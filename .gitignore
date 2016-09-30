@@ -1,2 +1,3 @@
 #output data that would make the repository huge
 small_fragment_data/
+.DS_Store
