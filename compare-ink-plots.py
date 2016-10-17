@@ -1,6 +1,8 @@
 '''
 compare-ink-plots.py
-Randomly walk through the fragment image, find points near the
+Randomly walk through the fragment image,
+find points near the edge of the ink,
+and plot for comparison
 '''
 
 __author__ = "Jack Bandy"
@@ -12,11 +14,11 @@ import numpy as np
 import random
 import sys
 import matplotlib.pyplot as plt
-from scipy.signal import argrelmax
+from scipy.signal import argrelmax, argrelmin
 
 NEIGH_SZ = 20 
 
-data_path = "/Users/jack/dev/ink-id/small_fragment_data"
+data_path = "/home/jack/devel/ink-id/small-fragment-data"
 ref_photo = tiff.imread(data_path+"/registered/aligned-photo-contrast.tif")
 ground_truth = tiff.imread(data_path+"/registered/ground-truth-mask.tif")
 the_slice = tiff.imread(data_path+"/vertical_rotated_slices/slice0000.tif")
@@ -108,21 +110,27 @@ def plot_slice_pts(slice_name, ink_pt_x, ink_pt_y, no_ink_pt_x, no_ink_pt_y):
     the_slice = tiff.imread(slice_name)
 
     #set threshold
-    THRESH = 20000
+    THRESH = 21000
     ink_vect = the_slice[ink_pt_x]
     no_ink_vect = the_slice[no_ink_pt_x]
 
     #anything in the vector below threshold gets set to 0
-    ink_vect = np.where(ink_vect > THRESH, ink_vect, 0)
-    no_ink_vect = np.where(no_ink_vect > THRESH, no_ink_vect, 0)
+    thresh_ink_vect = np.where(ink_vect > THRESH, ink_vect, 0)
+    thresh_no_ink_vect = np.where(no_ink_vect > THRESH, no_ink_vect, 0)
 
     #find first and last peak in the new vector
     #use scipy's fast argrelmax instead of writing my own
-    ink_vect_peaks = argrelmax(ink_vect)[0]
-    no_ink_vect_peaks = argrelmax(no_ink_vect)[0]
-
-
-
+    ink_vect_peaks = argrelmax(thresh_ink_vect)[0]
+    peaks = argrelmax(thresh_ink_vect)
+    no_ink_vect_peaks = argrelmax(thresh_no_ink_vect)[0]
+    # find the surrounding valleys
+    # first valley: the last of all valleys until first peak
+    vall1 = argrelmin(ink_vect[:peaks[0][0]])[0][-1]
+    # second valley: the first of all valleys after last peak
+    vall2 = argrelmin(ink_vect[peaks[0][0]:])[0][0] + peaks[0][0]
+    print("Peaks: {}, {}".format(peaks[0][0],peaks[0][-1]))
+    print("Valleys: {}, {}".format(vall1,vall2))
+                                                                            
 
 
     #figure 1,subplot 1: reference photo, ink/non-ink are dots
@@ -134,7 +142,6 @@ def plot_slice_pts(slice_name, ink_pt_x, ink_pt_y, no_ink_pt_x, no_ink_pt_y):
     #plt.plot((ink_pt_x),(ink_pt_y),'gs')
     p1.plot((ink_pt_x),(ink_pt_y),color='g',marker='s')
     p1.plot((no_ink_pt_x),(no_ink_pt_y),color='r',marker='s')
-    cid = fig1.canvas.mpl_connect('button_press_event', onclick)
 
     #figure 2: slice image, ink and no-ink plots
     fig2 = plt.figure(2)
@@ -144,6 +151,7 @@ def plot_slice_pts(slice_name, ink_pt_x, ink_pt_y, no_ink_pt_x, no_ink_pt_y):
     #figure 1, subplot 0: slice image
     p1 = fig2.add_subplot(311)
     p1.imshow(the_slice,cmap="Greys_r")
+    fig2.gca().set_ylim(bottom=ink_pt_x - NEIGH_SZ)
     height = len(the_slice[0])
     p1.plot([0,height],[ink_pt_x,ink_pt_x],color='g',linewidth=2)
     p1.plot([0,height],[no_ink_pt_x,no_ink_pt_x],color='r',linewidth=2)
@@ -154,19 +162,23 @@ def plot_slice_pts(slice_name, ink_pt_x, ink_pt_y, no_ink_pt_x, no_ink_pt_y):
     g1 = fig2.add_subplot(312,sharex=p1)
     axes = fig2.gca()
     axes.set_ylim([0,ymax])
-    g1.plot(the_slice[ink_pt_x],color='g',marker='o')
+    g1.plot(the_slice[ink_pt_x],color='g',) #marker='o')
     if(len(ink_vect_peaks) > 1):
         ink_vect_start = ink_vect_peaks[0]
         ink_vect_end = ink_vect_peaks[-1]
         p1.plot((ink_vect_start),(ink_pt_x),color='g',marker='*')
         p1.plot((ink_vect_end),(ink_pt_x),color='g',marker='*')
-        g1.scatter([ink_vect_start,ink_vect_end], \
-                [ink_vect[ink_vect_start],ink_vect[ink_vect_end]], \
+        p1.plot((vall1),(ink_pt_x),color='g',marker='*')
+        p1.plot((vall2),(ink_pt_x),color='g',marker='*')
+
+        g1.scatter([ink_vect_start,ink_vect_end,vall1,vall2], \
+                [ink_vect[ink_vect_start],ink_vect[ink_vect_end], \
+                ink_vect[vall1],ink_vect[vall2]], \
                 color='g',marker='*')
 
     #figure 2, subplot 2: no-ink plot
     g2 = fig2.add_subplot(313,sharex=p1,sharey=g1)
-    g2.plot(the_slice[no_ink_pt_x],color='r',marker='o')
+    g2.plot(the_slice[no_ink_pt_x],color='r')
     if(len(no_ink_vect_peaks) > 1):
         no_ink_vect_start = no_ink_vect_peaks[0]
         no_ink_vect_end = no_ink_vect_peaks[-1]
