@@ -13,15 +13,25 @@ import time
 from scipy.signal import argrelmax, argrelmin
 import features
 from sklearn.linear_model import LogisticRegression
-#from sklearn.svm import SVC
 from sklearn.metrics import confusion_matrix
+from sklearn.feature_selection import SelectKBest
+from sklearn.feature_selection import chi2
 
 
 def main():
     start_time = time.time()
 
     global THRESH
-    THRESH = 21000
+    global CUT_IN
+    global CUT_BACK
+    global STRP_RNGE
+    global NEIGH_RADIUS
+    THRESH = 21000 # the intensity threshold at which to extract the surface
+    CUT_IN = 4 # how far beyond the surface point to go
+    CUT_BACK = 16 # how far behind the surface point to go
+    STRP_RNGE = 64  # the radius of the strip to train on
+    NEIGH_RADIUS = 4  # the radius of the strip to train on
+    NR = NEIGH_RADIUS
 
     global data_path
     data_path = "/home/jack/devel/ink-id/small-fragment-data"
@@ -36,7 +46,8 @@ def main():
     output_dims = (num_slices, slice_length)
 
     global volume
-    surf_pts_filename = "surf-pts-{}".format(THRESH)
+    #surf_pts_filename = "surf-valls-{}".format(THRESH)
+    surf_pts_filename = "surf-peaks-{}".format(THRESH)
     volume_filename = "volume-{}".format(THRESH)
     try:
         surf_pts = np.load(surf_pts_filename+".npy")
@@ -57,7 +68,7 @@ def main():
             for v in range(slice_length):
                 volume[sl][v] = np.zeros(vect_length,dtype=np.uint16)
                 try:
-                    surf_pts[sl][v] = extract_surf_pt(current_slice[v])
+                    surf_pts[sl][v] = extract_surf_peak(current_slice[v])
                     volume[sl][v] = current_slice[v]
                 except Exception:
                     #print(inst.args)
@@ -74,9 +85,14 @@ def main():
     no_ink_inds = []
     for i in range(num_slices):
         for j in range(slice_length):
-            if ground_truth[i][j]:
+            # only train where everything in the neighborhood is ink
+            gt_flat = ground_truth[i-NR:i+NR+1,j-NR:j+NR+1].flatten()
+            needed_gt = (2*NR+1)*(2*NR+1)
+            if np.count_nonzero(gt_flat) == needed_gt:
                 ink_inds.append(i*slice_length + j)
-            elif np.count_nonzero(volume[i][j]) > 0:
+                #print("gt_flat: {}".format(gt_flat))
+                #print("needed_gt: {}".format(needed_gt))
+            elif np.count_nonzero(np.where(volume[i][j] > THRESH, volume[i][j], 0)) > 12:
                 no_ink_inds.append(i*slice_length + j)
     fragment_inds = ink_inds + no_ink_inds
     print("total samples on fragment: {}".format(len(fragment_inds)))
@@ -86,9 +102,18 @@ def main():
 
     print("extracting features")
     feature_start = time.time()
+    feats = features.extract_for_vol(volume, surf_pts, CUT_IN, CUT_BACK, NEIGH_RADIUS, THRESH)
+    feats_list = []
+    gt_list = []
+    for i in range(num_slices):
+        for j in range(slice_length):
+            feats_list.append(feats[i,j])
+            gt_list.append(ground_truth[i,j])
     # extract features for all vectors in the volume
-    feats = features.extract_for_vol(volume, surf_pts, 32)
     print("feature extraction took {:.2f} seconds".format(time.time() - feature_start))
+    k = 2
+    print("selecting {} best features".format(k))
+    feats_list = SelectKBest(chi2, k=k).fit_transform(feats_list,gt_list)
 
 
     print("randomly selecting train/test sets")
@@ -96,7 +121,7 @@ def main():
     
     # randomly divide train and test data
     total_fragment_samples = len(fragment_inds)
-    assignments = np.random.randint(0,10, size=num_slices*slice_length)
+    assignments = np.random.randint(0,10, size=total_fragment_samples)
     test_nums = np.random.randint(0,10,size=2)
     train_inds = [] # the indeces to use for training
     test_inds = [] # the indeces to use for testing
@@ -110,14 +135,19 @@ def main():
         # find its index
         i = fragment_inds[ind]
         slice_num, vect_num = ind_to_coord(i)
-        if assignments[i] in test_nums:
+        if assignments[ind] in test_nums:
             test_inds.append(i)
-            test_set.append(feats[slice_num][vect_num])
+            #test_set.append(feats[slice_num][vect_num])
+            test_set.append(feats_list[i])
             test_labels.append(ground_truth[slice_num][vect_num])
-        elif (vect_num % slice_length) > int(slice_length / 2):
+        # train on the right half of the image
+        elif (vect_num % slice_length) < int(slice_length / 2):
             train_inds.append(i)
-            train_set.append(feats[slice_num][vect_num])
+            #train_set.append(feats[slice_num][vect_num])
+            train_set.append(feats_list[i])
             train_labels.append(ground_truth[slice_num][vect_num])
+    assert (len(train_inds) == len(train_set) == len(train_labels))
+    assert (len(test_inds) == len(test_set) == len(test_labels))
     '''
     # create a trimmed version for training
     trim_size = 100000
@@ -153,6 +183,7 @@ def main():
     clf = LogisticRegression(C=1e5)
     s_clf = LogisticRegression(C=1e5)
 
+
     print("training classifier")
     clf.fit(train_set, train_labels)
     print("trained classifier in {:.2f} seconds".format(time.time() - train_start))
@@ -163,41 +194,55 @@ def main():
     print("predicting samples")
     pred_start = time.time()
     predicted_pic = np.zeros(ground_truth.shape, dtype=np.uint16)
+    strip_predicted_pic = np.zeros(ground_truth.shape, dtype=np.uint16)
 
-    ink_count = 0
     train_inds = np.array(train_inds)
     print("train_inds shape: {}".format(train_inds.shape))
-   
-    RNGE = 16
-    for sl in range(num_slices - RNGE):
-        pred = clf.decision_function(feats[sl])
-        predicted_pic[sl] = np.where(pred > 0, pred*65535, 0)
-        
-        min_ind = (sl * slice_length)
-        max_ind = ((sl+1+RNGE) * slice_length)
+ 
+    preds = clf.predict_proba(feats_list)[:,1]
+    for i in range(num_slices * slice_length):
+        (sl,v) = ind_to_coord(i)
+        predicted_pic[sl,v] = preds[i]*65535
 
-        train = np.where(np.logical_and(train_inds>=min_ind, train_inds <=max_ind))[0]
-        train_slice_set = [train_set[ind] for ind in train]
-        train_slice_labels = [train_labels[ind] for ind in train]
 
-        if(np.count_nonzero(train_slice_labels)):
-            s_clf.fit(train_slice_set, train_slice_labels)
-            pred = s_clf.decision_function(feats[sl])
-            ink_count += np.count_nonzero(pred)
-            predicted_pic[sl] = np.where(pred > 0, pred*65535, 0)
-        
-        if (sl % (num_slices / 10) == 0):
-            print("finished {:.2f}% of predictions ({:.2f} seconds)".format(
-                100*(sl / num_slices), time.time()-pred_start))
-    tiff.imsave("prediction.tif", predicted_pic)
+    # localized training
+    strip_length = STRP_RNGE * slice_length
+    for strip in range(0, int(num_slices / STRP_RNGE)):
+        min_ind = (strip * strip_length)
+        max_ind = ((strip+1) * strip_length)
+        #min_slc = int(min_ind / slice_length)
+        #max_slc = int(max_ind / slice_length)
+
+        train_strip_inds = np.where(np.logical_and(train_inds>=min_ind, train_inds <=max_ind))[0]
+        #train_strip_set = [train_set[ind] for ind in train_strip_inds]
+        #train_strip_labels = [train_labels[ind] for ind in train_strip_inds]
+        train_strip_set = []
+        train_strip_labels = []
+        for ind in train_strip_inds:
+            (sl, v) = ind_to_coord(train_inds[ind])
+            train_strip_set.append(feats[sl,v])
+            train_strip_labels.append(ground_truth[sl,v])
+        num_inks = np.count_nonzero(train_strip_labels)
+        num_no_inks = len(train_strip_labels) - num_inks
+        if(num_inks > 20 and num_no_inks > 20):
+            print("training strip {}, min: {}, max: {}".format(strip, min_ind, max_ind))
+            s_clf.fit(train_strip_set, train_strip_labels)
+            for ind in range(min_ind, max_ind):
+                (sl, v) = ind_to_coord(ind)
+                vect_feats = feats[sl,v]
+                pred = (s_clf.predict_proba([vect_feats]) * 65535)[:,1][0]
+                strip_predicted_pic[sl, v] = pred
+
+    tiff.imsave("predictions/prediction-in{}-back{}-neigh{}.tif".format(CUT_IN,CUT_BACK,NR), predicted_pic)
+    tiff.imsave("predictions/strip{}-prediction-in{}-back{}-neigh{}.tif".format(
+        STRP_RNGE,CUT_IN,CUT_BACK,NR), strip_predicted_pic)
     print("predicted all samples in {} seconds".format(time.time() - pred_start))
-    print("there are {} predicted ink points in the output".format(ink_count))
 
     training_pic = np.zeros(ground_truth.shape, dtype=np.uint16)
     for ind in train_inds:
         slice_num, vect_num = ind_to_coord(ind)
         training_pic[slice_num][vect_num] = 65535
-    tiff.imsave("training.tif", training_pic)
+    tiff.imsave("predictions/training.tif", training_pic)
 
     duration = time.time() - start_time
     print("script took {:.2f} seconds ({:.2f} minutes) to finish".format(duration, duration / 60))
@@ -218,7 +263,8 @@ def extract_surface(vect,length):
     return to_return
 
 
-def extract_surf_pt(vect):
+
+def extract_surf_vall(vect):
     thresh_vect = np.where(vect > THRESH, vect, 0)
 
     # find first peak above threshold
@@ -228,6 +274,17 @@ def extract_surf_pt(vect):
     surf_vall = argrelmin(vect[:surf_peak])[0][-1]
 
     return surf_vall
+
+
+
+def extract_surf_peak(vect):
+    thresh_vect = np.where(vect > THRESH, vect, 0)
+
+    # find first peak above threshold
+    surf_peak = argrelmax(thresh_vect)[0][0]
+
+    return surf_peak
+
 
 
 def ind_to_coord(an_ind):
