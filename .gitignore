@@ -1,3 +1,5 @@
-#output data that would make the repository huge
+#output that would inflate the repository
 small-fragment-data/
+predictions/
 .DS_Store
+feat_cache/
