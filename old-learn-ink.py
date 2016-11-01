@@ -1,6 +1,7 @@
 '''
-learn-ink.py
-machine learning skeleton for detecting ink and no-ink points
+learn-ink-old.py
+initial machine learning skeleton for detecting ink and no-ink points
+this script has been refactored into a cleaner learn-ink.py
 '''
 
 __author__ = "Jack Bandy"
@@ -13,9 +14,7 @@ import time
 from scipy.signal import argrelmax, argrelmin
 import features
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import confusion_matrix
-from sklearn.feature_selection import SelectKBest
-from sklearn.feature_selection import chi2
+#from sklearn.metrics import confusion_matrix
 
 
 def main():
@@ -28,14 +27,14 @@ def main():
     global NEIGH_RADIUS
     THRESH = 21000 # the intensity threshold at which to extract the surface
     CUT_IN = 4 # how far beyond the surface point to go
-    CUT_BACK = 16 # how far behind the surface point to go
+    CUT_BACK = 8 # how far behind the surface point to go
     STRP_RNGE = 64  # the radius of the strip to train on
     NEIGH_RADIUS = 4  # the radius of the strip to train on
     NR = NEIGH_RADIUS
 
     global data_path
     data_path = "/home/jack/devel/ink-id/small-fragment-data"
-    ground_truth = tiff.imread(data_path + "/registered/ground-truth-mask.tif")
+    ground_truth = tiff.imread(data_path + "/registered/ground-truth-mask-full.tif")
     ground_truth = np.where(ground_truth == 255, 1, 0)
 
     global num_slices
@@ -92,7 +91,7 @@ def main():
                 ink_inds.append(i*slice_length + j)
                 #print("gt_flat: {}".format(gt_flat))
                 #print("needed_gt: {}".format(needed_gt))
-            elif np.count_nonzero(np.where(volume[i][j] > THRESH, volume[i][j], 0)) > 12:
+            elif np.count_nonzero(np.where(volume[i][j] > THRESH, volume[i][j], 0)) > 8:
                 no_ink_inds.append(i*slice_length + j)
     fragment_inds = ink_inds + no_ink_inds
     print("total samples on fragment: {}".format(len(fragment_inds)))
@@ -111,9 +110,9 @@ def main():
             gt_list.append(ground_truth[i,j])
     # extract features for all vectors in the volume
     print("feature extraction took {:.2f} seconds".format(time.time() - feature_start))
-    k = 2
-    print("selecting {} best features".format(k))
-    feats_list = SelectKBest(chi2, k=k).fit_transform(feats_list,gt_list)
+    #k = 2
+    #print("selecting {} best features".format(k))
+    #feats_list = SelectKBest(chi2, k=k).fit_transform(feats_list,gt_list)
 
 
     print("randomly selecting train/test sets")
@@ -182,14 +181,19 @@ def main():
 
     clf = LogisticRegression(C=1e5)
     s_clf = LogisticRegression(C=1e5)
+    train_set = np.array(train_set)
+    print("train_set.shape: {}".format(train_set.shape))
 
-
-    print("training classifier")
-    clf.fit(train_set, train_labels)
+    # use for individual feature predictions
+    #for feature in range(len(train_set[0])):
+    feature = "all"
+    tmp_train = train_set[:,:]
+    tmp_feats = np.array(feats_list)[:,:]
+    print("tmp_train[0]: {}".format(tmp_train[0])) 
+    print("tmp_train.shape: {}".format(tmp_train.shape))
+    print("training classifier for feature {}".format(feature))
+    clf.fit(tmp_train, train_labels)
     print("trained classifier in {:.2f} seconds".format(time.time() - train_start))
-    print("score on test set: {}".format(clf.score(test_set,test_labels)))
-    predicted = clf.predict(test_set)
-    print("confusion matrix for test set: {}".format(confusion_matrix(test_labels,predicted)))
 
     print("predicting samples")
     pred_start = time.time()
@@ -199,11 +203,10 @@ def main():
     train_inds = np.array(train_inds)
     print("train_inds shape: {}".format(train_inds.shape))
  
-    preds = clf.predict_proba(feats_list)[:,1]
+    preds = clf.predict_proba(tmp_feats)[:,1]
     for i in range(num_slices * slice_length):
         (sl,v) = ind_to_coord(i)
         predicted_pic[sl,v] = preds[i]*65535
-
 
     # localized training
     strip_length = STRP_RNGE * slice_length
@@ -220,23 +223,26 @@ def main():
         train_strip_labels = []
         for ind in train_strip_inds:
             (sl, v) = ind_to_coord(train_inds[ind])
-            train_strip_set.append(feats[sl,v])
+            train_strip_set.append(tmp_feats[ind])
             train_strip_labels.append(ground_truth[sl,v])
+        train_strip_set = np.array(train_strip_set)
+        train_strip_labels = np.array(train_strip_labels)
         num_inks = np.count_nonzero(train_strip_labels)
         num_no_inks = len(train_strip_labels) - num_inks
-        if(num_inks > 20 and num_no_inks > 20):
+        #if(num_inks > 20 and num_no_inks > 20):
+        if(0):
             print("training strip {}, min: {}, max: {}".format(strip, min_ind, max_ind))
             s_clf.fit(train_strip_set, train_strip_labels)
             for ind in range(min_ind, max_ind):
                 (sl, v) = ind_to_coord(ind)
-                vect_feats = feats[sl,v]
-                pred = (s_clf.predict_proba([vect_feats]) * 65535)[:,1][0]
+                pred = (s_clf.predict_proba(tmp_feats[ind]) * 65535)[:,1][0]
                 strip_predicted_pic[sl, v] = pred
 
-    tiff.imsave("predictions/prediction-in{}-back{}-neigh{}.tif".format(CUT_IN,CUT_BACK,NR), predicted_pic)
-    tiff.imsave("predictions/strip{}-prediction-in{}-back{}-neigh{}.tif".format(
-        STRP_RNGE,CUT_IN,CUT_BACK,NR), strip_predicted_pic)
-    print("predicted all samples in {} seconds".format(time.time() - pred_start))
+    tiff.imsave("predictions/prediction-in{}-back{}-neigh{}-feat{}.tif".format(
+            CUT_IN, CUT_BACK, NR, feature), predicted_pic)
+    tiff.imsave("predictions/strip{}-prediction-in{}-back{}-neigh{}-feat{}.tif".format(
+            STRP_RNGE, CUT_IN, CUT_BACK, NR, feature), strip_predicted_pic)
+        print("predicted all samples in {} seconds".format(time.time() - pred_start))
 
     training_pic = np.zeros(ground_truth.shape, dtype=np.uint16)
     for ind in train_inds:

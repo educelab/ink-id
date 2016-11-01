@@ -10,6 +10,62 @@ import numpy as np
 from sklearn import preprocessing
 
 
+def extract_for_list(vect_list, neigh_inds, CUT_IN, CUT_BACK, NEIGH_RADIUS):
+    num_features = 10
+    features = np.zeros((len(vect_list), num_features), dtype=np.float64)
+
+    features_filename = "feat_cache/l-features-in{}-back{}-neigh{}".format(
+            num_features, CUT_IN, CUT_BACK, NEIGH_RADIUS)
+
+    try:
+        features = np.load(features_filename+".npy")
+        print("loaded features from file")
+        return features
+    except Exception:
+        pass
+
+
+    # vector average
+    features[:,0] = (np.mean(vect_list, axis=1))
+
+    # vector integral
+    features[:,1] = (np.sum(vect_list, axis=1))
+
+    # vector min
+    features[:,2] = (np.min(vect_list, axis=1))
+
+    # vector max
+    features[:,3] = (np.max(vect_list, axis=1))
+
+    # vector stdev
+    features[:,4] = (np.std(vect_list, axis=1))
+
+    print("extracted single-vector features")
+
+    for i in range(len(neigh_inds)):
+
+        # neighborhood average
+        features[i,5] = np.mean(np.array([features[ind,0] for ind in neigh_inds[i]]))
+
+        # neighborhood integral
+        features[i,6] = np.sum(np.array([features[ind,1] for ind in neigh_inds[i]]))
+
+        # neighborhood min
+        features[i,7] = np.min(np.array([features[ind,2] for ind in neigh_inds[i]]))
+
+        # neighborhood max
+        features[i,8] = np.max(np.array([features[ind,3] for ind in neigh_inds[i]]))
+
+        # neighborhood stdev
+        features[i,9] = np.std(np.array([vect_list[ind] for ind in neigh_inds[i]]).flatten())
+
+    print("extracted neighborhood features")
+
+    features = preprocessing.normalize(features, axis=1)
+    np.save(features_filename, features)
+    return features
+
+
 def extract_for_vol(volume, surf_pts, CUT_IN, CUT_BACK, NEIGH_RADIUS, THRESH):
     USE_SINGLE = True
     USE_NEIGH = True
@@ -95,4 +151,7 @@ def extract_for_vol(volume, surf_pts, CUT_IN, CUT_BACK, NEIGH_RADIUS, THRESH):
 
     np.save(features_filename, features)
     return features
+
+
+
 
