@@ -43,21 +43,22 @@ def extract_for_list(vect_list, neigh_inds, CUT_IN, CUT_BACK, NEIGH_RADIUS):
     print("extracted single-vector features")
 
     for i in range(len(neigh_inds)):
+        current_neigh = neigh_inds[i,np.nonzero(neigh_inds[i])]
 
         # neighborhood average
-        features[i,5] = np.mean(np.array([features[ind,0] for ind in neigh_inds[i]]))
+        features[i,5] = np.mean(np.array([features[ind,0] for ind in current_neigh]))
 
         # neighborhood integral
-        features[i,6] = np.sum(np.array([features[ind,1] for ind in neigh_inds[i]]))
+        features[i,6] = np.sum(np.array([features[ind,1] for ind in current_neigh]))
 
         # neighborhood min
-        features[i,7] = np.min(np.array([features[ind,2] for ind in neigh_inds[i]]))
+        features[i,7] = np.min(np.array([features[ind,2] for ind in current_neigh]))
 
         # neighborhood max
-        features[i,8] = np.max(np.array([features[ind,3] for ind in neigh_inds[i]]))
+        features[i,8] = np.max(np.array([features[ind,3] for ind in current_neigh]))
 
         # neighborhood stdev
-        features[i,9] = np.std(np.array([vect_list[ind] for ind in neigh_inds[i]]).flatten())
+        features[i,9] = np.std(np.array([vect_list[ind] for ind in current_neigh]).flatten())
 
     print("extracted neighborhood features")
 

@@ -35,7 +35,7 @@ def main():
     MIN = 2 # the minimum number of points above THRESH to be considered on the fragment
     CUT_IN = 4 # how far beyond the surface point to go
     CUT_BACK = 16 # how far behind the surface point to go
-    STRP_RNGE = 8  # the radius of the strip to train on
+    STRP_RNGE = 16  # the width of the strip to train on
     NEIGH_RADIUS = 2  # the radius of the strip to train on
     NR = NEIGH_RADIUS
     neigh_count = (2*NR+1)*(2*NR+1)
@@ -93,7 +93,7 @@ def main():
     # make train and test
     n = len(frag_inds)
     np.random.shuffle(frag_inds)
-    train_inds = np.array(frag_inds[:int(.6*n)])
+    train_inds = np.array(frag_inds[:int(.8*n)])
     #test_inds = inds[int(.6*n):int(.8*n)]
     #val_inds = inds[int(.8*n):]
 
@@ -104,10 +104,8 @@ def main():
         tmp_ind = train_inds[i]
         train_x[i] = all_feats[tmp_ind]
         train_y[i] = truth_list[tmp_ind]
-    print("train_x: {}\n".format(train_x[:10]))
-    print("train_y: {}\n".format(train_y[:10]))
 
-    print("train_y has {} nonzeros".format(np.count_nonzero(train_y)))
+    print("train_y has {}/{} nonzeros".format(np.count_nonzero(train_y), len(train_y)))
     make_train_truth_pic(train_inds, train_y)
     #test_x = [feats[index] for index in test_inds]
     #test_y = [frag_truth[index] for index in test_inds]
@@ -115,14 +113,13 @@ def main():
     preds = learn_lr(train_x, train_y, all_feats)
     make_full_pred_pic(preds)
 
-
     '''
     # use this loop for single-feature training
-    for i in range(len(feats[0])):
+    for i in range(all_feats.shape[1]):
         tmp_x = train_x[:,i].reshape(-1,1)
-        tmp_feats = feats[:,i].reshape(-1,1)
+        tmp_feats = all_feats[:,i].reshape(-1,1)
         preds = learn_lr(tmp_x, train_y, tmp_feats)
-        make_pred_pic(frag_coords, preds, str(i))
+        make_full_pred_pic(preds, str(i))
     '''
     # use this loop for strip training
     preds = np.zeros(len(all_feats), dtype=np.float32)
@@ -141,9 +138,7 @@ def main():
         if(num_inks > 20 and num_no_inks > 20):
             preds[min_ind:max_ind] = learn_lr(tmp_x, tmp_y, tmp_feats)
     make_full_pred_pic(preds,strip='-strip{}'.format(STRP_RNGE))
- 
 
-    make_train_pic(train_inds)
     print("full script took {:.2f} seconds".format(time.time() - start_time))
 
 
@@ -241,7 +236,7 @@ def make_full_pred_pic(preds, feat='all', strip=''):
 
 
 def learn_lr(train_feats, train_gt, all_feats):
-    clf = LogisticRegression()
+    clf = LogisticRegression(C=1e5)
     clf.fit(train_feats, train_gt)
     preds = clf.predict_proba(all_feats)[:,1]
     #preds = clf.predict(all_feats)
@@ -305,7 +300,9 @@ def learn_tf(train_feats, train_gt, test_feats, test_gt, all_feats):
 
         correct_prediction = tf.equal(tf.argmax(pred, 1), tf.argmax(y,1))
         accuracy = tf.reduce_mean(tf.cast(correct_prediction, "float"))
-        print("Accuracy:", accuracy.eval({x: test_feats, y: test_gt}))
+        #TODO change accuracy function (add training/prediction separated)
+
+        #print("Accuracy:", accuracy.eval({x: test_feats, y: test_gt}))
 
         #feed_dict = {x : all_feats}
         #classifications = sess.run(y, feed_dict)
