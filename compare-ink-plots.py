@@ -21,7 +21,7 @@ NEIGH_SZ = 20
 data_path = "/home/jack/devel/ink-id/small-fragment-data"
 ref_photo = tiff.imread(data_path+"/registered/aligned-photo-contrast.tif")
 ground_truth = tiff.imread(data_path+"/registered/ground-truth-mask.tif")
-the_slice = tiff.imread(data_path+"/vertical_rotated_slices/slice0000.tif")
+the_slice = tiff.imread(data_path+"/flatfielded-slices/slice0000.tif")
 
 
 
@@ -31,29 +31,34 @@ def onclick(event):
           (event.button, event.x, event.y, event.xdata, event.ydata))
     selection = int(event.ydata)
     digits = len(str(selection))
-    the_slice_name = (data_path+"/vertical_rotated_slices/slice" \
+    the_slice_name = (data_path+"/flatfielded-slices/slice" \
                 +"0000"[:4-digits]+str(selection)+".tif")
-                
+    '''         
     pat = [0,255]
     edge = [x for x in range(len(ground_truth[selection])-len(pat)) \
-		if np.array_equal(ground_truth[selection][x:x+len(pat)], pat)]
+    		if np.array_equal(ground_truth[selection][x:x+len(pat)], pat)]
     print("edge index: " + str(x))
-
+    '''
 
     #grab an "inky" point close to the edge
-    ink_pt_x = (edge[0]+NEIGH_SZ)
+    #ink_pt_x = (edge[0]+NEIGH_SZ)
+    ink_pt_x = (int(event.xdata)+NEIGH_SZ)
     ink_pt_y = (selection)
     ink_pt = (ink_pt_x,ink_pt_y)
     print("ink point: " + str(ink_pt))
 
     #grab a "non-inky" point close to the edge
-    no_ink_pt_x = (edge[0]-NEIGH_SZ)
+    #no_ink_pt_x = (edge[0]-NEIGH_SZ)
+    no_ink_pt_x = (int(event.xdata)-NEIGH_SZ)
     no_ink_pt_y = (selection)
     no_ink_pt = (no_ink_pt_x,no_ink_pt_y)
     print("no ink point: " + str(no_ink_pt))
     
-    plt.close()
-    plot_slice_pts(the_slice_name,ink_pt_x, ink_pt_y, no_ink_pt_x, no_ink_pt_y)
+    #plt.close()
+    try:
+        plot_slice_pts(the_slice_name,ink_pt_x, ink_pt_y, no_ink_pt_x, no_ink_pt_y)
+    except Exception:
+        print("plotting error")
 
 
 def main():    
@@ -64,14 +69,14 @@ def main():
       while(np.count_nonzero(ground_truth[randy]) < (len(ground_truth[randy]) / 10)):
         randy = random.randint(0,len(ground_truth)-1)
         digits = len(str(randy))
-        the_slice_name = data_path+"/vertical_rotated_slices/slice" + "0000"[:4-digits] + str(randy) + ".tif"
+        the_slice_name = data_path+"/flatfielded-slices/slice" + "0000"[:4-digits] + str(randy) + ".tif"
         print "Randomly chose " + the_slice_name
 
     elif len(sys.argv)==2:
       try:
         randy = int(sys.argv[1])
         digits = len(str(randy))
-        the_slice_name = (data_path+"/vertical_rotated_slices/slice" \
+        the_slice_name = (data_path+"/flatfielded-slices/slice" \
                 +"0000"[:4-digits]+str(randy)+".tif")
         print("Selected " + the_slice_name)
       except Exception:
@@ -136,6 +141,7 @@ def plot_slice_pts(slice_name, ink_pt_x, ink_pt_y, no_ink_pt_x, no_ink_pt_y):
     #figure 1,subplot 1: reference photo, ink/non-ink are dots
     fig1 = plt.figure(1)
     fig1.clf()
+    fig1.canvas.mpl_connect('button_press_event', onclick)
     p1 = fig1.add_subplot(111)
     p1.imshow(ref_photo,cmap="Greys_r")
     #plt.plot([ink_pt_x,no_ink_pt_x],[ink_pt_y,no_ink_pt_y],color='g',marker='s')
@@ -146,12 +152,13 @@ def plot_slice_pts(slice_name, ink_pt_x, ink_pt_y, no_ink_pt_x, no_ink_pt_y):
     #figure 2: slice image, ink and no-ink plots
     fig2 = plt.figure(2)
     fig2.clf()
-    ymax = max([max(the_slice[ink_pt_x]), max(the_slice[no_ink_pt_x])]) + 1000
+    ymax = max([max(the_slice[ink_pt_x]), max(the_slice[no_ink_pt_x])]) + 100
+    #ymin = min([min(the_slice[ink_pt_x]), min(the_slice[no_ink_pt_x])]) - 100
 
     #figure 1, subplot 0: slice image
     p1 = fig2.add_subplot(311)
-    p1.imshow(the_slice,cmap="Greys_r")
-    fig2.gca().set_ylim(bottom=ink_pt_x - NEIGH_SZ)
+    p1.imshow(the_slice,cmap="Greys_r",interpolation='none')
+    fig2.gca().set_ylim(bottom=ink_pt_x - NEIGH_SZ, top=no_ink_pt_x + NEIGH_SZ)
     height = len(the_slice[0])
     p1.plot([0,height],[ink_pt_x,ink_pt_x],color='g',linewidth=2)
     p1.plot([0,height],[no_ink_pt_x,no_ink_pt_x],color='r',linewidth=2)
@@ -159,10 +166,10 @@ def plot_slice_pts(slice_name, ink_pt_x, ink_pt_y, no_ink_pt_x, no_ink_pt_y):
 
 
     #figure 2, subplot 1: ink plot
-    g1 = fig2.add_subplot(312,sharex=p1)
+    g1 = fig2.add_subplot(313,sharex=p1)
     axes = fig2.gca()
     axes.set_ylim([0,ymax])
-    g1.plot(the_slice[ink_pt_x],color='g',) #marker='o')
+    g1.scatter(np.arange(0,height),the_slice[ink_pt_x],color='g', marker='.')
     if(len(ink_vect_peaks) > 1):
         ink_vect_start = ink_vect_peaks[0]
         ink_vect_end = ink_vect_peaks[-1]
@@ -177,8 +184,8 @@ def plot_slice_pts(slice_name, ink_pt_x, ink_pt_y, no_ink_pt_x, no_ink_pt_y):
                 color='g',marker='*')
 
     #figure 2, subplot 2: no-ink plot
-    g2 = fig2.add_subplot(313,sharex=p1,sharey=g1)
-    g2.plot(the_slice[no_ink_pt_x],color='r')
+    g2 = fig2.add_subplot(312,sharex=p1,sharey=g1)
+    g2.scatter(np.arange(0,height),the_slice[no_ink_pt_x],color='r', marker='.')
     if(len(no_ink_vect_peaks) > 1):
         no_ink_vect_start = no_ink_vect_peaks[0]
         no_ink_vect_end = no_ink_vect_peaks[-1]

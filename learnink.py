@@ -31,12 +31,14 @@ def main():
     global NEIGH_RADIUS
     global NR
     global neigh_count
+    global Cf
     THRESH = 21000 # the intensity threshold at which to extract the surface
     MIN = 2 # the minimum number of points above THRESH to be considered on the fragment
-    CUT_IN = 4 # how far beyond the surface point to go
+    CUT_IN = 8 # how far beyond the surface point to go
     CUT_BACK = 16 # how far behind the surface point to go
-    STRP_RNGE = 16  # the width of the strip to train on
+    STRP_RNGE = 8  # the width of the strip to train on
     NEIGH_RADIUS = 2  # the radius of the strip to train on
+    Cf = 1e4 # the float value to use for regularization
     NR = NEIGH_RADIUS
     neigh_count = (2*NR+1)*(2*NR+1)
 
@@ -46,19 +48,20 @@ def main():
     ground_truth = tiff.imread(data_path + "/registered/ground-truth-mask-full.tif")
     ground_truth = np.where(ground_truth == 255, 1, 0)
 
-    global volume
-    global surf_pts
-    volume = retrieve_volume()
-    surf_pts = retrieve_surf_pts(volume)
-
     global num_slices
     global slice_length
     global vol_depth
     global output_dims
     num_slices = ground_truth.shape[0]
     slice_length = ground_truth.shape[1]
-    vol_depth = volume.shape[2]
+    vol_depth = 286
     output_dims = (num_slices, slice_length)
+
+    global volume
+    global surf_pts
+    volume = retrieve_volume()
+    surf_pts = retrieve_surf_pts(volume)
+
 
     print("unraveling volume into 2D array")
     global vol_list # an ordered list of all the vectors in the volume
@@ -74,7 +77,7 @@ def main():
 
     print("finding points on fragment")
     frag_inds = find_frag_inds(THRESH, MIN)
-    frag_truth = [truth_list[i] for i in frag_inds]
+    frag_truth = np.array([truth_list[i] for i in frag_inds])
     print("found {} points on fragment, {} ink".format(
         len(frag_inds), np.count_nonzero(frag_truth)))
 
@@ -87,47 +90,49 @@ def main():
 
 
     print("extracting features")
-    all_feats = features.extract_for_list(vect_list, neigh_inds, CUT_IN, CUT_BACK, NR)
+    #all_feats = features.extract_for_list(vect_list, neigh_inds, CUT_IN, CUT_BACK, NR)
+    all_feats = vect_list
 
 
     # make train and test
     n = len(frag_inds)
+    k1 = int(.6*n)
+    k2 = int(.1*n)
     np.random.shuffle(frag_inds)
-    train_inds = np.array(frag_inds[:int(.8*n)])
-    #test_inds = inds[int(.6*n):int(.8*n)]
+    train_inds = np.array(frag_inds[:k1])
+    test_inds = np.array(frag_inds[k1:(k1+k2)])
     #val_inds = inds[int(.8*n):]
 
-    train_x = np.zeros((len(train_inds), all_feats.shape[1]))
-    train_y = np.zeros((len(train_inds)))
-    #train_y = np.zeros((len(train_inds),2))
-    for i in range(len(train_inds)):
-        tmp_ind = train_inds[i]
-        train_x[i] = all_feats[tmp_ind]
-        train_y[i] = truth_list[tmp_ind]
+    train_x = all_feats[train_inds]
+    train_y = truth_list[train_inds]
+    assert len(train_x) == len(train_y)
+    test_x = all_feats[test_inds]
+    test_y = truth_list[test_inds]
+    assert len(test_x) == len(test_y)
 
-    print("train_y has {}/{} nonzeros".format(np.count_nonzero(train_y), len(train_y)))
-    make_train_truth_pic(train_inds, train_y)
-    #test_x = [feats[index] for index in test_inds]
-    #test_y = [frag_truth[index] for index in test_inds]
-    #preds = learn_tf(train_x, train_y, test_x, test_y, feats)
     preds = learn_lr(train_x, train_y, all_feats)
-    make_full_pred_pic(preds)
-
-    '''
+    make_full_pred_pic(preds, name="lr-C{}-".format(Cf))
+    preds = learn_tf_mlp(train_x, train_y, all_feats)
+    make_full_pred_pic(preds, name="tf-mlp-")
+    
+    ''' 
     # use this loop for single-feature training
     for i in range(all_feats.shape[1]):
         tmp_x = train_x[:,i].reshape(-1,1)
         tmp_feats = all_feats[:,i].reshape(-1,1)
-        preds = learn_lr(tmp_x, train_y, tmp_feats)
-        make_full_pred_pic(preds, str(i))
-    '''
+        #preds = tmp_feats
+        preds = learn_tf_mlp(tmp_x, train_y, tmp_feats)
+        make_full_pred_pic(preds, name="tf-mlp-", feat=str(i))
+
     # use this loop for strip training
     preds = np.zeros(len(all_feats), dtype=np.float32)
     strip_length = STRP_RNGE * slice_length
     for strip in range(0, int(num_slices / STRP_RNGE)):
-        min_ind = (strip * strip_length)
-        max_ind = ((strip+1) * strip_length)
-        train_strip_inds = np.where(np.logical_and(train_inds>=min_ind, train_inds<=max_ind))[0]
+        min_ind = strip * strip_length
+        max_ind = min_ind + strip_length
+        train_strip_inds = np.where(np.logical_and(
+            train_inds>=min_ind-int(strip_length/2),
+            train_inds<=max_ind+int(strip_length/2)))[0]
 
         tmp_x = [train_x[ind] for ind in train_strip_inds]
         tmp_y = [train_y[ind] for ind in train_strip_inds]
@@ -136,10 +141,158 @@ def main():
         num_inks = np.count_nonzero(tmp_y)
         num_no_inks = len(tmp_y) - num_inks
         if(num_inks > 20 and num_no_inks > 20):
+            #preds[min_ind:max_ind] = learn_tf_tutor(tmp_x, tmp_y, test_x, test_y, tmp_feats)
             preds[min_ind:max_ind] = learn_lr(tmp_x, tmp_y, tmp_feats)
-    make_full_pred_pic(preds,strip='-strip{}'.format(STRP_RNGE))
+    #make_full_pred_pic(preds, "tf-", strip='-strip{}'.format(STRP_RNGE))
+    make_full_pred_pic(preds, "lr-C{}-".format(Cf), strip='-strip{}'.format(STRP_RNGE))
+    '''     
 
     print("full script took {:.2f} seconds".format(time.time() - start_time))
+
+
+
+def learn_lr(train_feats, train_gt, all_feats):
+    clf = LogisticRegression(C=Cf)
+    clf.fit(train_feats, train_gt)
+    preds = clf.predict_proba(all_feats)[:,1]
+    #preds = clf.predict(all_feats)
+    return preds
+
+
+
+def learn_svm(train_feats, train_gt, all_feats):
+    clf = svm.SVR()
+    clf.fit(train_feats, train_gt)
+    preds = clf.predict(all_feats)
+    return preds
+
+
+
+def learn_tf_lr(train_feats, train_gt, test_feats, test_gt, all_feats):
+    # parameters
+    learning_rate = 0.01
+    batch_size = 100
+
+    # convert truth labels into truth tuples
+    train_y = make_2d_gt(train_gt)
+    #test_y = make_2d_gt(test_gt)
+
+    repdim = all_feats.shape[1]
+    x = tf.placeholder(tf.float32, [None, repdim])
+    W = tf.Variable(tf.zeros([repdim, 2]))
+    b = tf.Variable(tf.zeros([2]))
+    # the model
+    y = tf.nn.softmax(tf.matmul(x, W) + b)
+
+    # the answewrs
+    y_ = tf.placeholder(tf.float32, [None, 2])
+    cross_entropy = tf.nn.softmax_cross_entropy_with_logits(y, y_)
+    train_step = tf.train.GradientDescentOptimizer(learning_rate).minimize(cross_entropy)
+
+    init = tf.initialize_all_variables()
+    sess = tf.Session()
+    sess.run(init)
+
+    for i in range(1,int(len(train_feats) / batch_size)):
+        batch_xs, batch_ys = (train_feats[(i-1)*batch_size: (i*batch_size)],
+                                train_y[(i-1)*batch_size: (i*batch_size)])
+        sess.run(train_step, feed_dict={x: batch_xs, y_: batch_ys})
+
+    #prediction = tf.argmax(y,1)
+    prediction = y
+    return sess.run(prediction, feed_dict={x:all_feats})[:,0]
+
+
+
+
+def learn_tf_mlp(train_feats, train_gt, all_feats):
+    # parameters
+    learning_rate = 0.001
+    batch_size = 200
+    n_input = train_feats.shape[1]
+    n_hidden_1 = train_feats.shape[1]
+    n_hidden_2 = train_feats.shape[1] * 4
+    n_classes = 2
+
+    # Store layers weight & bias
+    weights = {
+        'h1': tf.Variable(tf.random_normal([n_input, n_hidden_1])),
+        'h2': tf.Variable(tf.random_normal([n_hidden_1, n_hidden_2])),
+        'out': tf.Variable(tf.random_normal([n_hidden_2, n_classes]))
+    }
+    biases = {
+        'b1': tf.Variable(tf.random_normal([n_hidden_1])),
+        'b2': tf.Variable(tf.random_normal([n_hidden_2])),
+        'out': tf.Variable(tf.random_normal([n_classes]))
+    }
+
+    # convert truth labels into truth tuples
+    train_y = make_2d_gt(train_gt)
+    x = tf.placeholder(tf.float32, [None, n_input])
+
+    # the answewrs
+    y_ = tf.placeholder(tf.float32, [None, n_classes])
+
+    # the model
+    y = multilayer_perceptron(x, weights, biases)
+
+    cost = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(y,y_))
+    optimizer = tf.train.AdamOptimizer(learning_rate).minimize(cost)
+
+    init = tf.initialize_all_variables()
+    sess = tf.Session()
+    sess.run(init)
+
+    for i in range(1,int(len(train_feats) / batch_size)):
+        batch_xs, batch_ys = (train_feats[(i-1)*batch_size: (i*batch_size)],
+                                train_y[(i-1)*batch_size: (i*batch_size)])
+        sess.run([optimizer,cost], feed_dict={x: batch_xs, y_: batch_ys})
+
+    predictions = sess.run(y, feed_dict={x:all_feats})[:,1]
+    p_min = np.min(predictions)
+    p_max = np.max(predictions)
+    print("range before normalize: {} - {}".format(p_min, p_max))
+    return np.nan_to_num((predictions - p_min) / (p_max - p_min))
+
+
+
+
+def multilayer_perceptron(x, weights, biases):
+    layer_1 = tf.add(tf.matmul(x, weights['h1']), biases['b1'])
+    layer_1 = tf.nn.relu(layer_1)
+
+    layer_2 = tf.add(tf.matmul(x, weights['h2']), biases['b2'])
+    layer_2 = tf.nn.relu(layer_2)
+
+    out_layer = tf.matmul(layer_2, weights['out']) + biases['out']
+    return out_layer
+
+
+
+def make_2d_gt(gt):
+    gt_2d = np.zeros((gt.shape[0], 2), dtype=np.int)
+    gt_2d[:,0] = gt
+    gt_2d[gt==0, 1] = 1
+    return gt_2d 
+
+
+
+def retrieve_volume():
+    volume_filename = "volume"
+    try:
+        volume = np.load(volume_filename + ".npy")
+        print("loaded volume from file")
+    except Exception:
+        print("could not load volume from file, extracting")
+        volume = np.zeros((num_slices, slice_length, vol_depth), dtype=np.uint16)
+        for sl in range(num_slices):
+            slice_name = (data_path + "/flatfielded-slices/slice"
+                        + "0000"[:4-len(str(sl))] + str(sl) + ".tif")
+            current_slice = np.array(tiff.imread(slice_name))
+            for v in range(slice_length):
+                volume[sl][v] = current_slice[v]
+        np.save(volume_filename, volume)
+    return volume
 
 
 
@@ -202,7 +355,6 @@ def make_feature_input():
 
 
 
-
 def make_train_pic(inds):
     train_pic = np.zeros((num_slices, slice_length), dtype=np.uint16)
     for ind in inds:
@@ -220,7 +372,8 @@ def make_train_truth_pic(inds, truths):
 
 
 
-def make_full_pred_pic(preds, feat='all', strip=''):
+def make_full_pred_pic(preds, name='', feat='all', strip=''):
+    print("preds: {}".format(preds.shape))
     predicted_pic = np.zeros((num_slices, slice_length), dtype=np.uint16)
     pred_range = (min(preds), max(preds))
     print("pred range: {}".format(pred_range))
@@ -230,112 +383,8 @@ def make_full_pred_pic(preds, feat='all', strip=''):
         predicted_pic[sl,v] = (pred *65535)
     pic_range = (np.min(predicted_pic), np.max(predicted_pic))
     print("pic range: {}".format(pic_range))
-    tiff.imsave("predictions/prediction-in{}-back{}-neigh{}-feat{}{}.tif".format(
-        CUT_IN, CUT_BACK, NR, feat, strip), predicted_pic)
-
-
-
-def learn_lr(train_feats, train_gt, all_feats):
-    clf = LogisticRegression(C=1e5)
-    clf.fit(train_feats, train_gt)
-    preds = clf.predict_proba(all_feats)[:,1]
-    #preds = clf.predict(all_feats)
-    return preds
-
-
-
-def learn_svm(train_feats, train_gt, all_feats):
-    clf = svm.SVR()
-    clf.fit(train_feats, train_gt)
-    preds = clf.predict(all_feats)
-    return preds
-
-
-
-def learn_tf(train_feats, train_gt, test_feats, test_gt, all_feats):
-    # parameters
-    learning_rate = 0.001
-    training_epochs = 10
-    batch_size = 100
-    display_step = 1
-
-    # network
-    n_hidden_1 = 10
-    n_hidden_2 = 256
-    n_input = 10
-    n_classes = 2
-
-    x = tf.placeholder("float", [None, n_input])
-    y = tf.placeholder("float", [None, n_classes])
-
-    weights = {
-    'h1': tf.Variable(tf.random_normal([n_input, n_hidden_1])),
-    'h2': tf.Variable(tf.random_normal([n_hidden_1, n_hidden_2])),
-    'out': tf.Variable(tf.random_normal([n_hidden_2, n_classes]))
-    }
-    biases = {
-    'b1': tf.Variable(tf.random_normal([n_hidden_1])),
-    'b2': tf.Variable(tf.random_normal([n_hidden_2])),
-    'out': tf.Variable(tf.random_normal([n_classes]))
-    }
-    pred = multilayer_perceptron(x, weights, biases)
-    cost = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(pred,y))
-    optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(cost)
-    init = tf.initialize_all_variables()
-
-    with tf.Session() as sess:
-        sess.run(init)
-
-        for epoch in range(training_epochs):
-            avg_cost = 0.
-            total_batches = int(len(train_feats) / batch_size)
-            for i in range(1,total_batches):
-                (batch_x, batch_y) = (train_feats[(i-1)*batch_size:i*batch_size],
-                    train_gt[(i-1)*batch_size:i*batch_size])
-                _, c = sess.run([optimizer, cost], feed_dict = {x: batch_x, y: batch_y})
-                avg_cost += c / total_batches
-            if epoch % display_step == 0:
-                print("Epoch:", '%04d' % (epoch+1), "cost=", "{:.4f}".format(avg_cost))
-        print("finished optimization")
-
-        correct_prediction = tf.equal(tf.argmax(pred, 1), tf.argmax(y,1))
-        accuracy = tf.reduce_mean(tf.cast(correct_prediction, "float"))
-        #TODO change accuracy function (add training/prediction separated)
-
-        #print("Accuracy:", accuracy.eval({x: test_feats, y: test_gt}))
-
-        #feed_dict = {x : all_feats}
-        #classifications = sess.run(y, feed_dict)
-        #return classifications
-
-
-def multilayer_perceptron(x, weights, biases):
-    layer_1 = tf.add(tf.matmul(x, weights['h1']), biases['b1'])
-    layer_1 = tf.nn.relu(layer_1)
-
-    layer_2 = tf.add(tf.matmul(x, weights['h2']), biases['b2'])
-    layer_2 = tf.nn.relu(layer_2)
-
-    out_layer = tf.matmul(layer_2, weights['out']) + biases['out']
-    return out_layer
-
-
-
-def retrieve_volume():
-    volume_filename = "volume"
-    try:
-        volume = np.load(volume_filename + ".npy")
-        print("loaded volume from file")
-    except Exception:
-        print("could not load volume from file, extracting")
-        volume = np.zeros((num_slices, slice_length, vol_depth), dtype=np.uint16)
-        for sl in range(num_slices):
-            slice_name = (data_path + "/vertical_rotated_slices/slice"
-                        + "0000"[:4-len(str(sl))] + str(sl) + ".tif")
-            current_slice = np.array(tiff.imread(slice_name))
-            for v in range(slice_length):
-                volume[sl][v] = current_slice[v]
-    return volume
+    tiff.imsave("predictions/{}prediction-in{}-back{}-neigh{}-feat{}{}.tif".format(
+        name, CUT_IN, CUT_BACK, NR, feat, strip), predicted_pic)
 
 
 
@@ -349,7 +398,12 @@ def retrieve_surf_pts(volume):
         surf_pts = np.zeros(output_dims, dtype=np.uint16)
         for sl in range(num_slices):
             for v in range(slice_length):
-                surf_pts[sl][v] = extract_surf_peak(volume[sl][v])
+                try:
+                    surf_pts[sl][v] = extract_surf_peak(volume[sl][v])
+                except Exception:
+                    # no definitive peak/valley on surface
+                    pass
+        np.save(surf_pts_filename, surf_pts)
     return surf_pts
 
 

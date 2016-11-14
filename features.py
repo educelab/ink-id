@@ -11,10 +11,10 @@ from sklearn import preprocessing
 
 
 def extract_for_list(vect_list, neigh_inds, CUT_IN, CUT_BACK, NEIGH_RADIUS):
-    num_features = 10
-    features = np.zeros((len(vect_list), num_features), dtype=np.float64)
+    num_features = 12
+    features = np.zeros((len(vect_list), num_features), dtype=np.float32)
 
-    features_filename = "feat_cache/l-features-in{}-back{}-neigh{}".format(
+    features_filename = "feat_cache/l-{}features-in{}-back{}-neigh{}".format(
             num_features, CUT_IN, CUT_BACK, NEIGH_RADIUS)
 
     try:
@@ -26,7 +26,7 @@ def extract_for_list(vect_list, neigh_inds, CUT_IN, CUT_BACK, NEIGH_RADIUS):
 
 
     # vector average
-    features[:,0] = (np.mean(vect_list, axis=1))
+    features[:,0] = np.mean(vect_list, axis=1)
 
     # vector integral
     features[:,1] = (np.sum(vect_list, axis=1))
@@ -40,29 +40,36 @@ def extract_for_list(vect_list, neigh_inds, CUT_IN, CUT_BACK, NEIGH_RADIUS):
     # vector stdev
     features[:,4] = (np.std(vect_list, axis=1))
 
-    print("extracted single-vector features")
+    # average vector slope 
+    features[:,5] = np.mean(np.gradient(vect_list, axis=1), axis=1)
 
     for i in range(len(neigh_inds)):
         current_neigh = neigh_inds[i,np.nonzero(neigh_inds[i])]
 
         # neighborhood average
-        features[i,5] = np.mean(np.array([features[ind,0] for ind in current_neigh]))
+        features[i,6] = np.mean(np.array([features[ind,0] for ind in current_neigh]))
 
         # neighborhood integral
-        features[i,6] = np.sum(np.array([features[ind,1] for ind in current_neigh]))
+        features[i,7] = np.sum(np.array([features[ind,1] for ind in current_neigh]))
 
         # neighborhood min
-        features[i,7] = np.min(np.array([features[ind,2] for ind in current_neigh]))
+        features[i,8] = np.min(np.array([features[ind,2] for ind in current_neigh]))
 
         # neighborhood max
-        features[i,8] = np.max(np.array([features[ind,3] for ind in current_neigh]))
+        features[i,9] = np.max(np.array([features[ind,3] for ind in current_neigh]))
 
         # neighborhood stdev
-        features[i,9] = np.std(np.array([vect_list[ind] for ind in current_neigh]).flatten())
+        features[i,10] = np.std(np.array([vect_list[ind] for ind in current_neigh]).flatten())
+
+        # neighborhood average slope 
+        features[i,11] = np.mean(np.array([vect_list[ind,5] for ind in current_neigh]))
 
     print("extracted neighborhood features")
 
-    features = preprocessing.normalize(features, axis=1)
+    for f in range(features.shape[1]):
+        f_min = np.min(features[:,f])
+        f_max = np.max(features[:,f])
+        features[:,f] = (features[:,f] - f_min) / (f_max - f_min)
     np.save(features_filename, features)
     return features
 

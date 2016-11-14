@@ -3,3 +3,8 @@ small-fragment-data/
 predictions/
 .DS_Store
 feat_cache/
+__pycache__/
+CarbonSampleNov2016/
+old_output/
+*.npy
+*.pyc
