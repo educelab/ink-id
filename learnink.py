@@ -36,7 +36,7 @@ def main():
     MIN = 2 # the minimum number of points above THRESH to be considered on the fragment
     CUT_IN = 8 # how far beyond the surface point to go
     CUT_BACK = 16 # how far behind the surface point to go
-    STRP_RNGE = 8  # the width of the strip to train on
+    STRP_RNGE = 64  # the width of the strip to train on
     NEIGH_RADIUS = 2  # the radius of the strip to train on
     Cf = 1e4 # the float value to use for regularization
     NR = NEIGH_RADIUS
@@ -94,6 +94,7 @@ def main():
     all_feats = vect_list
 
 
+    print("splitting train/test sets")
     # make train and test
     n = len(frag_inds)
     k1 = int(.6*n)
@@ -110,10 +111,14 @@ def main():
     test_y = truth_list[test_inds]
     assert len(test_x) == len(test_y)
 
-    preds = learn_lr(train_x, train_y, all_feats)
-    make_full_pred_pic(preds, name="lr-C{}-".format(Cf))
-    preds = learn_tf_mlp(train_x, train_y, all_feats)
-    make_full_pred_pic(preds, name="tf-mlp-")
+    print("training models for predictions")
+    #preds = learn_lr(train_x, train_y, all_feats)
+    #make_full_pred_pic(preds, name="lr-C{}-".format(Cf))
+    rec = 7
+    preds = learn_tf_cnn(rec, train_x, train_y, all_feats)
+    make_full_pred_pic(preds, name="tf-cnn-s{}-".format(rec))
+    #preds = learn_tf_mlp(train_x, train_y, all_feats)
+    #make_full_pred_pic(preds, name="tf-mlp-")
     
     ''' 
     # use this loop for single-feature training
@@ -143,10 +148,9 @@ def main():
         if(num_inks > 20 and num_no_inks > 20):
             #preds[min_ind:max_ind] = learn_tf_tutor(tmp_x, tmp_y, test_x, test_y, tmp_feats)
             preds[min_ind:max_ind] = learn_lr(tmp_x, tmp_y, tmp_feats)
-    #make_full_pred_pic(preds, "tf-", strip='-strip{}'.format(STRP_RNGE))
-    make_full_pred_pic(preds, "lr-C{}-".format(Cf), strip='-strip{}'.format(STRP_RNGE))
-    '''     
-
+    make_full_pred_pic(preds, "tf-mlp-", strip='-strip{}'.format(STRP_RNGE))
+    #make_full_pred_pic(preds, "lr-C{}-".format(Cf), strip='-strip{}'.format(STRP_RNGE))
+    '''
     print("full script took {:.2f} seconds".format(time.time() - start_time))
 
 
@@ -165,6 +169,89 @@ def learn_svm(train_feats, train_gt, all_feats):
     clf.fit(train_feats, train_gt)
     preds = clf.predict(all_feats)
     return preds
+
+
+
+def learn_tf_cnn(rec, train_feats, train_gt, all_feats):
+    train_y = make_2d_gt(train_gt)
+    # Params
+    learning_rate = 0.001
+    batch_size = 128
+
+    n_input = train_feats.shape[1]
+    n_classes = 2
+
+    x = tf.placeholder(tf.float32, [None, n_input])
+    y_ = tf.placeholder(tf.float32, [None, n_classes])
+
+    weights = {
+        'wc1': tf.Variable(tf.random_normal([rec, 1, 1, 32])),
+        'wc2': tf.Variable(tf.random_normal([rec, 1, 32, 64])),
+        'wd1': tf.Variable(tf.random_normal([6*64, 1024])),
+        'out': tf.Variable(tf.random_normal([1024, n_classes]))
+    }
+
+    biases = {
+        'bc1': tf.Variable(tf.random_normal([32])),
+        'bc2': tf.Variable(tf.random_normal([64])),
+        'bd1': tf.Variable(tf.random_normal([1024])),
+        'out': tf.Variable(tf.random_normal([n_classes])),
+    }
+
+    y = conv_net(x, weights, biases)
+    print("x shape: {}".format(x.get_shape().as_list()))
+    print("y_ shape: {}".format(y_.get_shape().as_list()))
+    print("y shape: {}".format(y.get_shape().as_list()))
+    cost = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(y, y_))
+    optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(cost)
+
+    init = tf.initialize_all_variables()
+    sess = tf.Session()
+    sess.run(init)
+    steps = 0
+
+    for i in range(1,int(len(train_feats) / batch_size)):
+        print("training cnn at step {}".format(i))
+        batch_xs, batch_ys = (train_feats[(i-1)*batch_size: (i*batch_size)],
+                                train_y[(i-1)*batch_size: (i*batch_size)])
+        sess.run([optimizer,cost], feed_dict={x: batch_xs, y_: batch_ys})
+        steps += 1
+
+    print("training steps for cnn: {}".format(steps))
+    predictions = np.zeros(all_feats.shape[0])
+    for i in range(0, int(len(all_feats) / batch_size)-1):
+        predictions[(i*batch_size):((i+1)*batch_size)] = sess.run(y, feed_dict={
+            x:all_feats[(i*batch_size):((i+1)*batch_size)]})[:,1]
+    #predictions = sess.run(y, feed_dict={x:all_feats})[:,1]
+    p_min = np.min(predictions)
+    p_max = np.max(predictions)
+    return np.nan_to_num((predictions - p_min) / (p_max - p_min))
+
+
+def conv2d(x, W, b, stride=1):
+    x = tf.nn.conv2d(x, W, strides=[1, stride,stride, 1], padding='SAME')
+    x = tf.nn.bias_add(x, b)
+    return tf.nn.relu(x)
+
+
+def maxpool2d(x, k=2):
+    return tf.nn.max_pool(x, ksize=[1,k,k,1], strides=[1,k,k,1], padding='SAME')
+
+
+def conv_net(x, weights, biases):
+    x = tf.reshape(x, shape=[-1,(CUT_IN+CUT_BACK),1,1])
+
+    conv1 = conv2d(x, weights['wc1'], biases['bc1'])
+    conv1 = maxpool2d(conv1,k=2)
+    conv2 = conv2d(conv1, weights['wc2'], biases['bc2'])
+    conv2 = maxpool2d(conv2,k=2)
+
+    fc1 = tf.reshape(conv2, [-1, weights['wd1'].get_shape().as_list()[0]])
+    fc1 = tf.add(tf.matmul(fc1, weights['wd1']), biases['bd1'])
+    fc1 = tf.nn.relu(fc1)
+
+    out = tf.add(tf.matmul(fc1, weights['out']), biases['out'])
+    return out
 
 
 
@@ -208,10 +295,10 @@ def learn_tf_lr(train_feats, train_gt, test_feats, test_gt, all_feats):
 def learn_tf_mlp(train_feats, train_gt, all_feats):
     # parameters
     learning_rate = 0.001
-    batch_size = 200
+    batch_size = 64
     n_input = train_feats.shape[1]
     n_hidden_1 = train_feats.shape[1]
-    n_hidden_2 = train_feats.shape[1] * 4
+    n_hidden_2 = train_feats.shape[1] * 8
     n_classes = 2
 
     # Store layers weight & bias

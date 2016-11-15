@@ -152,7 +152,7 @@ def plot_slice_pts(slice_name, ink_pt_x, ink_pt_y, no_ink_pt_x, no_ink_pt_y):
     #figure 2: slice image, ink and no-ink plots
     fig2 = plt.figure(2)
     fig2.clf()
-    ymax = max([max(the_slice[ink_pt_x]), max(the_slice[no_ink_pt_x])]) + 100
+    #ymax = max([max(the_slice[ink_pt_x]), max(the_slice[no_ink_pt_x])]) + 100
     #ymin = min([min(the_slice[ink_pt_x]), min(the_slice[no_ink_pt_x])]) - 100
 
     #figure 1, subplot 0: slice image
@@ -168,7 +168,7 @@ def plot_slice_pts(slice_name, ink_pt_x, ink_pt_y, no_ink_pt_x, no_ink_pt_y):
     #figure 2, subplot 1: ink plot
     g1 = fig2.add_subplot(313,sharex=p1)
     axes = fig2.gca()
-    axes.set_ylim([0,ymax])
+    #axes.set_ylim([0,ymax])
     g1.scatter(np.arange(0,height),the_slice[ink_pt_x],color='g', marker='.')
     if(len(ink_vect_peaks) > 1):
         ink_vect_start = ink_vect_peaks[0]
@@ -195,6 +195,7 @@ def plot_slice_pts(slice_name, ink_pt_x, ink_pt_y, no_ink_pt_x, no_ink_pt_y):
                 [no_ink_vect[no_ink_vect_start],no_ink_vect[no_ink_vect_end]], \
                 color='r',marker='*')
 
+    axes.set_ylim([10000,30000])
     #show dat plot
     plt.show()
 
