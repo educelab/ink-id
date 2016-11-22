@@ -12,9 +12,10 @@ import tifffile as tiff
 import numpy as np
 import time
 from scipy.signal import argrelmax, argrelmin
-import features
+#import features
 import tensorflow as tf
 from sklearn.linear_model import LogisticRegression 
+from sklearn.metrics import confusion_matrix
 from sklearn import svm
 #from sklearn.metrics import confusion_matrix
 
@@ -32,13 +33,13 @@ def main():
     global NR
     global neigh_count
     global Cf
-    THRESH = 21000 # the intensity threshold at which to extract the surface
+    THRESH = 20200 # the intensity threshold at which to extract the surface
     MIN = 2 # the minimum number of points above THRESH to be considered on the fragment
     CUT_IN = 8 # how far beyond the surface point to go
     CUT_BACK = 16 # how far behind the surface point to go
     STRP_RNGE = 64  # the width of the strip to train on
     NEIGH_RADIUS = 2  # the radius of the strip to train on
-    Cf = 1e4 # the float value to use for regularization
+    Cf = 1e4 # the float value to use as the regularization parameter
     NR = NEIGH_RADIUS
     neigh_count = (2*NR+1)*(2*NR+1)
 
@@ -91,7 +92,7 @@ def main():
 
     print("extracting features")
     #all_feats = features.extract_for_list(vect_list, neigh_inds, CUT_IN, CUT_BACK, NR)
-    all_feats = vect_list
+    all_feats = vect_list.astype(np.float32)
 
 
     print("splitting train/test sets")
@@ -100,7 +101,8 @@ def main():
     k1 = int(.6*n)
     k2 = int(.1*n)
     np.random.shuffle(frag_inds)
-    train_inds = np.array(frag_inds[:k1])
+    train_inds = (np.array(frag_inds[:k1]))
+    #train_inds = np.sort(train_inds)
     test_inds = np.array(frag_inds[k1:(k1+k2)])
     #val_inds = inds[int(.8*n):]
 
@@ -114,9 +116,11 @@ def main():
     print("training models for predictions")
     #preds = learn_lr(train_x, train_y, all_feats)
     #make_full_pred_pic(preds, name="lr-C{}-".format(Cf))
-    rec = 7
-    preds = learn_tf_cnn(rec, train_x, train_y, all_feats)
-    make_full_pred_pic(preds, name="tf-cnn-s{}-".format(rec))
+    rec = 5
+    learn_r = 0.001
+    batch_s = 256
+    preds = learn_tf_cnn(rec, learn_r, batch_s, train_x, train_y, test_x, test_y, all_feats)
+    make_full_pred_pic(preds, name="tf-cnn-rec{}-batch{}-learn{}-".format(rec, batch_s, learn_r))
     #preds = learn_tf_mlp(train_x, train_y, all_feats)
     #make_full_pred_pic(preds, name="tf-mlp-")
     
@@ -172,11 +176,12 @@ def learn_svm(train_feats, train_gt, all_feats):
 
 
 
-def learn_tf_cnn(rec, train_feats, train_gt, all_feats):
+def learn_tf_cnn(rec, learn_r, batch_s, train_feats, train_gt, test_feats, test_gt, all_feats):
     train_y = make_2d_gt(train_gt)
     # Params
-    learning_rate = 0.001
-    batch_size = 128
+    learning_rate = learn_r
+    batch_size = batch_s 
+    display_step = 100
 
     n_input = train_feats.shape[1]
     n_classes = 2
@@ -187,14 +192,14 @@ def learn_tf_cnn(rec, train_feats, train_gt, all_feats):
     weights = {
         'wc1': tf.Variable(tf.random_normal([rec, 1, 1, 32])),
         'wc2': tf.Variable(tf.random_normal([rec, 1, 32, 64])),
-        'wd1': tf.Variable(tf.random_normal([6*64, 1024])),
-        'out': tf.Variable(tf.random_normal([1024, n_classes]))
+        'wd1': tf.Variable(tf.random_normal([6*64, 256])),
+        'out': tf.Variable(tf.random_normal([256, n_classes]))
     }
 
     biases = {
         'bc1': tf.Variable(tf.random_normal([32])),
         'bc2': tf.Variable(tf.random_normal([64])),
-        'bd1': tf.Variable(tf.random_normal([1024])),
+        'bd1': tf.Variable(tf.random_normal([256])),
         'out': tf.Variable(tf.random_normal([n_classes])),
     }
 
@@ -211,18 +216,27 @@ def learn_tf_cnn(rec, train_feats, train_gt, all_feats):
     steps = 0
 
     for i in range(1,int(len(train_feats) / batch_size)):
-        print("training cnn at step {}".format(i))
         batch_xs, batch_ys = (train_feats[(i-1)*batch_size: (i*batch_size)],
                                 train_y[(i-1)*batch_size: (i*batch_size)])
-        sess.run([optimizer,cost], feed_dict={x: batch_xs, y_: batch_ys})
+        _, c = sess.run([optimizer,cost], feed_dict={x: batch_xs, y_: batch_ys})
         steps += 1
+        if(steps % display_step == 0):
+            print("cost is {} at step {}".format(c,i))
 
-    print("training steps for cnn: {}".format(steps))
+
+    test_preds = sess.run(y, feed_dict={x:test_feats})[:,1]
+    conf_mat = confusion_matrix([0],[1])#test_preds, test_gt)
+    print("test results: \n{}".format(conf_mat))
+    print("test_preds: {}".format(test_preds[:10]))
+    print("test_gt : {}".format(test_gt[:10]))
+
     predictions = np.zeros(all_feats.shape[0])
     for i in range(0, int(len(all_feats) / batch_size)-1):
         predictions[(i*batch_size):((i+1)*batch_size)] = sess.run(y, feed_dict={
             x:all_feats[(i*batch_size):((i+1)*batch_size)]})[:,1]
-    #predictions = sess.run(y, feed_dict={x:all_feats})[:,1]
+    
+
+    #correct_prediction = tf.equal(tf.argmax(y, 1), tf.argmax(y, 1))
     p_min = np.min(predictions)
     p_max = np.max(predictions)
     return np.nan_to_num((predictions - p_min) / (p_max - p_min))
@@ -476,7 +490,7 @@ def make_full_pred_pic(preds, name='', feat='all', strip=''):
 
 
 def retrieve_surf_pts(volume):
-    surf_pts_filename = "surf-peaks-{}".format(THRESH)
+    surf_pts_filename = "surf-points-{}".format(THRESH)
     try:
         surf_pts = np.load(surf_pts_filename + ".npy")
         print("loaded surface points from file")
@@ -486,11 +500,12 @@ def retrieve_surf_pts(volume):
         for sl in range(num_slices):
             for v in range(slice_length):
                 try:
-                    surf_pts[sl][v] = extract_surf_peak(volume[sl][v])
+                    surf_pts[sl][v] = extract_surface(volume[sl][v])
                 except Exception:
                     # no definitive peak/valley on surface
                     pass
         np.save(surf_pts_filename, surf_pts)
+        print("extracted surface points and saved to file")
     return surf_pts
 
 
