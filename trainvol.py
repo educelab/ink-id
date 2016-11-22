@@ -36,7 +36,6 @@ class TrainVol(object):
 
         start = self.current_spot
         end = start + batch_size
-        self.current_spot = end
 
         batch_inds = self.train_inds[start:end]
         c = 0
@@ -53,6 +52,7 @@ class TrainVol(object):
             to_return_y[c][1] = 1 - self.ground_truth[row, col]
             c += 1
 
+        self.current_spot = end
         return (to_return_x, to_return_y)
 
 
