@@ -10,29 +10,47 @@ import numpy as np
 
 class TrainVol(object):
 
-    def __init__(self, volume_fn, truth_fn):
+    def __init__(self, volume_fn, truth_fn, CUT_IN, CUT_BACK, NR, THRESH):
         print("initializing TrainVol")
         self.current_spot = 0
         self.fragment_buffer = 4
-        self.NR = 2
-        self.C_IN = 4
-        self.C_BACK = 4
+        self.NR = NR
+        self.C_IN = CUT_IN
+        self.C_BACK = CUT_BACK
 
+        print("loading raw volume")
         self.raw_volume = np.load(volume_fn)
-        self.ground_truth = np.load(truth_fn)
+        print("loading ground truth")
+        self.raw_ground_truth = np.load(truth_fn)
+        print("adjusting ground truth for neighborhood radius {}".format(self.NR))
+        self.raw_ground_truth = np.where(self.raw_ground_truth > 0, 1, 0)
+        self.ground_truth = np.zeros(self.raw_ground_truth.shape, dtype=np.float32)
+        for i in range(self.NR, self.ground_truth.shape[0] - self.NR):
+            for j in range(self.NR, self.ground_truth.shape[1] - self.NR):
+                # make sure all labels in the neighborhood are ink
+                t_mean = np.mean(self.raw_ground_truth[i-NR:i+NR, j-NR:j+NR])
+                if t_mean == 1:
+                    self.ground_truth[i,j] = .99
+                #else:
+                #    self.ground_truth[i,j] = t_mean / 2
         self.flt_volume = self.raw_volume.astype(np.float32)
         self.train_style = 'drop'
         self.total_vects = self.raw_volume.shape[0]*self.raw_volume.shape[1]
-        self.frag_mask, self.surf_pts = self.find_frag_surf_at_thresh(20500)
-        print("done initializing TrainVol")
+        print("finding fragment surface at threshold {}".format(THRESH))
+        self.find_frag_surf_at_thresh(THRESH)
+        print("DONE initializing TrainVol")
 
 
 
     def next_batch(self, batch_size):
-        width = 2*self.NR + 1
+        width = 2*self.NR
         height = self.C_IN + self.C_BACK
         to_return_x = np.zeros((batch_size, width, height), dtype=np.float32)
         to_return_y = np.zeros((batch_size, 2), dtype=np.float32)
+
+        if(self.current_spot + batch_size > self.total_vects):
+            self.current_spot = 0
+            np.random.shuffle(self.train_inds)
 
         start = self.current_spot
         end = start + batch_size
@@ -45,15 +63,46 @@ class TrainVol(object):
         for ind in batch_inds:
             row,col = self.ind_to_coord(ind)
             surf = self.surf_pts[row, col]
-            print("row, col, surf = {}, {}, {}".format(row, col, surf))
-            to_put = self.flt_volume[row, col-NR:col+NR+1, surf-BK:surf+IN]
-            to_return_x[c] = to_put
-            to_return_y[c][0] = self.ground_truth[row, col]
-            to_return_y[c][1] = 1 - self.ground_truth[row, col]
+            to_put = self.flt_volume[row, col-NR:col+NR, surf-BK:surf+IN]
+            if to_put.shape == to_return_x[c].shape:
+                # randomly flip half of the data
+                if(np.random.randint(10) % 2 == 0):
+                    to_put = np.flipud(to_put)
+
+                to_return_x[c] = to_put
+                to_return_y[c][0] = self.ground_truth[row, col]
+                to_return_y[c][1] = 1 - self.ground_truth[row, col]
             c += 1
 
         self.current_spot = end
         return (to_return_x, to_return_y)
+
+
+
+
+    def get_predict_batch(self):
+        width = 2*self.NR
+        height = self.C_IN + self.C_BACK
+        to_return_x = np.zeros((self.total_vects, width, height), dtype=np.float32)
+        NR = self.NR
+        IN = self.C_IN
+        BK = self.C_BACK
+
+        for ind in range(self.total_vects):
+            row,col = self.ind_to_coord(ind)
+            surf = self.surf_pts[row, col]
+            to_put = self.flt_volume[row, col-NR:col+NR, surf-BK:surf+IN]
+            if to_put.shape == to_return_x[ind].shape:
+                to_return_x[ind] = to_put
+
+
+        return to_return_x
+
+
+
+
+    def get_output_shape(self):
+        return (self.flt_volume.shape[0], self.flt_volume.shape[1])
 
 
 
@@ -75,7 +124,8 @@ class TrainVol(object):
             self.train_style = 'drop'
             n = ind_pool.shape[0]
             np.random.shuffle(ind_pool)
-            train_inds = ind_pool[:(dropout*n)]
+            train_inds = ind_pool[:int(dropout*n)]
+            np.random.shuffle(train_inds)
 
         elif style == 'rhalf':
             # only train on the right half
@@ -104,13 +154,15 @@ class TrainVol(object):
 
         for i in range(n, self.raw_volume.shape[0]-n-1):
             for j in range(n, self.raw_volume.shape[1]-n-1):
-                if np.min(maxes[i-n:i+n+1, j-n:j+n+1].flatten()) > thresh:
+                if np.min(maxes[i-n:i+n+1, j-n:j+n+1]) > thresh:
                     frag_mask[i,j] = 1
                     vector = self.raw_volume[i,j]
                     surf_pts[i,j] = np.where(vector > thresh)[0][0]
 
-        return frag_mask, surf_pts
+        self.frag_mask = frag_mask
+        self.surf_pts = surf_pts
 
+    
 
 
     def ind_to_coord(self, ind):
