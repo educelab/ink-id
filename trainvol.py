@@ -7,36 +7,52 @@ __author__ = "Jack Bandy"
 __email__ = "jgba225@g.uky.edu"
 
 import numpy as np
+import time
+import tifffile as tiff
+from skimage.transform import resize
 
 class TrainVol(object):
 
-    def __init__(self, volume_fn, truth_fn, CUT_IN, CUT_BACK, NR, THRESH):
-        print("initializing TrainVol")
+    def __init__(self, volume_fn, truth_fn, CUT_IN, CUT_BACK, NR, THRESH, RSZ):
+        print("initializing TrainVol...")
         self.current_spot = 0
         self.fragment_buffer = 4
         self.NR = NR
         self.C_IN = CUT_IN
         self.C_BACK = CUT_BACK
+        self.RSZ = RSZ
 
-        print("loading raw volume")
-        self.raw_volume = np.load(volume_fn)
-        print("loading ground truth")
-        self.raw_ground_truth = np.load(truth_fn)
-        print("adjusting ground truth for neighborhood radius {}".format(self.NR))
+        print("loading raw volume...")
+        self.raw_volume = np.load(volume_fn).astype(np.float64)
+        x,y,z = self.raw_volume.shape
+        rx = int(x/RSZ)
+        ry = int(y/RSZ)
+        rz = int(z/RSZ)
+        print("resizing volume...")
+        self.raw_volume = resize(self.raw_volume, (rx,ry,rz)).astype(np.uint16)
+        print("loading ground truth...")
+        self.raw_ground_truth = np.load(truth_fn).astype(np.float64)
+        self.raw_ground_truth = resize(self.raw_ground_truth, (rx,ry)).astype(np.uint8)
+        print("adjusting ground truth for neighborhood radius {}...".format(self.NR))
         self.raw_ground_truth = np.where(self.raw_ground_truth > 0, 1, 0)
         self.ground_truth = np.zeros(self.raw_ground_truth.shape, dtype=np.float32)
         for i in range(self.NR, self.ground_truth.shape[0] - self.NR):
             for j in range(self.NR, self.ground_truth.shape[1] - self.NR):
                 # make sure all labels in the neighborhood are ink
                 t_mean = np.mean(self.raw_ground_truth[i-NR:i+NR, j-NR:j+NR])
-                if t_mean == 1:
+                if t_mean > .9:
                     self.ground_truth[i,j] = .99
-                #else:
-                #    self.ground_truth[i,j] = t_mean / 2
+                elif t_mean < .1:
+                    self.ground_truth[i,j] = .01
+                '''
+                else:
+                    self.ground_truth[i,j] = t_mean / 2
+                '''
         self.flt_volume = self.raw_volume.astype(np.float32)
-        self.train_style = 'drop'
+        self.train_style = 'random'
+        np.random.seed(int(time.time())) # use a different seed each time
         self.total_vects = self.raw_volume.shape[0]*self.raw_volume.shape[1]
-        print("finding fragment surface at threshold {}".format(THRESH))
+        print("finding fragment surface at threshold {}...".format(THRESH))
         self.find_frag_surf_at_thresh(THRESH)
         print("DONE initializing TrainVol")
 
@@ -107,7 +123,7 @@ class TrainVol(object):
 
 
 
-    def make_train_with_style(self, style, dropout=0.6):
+    def make_train_with_style(self, style, prob=0.6):
         ind_pool = np.zeros(self.total_vects, dtype=np.int)
 
         print("creating fragment mask")
@@ -119,12 +135,12 @@ class TrainVol(object):
         ind_pool = ind_pool[np.nonzero(ind_pool)[0]]
         print("created fragment mask")
 
-        if style == 'drop':
+        if style == 'random':
             # train on a random sample of dropout% points
-            self.train_style = 'drop'
+            self.train_style = 'random'
             n = ind_pool.shape[0]
             np.random.shuffle(ind_pool)
-            train_inds = ind_pool[:int(dropout*n)]
+            train_inds = ind_pool[:int(prob*n)]
             np.random.shuffle(train_inds)
 
         elif style == 'rhalf':
@@ -142,6 +158,11 @@ class TrainVol(object):
             np.random.shuffle(train_inds)
 
         self.train_inds = train_inds
+        train_coords = [self.ind_to_coord(i) for i in train_inds]
+        truth_pic = np.zeros(self.ground_truth.shape, dtype=np.uint16)
+        for (i,j) in train_coords:
+            truth_pic[i,j] = (self.ground_truth[i,j] + 1) * (65534 / 2)
+        tiff.imsave('predictions/latest-training-truth.tif', truth_pic)
 
 
 
