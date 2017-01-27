@@ -7,71 +7,158 @@ __author__ = "Jack Bandy"
 __email__ = "jgba225@g.uky.edu"
 
 import numpy as np
+import tifffile as tiff
 from sklearn import preprocessing
+from scipy.signal import argrelmax, argrelmin
 
 
-def extract_for_list(vect_list, neigh_inds, CUT_IN, CUT_BACK, NEIGH_RADIUS):
-    num_features = 12
-    features = np.zeros((len(vect_list), num_features), dtype=np.float32)
+def main():
+    """Run feature extraction ad-hoc"""
+    print("Initializing...")
+    folder = '/home/jack/devel/ink-id/small-fragment-data/'
+    vol = np.load(folder+'volume.npy')
+    surf_pts = np.zeros((vol.shape[0], vol.shape[1]), dtype=np.int)
 
-    features_filename = "feat_cache/l-{}features-in{}-back{}-neigh{}".format(
-            num_features, CUT_IN, CUT_BACK, NEIGH_RADIUS)
+    maxes = np.max(vol, axis=2)
+    frag_mask = np.zeros(maxes.shape, dtype=np.uint16)
+    surf_pts = np.zeros(maxes.shape, dtype=np.int)
+    surf_vals = np.zeros(maxes.shape, dtype=np.int)
+    surf_peaks = np.zeros(maxes.shape, dtype=np.int)
+    #surf_pts_reverse = np.zeros(maxes.shape, dtype=np.int)
 
-    try:
-        features = np.load(features_filename+".npy")
-        print("loaded features from file")
-        return features
-    except Exception:
-        pass
+    n = 2 # neighborhood to verify
+    thresh = 20500
+    CUT_IN = 8
+    CUT_BACK = 8
+
+    print("Extracting surface...")
+    errors = 0
+    successes = 0
+    for i in range(n, vol.shape[0]-n-1):
+        for j in range(n, vol.shape[1]-n-1):
+            # if points in the point's neighborhood exceed the threshold
+            if np.min(maxes[i-n:i+n+1, j-n:j+n+1]) > thresh:
+                # mark it as a point on the fragment
+                frag_mask[i,j] = 1
+                try:
+                    above = np.where(vol[i,j] > thresh)[0]
+                    valley = argrelmin(vol[i,j,:above[0]])[0][-1] # the 'entry' trough 
+                    peak = valley + argrelmax(vol[i,j,valley:])[0][0]
+                    surface = int((peak + valley) / 2)
+                    
+                    surf_pts[i,j] = surface
+                    surf_peaks[i,j] = peak
+                    surf_vals[i,j] = valley 
+                    successes += 1
+                except Exception:
+                    # no definitive peak/valley surface
+                    errors += 1
+        if (i % int(vol.shape[0] / 10) == 0):
+            print('{}% done'.format(int((i / vol.shape[0]) * 100)))
+    print("Finished extracting surface with {} no-surface points, {} surface points".format(errors, successes))
+    np.save('/home/jack/devel/ink-id/output/ad-hoc-surf-{}'.format(thresh), surf_pts)
+    np.save('/home/jack/devel/ink-id/output/ad-hoc-peaks-{}'.format(thresh), surf_peaks)
+    np.save('/home/jack/devel/ink-id/output/ad-hoc-valls-{}'.format(thresh), surf_vals)
 
 
-    # vector average
-    features[:,0] = np.mean(vect_list, axis=1)
+    feats = extract_for_volume(vol, surf_pts, surf_peaks, surf_vals, CUT_IN, CUT_BACK, thresh)
+    for i in range(feats.shape[2]):
+        feats[:,:,i] = (feats[:,:,i] - np.min(feats[:,:,i])) / np.max(feats[:,:,i])
+    #np.save('/home/jack/devel/ink-id/output/ad-hoc-feats-norm-{}'.format(thresh), feats)
+    for i in range(feats.shape[2]):
+        outpic = feats[:,:,i] * 65535
+        outpictif = outpic.astype(np.uint16)
+        tiff.imsave('/home/jack/devel/ink-id/output/feat{}-{}'.format(i,thresh), outpictif)
 
-    # vector integral
-    features[:,1] = (np.sum(vect_list, axis=1))
 
-    # vector min
-    features[:,2] = (np.min(vect_list, axis=1))
 
-    # vector max
-    features[:,3] = (np.max(vect_list, axis=1))
 
-    # vector stdev
-    features[:,4] = (np.std(vect_list, axis=1))
 
-    # average vector slope 
-    features[:,5] = np.mean(np.gradient(vect_list, axis=1), axis=1)
 
-    for i in range(len(neigh_inds)):
-        current_neigh = neigh_inds[i,np.nonzero(neigh_inds[i])]
+def extract_for_volume(volume, surf_pts, surf_peaks, surf_valls, CUT_IN, CUT_BACK, THRESH):
+    num_features = 15
+    output_dims = (volume.shape[0], volume.shape[1])
+    features = np.zeros((volume.shape[0], volume.shape[1], num_features), dtype=np.float64)
 
-        # neighborhood average
-        features[i,6] = np.mean(np.array([features[ind,0] for ind in current_neigh]))
+    # fixed-window features
+    surf_inds = np.zeros(output_dims, dtype=np.float64)
+    vall_inds = np.zeros(output_dims, dtype=np.float64)
+    peak_inds = np.zeros(output_dims, dtype=np.float64)
+    surf_vals = np.zeros(output_dims, dtype=np.float64)
+    vall_vals = np.zeros(output_dims, dtype=np.float64)
+    peak_vals = np.zeros(output_dims, dtype=np.float64)
+    min_vals = np.zeros(output_dims, dtype=np.float64)
+    max_vals = np.zeros(output_dims, dtype=np.float64)
+    avg_vals = np.zeros(output_dims, dtype=np.float64)
+    sum_vals = np.zeros(output_dims, dtype=np.float64)
+    std_vals = np.zeros(output_dims, dtype=np.float64)
 
-        # neighborhood integral
-        features[i,7] = np.sum(np.array([features[ind,1] for ind in current_neigh]))
+    # d_ynamic features: changes depending on peak and valley location
+    d_width_vals = np.zeros(output_dims, dtype=np.float64)
+    d_avg_vals = np.zeros(output_dims, dtype=np.float64)
+    d_sum_vals = np.zeros(output_dims, dtype=np.float64)
+    d_std_vals = np.zeros(output_dims, dtype=np.float64)
 
-        # neighborhood min
-        features[i,8] = np.min(np.array([features[ind,2] for ind in current_neigh]))
+    count = 0
+    print("Extracting features...")
+    for i in range(volume.shape[0]):
+        for j in range(volume.shape[1]):
+            surface = surf_pts[i,j]
+            valley = surf_valls[i,j]
+            peak = surf_peaks[i,j]
 
-        # neighborhood max
-        features[i,9] = np.max(np.array([features[ind,3] for ind in current_neigh]))
+            if peak > 0 and valley > 0:
+                try:
+                    vector = volume[i,j, surface-CUT_BACK:surface+CUT_IN]
+                    d_vector = volume[i,j, valley:peak]
 
-        # neighborhood stdev
-        features[i,10] = np.std(np.array([vect_list[ind] for ind in current_neigh]).flatten())
+                    surf_inds[i,j] = surface
+                    vall_inds[i,j] = valley
+                    peak_inds[i,j] = peak
+                    surf_vals[i,j] = vol[i,j,surface]
+                    vall_vals[i,j] = vol[i,j,valley]
+                    peak_vals[i,j] = vol[i,j,peak]
+                    min_vals[i,j] = np.min(vector)
+                    max_vals[i,j] = np.max(vector)
+                    avg_vals[i,j] = np.mean(vector)
+                    sum_vals[i,j] = np.sum(vector)
+                    std_vals[i,j] = np.std(vector)
 
-        # neighborhood average slope 
-        features[i,11] = np.mean(np.array([vect_list[ind,5] for ind in current_neigh]))
+                    # d_ynamic features
+                    d_width_vals[i,j] = peak - valley
+                    d_avg_vals[i,j] = np.mean(d_vector)
+                    d_sum_vals[i,j] = np.sum(d_vector)
+                    d_std_vals[i,j] = np.std(d_vector)
+                    count += 1
+                except Exception:
+                    # catches "zero-size array to reduction operation" error
+                    pass
 
-    print("extracted neighborhood features")
+        # progress update
+        if (i % (int(volume.shape[0] / 10))) == 0:
+            print("{}% done".format( int(i / volume.shape[0] * 100)))
 
-    for f in range(features.shape[1]):
-        f_min = np.min(features[:,f])
-        f_max = np.max(features[:,f])
-        features[:,f] = (features[:,f] - f_min) / (f_max - f_min)
-    np.save(features_filename, features)
+    print("Extracted at {} points".format(count))
+    features[:,:,0] = surf_inds 
+    features[:,:,1] = vall_inds
+    features[:,:,2] = peak_inds
+    features[:,:,3] = surf_vals 
+    features[:,:,4] = vall_vals
+    features[:,:,5] = peak_vals
+    features[:,:,6] = min_vals
+    features[:,:,7] = max_vals
+    features[:,:,8] = avg_vals
+    features[:,:,9] = sum_vals
+    features[:,:,10] = std_vals
+    features[:,:,11] = d_width_vals
+    features[:,:,12] = d_avg_vals
+    features[:,:,13] = d_sum_vals
+    features[:,:,14] = d_std_vals
+
     return features
+
+
+
 
 
 def extract_for_vol(volume, surf_pts, CUT_IN, CUT_BACK, NEIGH_RADIUS, THRESH):
@@ -162,4 +249,70 @@ def extract_for_vol(volume, surf_pts, CUT_IN, CUT_BACK, NEIGH_RADIUS, THRESH):
 
 
 
+def extract_for_list(vect_list, neigh_inds, CUT_IN, CUT_BACK, NEIGH_RADIUS):
+    num_features = 12
+    features = np.zeros((len(vect_list), num_features), dtype=np.float32)
+
+    features_filename = "feat_cache/l-{}features-in{}-back{}-neigh{}".format(
+            num_features, CUT_IN, CUT_BACK, NEIGH_RADIUS)
+
+    try:
+        features = np.load(features_filename+".npy")
+        print("loaded features from file")
+        return features
+    except Exception:
+        pass
+
+
+    # vector average
+    features[:,0] = np.mean(vect_list, axis=1)
+
+    # vector integral
+    features[:,1] = (np.sum(vect_list, axis=1))
+
+    # vector min
+    features[:,2] = (np.min(vect_list, axis=1))
+
+    # vector max
+    features[:,3] = (np.max(vect_list, axis=1))
+
+    # vector stdev
+    features[:,4] = (np.std(vect_list, axis=1))
+
+    # average vector slope 
+    features[:,5] = np.mean(np.gradient(vect_list, axis=1), axis=1)
+
+    for i in range(len(neigh_inds)):
+        current_neigh = neigh_inds[i,np.nonzero(neigh_inds[i])]
+
+        # neighborhood average
+        features[i,6] = np.mean(np.array([features[ind,0] for ind in current_neigh]))
+
+        # neighborhood integral
+        features[i,7] = np.sum(np.array([features[ind,1] for ind in current_neigh]))
+
+        # neighborhood min
+        features[i,8] = np.min(np.array([features[ind,2] for ind in current_neigh]))
+
+        # neighborhood max
+        features[i,9] = np.max(np.array([features[ind,3] for ind in current_neigh]))
+
+        # neighborhood stdev
+        features[i,10] = np.std(np.array([vect_list[ind] for ind in current_neigh]).flatten())
+
+        # neighborhood average slope 
+        features[i,11] = np.mean(np.array([vect_list[ind,5] for ind in current_neigh]))
+
+    print("extracted neighborhood features")
+
+    for f in range(features.shape[1]):
+        f_min = np.min(features[:,f])
+        f_max = np.max(features[:,f])
+        features[:,f] = (features[:,f] - f_min) / (f_max - f_min)
+    np.save(features_filename, features)
+    return features
+
+
+if __name__ == "__main__":
+    main()
 
