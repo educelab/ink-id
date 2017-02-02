@@ -11,7 +11,7 @@ args = {
     "y_Dimension": 50,
     "z_Dimension": 50,
     "learningRate": 0.001,
-    "batchSize": 50,
+    "batchSize": 5,
     "dropout": 0.75,
     "trainingIterations": 50000,
     "analyzeStep": 50,
