@@ -11,11 +11,12 @@ def readData(args):
     for f in files:
         sliceData = np.array(Image.open(args["dataPath"]+f))
         volume.append(sliceData)
-    volume = np.array(volume)
+    volume = np.transpose(volume, (2,1,0))
+    volume = (volume - np.min(volume)) / (np.amax(volume) - np.min(volume))
 
-    x = int(math.floor(int(volume[0,0,:].shape[0])/args["x_Dimension"]))
+    x = int(math.floor(int(volume[:,0,0].shape[0])/args["x_Dimension"]))
     y = int(math.floor(int(volume[0,:,0].shape[0])/args["y_Dimension"]))
-    z = int(math.floor(int(volume[:,0,0].shape[0])/args["z_Dimension"]))
+    z = int(math.floor(int(volume[0,0,:].shape[0])/args["z_Dimension"]))
     n_cubes =  z * x * y
     inputSubVolumes = np.empty((n_cubes, args["x_Dimension"], args["y_Dimension"], args["z_Dimension"]))
     cubeCount = 0
