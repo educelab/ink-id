@@ -62,9 +62,11 @@ def main():
 
 
     feats = extract_for_volume(vol, surf_pts, surf_peaks, surf_vals, CUT_IN, CUT_BACK, thresh)
+    np.save('/home/jack/devel/ink-id/output/ad-hoc-feats-raw-{}'.format(thresh), feats)
     for i in range(feats.shape[2]):
         feats[:,:,i] = (feats[:,:,i] - np.min(feats[:,:,i])) / np.max(feats[:,:,i])
-    #np.save('/home/jack/devel/ink-id/output/ad-hoc-feats-norm-{}'.format(thresh), feats)
+
+    np.save('/home/jack/devel/ink-id/output/ad-hoc-feats-norm-{}'.format(thresh), feats)
     for i in range(feats.shape[2]):
         outpic = feats[:,:,i] * 65535
         outpictif = outpic.astype(np.uint16)
@@ -115,9 +117,9 @@ def extract_for_volume(volume, surf_pts, surf_peaks, surf_valls, CUT_IN, CUT_BAC
                     surf_inds[i,j] = surface
                     vall_inds[i,j] = valley
                     peak_inds[i,j] = peak
-                    surf_vals[i,j] = vol[i,j,surface]
-                    vall_vals[i,j] = vol[i,j,valley]
-                    peak_vals[i,j] = vol[i,j,peak]
+                    surf_vals[i,j] = volume[i,j,surface]
+                    vall_vals[i,j] = volume[i,j,valley]
+                    peak_vals[i,j] = volume[i,j,peak]
                     min_vals[i,j] = np.min(vector)
                     max_vals[i,j] = np.max(vector)
                     avg_vals[i,j] = np.mean(vector)

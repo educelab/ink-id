@@ -29,18 +29,20 @@ train_vol.make_train_with_style('rhalf')
 # Parameters
 learning_rate = 0.001
 training_iters = 10000
-batch_size = 50
-display_step = 10
+batch_size = 32
+pred_batch_size = 128
+display_step = 20
 pred_display_step = 100
 dropout = .8
 PARAMS = 'lr{}-iters{}-batch{}-drop{}-in{}-back{}-NR{}-thresh{}-resize{}'.format(
         learning_rate, training_iters, batch_size, dropout, CUT_IN, CUT_BACK, NR, THRESH, RSZ)
 
+
 # Network Parameters
-input_height = 64
-input_width = 64
-overlap_height = 48
-overlap_width = 48
+input_height = 32
+input_width = 32
+overlap_height = 24
+overlap_width = 24
 n_input = input_height * input_width
 n_classes = 2 # total classes
 
@@ -84,96 +86,128 @@ def conv_net(x, weights, biases, dropout):
 
     # Output layer: class prediction
     # reshape to fit the layer
-    print("\nconv6: {} \nout: {}".format(tf.shape(conv6), tf.shape(weights['out'])))
     conv6 = tf.reshape(conv6, [-1, weights['out'].get_shape().as_list()[0]])
     # reshape conv6
-    print("After reshape:\nconv6: {} \nout: {}".format(tf.shape(conv6), tf.shape(weights['out'])))
     out = tf.add(tf.matmul(conv6, weights['out']), biases['out'])
     return tf.nn.dropout(out, dropout)
 
-# Store layers weight & bias
-weights = {
-    # layer 1: 3x3 conv, 1 input, 32 outputs
-    'wc1': tf.Variable(tf.random_normal([3, 3, 1, 2])),
-    # layer 2: 5x5 conv, 32 inputs, 64 outputs
-    'wc2': tf.Variable(tf.random_normal([3, 3, 2, 4])),
-    # layer 3: convolution
-    'wc3': tf.Variable(tf.random_normal([3, 3, 4, 8])),
-    # layer 4: convolution
-    'wc4': tf.Variable(tf.random_normal([3, 3, 8, 16])),
-    # layer 5: convolution
-    'wc5': tf.Variable(tf.random_normal([3, 3, 16, 32])),
-    # layer 6: convolution
-    'wc6': tf.Variable(tf.random_normal([3, 3, 32, 64])),
 
-    # output layer
-    # should be 8*8*64
-    'out': tf.Variable(tf.random_normal([8*8*64, n_classes]))
-}
-
-biases = {
-    # seven biases: 6 layers + output
-    'bc1': tf.Variable(tf.random_normal([2])),
-    'bc2': tf.Variable(tf.random_normal([4])),
-    'bc3': tf.Variable(tf.random_normal([8])),
-    'bc4': tf.Variable(tf.random_normal([16])),
-    'bc5': tf.Variable(tf.random_normal([32])),
-    'bc6': tf.Variable(tf.random_normal([64])),
-
-    'out': tf.Variable(tf.random_normal([n_classes]))
-}
-
-# Construct model
-pred = conv_net(x, weights, biases, keep_prob)
-
-# Define loss and optimizer
-cost = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(pred, y))
-optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(cost)
-
-# Evaluate model
-correct_pred = tf.equal(tf.argmax(tf.nn.softmax(pred), 1), tf.argmax(y, 1))
-accuracy = tf.reduce_mean(tf.cast(correct_pred, tf.float32))
-
-# Initializing the variables
-init = tf.global_variables_initializer()
 
 
 features = np.load('/home/jack/devel/ink-id/output/ad-hoc-feats-norm-20500.npy')
 truth = np.load('/home/jack/devel/ink-id/small-fragment-data/volume-truth.npy')
 train_portion = .8 # train on the left .x portion of the fragment
 pred_x = []
+pred_y = []
+pred_coords = []
 all_x = []
 all_y = []
 i = 0
 j = 0
 while i in range(features.shape[0] - input_height):
-    while j in range(int(train_portion * (features.shape[1] - input_width))):
+    while j in range(features.shape[1] - input_width):
         pred_x.append(features[i:i+input_height, j:j+input_width])
-        if np.mean(truth[i:i+input_height, j:j+input_width]) > (255* .8):
-            all_x.append(features[i:i+input_height, j:j+input_width])
-            all_y.append((0,1))
-        elif np.mean(truth[i:i+input_height, j:j+input_width]) < (255 * .2):
-            all_x.append(features[i:i+input_height, j:j+input_width])
-            all_y.append((1,0))
-        j += (input_width - overlap_width)
-    j = 0
-    i += (input_height - overlap_height)
+        pred_coords.append((i,j))
+        truth_val = np.mean(truth[i:i+input_height, j:j+input_width])
+        pred_y.append(truth_val)
+        if j < train_portion * (features.shape[1] - input_width):
+            if truth_val > (255* .9):
+                all_x.append(features[i:i+input_height, j:j+input_width])
+                all_y.append((0,1))
+            elif truth_val < (255 * .1):
+                all_x.append(features[i:i+input_height, j:j+input_width])
+                all_y.append((1,0))
+        j += (input_width - overlap_width) # incriment the column
+    j = 0 # go back to first column
+    i += (input_height - overlap_height) # increment the row
 
 
+
+
+# for loop to train on each feature
 for f in range(features.shape[2]):
-    print("features.shape: {}".format(features.shape))
-    print("all_x.shape: {}".format(np.array(all_x).shape))
-    all_x_f = np.array(all_x)[:,:,:,f]
-    all_y_f = all_y
+    start_t_f = time.time()
+   
+    # double the data: for each sample, add a modification of it
+    all_x_f = np.array(all_x + all_x)[:,:,:,f]
+    for i in range(int(len(all_x_f) / 2)):
+        # perform operations on the first half of the data
+        operation = np.random.randint(4)
+        if (operation == 0):
+            # flip vertical
+            all_x_f[i] = np.flipud(all_x_f[i])
+        elif (operation == 1):
+            # flip horizontal
+            all_x_f[i] = np.fliplr(all_x_f[i])
+        elif (operation == 2):
+            # rotate 90 degrees counter-clockwise
+            all_x_f[i] = np.rot90(all_x_f[i])
+        elif (operation == 3):
+            # rotate 90 degrees clockwise
+            all_x_f[i] = np.rot90(all_x_f[i], 3)
+
+
+    # shuffle input and labels in parallel
+    all_y_f = all_y + all_y
     pairs = list(zip(all_x_f, all_y_f))
     np.random.shuffle(pairs)
     all_x_f, all_y_f = zip(*pairs)
-    print("training on feature {} using {} samples...".format(f, len(all_y)))
+
+
+    # layers weight & bias - must be defined for each features' training iteration
+    weights = {
+        # layer 1: 3x3 conv, 1 input channel, 2 output channels
+        'wc1': tf.Variable(tf.random_normal([3, 3, 1, 2])),
+        # layer 2: 3x3 conv, 2 input channels, 4 output channels
+        'wc2': tf.Variable(tf.random_normal([3, 3, 2, 4])),
+        # layer 3: convolution
+        'wc3': tf.Variable(tf.random_normal([3, 3, 4, 8])),
+        # layer 4: convolution
+        'wc4': tf.Variable(tf.random_normal([3, 3, 8, 16])),
+        # layer 5: convolution
+        'wc5': tf.Variable(tf.random_normal([3, 3, 16, 32])),
+        # layer 6: convolution
+        'wc6': tf.Variable(tf.random_normal([3, 3, 32, 64])),
+
+        # output layer
+        # should be 8*8*64
+        'out': tf.Variable(tf.random_normal([4*4*64, n_classes]))
+    }
+
+    biases = {
+        # seven biases: 6 layers + output
+        'bc1': tf.Variable(tf.random_normal([2])),
+        'bc2': tf.Variable(tf.random_normal([4])),
+        'bc3': tf.Variable(tf.random_normal([8])),
+        'bc4': tf.Variable(tf.random_normal([16])),
+        'bc5': tf.Variable(tf.random_normal([32])),
+        'bc6': tf.Variable(tf.random_normal([64])),
+
+        'out': tf.Variable(tf.random_normal([n_classes]))
+    }
+
+    # Construct model
+    pred = conv_net(x, weights, biases, keep_prob)
+
+    # Define loss and optimizer
+    cost = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(pred, y))
+    optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(cost)
+
+    # Evaluate model
+    correct_pred = tf.equal(tf.argmax(tf.nn.softmax(pred), 1), tf.argmax(y, 1))
+    accuracy = tf.reduce_mean(tf.cast(correct_pred, tf.float32))
+
+    # fresh network for each feature
+    init = tf.global_variables_initializer()
+
+
+
     # run the network for feature f
+    print("training on feature {} using {} samples...".format(f, len(all_y_f)))
     with tf.Session() as sess:
         sess.run(init)
         step = 1
-        while step * batch_size < len(all_x):
+        while step * batch_size < len(all_x_f):
             batch_x = np.array(all_x_f[(step-1)*batch_size:step*batch_size])
             batch_y = np.array(all_y_f[(step-1)*batch_size:step*batch_size])
             batch_x = np.reshape(batch_x, (-1, n_input))
@@ -185,26 +219,42 @@ for f in range(features.shape[2]):
                 print("Iter " + str(step*batch_size) + ", Minibatch Loss= " + \
                       "{:.4f}".format(loss) + ", Training Accuracy= " + \
                       "{:.4f}".format(acc))
-                print("{} ink samples in batch".format(np.count_nonzero(batch_y[:,0])))
+                print("{} ink samples in batch".format(np.count_nonzero(batch_y[:,1])))
             step += 1
-   
+        print("took {:.2f} seconds to train".format(time.time() - start_t_f))
+ 
+
+        # make predictions
         print("PREDICTING for feature {}...".format(f))
         pred_x = np.reshape(pred_x, (-1, n_input))
         predictions = np.zeros(pred_x.shape[0])
-        prediction_batches = int(len(pred_x) / batch_size) - 1
+        prediction_batches = int(len(pred_x) / pred_batch_size) - 1
         for i in range(0, prediction_batches):
             predictions[(i*batch_size):((i+1)*batch_size)] = sess.run(tf.nn.softmax(pred), feed_dict={
                         x:pred_x[(i*batch_size):((i+1)*batch_size)],
                         keep_prob: 1.})[:,1]
             if i % int(prediction_batches / 10) == 0:
                 print("{}% done".format(int((i / prediction_batches) * 100)))
-        out_height = int(features.shape[0] / input_height)
-        out_width = int(features.shape[1] / input_width)
-        output_pic = np.zeros((out_height, out_width), dtype=np.uint16)
-        for i in range(out_height):
-            for j in range(out_width):
-                output_pic[i,j] = predictions[(i*out_width) + j]
-        tiff.imsave('output/predictions-feat{}.tif'.format(f), output_pic)
+        output_pic = np.zeros((features.shape[0], features.shape[1]), dtype=np.float64)
+        truth_pic = np.zeros((features.shape[0], features.shape[1]), dtype=np.float64)
+
+
+        # save the results
+        print("Creating prediction image with shape: {}...".format(output_pic.shape))
+        for ind in range(len(pred_coords)):
+            (i,j) = pred_coords[ind]
+            output_pic[i:i+input_height, j:j+input_width] += predictions[ind] # to show overlap
+            truth_pic[i:i+input_height, j:j+input_width] += pred_y[ind]
+        # scale to uint8
+        output_pic = output_pic * (65535 / np.max(output_pic)) 
+        truth_pic = truth_pic * (65535 / np.max(truth_pic))
+
+        tiff.imsave('output/predictions-feat{}-{}x{}.tif'.format(
+            f, input_height, input_width), output_pic.astype(np.uint16))
+        tiff.imsave('output/used-truth.tif', truth_pic.astype(np.uint16))
+
+    print("feature {} took {:.2f} seconds".format(f, time.time() - start_t_f))
+
 
 print("full script took {:.2f} seconds".format(time.time() - start_t))
 
