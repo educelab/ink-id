@@ -16,7 +16,10 @@ def main():
     """Run feature extraction ad-hoc"""
     print("Initializing...")
     folder = '/home/jack/devel/ink-id/small-fragment-data/'
-    vol = np.load(folder+'volume.npy')
+    vol_front = np.load(folder+'volume.npy')
+    vol_flip = np.flip(vol_front, axis=2)
+    vol = np.concatenate((vol_front, vol_flip), axis=1)
+    print("Created reversed volume with shape {}".format(vol.shape))
     surf_pts = np.zeros((vol.shape[0], vol.shape[1]), dtype=np.int)
 
     maxes = np.max(vol, axis=2)
