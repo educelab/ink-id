@@ -15,16 +15,13 @@ def conv3d(x, weight, bias, padding=0):
 
     conv = tf.nn.bias_add(conv, bias)
     # conv = lrelu(conv)
-    conv = tf.nn.relu(conv)
+    convForward = tf.nn.relu(conv)
 
-    mean, variance = tf.nn.moments(conv, [0,1,2,3])
-    # shape = conv.get_shape().as_list()
-    # offset = tf.get_variable("offset"+str(shape[-1]), [shape[-1]], initializer=tf.constant_initializer(0.))
-    # scale = tf.get_variable("scale"+str(shape[-1]), [shape[-1]], initializer=tf.random_normal_initializer(1., 0.02))
-    conv = tf.nn.batch_normalization(conv, mean, variance, None, None, 1e-5)
+    mean, variance = tf.nn.moments(convForward, [0,1,2,3])
+    convForward = tf.nn.batch_normalization(convForward, mean, variance, None, None, 1e-5)
 
-    conv = tf.nn.pool(conv, [3,3,3], pooling_type="AVG", padding="SAME", strides=[2,2,2])
-    return conv
+    convForward = tf.nn.pool(convForward, [3,3,3], pooling_type="AVG", padding="SAME", strides=[2,2,2])
+    return conv, convForward
 
 
 def conv3d_transpose(x, weight, bias, outputShape, strides=2, padding=0, activation_fn=None):
@@ -35,18 +32,11 @@ def conv3d_transpose(x, weight, bias, outputShape, strides=2, padding=0, activat
     deconv = tf.nn.bias_add(deconv, bias)
 
     if activation_fn == "sigmoid":
-        return tf.nn.sigmoid(deconv)
+        return deconv, tf.nn.sigmoid(deconv)
 
-    deconv = tf.nn.relu(deconv)
+    deconvForward = tf.nn.relu(deconv)
 
-    mean, variance = tf.nn.moments(deconv, [0,1,2,3])
-    # shape = deconv.get_shape().as_list()
-    # offset = tf.get_variable("offsetTranspose"+str(shape[-1]), [shape[-1]], initializer=tf.constant_initializer(0.))
-    # scale = tf.get_variable("scaleTranspose"+str(shape[-1]), [shape[-1]], initializer=tf.random_normal_initializer(1., 0.02))
-    deconv = tf.nn.batch_normalization(deconv, mean, variance, None, None, 1e-5)
+    mean, variance = tf.nn.moments(deconvForward, [0,1,2,3])
+    deconvForward = tf.nn.batch_normalization(deconvForward, mean, variance, None, None, 1e-5)
 
-    # if activation_fn == "sigmoid":
-    #     return tf.nn.sigmoid(deconv)
-    # deconv = tf.nn.sigmoid(deconv)
-
-    return deconv
+    return deconv, deconvForward
