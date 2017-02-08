@@ -6,7 +6,6 @@ import numpy as np
 
 from ops import *
 
-z_Size = 8
 networkParams = {
     "nFilter0": 1,
     "nFilter1": 2,
@@ -47,7 +46,7 @@ biases = {
 def buildModel(x, args):
     l1, l2, l3, z_Mean, z_Stddev = encoder(x, args)
     batchSize = tf.shape(x)[0]
-    randomSample = tf.random_normal([batchSize, z_Size], 0, 1, dtype=tf.float32)
+    randomSample = tf.random_normal([batchSize, networkParams["zSize"]], 0, 1, dtype=tf.float32)
     z = z_Mean + (z_Stddev * randomSample)
 
     l4, l5, l6, finalLayer = decoder(z, args, batchSize)
@@ -59,10 +58,10 @@ def buildModel(x, args):
     latentLoss = -0.5 * tf.reduce_sum(1 + tf.log(tf.square(z_Stddev) + 1e-4) - tf.square(z_Mean) - tf.square(z_Stddev), 1)
 
     # Mean squared error (euclidean distance) function
-    generatorLoss = tf.sqrt(tf.reduce_mean(tf.square(tf.sub(flattenedG, flattenedImage)), 1))
+    # generatorLoss = tf.sqrt(tf.reduce_mean(tf.square(tf.sub(flattenedG, flattenedImage)), 1))
 
     # Entropy function
-    # generatorLoss = tf.reduce_sum(flattenedImage * tf.log(flattenedG + 1e-4) + (1 - flattenedImage) * tf.log(1 - flattenedG + 1e-4), 1)
+    generatorLoss = tf.reduce_sum(flattenedImage * tf.log(flattenedG + 1e-4) + (1 - flattenedImage) * tf.log(1 - flattenedG + 1e-4), 1)
 
     overallLoss = tf.reduce_sum(latentLoss + generatorLoss)
     return l1, l2, l3, l4, l5, l6, finalLayer, overallLoss
@@ -73,7 +72,7 @@ def encoder(x, args):
     l2, l2_Forward = conv3d(l1_Forward, weights["wc2"], biases["bc2"])
     l3, l3_Forward = conv3d(l2_Forward, weights["wc3"], biases["bc3"])
 
-    return l1, l2, l3, slim.fully_connected(slim.flatten(l3_Forward), z_Size, activation_fn=None), slim.fully_connected(slim.flatten(l3_Forward), z_Size, activation_fn=None)
+    return l1, l2, l3, slim.fully_connected(slim.flatten(l3_Forward), networkParams["zSize"], activation_fn=None), slim.fully_connected(slim.flatten(l3_Forward), networkParams["zSize"], activation_fn=None)
 
 def decoder(z, args, batchSize):
     decodeLayer_OutputShape = [math.ceil(args["x_Dimension"]/8), math.ceil(args["y_Dimension"]/8), math.ceil(args["z_Dimension"]/8), networkParams["nFilter3"]]
