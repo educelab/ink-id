@@ -13,7 +13,7 @@ def readData(args):
         sliceData = np.array(Image.open(args["dataPath"]+f))
         volume.append(sliceData)
     volume = np.transpose(volume, (2,1,0))
-    volume = (volume - np.min(volume)) / (np.amax(volume) - np.min(volume))
+    # volume = (volume - np.min(volume)) / (np.amax(volume) - np.min(volume))
 
     x = int(math.floor(int(volume[:,0,0].shape[0])/args["x_Dimension"]))
     y = int(math.floor(int(volume[0,:,0].shape[0])/args["y_Dimension"]))
@@ -42,32 +42,3 @@ def saveSamples(args, sampleList):
                 sliceIm = np.transpose(sliceIm, (1,0))
                 im = Image.fromarray(sliceIm)
                 im.convert('RGB').save(f)
-
-
-# NOTE: code snippet for reconstructing input data -- for verification
-
-
-    # cubeCount = 0
-    # l1_x_Dimension = []
-    # for i in range(x):
-    #     l1_y_Dimension = []
-    #     for j in range(y):
-    #         l1_z_Dimension = []
-    #         for k in range(z):
-    #             cube = inputSubVolumes[cubeCount,:,:,:]
-    #             l1_z_Dimension.append(cube)
-    #             cubeCount += 1
-    #             # pdb.set_trace()
-    #         l1_y_Dimension.append(np.concatenate(l1_z_Dimension, axis=2))
-    #     l1_x_Dimension.append(np.concatenate(l1_y_Dimension, axis=1))
-    #
-    # entireVolume = np.concatenate(l1_x_Dimension, axis=0)
-    # entireVolume = np.transpose(entireVolume, (1,0,2))
-    # for k in range(entireVolume.shape[2]): # iterate through slices
-    #     sliceNumber = str(k).zfill(4)
-    #     f = "/home/volcart/Desktop/test/" + sliceNumber + ".jpg"
-    #     # pdb.set_trace()
-    #     sliceIm = 255 * ( (entireVolume[:,:,k] - np.min(entireVolume)) / (np.amax(entireVolume) - np.min(entireVolume)) )
-    #     im = Image.fromarray(sliceIm)
-    #     im.convert('RGB').save(f)
-    # pdb.set_trace()
