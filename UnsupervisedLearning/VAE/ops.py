@@ -1,3 +1,11 @@
+'''
+ops.py
+    - various wrapper functions 
+'''
+
+__author__ = "Kendall Weihe"
+__email__ = "kendall.weihe@uky.edu"
+
 import tensorflow as tf
 import pdb
 

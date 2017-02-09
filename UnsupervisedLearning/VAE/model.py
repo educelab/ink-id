@@ -1,3 +1,12 @@
+'''
+model.py
+    - variational autoencoder, modeled after: https://arxiv.org/pdf/1312.6114.pdf
+'''
+
+__author__ = "Kendall Weihe"
+__email__ = "kendall.weihe@uky.edu"
+
+
 import tensorflow as tf
 import tensorflow.contrib.slim as slim
 import pdb
