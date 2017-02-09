@@ -42,3 +42,28 @@ def saveSamples(args, sampleList):
                 sliceIm = np.transpose(sliceIm, (1,0))
                 im = Image.fromarray(sliceIm)
                 im.convert('RGB').save(f)
+
+            # save video of each sample
+            videoFile = args["saveVideoPath"] + "layer-" + str(i+1) + "-sample-" + str(j+1) + ".avi"
+            sliceFiles = args["saveSamplePath"] + str(i+1) + "/sample" + str(j+1) + "/%04d.jpg"
+            os.system("ffmpeg -y -framerate 10 -start_number 0 -i " + sliceFiles + " -vcodec mpeg4 " + videoFile)
+
+    # save one video that spans all neurons
+    videoFiles = os.listdir(args["saveVideoPath"])
+    videoFiles.sort()
+    del videoFiles[0]
+    ffmpegConcatFileData = []
+    for f in videoFiles:
+        ffmpegConcatFileData.append("file " + args["saveVideoPath"] + f)
+
+    # write the list of video files to a config file -- for ffmpeg
+    ffmpegFileList = open(args["ffmpegFileListPath"], 'w')
+    for line in ffmpegConcatFileData:
+        ffmpegFileList.write(line+"\n")
+    ffmpegFileList.close()
+
+    outputConcatVideo = args["saveVideoPath"] + "allSamples.avi"
+    os.system("ffmpeg -y -f concat -safe 0 -i " + args["ffmpegFileListPath"] + " -c copy " + outputConcatVideo)
+
+    # TODO:
+        # evntually: test out adding text to videos with neuron info?

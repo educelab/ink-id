@@ -11,12 +11,14 @@ args = {
     "y_Dimension": 50,
     "z_Dimension": 50,
     "learningRate": 0.001,
-    "batchSize": 5,
+    "batchSize": 10,
     "dropout": 0.75,
-    "trainingIterations": 50000,
-    "analyzeStep": 250,
+    "trainingIterations": 10001,
+    "analyzeStep": 2000,
     "displayStep": 5,
-    "saveSamplePath": "/home/volcart/VAE_Layers/"
+    "saveSamplePath": "/home/volcart/VAE_Layers/",
+    "saveVideoPath": "/home/volcart/VAE_Layers/videos/",
+    "ffmpegFileListPath": "/home/volcart/VAE_Layers/concatFileList.txt"
 }
 
 n_CubesX, n_CubesY, n_CubesZ, trainingData = data.readData(args)
