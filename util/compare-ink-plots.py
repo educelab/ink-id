@@ -71,7 +71,7 @@ def main():
         randy = random.randint(0,len(ground_truth)-1)
         digits = len(str(randy))
         the_slice_name = data_path+"/flatfielded-slices/slice" + "0000"[:4-digits] + str(randy) + ".tif"
-        print "Randomly chose " + the_slice_name
+        print("Randomly chose " + the_slice_name)
 
     elif len(sys.argv)==2:
       try:
@@ -118,17 +118,17 @@ def plot_slice_pts(slice_name, ink_pt_x, ink_pt_y, no_ink_pt_x, no_ink_pt_y):
     #set threshold
     THRESH = 21000
     ink_vect = the_slice[ink_pt_x]
-    #no_ink_vect = the_slice[no_ink_pt_x]
+    no_ink_vect = the_slice[no_ink_pt_x]
 
     #anything in the vector below threshold gets set to 0
     thresh_ink_vect = np.where(ink_vect > THRESH, ink_vect, 0)
-    #thresh_no_ink_vect = np.where(no_ink_vect > THRESH, no_ink_vect, 0)
+    thresh_no_ink_vect = np.where(no_ink_vect > THRESH, no_ink_vect, 0)
 
     #find first and last peak in the new vector
     #use scipy's fast argrelmax instead of writing my own
     ink_vect_peaks = argrelmax(thresh_ink_vect)[0]
     peaks = argrelmax(thresh_ink_vect)
-    #no_ink_vect_peaks = argrelmax(thresh_no_ink_vect)[0]
+    no_ink_vect_peaks = argrelmax(thresh_no_ink_vect)[0]
     # find the surrounding valleys
     # first valley: the last of all valleys until first peak
     vall1 = argrelmin(ink_vect[:peaks[0][0]])[0][-1]
@@ -157,23 +157,23 @@ def plot_slice_pts(slice_name, ink_pt_x, ink_pt_y, no_ink_pt_x, no_ink_pt_y):
     #ymin = min([min(the_slice[ink_pt_x]), min(the_slice[no_ink_pt_x])]) - 100
 
     height = len(the_slice[0])
-    '''
     #figure 1, subplot 0: slice image
-    p1 = fig2.add_subplot(311)
+    p1 = fig2.add_subplot(211)
     p1.imshow(the_slice,cmap="Greys_r",interpolation='none')
     fig2.gca().set_ylim(bottom=ink_pt_x - NEIGH_SZ, top=no_ink_pt_x + NEIGH_SZ)
     p1.plot([0,height],[ink_pt_x,ink_pt_x],color='g',linewidth=2)
     p1.plot([0,height],[no_ink_pt_x,no_ink_pt_x],color='r',linewidth=2)
-    '''
 
 
     #figure 2, subplot 1: ink plot
-    g1 = fig2.add_subplot(111,sharex=p1)
+    g1 = fig2.add_subplot(212,sharex=p1)
     axes = fig2.gca()
     g1.scatter(np.arange(0,height),the_slice[ink_pt_x], color='g', marker='.')
     if(len(ink_vect_peaks) > 1):
         ink_vect_start = ink_vect_peaks[0]
-        #ink_vect_end = ink_vect_peaks[-1]
+        ink_vect_end = ink_vect_peaks[-1]
+
+        ''' nudge code
         bumped = the_slice[ink_pt_x, ink_vect_start - 4: ink_vect_start + 4]
         loc = 0
         scale = 2
@@ -191,7 +191,6 @@ def plot_slice_pts(slice_name, ink_pt_x, ink_pt_y, no_ink_pt_x, no_ink_pt_y):
                 [ink_vect[ink_vect_start],ink_vect[ink_vect_end], \
                 ink_vect[vall1],ink_vect[vall2]], \
                 color='g',marker='*')
-        '''
 
     '''
     #figure 2, subplot 2: no-ink plot

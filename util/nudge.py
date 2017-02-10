@@ -21,8 +21,8 @@ after = np.zeros(truth.shape, dtype=np.uint16)
 # parameters
 loc = 0
 scale = 2
-increases = [16000]
-neigh = 2
+increases = [4000,6000]
+neigh = 4
 thresh = 20500
 span = 4
 
@@ -59,6 +59,8 @@ for increase in increases:
             
         print("finished row {} / {} for increase {}".format(i, vol.shape[0] - neigh, increase))
 
-    np.save("volume-inc{}-span{}-scale{}".format(increase, span, scale), output)
-    tiff.imsave("values-before.tif", before)
-    tiff.imsave("values-after-{}.tif".format(int(distribute[0]*increase)), after)
+    np.save("../small-fragment-data/volume-increase{}-neigh{}-scale{}".format(
+        int(increase*distribute[0]), neigh, scale), output)
+    tiff.imsave("../output/values-before.tif", before)
+    tiff.imsave("../output/values-after-increase{}-neigh{}.tif".format(
+        int(distribute[0]*increase), neigh), after)

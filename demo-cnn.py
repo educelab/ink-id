@@ -95,7 +95,7 @@ def conv_net(x, weights, biases, dropout):
 
 
 
-features = np.load('/home/jack/devel/ink-id/output/ad-hoc-feats-norm-20500.npy')
+features = np.load('/home/jack/devel/ink-id/output/nudged-ad-hoc-feats-norm-20500.npy')
 truth = np.load('/home/jack/devel/ink-id/small-fragment-data/volume-reverse-truth.npy')
 train_portion = .7 # train on the left .x portion of the fragment
 pred_x = []
@@ -253,15 +253,15 @@ for f in range(features.shape[2]):
 
 
         # arrange the results
-        print("Creating prediction image with shape: {}...".format(output_pic.shape))
         output_pic = np.zeros((features.shape[0], features.shape[1]), dtype=np.float64)
         truth_pic = np.zeros((features.shape[0], features.shape[1]), dtype=np.float64)
+        print("Creating prediction image with shape: {}...".format(output_pic.shape))
         for ind in range(len(pred_coords)):
             (i,j) = pred_coords[ind]
             output_pic[i:i+input_height, j:j+input_width] += predictions[ind] # to show overlap
             truth_pic[i:i+input_height, j:j+input_width] += pred_y[ind]
 
-        # scale to uint8
+        # scale to uint16
         output_pic = output_pic * (65535 / np.max(output_pic)) 
         truth_pic = truth_pic * (65535 / np.max(truth_pic))
 

@@ -16,7 +16,7 @@ def main():
     """Run feature extraction ad-hoc"""
     print("Initializing...")
     folder = '/home/jack/devel/ink-id/small-fragment-data/'
-    vol_front = np.load(folder+'volume.npy')
+    vol_front = np.load(folder+'volume-increase797-neigh4-scale2.npy')
     vol_flip = np.flip(vol_front, axis=2)
     vol = np.concatenate((vol_front, vol_flip), axis=1)
     print("Created reversed volume with shape {}".format(vol.shape))
@@ -65,15 +65,15 @@ def main():
 
 
     feats = extract_for_volume(vol, surf_pts, surf_peaks, surf_vals, CUT_IN, CUT_BACK, thresh)
-    np.save('/home/jack/devel/ink-id/output/ad-hoc-feats-raw-{}'.format(thresh), feats)
+    np.save('/home/jack/devel/ink-id/output/nudged-ad-hoc-feats-raw-{}'.format(thresh), feats)
     for i in range(feats.shape[2]):
         feats[:,:,i] = (feats[:,:,i] - np.min(feats[:,:,i])) / np.max(feats[:,:,i])
 
-    np.save('/home/jack/devel/ink-id/output/ad-hoc-feats-norm-{}'.format(thresh), feats)
+    np.save('/home/jack/devel/ink-id/output/nudged-ad-hoc-feats-norm-{}'.format(thresh), feats)
     for i in range(feats.shape[2]):
         outpic = feats[:,:,i] * 65535
         outpictif = outpic.astype(np.uint16)
-        tiff.imsave('/home/jack/devel/ink-id/output/feat{}-{}'.format(i,thresh), outpictif)
+        tiff.imsave('/home/jack/devel/ink-id/output/nudged-feat{}-{}'.format(i,thresh), outpictif)
 
 
 

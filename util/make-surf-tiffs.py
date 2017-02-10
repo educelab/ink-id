@@ -9,6 +9,7 @@ import numpy as np
 import os
 #from scipy.signal import argrelmax, argrelmin
 import tifffile as tiff
+import matplotlib.pyplot as plt
 
 def extract_surface(vect,length,thresh):
     to_return = np.zeros(length,dtype=np.uint16)
@@ -21,27 +22,68 @@ def extract_surface(vect,length,thresh):
     #surf_vall = argrelmin(vect[:surf_peak])[0][-1]
     #to_return[surf_peak-1:surf_peak+2] = vect[surf_vall:surf_peak]
 
-    to_return[nz-1:nz+2] = 65535
+    #to_return[nz-1:nz+2] = 65535
+    to_return[nz] = 65535
 
-    return to_return
+    return (to_return, nz)
 
 
-volume_filename = "volume.npy"
+volume_filename = "/home/jack/devel/ink-id/small-fragment-data/volume.npy"
 volume = np.load(volume_filename)
 surfs = np.zeros(volume.shape, dtype=np.uint16)
-threshes = [20000, 20100, 20200, 20300, 20400, 20500]
+approx_surfs = np.zeros(volume.shape, dtype=np.uint16)
+threshes = [20500]
 n = 2
+degree = 32
 
 for thresh in threshes:
-    stdev = np.zeros(volume.shape[0], dtype=np.float64)
+    # create the directory to save pictures
+    try:
+        pic_dir = "/home/jack/devel/ink-id/small-fragment-data/surf-line-slices-thresh{}-deg{}".format(
+                thresh, degree)
+        os.mkdir(pic_dir)
+    except Exception:
+        pass
+
+
+    # main loop
     for sl in range(volume.shape[0]):
+        x_vals = np.arange(volume.shape[1])
+        y_vals = np.zeros((volume.shape[1]), dtype=np.uint16)
+        x_vals = []
+        y_vals = []
+
+
+        # extract the surface peaks
         for v in range(volume.shape[1]):
             try:
-                surf_vect = extract_surface(volume[sl][v], volume.shape[2], thresh)
+                surf_vect, ind = extract_surface(volume[sl][v], volume.shape[2], thresh)
                 surfs[sl][v] = surf_vect
+                if ind > 0 and ind < volume.shape[2]:
+                    x_vals.append(v)
+                    y_vals.append(ind)
             except Exception:
                 pass
 
+
+        # create line of best fit
+        surf_line = np.poly1d(np.polyfit(x_vals, y_vals, degree))
+        for v in range(volume.shape[1]):
+            approx = int(surf_line(v))
+            approx_surfs[sl][v][max(0,min(approx,approx_surfs.shape[2]-1))] = 65535
+        if sl == 220:
+            _ = plt.plot(x_vals, y_vals, '.', x_vals, surf_line(x_vals), '-')
+            plt.show()
+
+
+        # save picture
+        print("saving picture for slice {}/{}".format(sl, approx_surfs.shape[0]))
+        tiff.imsave(pic_dir + "/slice"
+                +"0000"[:(4-len(str(sl)))]+ str(sl), approx_surfs[sl])
+
+
+
+    '''
     for sl in range(n, volume.shape[0]-n-1):
         inkspots = []
         for v in range(n, volume.shape[1]-n-1):
@@ -53,22 +95,7 @@ for thresh in threshes:
                     except Exception:
                         pass
         inkspots = np.array(inkspots)
-        stdev[sl] += np.std(inkspots)
+    '''
 
-    # save the pictures
-    print("thresh {}".format(thresh))
-    print("stdev : {}".format(stdev))
-    print("total stdev : {}".format(np.sum(stdev)))
-    
-    print("saving pictures for thresh {}".format(thresh))
-    try:
-        pic_dir = "small-fragment-data/surface-thresh{}-only-slices".format(thresh)
-        os.mkdir(pic_dir)
-    except Exception:
-        pass
-    for sl in range(surfs.shape[0]):
-        tiff.imsave(pic_dir + "/slice"
-                +"0000"[:(4-len(str(sl)))]+ str(sl), surfs[sl])
-    
 
 
