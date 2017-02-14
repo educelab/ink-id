@@ -13,6 +13,7 @@ import os
 from PIL import Image
 import math
 import re
+import os
 
 def readData(args):
     files = os.listdir(args["dataPath"])
@@ -24,7 +25,7 @@ def readData(args):
     volume = np.transpose(volume, (2,1,0))
 
     # uncomment below line to normalize input (0,1)
-    # volume = (volume - np.min(volume)) / (np.amax(volume) - np.min(volume))
+    volume = (volume - np.min(volume)) / (np.amax(volume) - np.min(volume))
 
     nCubesX = int(math.floor(int(volume.shape[0] - args["x_Dimension"] + args["subVolumeStepSize"]) / args["subVolumeStepSize"]))
     nCubesY = int(math.floor(int(volume.shape[1] - args["y_Dimension"] + args["subVolumeStepSize"]) / args["subVolumeStepSize"]))
@@ -83,8 +84,10 @@ def saveSamples(args, overlappingCoordinates, nCubes, sampleList):
 
             # save 2D slices
             for k in range(sample.shape[2]):
+                path = args["saveSamplePath"] + str(i+1) + "/sample" + str(j+1) + "/"
+                os.mkdir(path)
                 sliceNumber = str(k).zfill(4)
-                f = args["saveSamplePath"] + str(i+1) + "/sample" + str(j+1) + "/" + sliceNumber + ".jpg"
+                f = path + sliceNumber + ".jpg"
                 if (np.amax(sample) - np.min(sample)) != 0:
                     sliceIm = 255 * ((sample[:,:,k] - np.min(sample)) / (np.amax(sample) - np.min(sample)))
                 else:
@@ -101,6 +104,7 @@ def saveSamples(args, overlappingCoordinates, nCubes, sampleList):
     # save one video that spans all neurons
     videoFiles = os.listdir(args["saveVideoPath"])
     videoFiles.sort()
+    pdb.set_trace()
     del videoFiles[0] # delete the video allSamples.avi that already exists TODO: search if file exists and then delete
     ffmpegConcatFileData = []
     for f in videoFiles:

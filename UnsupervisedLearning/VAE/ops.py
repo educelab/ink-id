@@ -1,12 +1,13 @@
 '''
 ops.py
-    - various wrapper functions 
+    - various wrapper functions
 '''
 
 __author__ = "Kendall Weihe"
 __email__ = "kendall.weihe@uky.edu"
 
 import tensorflow as tf
+import tensorflow.contrib.slim as slim
 import pdb
 
 def lrelu(x, leak=0.2, name="lrelu"):
@@ -15,36 +16,32 @@ def lrelu(x, leak=0.2, name="lrelu"):
         f2 = 0.5 * (1 - leak)
         return f1 * x + f2 * abs(x)
 
-def conv3d(x, weight, bias, padding=0):
-    if padding == 0:
+def conv3d(x, weight, bias, padding="SAME"):
+    if padding == "SAME":
         conv = tf.nn.convolution(x, weight, padding="SAME", dilation_rate=[3,3,3])
     else:
         conv = tf.nn.convolution(x, weight, padding="VALID", dilation_rate=[3,3,3])
 
     conv = tf.nn.bias_add(conv, bias)
-    # conv = lrelu(conv)
+    # convForward = lrelu(conv)
     convForward = tf.nn.relu(conv)
-
-    mean, variance = tf.nn.moments(convForward, [0,1,2,3])
-    convForward = tf.nn.batch_normalization(convForward, mean, variance, None, None, 1e-5)
+    convForward = slim.batch_norm(convForward)
 
     convForward = tf.nn.pool(convForward, [3,3,3], pooling_type="AVG", padding="SAME", strides=[2,2,2])
     return conv, convForward
 
 
-def conv3d_transpose(x, weight, bias, outputShape, strides=2, padding=0, activation_fn=None):
-    if padding == 0:
+def conv3d_transpose(x, weight, bias, outputShape, strides=2, padding="SAME", activation_fn="relu"):
+    if padding == "SAME":
         deconv = tf.nn.conv3d_transpose(x, weight, output_shape=outputShape, strides=[1,strides,strides,strides,1], padding="SAME")
     else:
         deconv = tf.nn.conv3d_transpose(x, weight, output_shape=outputShape, strides=[1,strides,strides,strides,1], padding="VALID")
     deconv = tf.nn.bias_add(deconv, bias)
 
-    if activation_fn == "sigmoid":
-        return deconv, tf.nn.sigmoid(deconv)
+    if activation_fn == None:
+        return deconv, deconv
 
     deconvForward = tf.nn.relu(deconv)
-
-    mean, variance = tf.nn.moments(deconvForward, [0,1,2,3])
-    deconvForward = tf.nn.batch_normalization(deconvForward, mean, variance, None, None, 1e-5)
+    deconvForward = slim.batch_norm(deconvForward)
 
     return deconv, deconvForward

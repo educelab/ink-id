@@ -1,9 +1,9 @@
-# H1 Variational Autoencoder (VAE)
+# Variational Autoencoder (VAE)
 ## Based on paper from [here](https://arxiv.org/pdf/1312.6114.pdf)
 ### Author: Kendall Weihe
 
 ##### General abstraction
-A autoencoder (neural network) consists of an encoder that tries to encode data in a unique way such that the decoder can generate the original data.
+A autoencoder (neural network) consists of an encoder that tries to encode data in a unique way such that a decoder can generate the original data.
 Through this process, individual neurons of the network learn features of the dataset. The purposes of this autoencoder is to see if neurons are able to learn
 to identify ink features that are not visible to the human eye. This network will train on any volume (specified by a path) and capture the output of individual neurons
 over the entire volume.
@@ -38,7 +38,7 @@ args = {
 }
 ```
 
-###### Breaking it down
+**Breaking it down**
 * `dataPath` is the path to the volume -- in 2D slices
 * `x_Dimension` and the others are the dimensions of the subvolume that will be sent through the network
 * `subVolumeStepSize` is how much each input subvolume will overlap -- i.e. the above configuration, each subvolume will be overlapped by (most likely) 5 other subvolumes

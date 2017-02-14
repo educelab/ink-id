@@ -70,7 +70,8 @@ def buildModel(x, args):
     # generatorLoss = tf.sqrt(tf.reduce_mean(tf.square(tf.sub(flattenedG, flattenedImage)), 1))
 
     # Entropy function
-    generatorLoss = tf.reduce_sum(flattenedImage * tf.log(flattenedG + 1e-4) + (1 - flattenedImage) * tf.log(1 - flattenedG + 1e-4), 1)
+    # generatorLoss = tf.reduce_sum(flattenedImage * tf.log(flattenedG + 1e-4) + (1 - flattenedImage) * tf.log(1 - flattenedG + 1e-4), 1)
+    generatorLoss = tf.nn.softmax_cross_entropy_with_logits(flattenedG, flattenedImage)
 
     overallLoss = tf.reduce_sum(latentLoss + generatorLoss)
     return l1, l2, l3, l4, l5, l6, finalLayer, overallLoss
@@ -84,17 +85,17 @@ def encoder(x, args):
     return l1, l2, l3, slim.fully_connected(slim.flatten(l3_Forward), networkParams["zSize"], activation_fn=None), slim.fully_connected(slim.flatten(l3_Forward), networkParams["zSize"], activation_fn=None)
 
 def decoder(z, args, batchSize):
-    decodeLayer_OutputShape = [math.ceil(args["x_Dimension"]/8), math.ceil(args["y_Dimension"]/8), math.ceil(args["z_Dimension"]/8), networkParams["nFilter3"]]
-    decodeLayer = tf.reshape(slim.fully_connected(z, int(np.prod(decodeLayer_OutputShape)), activation_fn=None), [-1, math.ceil(args["x_Dimension"]/8), math.ceil(args["y_Dimension"]/8), math.ceil(args["z_Dimension"]/8), 8])
+    decodeLayer_OutputShape = [int(math.ceil(float(args["x_Dimension"])/8.0)), int(math.ceil(float(args["y_Dimension"])/8.0)), int(math.ceil(float(args["z_Dimension"])/8.0)), networkParams["nFilter3"]]
+    decodeLayer = tf.reshape(slim.fully_connected(z, int(np.prod(decodeLayer_OutputShape))), [-1, decodeLayer_OutputShape[0], decodeLayer_OutputShape[1], decodeLayer_OutputShape[2], decodeLayer_OutputShape[3]])
 
-    l4_OutputShape = [batchSize, math.ceil(args["x_Dimension"]/4), math.ceil(args["y_Dimension"]/4), math.ceil(args["z_Dimension"]/4), networkParams["nFilter2"]]
+    l4_OutputShape = [batchSize, int(math.ceil(float(args["x_Dimension"])/4.0)), int(math.ceil(float(args["y_Dimension"])/4.0)), int(math.ceil(float(args["z_Dimension"])/4.0)), networkParams["nFilter2"]]
     l4, l4_Forward = conv3d_transpose(decodeLayer, weights["wdc1"], biases["bdc1"], l4_OutputShape)
 
-    l5_OutputShape = [batchSize, math.ceil(args["x_Dimension"]/2), math.ceil(args["y_Dimension"]/2), math.ceil(args["z_Dimension"]/2), networkParams["nFilter1"]]
+    l5_OutputShape = [batchSize, int(math.ceil(float(args["x_Dimension"])/2.0)), int(math.ceil(float(args["y_Dimension"])/2.0)), int(math.ceil(float(args["z_Dimension"])/2.0)), networkParams["nFilter1"]]
     l5, l5_Forward = conv3d_transpose(l4_Forward, weights["wdc2"], biases["bdc2"], l5_OutputShape)
 
-    l6_OutputShape = [batchSize, math.ceil(args["x_Dimension"]), math.ceil(args["y_Dimension"]), math.ceil(args["z_Dimension"]), networkParams["nFilter0"]]
-    l6, l6_Forward = conv3d_transpose(l5_Forward, weights["wdc3"], biases["bdc3"], l6_OutputShape, activation_fn="sigmoid")
+    l6_OutputShape = [batchSize, args["x_Dimension"], args["y_Dimension"], args["z_Dimension"], networkParams["nFilter0"]]
+    l6, l6_Forward = conv3d_transpose(l5_Forward, weights["wdc3"], biases["bdc3"], l6_OutputShape, activation_fn=None)
     l6_Forward = tf.reshape(l6_Forward, [-1, args["x_Dimension"], args["y_Dimension"], args["z_Dimension"]])
 
     return l4, l5, l6, tf.nn.dropout(l6_Forward, args["dropout"])
