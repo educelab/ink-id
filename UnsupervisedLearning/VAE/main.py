@@ -36,7 +36,7 @@ args = {
     "learningRate": 0.001,
     "batchSize": 30,
     "dropout": 0.75,
-    "trainingIterations": 100,
+    "trainingIterations": 10000,
     "analyzeStep": 50,
     "displayStep": 25,
     "saveSamplePath": sys.argv[3],
@@ -44,7 +44,7 @@ args = {
     "ffmpegFileListPath": "/home/volcart/VAE_Layers/concatFileList.txt"
 }
 
-nCubesX, nCubesY, nCubesZ, overlappingCoordinates, trainingData = data.readData(args)
+trainingData, overlappingCoordinates = data.readData(args)
 
 x = tf.placeholder(tf.float32, [None, args["x_Dimension"], args["y_Dimension"], args["z_Dimension"]])
 keep_prob = tf.placeholder(tf.float32)
@@ -71,19 +71,8 @@ with tf.Session() as sess:
 
         epoch += 1
 
-    cubeCount = 0
-    pdb.set_trace()
-    l1_Predictions, l2_Predictions, l3_Predictions, l4_Predictions, l5_Predictions, l6_Predictions = [], [], [], [], [], []
-    for i in range(nCubesX):
-        for j in range(nCubesY):
-            for k in range(nCubesZ):
-                l1_out, l2_out, l3_out, l4_out, l5_out, l6_out = sess.run([l1, l2, l3, l4, l5, l6], feed_dict={x: trainingData[cubeCount,:,:,:].reshape((1, args["x_Dimension"], args["y_Dimension"], args["z_Dimension"])), keep_prob: 1.0})
-                l1_Predictions.append(l1_out), l2_Predictions.append(l2_out), l3_Predictions.append(l3_out), l4_Predictions.append(l4_out), l5_Predictions.append(l5_out), l6_Predictions.append(l6_out)
-                cubeCount += 1
-    l1_Samples = np.squeeze(l1_Predictions)
-    l2_Samples = np.squeeze(l2_Predictions)
-    l3_Samples = np.squeeze(l3_Predictions)
-    l4_Samples = np.squeeze(l4_Predictions)
-    l5_Samples = np.squeeze(l5_Predictions)
-    l6_Samples = np.squeeze(np.array(l6_Predictions), axis=1)
-    data.saveSamples(args, overlappingCoordinates, [nCubesX, nCubesY, nCubesZ], [l1_Samples, l2_Samples, l3_Samples, l4_Samples, l5_Samples, l6_Samples])
+    l1_Predictions, l2_Predictions, l3_Predictions, l4_Predictions, l5_Predictions, l6_Predictions = \
+        sess.run([l1, l2, l3, l4, l5, l6], feed_dict={x: trainingData, keep_prob: 1.0})
+
+    data.saveSamples(args, overlappingCoordinates, \
+        [l1_Predictions, l2_Predictions, l3_Predictions, l4_Predictions, l5_Predictions, l6_Predictions])

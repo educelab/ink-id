@@ -43,9 +43,9 @@ def readData(args):
                 overlappingCoordinates[cubeCount,2] = k
                 cubeCount += 1
 
-    return nCubesX, nCubesY, nCubesZ, overlappingCoordinates, inputSubVolumes
+    return inputSubVolumes, overlappingCoordinates
 
-def saveSamples(args, overlappingCoordinates, nCubes, sampleList):
+def saveSamples(args, overlappingCoordinates, sampleList):
 
     for i in range(len(sampleList)): # iterate through layers
         print("Saving layer number: " + str(i+1))
@@ -54,9 +54,9 @@ def saveSamples(args, overlappingCoordinates, nCubes, sampleList):
             sample = np.zeros((2000,2000,200), dtype=np.float32) # NOTE: calculating individual sample sizes has not been developed yet, so I declare a large empty volume and clip later
             counter = np.zeros((2000,2000,200), dtype=np.float32)
             for k in range(sampleList[i].shape[0]): # iterate through sub volumes
-                xCoordinate = int((sampleList[i].shape[1] / sampleList[0].shape[1]) * overlappingCoordinates[k,0])
-                yCoordinate = int((sampleList[i].shape[2] / sampleList[0].shape[2]) * overlappingCoordinates[k,1])
-                zCoordinate = int((sampleList[i].shape[3] / sampleList[0].shape[3]) * overlappingCoordinates[k,2])
+                xCoordinate = int((float(sampleList[i].shape[1]) / float(sampleList[0].shape[1])) * overlappingCoordinates[k,0])
+                yCoordinate = int((float(sampleList[i].shape[2]) / float(sampleList[0].shape[2])) * overlappingCoordinates[k,1])
+                zCoordinate = int((float(sampleList[i].shape[3]) / float(sampleList[0].shape[3])) * overlappingCoordinates[k,2])
                 for l in range(sampleList[i].shape[1]): # iterate through overlaping voxels
                     for m in range(sampleList[i].shape[2]):
                         for n in range(sampleList[i].shape[3]):
@@ -65,15 +65,15 @@ def saveSamples(args, overlappingCoordinates, nCubes, sampleList):
 
             # find the true size of the sample
             for k in range(2000):
-                if sample[k,0,0] == 0.0:
+                if counter[k,0,0] == 0.0:
                     clipXCoordinate = k
                     break
             for k in range(2000):
-                if sample[0,k,0] == 0.0:
+                if counter[0,k,0] == 0.0:
                     clipYCoordinate = k
                     break
             for k in range(200):
-                if sample[0,0,k] == 0.0:
+                if counter[0,0,k] == 0.0:
                     clipZCoordinate = k
                     break
 
@@ -83,9 +83,14 @@ def saveSamples(args, overlappingCoordinates, nCubes, sampleList):
             sample /= counter # average each voxel
 
             # save 2D slices
-            for k in range(sample.shape[2]):
-                path = args["saveSamplePath"] + str(i+1) + "/sample" + str(j+1) + "/"
+            path = args["saveSamplePath"] + str(i+1) + "/"
+            try:
                 os.mkdir(path)
+            except:
+                pass
+            path = path + "sample" + str(j+1) + "/"
+            os.mkdir(path)
+            for k in range(sample.shape[2]):
                 sliceNumber = str(k).zfill(4)
                 f = path + sliceNumber + ".jpg"
                 if (np.amax(sample) - np.min(sample)) != 0:
@@ -104,8 +109,8 @@ def saveSamples(args, overlappingCoordinates, nCubes, sampleList):
     # save one video that spans all neurons
     videoFiles = os.listdir(args["saveVideoPath"])
     videoFiles.sort()
-    pdb.set_trace()
-    del videoFiles[0] # delete the video allSamples.avi that already exists TODO: search if file exists and then delete
+    if "allSamples.avi" in videoFiles:
+        del videoFiles[0] # delete the video allSamples.avi that already exists
     ffmpegConcatFileData = []
     for f in videoFiles:
         ffmpegConcatFileData.append("file " + args["saveVideoPath"] + f)

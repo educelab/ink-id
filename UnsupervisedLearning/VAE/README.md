@@ -8,13 +8,6 @@ Through this process, individual neurons of the network learn features of the da
 to identify ink features that are not visible to the human eye. This network will train on any volume (specified by a path) and capture the output of individual neurons
 over the entire volume.
 
-##### Capturing neuron outputs happens in three steps
-* first, the program saves neuron samples to a unique directory
-    * the naming scheme of the directory must be `1/sample1/*.jpg` where the first `1/` means the first layer in the autoencoder and the `sample1/` means the first sample of that layer
-* second, the program uses `ffmpeg` to generate a video for each sample
-* third, the program constructs on large video of all the video samples
-    * this is to make the analyzing process quicker -- each video is created at 10 fps
-
 ##### Configuring the network
 
 Adjust the following hash table to configure the network.
@@ -65,3 +58,12 @@ networkParams = {
     "zSize": 20
 }
 ```
+
+##### Capturing neuron outputs happens in three steps
+* first, the program saves neuron samples to a unique directory
+    * the naming scheme of the directory must be `1/sample1/*.jpg` where the first `1/` means the first layer in the autoencoder and the `sample1/` means the first sample of that layer
+* second, the program uses `ffmpeg` to generate a video for each sample
+* third, the program constructs on large video of all the video samples
+    * this is to make the analyzing process quicker -- each video is created at 10 fps
+* **NOTE**: calculating volume shape from a list of prediction samples is non-trivial, so this program initializes an empty volume of size (2000, 2000, 200), fills in the empty volume,
+and splices away any excess space. The size of the empty volume may need to be modified -- edit lines around 54 & 67 in `data.py`
