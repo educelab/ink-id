@@ -56,6 +56,7 @@ def inputGroundTruth(args):
     y = int(math.floor(int(groundTruthSlice[0,:].shape[0])/args["y_Dimension"]))
     n_cubes =  x * y
 
+    #TODO implement subVolumeStepSize
     dataGroundTruth = np.zeros((n_cubes, args["n_Classes"]))
     cubeCount = 0
     for i in range(0, int(groundTruthSlice.shape[0]/2)-args["x_Dimension"]+1, args["x_Dimension"]):

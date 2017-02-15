@@ -54,7 +54,7 @@ with tf.Session() as sess:
             print "Epoch: " + str(epoch) + "  Loss: " + str(np.mean(evaluatedLoss)) + "  Acc: " + str(np.mean(acc))
 
         if epoch % args["predictStep"] == 0 and epoch > 9000:
-
+            #TODO implement per-voxel predictions
             trainingSet = sess.run(pred, feed_dict={x: dataSamples, keep_prob: 1.0})
             predictionSet = sess.run(pred, feed_dict={x:predictionSamples, keep_prob: 1.0})
             predictions = np.concatenate((trainingSet, predictionSet), 0)
