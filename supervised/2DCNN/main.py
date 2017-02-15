@@ -31,7 +31,7 @@ train_vol.make_train_with_style('rhalf')
 learning_rate = 0.001
 training_iters = 10000
 batch_size = 32
-p_batch_size = 16
+p_batch_size = 32
 display_step = 20
 pred_display_step = 100
 dropout = .8
@@ -58,7 +58,11 @@ def conv2d(x, W, b, strides=1):
     # Conv2D wrapper, with bias and relu activation
     x = tf.nn.conv2d(x, W, strides=[1, strides, strides, 1], padding='SAME')
     x = tf.nn.bias_add(x, b)
-    return tf.nn.relu(x)
+    x = tf.nn.relu(x)
+    #return x
+    mean, variance = tf.nn.moments(x, axes=[0])
+    conv = tf.nn.batch_normalization(x, mean, variance, None, None, 1e-5)
+    return conv
 
 
 
@@ -95,8 +99,8 @@ def conv_net(x, weights, biases, dropout):
 
 
 
-features = np.load('/home/jack/devel/ink-id/output/nudged-ad-hoc-feats-norm-20500.npy')
-truth = np.load('/home/jack/devel/ink-id/small-fragment-data/volume-reverse-truth.npy')
+features = np.load('/home/jack/devel/volcart/output/nudged-ad-hoc-feats-norm-20500.npy')
+truth = np.load('/home/jack/devel/volcart/small-fragment-data/volume-reverse-truth.npy')
 train_portion = .7 # train on the left .x portion of the fragment
 pred_x = []
 pred_y = []
@@ -168,17 +172,23 @@ for f in range(features.shape[2]):
     # layers weight & bias - must be defined for each features' training iteration
     weights = {
         # layer 1: 3x3 conv, 1 input channel, 2 output channels
-        'wc1': tf.Variable(tf.random_normal([3, 3, 1, 2])),
+        'wc1': tf.get_variable("weights_1", shape=[3, 3, 1, 2],
+            initializer=tf.contrib.layers.xavier_initializer(), dtype=np.float32),
         # layer 2: 3x3 conv, 2 input channels, 4 output channels
-        'wc2': tf.Variable(tf.random_normal([3, 3, 2, 4])),
+        'wc2': tf.get_variable("weights_2", shape=[3, 3, 2, 4],
+            initializer=tf.contrib.layers.xavier_initializer(), dtype=np.float32),
         # layer 3: convolution
-        'wc3': tf.Variable(tf.random_normal([3, 3, 4, 8])),
+        'wc3': tf.get_variable("weights_3", shape=[3, 3, 4, 8],
+            initializer=tf.contrib.layers.xavier_initializer(), dtype=np.float32),
         # layer 4: convolution
-        'wc4': tf.Variable(tf.random_normal([3, 3, 8, 16])),
+        'wc4': tf.get_variable("weights_4", shape=[3, 3, 8, 16],
+            initializer=tf.contrib.layers.xavier_initializer(), dtype=np.float32),
         # layer 5: convolution
-        'wc5': tf.Variable(tf.random_normal([3, 3, 16, 32])),
+        'wc5': tf.get_variable("weights_5", shape=[3, 3, 16, 32],
+            initializer=tf.contrib.layers.xavier_initializer(), dtype=np.float32),
         # layer 6: convolution
-        'wc6': tf.Variable(tf.random_normal([3, 3, 32, 64])),
+        'wc6': tf.get_variable("weights_6", shape=[3, 3, 32, 64],
+            initializer=tf.contrib.layers.xavier_initializer(), dtype=np.float32),
 
         # output layer
         # should be 8*8*64 for 64x64 input
@@ -211,6 +221,7 @@ for f in range(features.shape[2]):
 
     # fresh network for each feature
     init = tf.global_variables_initializer()
+    #init = tf.contrib.layers.xavier_initializer()
 
 
 
@@ -218,21 +229,34 @@ for f in range(features.shape[2]):
     print("training on feature {} using {} samples...".format(f, len(all_y_f)))
     with tf.Session() as sess:
         sess.run(init)
-        step = 1
-        while step * batch_size < len(all_x_f):
-            batch_x = np.array(all_x_f[(step-1)*batch_size:step*batch_size])
-            batch_y = np.array(all_y_f[(step-1)*batch_size:step*batch_size])
+        iter_step = 1
+        #while step * batch_size < len(all_x_f):
+        while iter_step < training_iters:
+            if(iter_step % int((len(all_x_f) - batch_size)/10) == 0):
+                print("randomizing training data...")
+                # if 10% of the potential indexes have been used, reshuffle
+                pairs = list(zip(all_x_f, all_y_f))
+                np.random.shuffle(pairs)
+                all_x_f, all_y_f = zip(*pairs)
+
+            random_batch = np.random.randint(len(all_x_f) - batch_size)
+            batch_x = np.array(all_x_f[random_batch: random_batch + batch_size])
+            batch_y = np.array(all_y_f[random_batch: random_batch + batch_size])
+            #batch_x = np.array(all_x_f[(step-1)*batch_size:step*batch_size])
+            #batch_y = np.array(all_y_f[(step-1)*batch_size:step*batch_size])
+
             batch_x = np.reshape(batch_x, (-1, n_input))
+
             sess.run(optimizer, feed_dict={x: batch_x, y: batch_y, keep_prob: dropout})
-            if step % display_step == 0:
+            if iter_step % display_step == 0:
                 loss, acc = sess.run([cost, accuracy], feed_dict={x: batch_x,
                                                                   y: batch_y,
                                                                   keep_prob: 1.})
-                print("Iter " + str(step*batch_size) + ", Minibatch Loss= " + \
+                print("Iter_step " + str(iter_step) + ", Minibatch Loss= " + \
                       "{:.4f}".format(loss) + ", Training Accuracy= " + \
                       "{:.4f}".format(acc))
                 print("{} ink samples in batch".format(np.count_nonzero(batch_y[:,1])))
-            step += 1
+            iter_step += 1
         print("took {:.2f} seconds to train".format(time.time() - start_t_f))
  
 
@@ -240,6 +264,11 @@ for f in range(features.shape[2]):
         print("PREDICTING for feature {}...".format(f))
         pred_x = np.reshape(pred_x, (-1, n_input))
         predictions = np.zeros(pred_x.shape[0])
+        '''
+        predictions = sess.run(tf.nn.softmax(pred), feed_dict={
+            x:pred_x, keep_prob:1.})[:,1]
+        '''
+        # batch-prediction method
         prediction_batches = int(len(pred_x) / p_batch_size) - 1
         for i in range(0, prediction_batches):
             predictions[(i*p_batch_size):((i+1)*p_batch_size)] =\
@@ -266,10 +295,11 @@ for f in range(features.shape[2]):
         truth_pic = truth_pic * (65535 / np.max(truth_pic))
 
         # save output
-        tiff.imsave('output/predictions-feat{}-{}x{}.tif'.format(
+        tiff.imsave('/home/jack/devel/volcart/output/predictions-feat{}-{}x{}.tif'.format(
             f, input_height, input_width), output_pic.astype(np.uint16))
-        tiff.imsave('output/used-truth.tif', truth_pic.astype(np.uint16))
+        tiff.imsave('/home/jack/devel/volcart/output/used-truth.tif', truth_pic.astype(np.uint16))
 
+    tf.reset_default_graph()
     print("feature {} took {:.2f} seconds".format(f, time.time() - start_t_f))
 
 
