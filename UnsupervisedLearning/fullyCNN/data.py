@@ -45,7 +45,7 @@ def readData(args):
     return overlappingCoordinates, inputSubVolumes
 
 def saveSamples(args, overlappingCoordinates, sampleList):
-    sampleRates = [1, 2, 4, 8, 4, 2]
+    sampleRates = [1, 2, 4, 4, 2, 1]
     for i in range(len(sampleList)): # iterate through layers
         print("Saving layer number: " + str(i+1))
         for j in range(sampleList[i].shape[4]): # iterate through samples
@@ -63,15 +63,15 @@ def saveSamples(args, overlappingCoordinates, sampleList):
 
             # find the true size of the sample
             for k in range(2000):
-                if counter[k,0,0] == 0.0:
+                if sample[k,0,0] == 0.0:
                     clipXCoordinate = k
                     break
             for k in range(2000):
-                if counter[0,k,0] == 0.0:
+                if sample[0,k,0] == 0.0:
                     clipYCoordinate = k
                     break
             for k in range(200):
-                if counter[0,0,k] == 0.0:
+                if sample[0,0,k] == 0.0:
                     clipZCoordinate = k
                     break
 
