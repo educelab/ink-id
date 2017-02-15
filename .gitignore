@@ -7,4 +7,4 @@ feat_cache/
 CarbonSampleNov2016/
 old_output/
 *.npy
-*.pyc
+#*.pyc
