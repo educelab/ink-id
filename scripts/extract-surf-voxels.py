@@ -12,6 +12,7 @@ import numpy as np
 from scipy.signal import argrelmax, argrelmin, resample
 from os import mkdir
 import time
+import warnings
 # import pickle as pickle
 
 
@@ -22,6 +23,7 @@ __email__ = "jgba225@g.uky.edu"
 def main():
     global data_path
     data_path = "/home/jack/devel/volcart/small-fragment-data"
+    warnings.simplefilter('ignore', np.RankWarning)
 
     ref_photo = tiff.imread(data_path+"/registered/aligned-photo-contrast.tif")
     global num_slices
@@ -62,6 +64,7 @@ def extract_volume_at_thresh(a_thresh):
     # # # # # # # # #
     start_time = time.time()
     #new_volume = []
+    state.say_my_name()
     for slice_number in range(num_slices):
         # worker
         state.extract_slice(slice_number)
@@ -100,12 +103,12 @@ class State(object):
 
 class polyfitState(State):
     def __init__(self):
-        self.line_wght = 4
-        self.peak_wght = 1
         self.degree = 32
+        self.cushion = 16
         self.mode_name = "polyfit"
         self.mode_description = "values from a line of best fit along the surface"
-        self.output_path = data_path + "/polyfit-output-" + str(THRESH)
+        self.output_path = data_path + "/polyfit-slices-degree{}-cush{}-thresh{}".format(
+                self.degree, self.cushion, THRESH)
         self.img_frnt = np.zeros(output_dims, dtype=np.uint16)
         try:
             mkdir(self.output_path)
@@ -113,12 +116,13 @@ class polyfitState(State):
             print("output directory \"{}\" may already exist".format(self.output_path))
     
     def extract_slice(self, slice_num):
-        self.img_frnt[slice_num] = polyfit_for_slice(
-                slice_num, degree=self.degree, line_wght=self.line_wght, peak_wght=self.peak_wght)
+        image = polyfit_for_slice(
+                slice_num, degree=self.degree, cushion=self.cushion)
+        tiff.imsave(self.output_path+"/slice{}.tif".format(
+            "0000"[:4-len(str(slice_num))] + str(slice_num)),  image)
 
     def save_output(self):
-        tiff.imsave(self.output_path+"/polyfit-deg{}.tif".format(
-            self.line_wght, self.peak_wght, self.degree), self.img_frnt)
+        pass
 
 
 
@@ -286,7 +290,7 @@ def resample_surface_for_slice(a_slice_number):
 
 
 
-def polyfit_for_slice(a_slice_number, degree=32, line_wght=1, peak_wght=1):
+def polyfit_for_slice(a_slice_number, degree=32, cushion=2):
     i = a_slice_number
     the_slice_name = (data_path+"/flatfielded-slices/slice"
                       + "0000"[:4-len(str(i))] + str(i)+".tif")
@@ -294,44 +298,49 @@ def polyfit_for_slice(a_slice_number, degree=32, line_wght=1, peak_wght=1):
     thresh_mat = np.where(the_slice > THRESH, the_slice, 0)
 
     # initialize
-    surface_values = np.zeros(the_slice.shape[0])
-    surface_peaks = np.zeros(the_slice.shape[0])
+    return_slice = np.zeros(the_slice.shape, dtype=np.uint16)
     x_vals = []
-    y_vals = []
+    y_vals_front = []
+    y_vals_back = []
 
     # extract the surface peaks
     for v in range(the_slice.shape[0]):
         try:
             thresh_vect = thresh_mat[v]
-
             # find peaks above threshold
             peaks = argrelmax(thresh_vect)[0]
-            ind = peaks[0]
-            surface_peaks[v] = ind
-            if ind > 0 and ind < the_slice.shape[1]:
+            front_ind = peaks[0]
+            back_ind = peaks[-1]
+
+            if (front_ind > 0 and front_ind < the_slice.shape[1] and 
+                    back_ind > 0 and back_ind < the_slice.shape[1] and
+                    front_ind != back_ind):
                 x_vals.append(v)
-                y_vals.append(ind)
+                y_vals_front.append(front_ind)
+                y_vals_back.append(back_ind)
+
         except Exception:
+            # when no relative maxima exist
             pass
 
 
-    # create line of best fit
-    try:
-        surf_line = np.poly1d(np.polyfit(x_vals, y_vals, degree))
-        for v in range(the_slice.shape[0]):
-            approx_ind = int(surf_line(v))
-            if (approx_ind < 1 or approx_ind > the_slice.shape[1]-1):
-                surface_values[v] = the_slice[v, approx_ind]
-            else:
-                index = int((approx_ind * line_wght) + (surface_peaks[v]*peak_wght) /
-                        (line_wght+peak_wght))
-                index = max(0,min(index,the_slice.shape[1]-1))
-                surface_values[v] = the_slice[v, index]
-    except Exception:
-        # catches when polyfit fails
-        pass
+    # create lines of best fit
+    front_surf_line = np.poly1d(np.polyfit(x_vals, y_vals_front, degree))
+    back_surf_line = np.poly1d(np.polyfit(x_vals, y_vals_back, degree))
+    for v in range(the_slice.shape[0]):
+        approx_front_ind = int(front_surf_line(v))
+        approx_back_ind = int(back_surf_line(v))
 
-    return surface_values
+        if (approx_front_ind < cushion+1 or approx_back_ind > the_slice.shape[1]-cushion-1 or
+                approx_back_ind < cushion+1 or approx_back_ind > the_slice.shape[1]-cushion-1):
+            pass
+        else:
+            start = approx_front_ind - cushion
+            end = approx_back_ind + cushion
+            return_slice[v, start:end] = the_slice[v, start:end]
+
+
+    return return_slice 
 
 
 
