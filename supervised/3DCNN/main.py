@@ -18,6 +18,7 @@ args = {
     "n_Classes": 2,
     "learningRate": 0.0001,
     "batchSize": 30,
+    "predictBatchSize": 5000,
     "dropout": 0.75,
     "trainingIterations": 10001,
     "predictStep": 75,
@@ -54,14 +55,17 @@ with tf.Session() as sess:
             print "Epoch: " + str(epoch) + "  Loss: " + str(np.mean(evaluatedLoss)) + "  Acc: " + str(np.mean(acc))
 
         if epoch % args["predictStep"] == 0 and epoch > 9000:
-            #TODO implement per-voxel predictions
-            trainingSet = sess.run(pred, feed_dict={x: dataSamples, keep_prob: 1.0})
-            predictionSet = sess.run(pred, feed_dict={x:predictionSamples, keep_prob: 1.0})
-            predictions = np.concatenate((trainingSet, predictionSet), 0)
+            all_predictions = []
+            #TODO: add coordinates
+            for pred_set in range(0, volumeShape[0]*volumeShape[1] / args["predictBatchSize"]):
+                batch_predictions = sess.run(pred, feed_dict={
+                    x: data.predict_batch(args["predictBatchSize"], pred_set*args["predictBatchSize"], args)})
+                all_predictions.append(batch_predictions)
+
 
             outputVolume = np.zeros((volumeShape[0], volumeShape[1]))
             for i in range(coordinates.shape[0]):
-                if (predictions[i,0] > 0.5):
+                if (all_predictions[i,0] > 0.5):
                     outputVolume[coordinates[i,0]:coordinates[i,0]+args["x_Dimension"], coordinates[i,1]:coordinates[i,1]+args["y_Dimension"]] = 1.0
 
             avgOutputVolume.append(outputVolume)

@@ -4,10 +4,13 @@ import os
 from PIL import Image
 import math
 
+global volume 
+
 def inputRawData(args):
     dataFiles = os.listdir(args["trainingDataPath"])
     dataFiles.sort(key=lambda f: int(filter(str.isdigit, f)))
 
+    global volume
     volume = []
     for f in dataFiles:
         sliceData = np.array(Image.open(args["trainingDataPath"]+f))
@@ -45,6 +48,7 @@ def inputRawData(args):
     # return dataSamples, predictionSamples, coordinates, volume.shape
     return predictionSamples, dataSamples, coordinates, volume.shape
 
+
 def inputGroundTruth(args):
 
     # groundTruthSlice = np.genfromtxt(args["groundTruthFile"], delimiter=",")
@@ -79,6 +83,26 @@ def inputGroundTruth(args):
 
     # return dataGroundTruth, predictionGroundTruth
     return predictionGroundTruth, dataGroundTruth
+
+
+
+def predict_batch(n_samples, start_pt, args):
+    #TODO implement this
+    global volume
+    width = volume.shape[0]
+    to_return = np.empty((n_samples, args["x_Dimension"], args["y_Dimension"], args["z_Dimension"]))
+    for i in range(n_samples):
+        (x,y) = ind_to_coord(start_pt+i, width)
+        to_return[i] = volume[x:x+args["x_dimension"], y:y+args["y_Dimension"], args["z_Dimension"]]
+    return to_return 
+
+
+
+def ind_to_coord(ind, width):
+    x = ind % width
+    y = int(ind / width)
+    return (x,y)
+   
 
 def inputData(args):
 
