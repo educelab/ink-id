@@ -10,12 +10,9 @@ __email__ = "kendall.weihe@uky.edu"
 
 import os
 
-saveVideosPath = "/home/volcart/UnsupervisedResults/VAE/"
+savePath = "/home/volcart/UnsupervisedResults/HercFragment/VAE/"
+dataPath = "/home/volcart/prelim-InkDetection/HercFragment/resliced/"
 for dimension in range(25, 80, 5):
-    stepSize = int(dimension / 2)
-    if stepSize % 2 != 0: stepSize += 1
-    experimentPath = saveVideosPath + "Dimension-" + str(dimension) + "-Step-" + str(stepSize) + "/"
-    os.mkdir(experimentPath)
-    experimentVidoePath = experimentPath + "videos/"
-    os.mkdir(experimentVidoePath)
-    os.system("python3 main.py " + str(dimension) + " " + str(stepSize) + " " + experimentPath + " " + experimentVidoePath)
+    saveSamplesPath = savePath + "Dimension-" + str(dimension) + "/"
+    os.mkdir(saveSamplesPath)
+    os.system("python3 main.py " + dataPath + " " + str(dimension) + " " + saveSamplesPath)
