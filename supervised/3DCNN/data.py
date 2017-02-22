@@ -3,114 +3,89 @@ import pdb
 import os
 from PIL import Image
 import math
-
-global volume 
-
-def inputRawData(args):
-    dataFiles = os.listdir(args["trainingDataPath"])
-    dataFiles.sort(key=lambda f: int(filter(str.isdigit, f)))
-
-    global volume
-    volume = []
-    for f in dataFiles:
-        sliceData = np.array(Image.open(args["trainingDataPath"]+f))
-        volume.append(sliceData)
-    volume = np.transpose(volume, (2,1,0))
-
-    x = int(math.floor(int(volume[:,0,0].shape[0]/2)/args["x_Dimension"]))
-    y = int(math.floor(int(volume[0,:,0].shape[0])/args["y_Dimension"]))
-    z = int(math.floor(int(volume[0,0,:].shape[0])/args["z_Dimension"]))
-    n_cubes =  z * x * y
-
-    coordinates = np.empty((n_cubes*2, 3), dtype=np.uint16)
-    coordinateCount = 0
-
-    dataSamples = np.empty((n_cubes, args["x_Dimension"], args["y_Dimension"], args["z_Dimension"]))
-    cubeCount = 0
-    for i in range(0, int(volume.shape[0]/2)-args["x_Dimension"]+1, args["x_Dimension"]):
-        for j in range(0, volume.shape[1]-args["y_Dimension"]+1, args["y_Dimension"]):
-            for k in range(0, volume.shape[2]-args["z_Dimension"]+1, args["z_Dimension"]):
-                dataSamples[cubeCount,:,:,:] = volume[i:i+args["x_Dimension"], j:j+args["y_Dimension"], k:k+args["z_Dimension"]]
-                coordinates[coordinateCount,0], coordinates[coordinateCount,1], coordinates[coordinateCount,2] = i, j, k
-                cubeCount += 1
-                coordinateCount += 1
-
-    predictionSamples = np.empty((n_cubes, args["x_Dimension"], args["y_Dimension"], args["z_Dimension"]))
-    cubeCount = 0
-    for i in range(int(volume.shape[0]/2), volume.shape[0]-args["x_Dimension"]+1, args["x_Dimension"]):
-        for j in range(0, volume.shape[1]-args["y_Dimension"]+1, args["y_Dimension"]):
-            for k in range(0, volume.shape[2]-args["z_Dimension"]+1, args["z_Dimension"]):
-                predictionSamples[cubeCount,:,:,:] = volume[i:i+args["x_Dimension"], j:j+args["y_Dimension"], k:k+args["z_Dimension"]]
-                coordinates[coordinateCount,0], coordinates[coordinateCount,1], coordinates[coordinateCount,2] = i, j, k
-                cubeCount += 1
-                coordinateCount += 1
-
-    # return dataSamples, predictionSamples, coordinates, volume.shape
-    return predictionSamples, dataSamples, coordinates, volume.shape
+import tifffile as tiff
 
 
-def inputGroundTruth(args):
+class Volume:
+    def __init__(self, args):
+        dataFiles = os.listdir(args["trainingDataPath"])
+        dataFiles.sort()
+        #dataFiles.sort(key=lambda f: int(filter(str.isdigit, f)))
 
-    # groundTruthSlice = np.genfromtxt(args["groundTruthFile"], delimiter=",")
-    groundTruthSlice = np.array(Image.open(args["groundTruthFile"]))
-    groundTruthSlice[groundTruthSlice == 255] = 1.0
-    groundTruthSlice = np.fliplr(np.transpose(groundTruthSlice, (1,0)))
-
-    x = int(math.floor(int(groundTruthSlice[:,0].shape[0]/2)/args["x_Dimension"]))
-    y = int(math.floor(int(groundTruthSlice[0,:].shape[0])/args["y_Dimension"]))
-    n_cubes =  x * y
-
-    #TODO implement subVolumeStepSize
-    dataGroundTruth = np.zeros((n_cubes, args["n_Classes"]))
-    cubeCount = 0
-    for i in range(0, int(groundTruthSlice.shape[0]/2)-args["x_Dimension"]+1, args["x_Dimension"]):
-        for j in range(0, groundTruthSlice.shape[1]-args["y_Dimension"]+1, args["y_Dimension"]):
-            if np.where(groundTruthSlice[i:i+args["x_Dimension"],j:j+args["y_Dimension"]] == 1.0)[0].shape[0] > (args["x_Dimension"]*args["y_Dimension"]*0.85):
-                dataGroundTruth[cubeCount,0] = 1.0
-            else:
-                dataGroundTruth[cubeCount,1] = 1.0
-            cubeCount = cubeCount + 1
-
-    predictionGroundTruth = np.zeros((n_cubes, args["n_Classes"]))
-    cubeCount = 0
-    for i in range(int(groundTruthSlice.shape[0]/2), groundTruthSlice.shape[0]-args["x_Dimension"]+1, args["x_Dimension"]):
-        for j in range(0, groundTruthSlice.shape[1]-args["y_Dimension"]+1, args["y_Dimension"]):
-            if np.where(groundTruthSlice[i:i+args["x_Dimension"],j:j+args["y_Dimension"]] == 1.0)[0].shape[0] > (args["x_Dimension"]*args["y_Dimension"]*0.85):
-                predictionGroundTruth[cubeCount,0] = 1.0
-            else:
-                predictionGroundTruth[cubeCount,1] = 1.0
-            cubeCount = cubeCount + 1
-
-    # return dataGroundTruth, predictionGroundTruth
-    return predictionGroundTruth, dataGroundTruth
+        volume = []
+        for f in dataFiles:
+            sliceData = np.array(Image.open(args["trainingDataPath"]+f))
+            volume.append(sliceData)
+        self.volume = np.transpose(volume, (2,1,0))
+        self.groundTruth = tiff.imread(args["groundTruthFile"])
+        self.predictionImage = np.zeros((self.volume.shape[0], self.volume.shape[1]), dtype=np.float32)
 
 
+    def getTrainingSample(self, args):
+        xBounds=[0,int(self.volume.shape[0]/2)-args["x_Dimension"]]
+        yBounds=[0,self.volume.shape[1]-args["y_Dimension"]]
+        trainingSamples = []
+        groundTruth = []
+        for i in range(args["numCubes"]):
+            xCoordinate = np.random.randint(xBounds[0], xBounds[1])
+            yCoordinate = np.random.randint(yBounds[0], yBounds[1])
+            zCoordinate = 0
 
-def predict_batch(n_samples, start_pt, args):
-    #TODO implement this
-    global volume
-    width = volume.shape[0]
-    to_return = np.empty((n_samples, args["x_Dimension"], args["y_Dimension"], args["z_Dimension"]))
-    for i in range(n_samples):
-        (x,y) = ind_to_coord(start_pt+i, width)
-        to_return[i] = volume[x:x+args["x_dimension"], y:y+args["y_Dimension"], args["z_Dimension"]]
-    return to_return 
+            trainingSamples.append(self.volume[xCoordinate:xCoordinate+args["x_Dimension"], \
+                        yCoordinate:yCoordinate+args["y_Dimension"], zCoordinate:zCoordinate+args["z_Dimension"]])
+
+            # NOTE: this volume class assumes that there are three classifications
+            #TODO: clean up
+            no_ink = len(np.where(self.groundTruth[xCoordinate:xCoordinate+args["x_Dimension"], \
+                        yCoordinate:yCoordinate+args["y_Dimension"]] < 85)[0])
+            papyrus = len(np.where(np.logical_and(self.groundTruth[xCoordinate:xCoordinate+args["x_Dimension"], \
+                        yCoordinate:yCoordinate+args["y_Dimension"]] > 85, \
+                        self.groundTruth[xCoordinate:xCoordinate+args["x_Dimension"], \
+                        yCoordinate:yCoordinate+args["y_Dimension"]] < 171))[0])
+            ink = len(np.where(self.groundTruth[xCoordinate:xCoordinate+args["x_Dimension"], \
+                        yCoordinate:yCoordinate+args["y_Dimension"]] > 171)[0])
+
+            classification = np.argmax([no_ink, papyrus, ink])
+            gt = [0,0,0]
+            gt[classification] = 1.0
+            groundTruth.append(gt)
+
+        return np.array(trainingSamples), np.array(groundTruth)
 
 
+    def getPredictionSample(self, args, startingCoordinates):
+        # return the prediction sample along side of coordinates
+        xCoordinate = startingCoordinates[0]
+        yCoordinate = startingCoordinates[1]
+        zCoordinate = startingCoordinates[2]
+        predictionSamples = []
+        coordinates = []
+        count = 0
+        while count < args["numCubes"]:
+            if (xCoordinate + args["x_Dimension"]) > self.volume.shape[0]:
+                xCoordinate = 0
+                yCoordinate += args["overlapStep"]
+            if (yCoordinate + args["y_Dimension"]) > self.volume.shape[1]:
+                # yCoordinate = 0
+                break
+            predictionSamples.append(self.volume[xCoordinate:xCoordinate+args["x_Dimension"], \
+                    yCoordinate:yCoordinate+args["y_Dimension"], zCoordinate:zCoordinate+args["z_Dimension"]])
+            coordinates.append([xCoordinate, yCoordinate])
+            xCoordinate += args["overlapStep"]
+            count += 1
 
-def ind_to_coord(ind, width):
-    x = ind % width
-    y = int(ind / width)
-    return (x,y)
-   
+        return np.array(predictionSamples), np.array(coordinates), [xCoordinate, yCoordinate, zCoordinate]
 
-def inputData(args):
 
-    dataSamples, predictionSamples, coordinates, volumeShape = inputRawData(args)
-    dataGroundTruth, predictionGroundTruth = inputGroundTruth(args)
+    def reconstruct(self, args, samples, coordinates):
+        # reconstruct prediction volume one prediction sample at a time
+        for i in range(coordinates.shape[0]):
+            if np.argmax(samples[i,:]) == 2:
+                self.predictionImage[coordinates[i,0]:coordinates[i,0]+args["x_Dimension"], \
+                        coordinates[i,1]:coordinates[i,1]+args["y_Dimension"]] += 1.0
 
-    randomIndices = np.arange(dataSamples.shape[0])
-    np.random.shuffle(randomIndices)
-    coordinatesIndices = np.concatenate((randomIndices, randomIndices+dataSamples.shape[0]))
 
-    return dataSamples[randomIndices], predictionSamples[randomIndices], dataGroundTruth[randomIndices], predictionGroundTruth[randomIndices], coordinates[coordinatesIndices], volumeShape
+    def savePredictionImage(self, args):
+        predictionImage = 65535 * ( (self.predictionImage.copy() - np.min(self.predictionImage)) / (np.amax(self.predictionImage) - np.min(self.predictionImage)) )
+        predictionImage = np.array(predictionImage, dtype=np.uint16)
+        tiff.imsave(args["savePredictionPath"] + "image.tif", predictionImage)
