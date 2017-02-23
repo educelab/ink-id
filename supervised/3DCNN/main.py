@@ -6,11 +6,15 @@ import sys
 
 import data
 import model
+import time
 
 if len(sys.argv) < 3:
     print("Missing arguments")
     print("Usage: main.py [xy Dimension]... [ overlap step]...")
     exit()
+
+print("Initializing...")
+start_time = time.time()
 
 args = {
     "trainingDataPath": "/home/jack/devel/volcart/small-fragment-data/tmp/",
@@ -24,12 +28,12 @@ args = {
     "n_Classes": 3,
     "learningRate": 0.001,
     "batchSize": 30,
-    "predictBatchSize": 5000,
+    "predictBatchSize": 500,
     "dropout": 0.75,
     "trainingIterations": 30001,
     "predictStep": 30000,
     "displayStep": 20,
-    "grabNewSamples": 100
+    "grabNewSamples": 50
 }
 
 
@@ -53,7 +57,16 @@ with tf.Session() as sess:
             if epoch % args["grabNewSamples"] == 0:
                 trainingSamples, groundTruth = volume.getTrainingSample(args)
 
-            #TODO: add periodic shuffle
+
+            if epoch % args["grabNewSamples"] % int(args["numCubes"]/4) == 0:
+                # periodically shuffle input and labels in parallel
+                all_pairs = list(zip(trainingSamples, groundTruth))
+                np.random.shuffle(all_pairs)
+                trainingSamples, groundTruth = zip(*all_pairs)
+                trainingSamples = np.array(trainingSamples)
+                groundTruth = np.array(groundTruth)
+
+
             randomBatch = np.random.randint(trainingSamples.shape[0] - args["batchSize"])
             batchX = trainingSamples[randomBatch:randomBatch+args["batchSize"]]
             batchY = groundTruth[randomBatch:randomBatch+args["batchSize"]]
@@ -66,12 +79,14 @@ with tf.Session() as sess:
                 print("Epoch: " + str(epoch) + "  Loss: " + str(np.mean(evaluatedLoss)) + "  Acc: " + str(np.mean(acc)))
 
             if epoch % args["predictStep"] == 0 and epoch > 0:
+                print("{} training iterations took {:.2f} minutes".format( \
+                    args["predictStep"], (time.time() - start_time)/60))
                 startingCoordinates = [0,0,0]
                 predictionSamples, coordinates, nextCoordinates = volume.getPredictionSample(args, startingCoordinates)
 
                 count = 1
-                while predictionSamples.shape[0] == args["numCubes"]: # TODO what about the special case where the volume is a perfect multiple of the numCubes?
-                    print("Predicting cubes {}".format(str(count * args["numCubes"])))
+                while predictionSamples.shape[0] == args["predictBatchSize"]: # TODO what about the special case where the volume is a perfect multiple of the numCubes?
+                    print("Predicting cubes {}".format(str(count * args["predictBatchSize"])))
                     predictionValues = sess.run(pred, feed_dict={x: predictionSamples, keep_prob: 1.0})
                     volume.reconstruct(args, predictionValues, coordinates)
                     predictionSamples, coordinates, nextCoordinates = volume.getPredictionSample(args, nextCoordinates)
@@ -79,3 +94,5 @@ with tf.Session() as sess:
                 volume.savePredictionImage(args)
 
             epoch = epoch + 1
+
+print("full script took {:.2f} minutes".format((time.time() - start_time)/60))
