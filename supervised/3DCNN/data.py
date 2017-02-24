@@ -7,6 +7,7 @@ import datetime
 import tifffile as tiff
 from sklearn.metrics import confusion_matrix
 
+
 class Volume:
     def __init__(self, args):
         dataFiles = os.listdir(args["trainingDataPath"])

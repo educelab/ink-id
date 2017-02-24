@@ -10,7 +10,7 @@ import time
 
 if len(sys.argv) < 5:
     print("Missing arguments")
-    print("Usage: main.py [xy Dimension]... [z Dimension]... [cushion]... [ overlap step]...")
+    print("Usage: main.py  [xy Dimension]... [z Dimension]... [cushion]... [ overlap step]...")
     exit()
 
 print("Initializing...")
