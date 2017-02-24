@@ -110,19 +110,22 @@ class polyfitState(State):
         self.output_path = data_path + "/polyfit-slices-degree{}-cush{}-thresh{}".format(
                 self.degree, self.cushion, THRESH)
         self.img_frnt = np.zeros(output_dims, dtype=np.uint16)
+        self.surface_points = np.zeros(output_dims, dtype=np.uint16)
         try:
             mkdir(self.output_path)
         except Exception:
             print("output directory \"{}\" may already exist".format(self.output_path))
     
     def extract_slice(self, slice_num):
-        image = polyfit_for_slice(
+        image, points = polyfit_for_slice(
                 slice_num, degree=self.degree, cushion=self.cushion)
+        self.surface_points[slice_num] = points
+
         tiff.imsave(self.output_path+"/slice{}.tif".format(
             "0000"[:4-len(str(slice_num))] + str(slice_num)),  image)
 
     def save_output(self):
-        pass
+        tiff.imsave(self.output_path+"/surface.tif", self.surface_points)
 
 
 
@@ -299,6 +302,7 @@ def polyfit_for_slice(a_slice_number, degree=32, cushion=2):
 
     # initialize
     return_slice = np.zeros(the_slice.shape, dtype=np.uint16)
+    return_points = np.zeros(the_slice.shape[0])
     x_vals = []
     y_vals_front = []
     y_vals_back = []
@@ -338,9 +342,10 @@ def polyfit_for_slice(a_slice_number, degree=32, cushion=2):
             start = approx_front_ind - cushion
             end = approx_back_ind + cushion
             return_slice[v, start:end] = the_slice[v, start:end]
+            return_points[v] = start
 
 
-    return return_slice 
+    return return_slice, return_points
 
 
 
