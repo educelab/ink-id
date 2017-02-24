@@ -8,24 +8,27 @@ import data
 import model
 import time
 
-if len(sys.argv) < 3:
+if len(sys.argv) < 5:
     print("Missing arguments")
-    print("Usage: main.py [xy Dimension]... [ overlap step]...")
+    print("Usage: main.py [xy Dimension]... [z Dimension]... [cushion]... [ overlap step]...")
     exit()
 
 print("Initializing...")
 start_time = time.time()
 
 args = {
-    "trainingDataPath": "/home/jack/devel/volcart/small-fragment-data/tmp/",
-    "groundTruthFile": "/home/jack/devel/volcart/small-fragment-data/YZ-aligned-mask-2.tif",
+    "trainingDataPath": "/home/jack/devel/volcart/small-fragment-data/flatfielded-slices/",
+    "surfaceDataFile": "/home/jack/devel/volcart/small-fragment-data/polyfit-slices-degree32-cush16-thresh21500/surface.tif",
+    "groundTruthFile": "/home/jack/devel/volcart/small-fragment-data/YZ-aligned-mask.tif",
     "savePredictionPath": "/home/jack/devel/volcart/predictions/3dcnn/",
     "x_Dimension": int(sys.argv[1]),
     "y_Dimension": int(sys.argv[1]),
-    "z_Dimension": 90,
-    "overlapStep": int(sys.argv[2]),
+    "z_Dimension": int(sys.argv[2]),
+    "surfaceCushion" : int(sys.argv[3]),
+    "overlapStep": int(sys.argv[4]),
     "numCubes" : 250,
     "n_Classes": 3,
+    "train_portion" : .5,
     "learningRate": 0.001,
     "batchSize": 30,
     "predictBatchSize": 500,
@@ -33,7 +36,8 @@ args = {
     "trainingIterations": 30001,
     "predictStep": 30000,
     "displayStep": 20,
-    "grabNewSamples": 50
+    "grabNewSamples": 50,
+    "notes": "trained on left half"
 }
 
 
@@ -58,7 +62,7 @@ with tf.Session() as sess:
                 trainingSamples, groundTruth = volume.getTrainingSample(args)
 
 
-            if epoch % args["grabNewSamples"] % int(args["numCubes"]/4) == 0:
+            if epoch % args["grabNewSamples"] % int(args["numCubes"]/8) == 0:
                 # periodically shuffle input and labels in parallel
                 all_pairs = list(zip(trainingSamples, groundTruth))
                 np.random.shuffle(all_pairs)
@@ -81,12 +85,13 @@ with tf.Session() as sess:
             if epoch % args["predictStep"] == 0 and epoch > 0:
                 print("{} training iterations took {:.2f} minutes".format( \
                     args["predictStep"], (time.time() - start_time)/60))
-                startingCoordinates = [0,0,0]
+                startingCoordinates = [0,0]
                 predictionSamples, coordinates, nextCoordinates = volume.getPredictionSample(args, startingCoordinates)
 
                 count = 1
-                while predictionSamples.shape[0] == args["predictBatchSize"]: # TODO what about the special case where the volume is a perfect multiple of the numCubes?
-                    print("Predicting cubes {}".format(str(count * args["predictBatchSize"])))
+                total_predictions = volume.totalPredictions(args)
+                while ((count-1)*args["predictBatchSize"]) < total_predictions:
+                    print("Predicting cubes {} of {}".format((count * args["predictBatchSize"]), total_predictions))
                     predictionValues = sess.run(pred, feed_dict={x: predictionSamples, keep_prob: 1.0})
                     volume.reconstruct(args, predictionValues, coordinates)
                     predictionSamples, coordinates, nextCoordinates = volume.getPredictionSample(args, nextCoordinates)

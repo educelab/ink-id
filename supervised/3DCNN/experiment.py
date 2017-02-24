@@ -1,6 +1,10 @@
 import os
 
-savePath = "/home/volcart/Desktop/supervisedPredictions/"
-for i in range(40,80,10):
-    #os.system("mkdir " + savePath + str(i))
-    os.system("python3 main.py " + str(i) + " " + str(1))
+xys = [30,40,50,60,70]
+zs = [60,80,100,120]
+cushions = [10,20,30]
+
+for xy in xys:
+    for z in zs:
+        for cushion in cushions:
+            os.system("python3 main.py {} {} {}".format(xy, z, cushion))

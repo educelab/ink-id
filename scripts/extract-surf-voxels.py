@@ -34,7 +34,7 @@ def main():
     output_dims = (num_slices, slice_length)
 
     threshes = []
-    threshes.append(20500)
+    threshes.append(21500)
 
     for thresh in threshes:
         print("beginning threshold {} of {}".format(
@@ -329,20 +329,21 @@ def polyfit_for_slice(a_slice_number, degree=32, cushion=2):
 
 
     # create lines of best fit
-    front_surf_line = np.poly1d(np.polyfit(x_vals, y_vals_front, degree))
-    back_surf_line = np.poly1d(np.polyfit(x_vals, y_vals_back, degree))
-    for v in range(the_slice.shape[0]):
-        approx_front_ind = int(front_surf_line(v))
-        approx_back_ind = int(back_surf_line(v))
+    if len(x_vals) > 0:
+        front_surf_line = np.poly1d(np.polyfit(x_vals, y_vals_front, degree))
+        back_surf_line = np.poly1d(np.polyfit(x_vals, y_vals_back, degree))
+        for v in range(the_slice.shape[0]):
+            approx_front_ind = int(front_surf_line(v))
+            approx_back_ind = int(back_surf_line(v))
 
-        if (approx_front_ind < cushion+1 or approx_back_ind > the_slice.shape[1]-cushion-1 or
-                approx_back_ind < cushion+1 or approx_back_ind > the_slice.shape[1]-cushion-1):
-            pass
-        else:
-            start = approx_front_ind - cushion
-            end = approx_back_ind + cushion
-            return_slice[v, start:end] = the_slice[v, start:end]
-            return_points[v] = start
+            if (approx_front_ind < cushion+1 or approx_back_ind > the_slice.shape[1]-cushion-1 or
+                    approx_back_ind < cushion+1 or approx_back_ind > the_slice.shape[1]-cushion-1):
+                pass
+            else:
+                start = approx_front_ind - cushion
+                end = approx_back_ind + cushion
+                return_slice[v, start:end] = the_slice[v, start:end]
+                return_points[v] = start
 
 
     return return_slice, return_points
