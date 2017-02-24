@@ -7,4 +7,4 @@ cushions = [10,20,30]
 for xy in xys:
     for z in zs:
         for cushion in cushions:
-            os.system("python3 main.py {} {} {}".format(xy, z, cushion))
+            os.system("python3 main.py {} {} {} 1".format(xy, z, cushion))

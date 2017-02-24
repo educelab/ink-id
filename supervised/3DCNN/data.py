@@ -42,7 +42,7 @@ class Volume:
             yCoordinate = np.random.randint(rowBounds[0], rowBounds[1])
             zCoordinate = 0
             if np.max(self.volume[yCoordinate, xCoordinate]) > 21500:
-                zCoordinate = np.max(0,self.surfaceImage[yCoordinate,xCoordinate] - args["surfaceCushion"])
+                zCoordinate = max(0, self.surfaceImage[yCoordinate,xCoordinate] - args["surfaceCushion"])
 
             # add sample to array, with appropriate shape
             sample = (self.volume[yCoordinate:yCoordinate+args["y_Dimension"], \
