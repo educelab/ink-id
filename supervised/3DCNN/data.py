@@ -26,6 +26,8 @@ class Volume:
         self.surfaceImage = tiff.imread(args["surfaceDataFile"])
         self.all_truth = []
         self.all_preds = []
+        self.test_truth = []
+        self.test_preds = []
 
 
     def getTrainingSample(self, args):
@@ -37,36 +39,37 @@ class Volume:
         colBounds=[0,int(self.volume.shape[1]*args["train_portion"])]
         rowBounds=[0,self.volume.shape[0]-args["y_Dimension"]]
 
+        inks = 0
         for i in range(args["numCubes"]):
             xCoordinate = np.random.randint(colBounds[0], colBounds[1])
             yCoordinate = np.random.randint(rowBounds[0], rowBounds[1])
             zCoordinate = 0
-            if np.max(self.volume[yCoordinate, xCoordinate]) > 21500:
-                zCoordinate = max(0, self.surfaceImage[yCoordinate,xCoordinate] - args["surfaceCushion"])
+            # use this loop to only train on the surface
+            while np.max(self.volume[yCoordinate, xCoordinate]) < args["surfaceThresh"]:
+                xCoordinate = np.random.randint(colBounds[0], colBounds[1])
+                yCoordinate = np.random.randint(rowBounds[0], rowBounds[1])
+            zCoordinate = np.maximum(0, self.surfaceImage[yCoordinate,xCoordinate] - args["surfaceCushion"])
 
             # add sample to array, with appropriate shape
             sample = (self.volume[yCoordinate:yCoordinate+args["y_Dimension"], \
                         xCoordinate:xCoordinate+args["x_Dimension"], zCoordinate:zCoordinate+args["z_Dimension"]])
             trainingSamples[i, 0:sample.shape[0], 0:sample.shape[1], 0:sample.shape[2]] = sample
 
-            # NOTE: this volume class assumes that there are three classifications
-            #TODO: clean up
-            no_ink = len(np.where(self.groundTruth[yCoordinate:yCoordinate+args["y_Dimension"], \
-                        xCoordinate:xCoordinate+args["x_Dimension"]] < 85)[0])
-            papyrus = len(np.where(np.logical_and(self.groundTruth[yCoordinate:yCoordinate+args["y_Dimension"], \
-                        xCoordinate:xCoordinate+args["x_Dimension"]] > 85, \
-                        self.groundTruth[yCoordinate:yCoordinate+args["y_Dimension"], \
-                        xCoordinate:xCoordinate+args["x_Dimension"]] < 171))[0])
-            ink = len(np.where(self.groundTruth[yCoordinate:yCoordinate+args["y_Dimension"], \
-                        xCoordinate:xCoordinate+args["x_Dimension"]] > 171)[0])
 
-            classification = np.argmax([no_ink, papyrus, ink])
-            gt = [0,0,0]
-            gt[classification] = 1.0
-            self.trainingImage[yCoordinate,xCoordinate] = int(65534/2 * classification)
+            label_avg = np.mean(self.groundTruth[yCoordinate:yCoordinate+args["y_Dimension"], \
+                        xCoordinate:xCoordinate+args["x_Dimension"]])
+
+            if label_avg > 200:
+                inks +=1
+                gt = [0.0,1.0]
+                self.trainingImage[yCoordinate,xCoordinate] = int(65534)
+            else:
+                gt = [1.0,0.0]
+                self.trainingImage[yCoordinate,xCoordinate] = int(65534/2)
             groundTruth[i] = gt
 
         #pdb.set_trace()
+        #print("{} inks in batch".format(inks))
         return trainingSamples, groundTruth
 
 
@@ -86,6 +89,12 @@ class Volume:
             if (rowCoordinate + args["y_Dimension"]) > self.volume.shape[0]:
                 # yCoordinate = 0
                 break
+
+            # don't predict on it if it's not on the fragment
+            if np.max(self.volume[rowCoordinate, colCoordinate]) < args["surfaceThresh"]:
+                colCoordinate += args["overlapStep"]
+                continue
+
             zCoordinate = self.surfaceImage[rowCoordinate,colCoordinate] - args["surfaceCushion"]
             sample = (self.volume[rowCoordinate:rowCoordinate+args["y_Dimension"], \
                     colCoordinate:colCoordinate+args["x_Dimension"], zCoordinate:zCoordinate+args["z_Dimension"]])
@@ -99,27 +108,32 @@ class Volume:
 
 
     def reconstruct(self, args, samples, coordinates):
+        center_step = int(round(args["overlapStep"] / 2))
+        inks = 0
         # reconstruct prediction volume one prediction sample at a time
         for i in range(coordinates.shape[0]):
-                xpoint = coordinates[i,0]
-                ypoint = coordinates[i,1]
+                xpoint = coordinates[i,0] + int(args["x_Dimension"] / 2)
+                ypoint = coordinates[i,1] + int(args["y_Dimension"] / 2)
 
-                # all_truth array for confusion matrix, 1=ink, 0=noink
+                # all_truth array for confusion matrix, 1=ink, 0=fragment
+                #pdb.set_trace()
                 if(self.groundTruth[xpoint,ypoint]) > 200:
-                    self.all_truth.append(2.0)
-                elif(100 < self.groundTruth[xpoint,ypoint] < 200):
+                    inks += 1
                     self.all_truth.append(1.0)
                 else:
                     self.all_truth.append(0.0)
 
-                if np.argmax(samples[i,:]) == 2:
-                    self.predictionImageInk[xpoint:xpoint+args["overlapStep"],ypoint:ypoint+args["overlapStep"]] = samples[i,2]
-                    self.all_preds.append(2.0)
-                elif np.argmax(samples[i,:]) == 1:
-                    self.predictionImageSurf[xpoint:xpoint+args["overlapStep"],ypoint:ypoint+args["overlapStep"]] = samples[i,1]
+                if np.argmax(samples[i,:]) == 1:
+                    self.predictionImageInk[xpoint-center_step:xpoint+center_step, ypoint-center_step:ypoint+center_step] = samples[i,1]
                     self.all_preds.append(1.0)
                 else:
+                    self.predictionImageSurf[xpoint-center_step:xpoint+center_step, ypoint-center_step:ypoint+center_step] = samples[i,0]
                     self.all_preds.append(0.0)
+
+                # test batch
+                if xpoint > int(self.volume.shape[1]*args["train_portion"]):
+                    self.test_preds.append(self.all_preds[-1])
+                    self.test_truth.append(self.all_truth[-1])
 
 
     def savePredictionImage(self, args):
@@ -133,8 +147,9 @@ class Volume:
         for t in range(3):
             tmstring += str(tm[t])
             tmstring+= "-"
-        for t in range(3,5):
-            tmstring += str(tm[t])
+        tmstring += str(tm[3])
+        tmstring += ":"
+        tmstring += str(tm[4])
         tmstring += "h"
         specstring = "{}x{}x{}-".format(args["x_Dimension"], args["y_Dimension"], args["z_Dimension"])
         specstring = specstring + tmstring
@@ -143,18 +158,23 @@ class Volume:
         os.mkdir(output_path)
 
         description = ""
-        for arg in args:
+        for arg in sorted(args.keys()):
             description += arg+": " + str(args[arg]) + "\n"
 
         tiff.imsave(output_path + "/predictionInk-{}.tif".format(specstring), predictionImageInk)
         tiff.imsave(output_path + "/predictionSurf-{}.tif".format(specstring), predictionImageSurf)
         tiff.imsave(output_path + "/training-{}.tif".format(specstring), self.trainingImage)
-        confusion = confusion_matrix(self.all_truth, self.all_preds)
-        norm_confusion = confusion.astype('float') / confusion.sum(axis=1)[:, np.newaxis]
-        print("Confusion matrix, before normalization: \n{}".format(confusion))
-        print("Normalized confusion matrix: \n{}".format(norm_confusion))
-        np.savetxt(output_path + "/confusion-{}.txt".format(specstring), confusion, fmt='%1.0f')
-        np.savetxt(output_path + "/confusion-norm-{}.txt".format(specstring), norm_confusion, fmt='%1.4f')
+        all_confusion = confusion_matrix(self.all_truth, self.all_preds)
+        test_confusion = confusion_matrix(self.test_truth, self.test_preds)
+        all_norm_confusion = all_confusion.astype('float') / all_confusion.sum(axis=1)[:, np.newaxis]
+        test_norm_confusion = test_confusion.astype('float') / test_confusion.sum(axis=1)[:, np.newaxis]
+        print("Normalized confusion matrix for ALL points: \n{}".format(all_norm_confusion))
+        print("Normalized confusion matrix for TEST points: \n{}".format(test_norm_confusion))
+        np.savetxt(output_path + "/all-confusion-{}.txt".format(specstring), all_confusion, fmt='%1.0f')
+        np.savetxt(output_path + "/all-confusion-norm-{}.txt".format(specstring), all_norm_confusion, fmt='%1.4f')
+        np.savetxt(output_path + "/test-confusion-{}.txt".format(specstring), test_confusion, fmt='%1.0f')
+        np.savetxt(output_path + "/test-confusion-norm-{}.txt".format(specstring), test_norm_confusion, fmt='%1.4f')
+
         np.savetxt(output_path +'/description.txt', [description], delimiter=' ', fmt="%s")
 
 
