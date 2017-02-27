@@ -18,7 +18,7 @@ start_time = time.time()
 
 args = {
     "trainingDataPath": "/home/jack/devel/volcart/small-fragment-data/flatfielded-slices/",
-    "surfaceDataFile": "/home/jack/devel/volcart/small-fragment-data/polyfit-slices-degree32-cush16-thresh21500/surface.tif",
+    "surfaceDataFile": "/home/jack/devel/volcart/small-fragment-data/surf-output-21500/surface-points-21500.tif",
     "groundTruthFile": "/home/jack/devel/volcart/small-fragment-data/YZ-aligned-mask.tif",
     "savePredictionPath": "/home/jack/devel/volcart/predictions/3dcnn/",
     "x_Dimension": int(sys.argv[1]),
@@ -26,18 +26,20 @@ args = {
     "z_Dimension": int(sys.argv[2]),
     "surfaceCushion" : int(sys.argv[3]),
     "overlapStep": int(sys.argv[4]),
+    "receptiveField" : [3,3,3],
     "numCubes" : 250,
-    "n_Classes": 3,
+    "n_Classes": 2,
     "train_portion" : .5,
     "learningRate": 0.001,
     "batchSize": 30,
     "predictBatchSize": 500,
-    "dropout": 0.75,
-    "trainingIterations": 30001,
-    "predictStep": 30000,
+    "dropout": 0.7,
+    "trainingIterations": 1001,
+    "predictStep": 1000,
     "displayStep": 20,
     "grabNewSamples": 50,
-    "notes": "trained on left half"
+    "surfaceThresh": 21500,
+    "notes": "trained on left portion"
 }
 
 
