@@ -34,6 +34,7 @@ def main():
     output_dims = (num_slices, slice_length)
 
     threshes = []
+    threshes.append(21000)
     threshes.append(21500)
 
     for thresh in threshes:
@@ -54,7 +55,8 @@ def extract_volume_at_thresh(a_thresh):
     # widthState():  # surface = distance between valley and peak
     global state
     #state = resampleState() # surface = resampling
-    state = polyfitState() # surface = line of best fit
+    #state = polyfitState() # surface = line of best fit
+    state = surfState() # surface = first point to cross THRESH of best fit
 
     print("finished intialization for threshold {}".format(THRESH))
 
@@ -155,6 +157,7 @@ class surfState(State):
         self.mode_name = "surface"
         self.mode_description = "output values at surface peak"
         self.img_frnt = np.zeros(output_dims, dtype=np.uint16)
+        self.surface_points = np.zeros(output_dims, dtype=np.uint16)
         self.output_path = data_path + "/surf-output-" + str(THRESH)
         self.skel_path = self.output_path + "/skeleton-slices"
         paths = [self.output_path,self.skel_path]
@@ -167,12 +170,13 @@ class surfState(State):
     def extract_slice(self,slice_num):
         skel_slice_name = (self.output_path+"/skeleton-slices/slice"
                         + "0000"[:4-len(str(slice_num))] + str(slice_num) + ".tif")
-        new_vect,skel_slice = extract_width_for_slice(slice_num)
+        new_vect, skel_slice, surf_points = extract_surface_for_slice(slice_num)
+        self.surface_points[slice_num] = surf_points
         self.img_frnt[slice_num] = new_vect
-        tiff.imsave(skel_slice_name,skel_slice)
-        self.img_frnt[slice_num] = extract_width_for_slice(slice_num)
+        #tiff.imsave(skel_slice_name,skel_slice)
         
-    def save_output(self): tiff.imsave(self.output_path+"/front-{}.tif".format(THRESH), self.img_frnt)
+    def save_output(self): tiff.imsave(self.output_path+"/surface-points-{}.tif".format(
+        THRESH), self.surface_points)
 
 
 class resampleState(State):
@@ -237,6 +241,7 @@ def extract_surface_for_slice(a_slice_number):
     thresh_mat = np.where(the_slice > THRESH, the_slice, 0)
 
     new_vect = [0]*len(the_slice)
+    surf_points = np.zeros(len(the_slice), dtype=np.uint16)
     for v in range(the_slice.shape[0]):
         # vect = the_slice[v]
         # filter out everything beneath the threshold
@@ -249,8 +254,9 @@ def extract_surface_for_slice(a_slice_number):
             skel_slice[v][start] = the_slice[v][start]
             skel_slice[v][end] = the_slice[v][end]
             new_vect[v] = np.average(the_slice[v][start:start+NUM_VOX])
+            surf_points[v] = start
 
-    return new_vect,skel_slice
+    return new_vect, skel_slice, surf_points
 
 
 def resample_surface_for_slice(a_slice_number):
