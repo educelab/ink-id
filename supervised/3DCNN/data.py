@@ -124,11 +124,18 @@ class Volume:
                     self.all_truth.append(0.0)
 
                 if np.argmax(samples[i,:]) == 1:
-                    self.predictionImageInk[xpoint-center_step:xpoint+center_step, ypoint-center_step:ypoint+center_step] = samples[i,1]
                     self.all_preds.append(1.0)
+                    if(center_step > 0):
+                        self.predictionImageInk[xpoint-center_step:xpoint+center_step, ypoint-center_step:ypoint+center_step] = samples[i,1]
+                    else:
+                        self.predictionImageInk[xpoint,ypoint] = samples[i,1]
+
                 else:
-                    self.predictionImageSurf[xpoint-center_step:xpoint+center_step, ypoint-center_step:ypoint+center_step] = samples[i,0]
                     self.all_preds.append(0.0)
+                    if(center_step > 0):
+                        self.predictionImageSurf[xpoint-center_step:xpoint+center_step, ypoint-center_step:ypoint+center_step] = samples[i,0]
+                    else:
+                        self.predictionImageSurf[xpoint,ypoint] = samples[i,0]
 
                 # test batch
                 if xpoint > int(self.volume.shape[1]*args["train_portion"]):
