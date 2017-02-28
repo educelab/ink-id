@@ -10,7 +10,7 @@ import time
 
 if len(sys.argv) < 5:
     print("Missing arguments")
-    print("Usage: main.py  [xy Dimension]... [z Dimension]... [cushion]... [ overlap step]...")
+    print("Usage: main.py  [xy Dimension]... [z Dimension]... [cushion]... [overlap step]... [dropout probability]...")
     exit()
 
 print("Initializing...")
@@ -29,13 +29,13 @@ args = {
     "receptiveField" : [3,3,3],
     "numCubes" : 250,
     "n_Classes": 2,
-    "train_portion" : .5,
+    "train_portion" : .6,
     "learningRate": 0.001,
     "batchSize": 30,
     "predictBatchSize": 500,
     "dropout": float(sys.argv[5]),
-    "trainingIterations": 30001,
-    "predictStep": 30000,
+    "trainingIterations": 15001,
+    "predictStep": 15000,
     "displayStep": 20,
     "grabNewSamples": 50,
     "surfaceThresh": 21500,
