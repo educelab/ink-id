@@ -10,24 +10,26 @@ import time
 
 if len(sys.argv) < 5:
     print("Missing arguments")
-    print("Usage: main.py  [xy Dimension]... [z Dimension]... [cushion]... [overlap step]... [dropout probability]...")
+    print("Usage: main.py  [xy Dimension]... [z Dimension]... [cushion]... [overlap step]... [dropout probability]... [data path]")
     exit()
 
 print("Initializing...")
 start_time = time.time()
 
 args = {
-    "trainingDataPath": "/home/jack/devel/volcart/small-fragment-data/flatfielded-slices/",
+    #"trainingDataPath": "/home/jack/devel/volcart/small-fragment-data/flatfielded-slices/",
+    #"trainingDataPath" : "/home/jack/devel/volcart/small-fragment-data/nudge-0.50%/slices/"
+    "trainingDataPath" : str(sys.argv[6])
     #"surfaceDataFile": "/home/jack/devel/volcart/small-fragment-data/surf-output-21500/surface-points-21500.tif",
     "surfaceDataFile": "/home/jack/devel/volcart/small-fragment-data/polyfit-slices-degree32-cush16-thresh21500/surface.tif",
-    "groundTruthFile": "/home/jack/devel/volcart/small-fragment-data/YZ-aligned-mask.tif",
+    "groundTruthFile": "/home/jack/devel/volcart/small-fragment-data/ink-only-mask.tif",
     "savePredictionPath": "/home/jack/devel/volcart/predictions/3dcnn/",
     "x_Dimension": int(sys.argv[1]),
     "y_Dimension": int(sys.argv[1]),
     "z_Dimension": int(sys.argv[2]),
     "surfaceCushion" : int(sys.argv[3]),
     "overlapStep": int(sys.argv[4]),
-    "receptiveField" : [3,3,3],
+    "receptiveField" : [5,5,5],
     "numCubes" : 250,
     "n_Classes": 2,
     "train_portion" : .5,
@@ -40,7 +42,7 @@ args = {
     "displayStep": 20,
     "grabNewSamples": 50,
     "surfaceThresh": 21500,
-    "notes": "trained on left portion"
+    "notes": "trained on top portion"
 }
 
 

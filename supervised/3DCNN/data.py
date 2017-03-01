@@ -48,9 +48,9 @@ class Volume:
                         xCoordinate:xCoordinate+args["x_Dimension"]])
 
             # use this loop to only train on the surface
-            # and make sure 95% of the ground truth in the area is the same
-            while (np.max(self.volume[yCoordinate, xCoordinate]) < args["surfaceThresh"] and \
-            label_avg in range(int(.05*255), int(.95*255))):
+            # and make sure 90% of the ground truth in the area is the same
+            while (np.max(self.volume[yCoordinate, xCoordinate]) < args["surfaceThresh"] or \
+            label_avg in range(int(.1*255), int(.9*255))):
                 xCoordinate = np.random.randint(colBounds[0], colBounds[1])
                 yCoordinate = np.random.randint(rowBounds[0], rowBounds[1])
                 label_avg = np.mean(self.groundTruth[yCoordinate:yCoordinate+args["y_Dimension"], \
