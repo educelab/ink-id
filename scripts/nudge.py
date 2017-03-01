@@ -19,7 +19,7 @@ output = np.zeros(vol.shape, dtype=np.uint16)
 before = np.zeros(truth.shape, dtype=np.uint16)
 after = np.zeros(truth.shape, dtype=np.uint16)
 cap = np.iinfo(vol.dtype).max
-vol_min = np.min(vol[np.nonzero(vol)])
+vol_min = np.min(np.where(vol > 0, vol, cap))
 vol_max = np.max(vol)
 vol_range = (vol_max - vol_min)
 truth_value = np.max(truth)
