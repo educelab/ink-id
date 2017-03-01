@@ -17,9 +17,9 @@ from ops import *
 
 networkParams = {
     "nFilter0": 1,
-    "nFilter1": 2,
-    "nFilter2": 4,
-    "nFilter3": 8,
+    "nFilter1": 32,
+    "nFilter2": 64,
+    "nFilter3": 128,
     "zSize": 20
 }
 
@@ -86,7 +86,7 @@ def encoder(x, args):
 
 def decoder(z, args, batchSize):
     decodeLayer_OutputShape = [math.ceil(args["x_Dimension"]/8), math.ceil(args["y_Dimension"]/8), math.ceil(args["z_Dimension"]/8), networkParams["nFilter3"]]
-    decodeLayer = tf.reshape(slim.fully_connected(z, int(np.prod(decodeLayer_OutputShape)), activation_fn=None), [-1, math.ceil(args["x_Dimension"]/8), math.ceil(args["y_Dimension"]/8), math.ceil(args["z_Dimension"]/8), 8])
+    decodeLayer = tf.reshape(slim.fully_connected(z, int(np.prod(decodeLayer_OutputShape)), activation_fn=None), [-1, math.ceil(args["x_Dimension"]/8), math.ceil(args["y_Dimension"]/8), math.ceil(args["z_Dimension"]/8), networkParams["nFilter3"]])
 
     l4_OutputShape = [batchSize, int(math.ceil(float(args["x_Dimension"])/4.0)), int(math.ceil(float(args["y_Dimension"])/4.0)), int(math.ceil(float(args["z_Dimension"])/4.0)), networkParams["nFilter2"]]
     l4, l4_Forward = conv3d_transpose(decodeLayer, weights["wdc1"], biases["bdc1"], l4_OutputShape)

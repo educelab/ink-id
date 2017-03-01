@@ -23,15 +23,16 @@ import model as VAE
         1. data path
         2. x_Dimension & y_Dimension & z_Dimension
         3. saveSamplesPath
+        4. numCubes
 '''
 
 args = {
     "trainingDataPath": sys.argv[1],
     "x_Dimension": int(sys.argv[2]),
     "y_Dimension": int(sys.argv[2]),
-    "z_Dimension": int(sys.argv[2]),
-    "overlapStep": 2,
-    "numCubes": 250,
+    "z_Dimension": 16,
+    "overlapStep": 5,
+    "numCubes": int(sys.argv[4]),
     "learningRate": 0.001,
     "batchSize": 30,
     "dropout": 0.75,
@@ -48,8 +49,8 @@ x = tf.placeholder(tf.float32, [None, args["x_Dimension"], args["y_Dimension"], 
 keep_prob = tf.placeholder(tf.float32)
 
 l1, l2, l3, l4, l5, l6, finalLayer, loss = VAE.buildModel(x, args)
-correct_prediction = tf.equal(tf.argmax(x,1), tf.argmax(finalLayer,1))
-accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
+correctPrediction = tf.equal(tf.argmax(x,1), tf.argmax(finalLayer,1))
+accuracy = tf.reduce_mean(tf.cast(correctPrediction, tf.float32))
 optimizer = tf.train.AdamOptimizer(learning_rate=args["learningRate"]).minimize(loss)
 init = tf.global_variables_initializer()
 
@@ -80,17 +81,19 @@ with tf.Session() as sess:
         if epoch % args["analyzeStep"] == 0 and epoch > 0:
             for i in range(len(layers)):
                 print("Predicting layer number: " + str(i))
-                for j in range(1,len(layers[i])):
-                    print("Predicting sample number: " + str(j))
-                    startingCoordinates = [0,0,0]
-                    predictionSamples, coordinates, nextCoordinates = volume.getPredictionSample(args, startingCoordinates)
-                    while predictionSamples.shape[0] == args["numCubes"]: # TODO what about the special case where the volume is a perfect multiple of the numCubes?
-                        predictionValues = sess.run(layers[i][0], feed_dict={x: predictionSamples, keep_prob: 1.0})
-                        layers[i][j].reconstruct(args, predictionValues[:,:,:,:,j-1], coordinates, sampleRates[i])
-                        predictionSamples, coordinates, nextCoordinates = volume.getPredictionSample(args, nextCoordinates)
+                count = 1
+                startingCoordinates = [0,0,0]
+                predictionSamples, coordinates, nextCoordinates = volume.getPredictionSample(args, startingCoordinates)
+                while predictionSamples.shape[0] == args["numCubes"]: # TODO what about the special case where the volume is a perfect multiple of the numCubes?
+                    print("Predicting cubes #"+str(count*args["numCubes"]))
                     predictionValues = sess.run(layers[i][0], feed_dict={x: predictionSamples, keep_prob: 1.0})
+                    for j in range(1,len(layers[i])):
+                        layers[i][j].reconstruct(args, predictionValues[:,:,:,:,j-1], coordinates, sampleRates[i])
+                    predictionSamples, coordinates, nextCoordinates = volume.getPredictionSample(args, nextCoordinates)
+                    count += 1
+                predictionValues = sess.run(layers[i][0], feed_dict={x: predictionSamples, keep_prob: 1.0})
+                for j in range(1,len(layers[i])):
                     layers[i][j].reconstruct(args, predictionValues[:,:,:,:,j-1], coordinates, sampleRates[i])
-
                     layers[i][j].trimZeros()
                     layers[i][j].savePredictionSlices(args, i, j)
                     # layers[i][j].savePredictionVolume(args)
