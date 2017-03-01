@@ -10,12 +10,11 @@ __email__ = "kendall.weihe@uky.edu"
 
 import os
 
-saveVideosPath = "/home/volcart/UnsupervisedResults/VAE/"
-for dimension in range(25, 80, 5):
-    stepSize = int(dimension / 2)
-    if stepSize % 2 != 0: stepSize += 1
-    experimentPath = saveVideosPath + "Dimension-" + str(dimension) + "-Step-" + str(stepSize) + "/"
-    os.mkdir(experimentPath)
-    experimentVidoePath = experimentPath + "videos/"
-    os.mkdir(experimentVidoePath)
-    os.system("python3 main.py " + str(dimension) + " " + str(stepSize) + " " + experimentPath + " " + experimentVidoePath)
+savePath = "/home/volcart/UnsupervisedResults/CarbonPhantom-Feb2017/Column-6/"
+dataPath = "/home/volcart/volumes/packages/CarbonPhantom-Feb2017.volpkg/paths/20170221130948/layered/column-6/"
+numCubes = [1000, 500, 250]
+dimensions = [25, 50, 75]
+for i in range(3):
+    saveSamplesPath = savePath + "Dimension-" + str(dimensions[i]) + "/"
+    os.mkdir(saveSamplesPath)
+    os.system("python3 main.py " + dataPath + " " + str(dimensions[i]) + " " + saveSamplesPath + " " + str(numCubes[i]))
