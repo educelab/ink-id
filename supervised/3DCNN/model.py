@@ -11,7 +11,8 @@ def buildModel(x, y, args):
     conv4 = slim.batch_norm(slim.convolution(conv3, 64, args["receptiveField"], stride=2))
     conv5 = slim.batch_norm(slim.convolution(conv4, 128, args["receptiveField"], stride=2))
 
-    pred = tf.nn.dropout(slim.fully_connected(slim.flatten(conv5), args["n_Classes"], activation_fn=None), args["dropout"])
-    loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=pred, labels=y))
+    pred = tf.nn.dropout(slim.fully_connected(slim.flatten(conv5), 256), args["dropout"])
+    net = tf.nn.dropout(slim.fully_connected(pred, args["n_Classes"], activation_fn=None), args["dropout"])
+    loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=net, labels=y))
 
-    return tf.nn.softmax(pred), loss
+    return tf.nn.softmax(net), loss
