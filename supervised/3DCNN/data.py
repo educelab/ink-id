@@ -36,18 +36,25 @@ class Volume:
         groundTruth = np.zeros((args["numCubes"], args["n_Classes"]), dtype=np.float32)
         # restrict training to left half
         #colBounds=[int(self.volume.shape[1]*args["train_portion"]), self.volume.shape[1] - args["x_Dimension"]]
-        colBounds=[0,int(self.volume.shape[1]*args["train_portion"])]
-        rowBounds=[0,self.volume.shape[0]-args["y_Dimension"]]
+        colBounds=[0, int(self.volume.shape[1]-args["x_Dimension"])]
+        rowBounds=[0, int(self.volume.shape[0]*args["train_portion"])]
 
         inks = 0
         for i in range(args["numCubes"]):
             xCoordinate = np.random.randint(colBounds[0], colBounds[1])
             yCoordinate = np.random.randint(rowBounds[0], rowBounds[1])
             zCoordinate = 0
+            label_avg = np.mean(self.groundTruth[yCoordinate:yCoordinate+args["y_Dimension"], \
+                        xCoordinate:xCoordinate+args["x_Dimension"]])
+
             # use this loop to only train on the surface
-            while np.max(self.volume[yCoordinate, xCoordinate]) < args["surfaceThresh"]:
+            # and make sure 95% of the ground truth in the area is the same
+            while (np.max(self.volume[yCoordinate, xCoordinate]) < args["surfaceThresh"] and \
+            label_avg in range(int(.05*255), int(.95*255))):
                 xCoordinate = np.random.randint(colBounds[0], colBounds[1])
                 yCoordinate = np.random.randint(rowBounds[0], rowBounds[1])
+                label_avg = np.mean(self.groundTruth[yCoordinate:yCoordinate+args["y_Dimension"], \
+                        xCoordinate:xCoordinate+args["x_Dimension"]])
             zCoordinate = np.maximum(0, self.surfaceImage[yCoordinate,xCoordinate] - args["surfaceCushion"])
 
             # add sample to array, with appropriate shape
@@ -55,11 +62,7 @@ class Volume:
                         xCoordinate:xCoordinate+args["x_Dimension"], zCoordinate:zCoordinate+args["z_Dimension"]])
             trainingSamples[i, 0:sample.shape[0], 0:sample.shape[1], 0:sample.shape[2]] = sample
 
-
-            label_avg = np.mean(self.groundTruth[yCoordinate:yCoordinate+args["y_Dimension"], \
-                        xCoordinate:xCoordinate+args["x_Dimension"]])
-
-            if label_avg > 200:
+            if label_avg > (.9 * 255):
                 inks +=1
                 gt = [0.0,1.0]
                 self.trainingImage[yCoordinate,xCoordinate] = int(65534)
