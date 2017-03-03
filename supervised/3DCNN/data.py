@@ -38,7 +38,7 @@ class Volume:
         # restrict training
         #colBounds=[int(self.volume.shape[1]*args["train_portion"]), self.volume.shape[1] - args["x_Dimension"]]
         colBounds=[0, int(args["train_portion"] * (self.volume.shape[1]-args["x_Dimension"]))]
-        rowBounds=[200, int(self.volume.shape[0])]
+        rowBounds=[200, int(self.volume.shape[0] - args["y_Dimension"] - 100)]
         if testSet:
             # get samples from "the other side" for test set
             colBounds=[int(args["train_portion"] * (self.volume.shape[1]-args["x_Dimension"])), (self.volume.shape[1]-args["x_Dimension"])]
@@ -58,11 +58,20 @@ class Volume:
                 yCoordinate = np.random.randint(rowBounds[0], rowBounds[1])
                 label_avg = np.mean(self.groundTruth[yCoordinate:yCoordinate+args["y_Dimension"], \
                         xCoordinate:xCoordinate+args["x_Dimension"]])
-            zCoordinate = np.maximum(0, self.surfaceImage[yCoordinate,xCoordinate] - args["surfaceCushion"])
+            jitter = np.random.randint(-10,10)
+            zCoordinate = np.maximum(0, self.surfaceImage[yCoordinate,xCoordinate] - args["surfaceCushion"] + jitter)
 
             # add sample to array, with appropriate shape
             sample = (self.volume[yCoordinate:yCoordinate+args["y_Dimension"], \
                         xCoordinate:xCoordinate+args["x_Dimension"], zCoordinate:zCoordinate+args["z_Dimension"]])
+
+            if jitter < 0:
+                sample = np.flip(sample, axis=2)
+            if jitter % 3 == 0:
+                sample = np.rot90(sample, axes=(0,1))
+            if jitter % 5 == 0:
+                sample = np.rot90(sample, axes=(0,1))
+
             trainingSamples[i, 0:sample.shape[0], 0:sample.shape[1], 0:sample.shape[2]] = sample
 
             if label_avg > (.9 * 255):
