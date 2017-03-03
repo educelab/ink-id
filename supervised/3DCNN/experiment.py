@@ -1,14 +1,30 @@
 import os
 
-xys = [25, 50]
-zs = [60,140]
-cushions = [20]
-dropouts = [0.5]
-paths = ["/home/jack/devel/volcart/small-fragment-data/nudge-0.50%/slices/", "/home/jack/devel/volcart/small-fragment-data/nudge-1.00%/slices/"]
+xys = [50]
+zs = [60, 80, 120]
+cushions = [20, 30, 40]
+dropouts = [0.5, 0.6]
+overlap = 1
+paths = [
+        #"/home/jack/devel/volcart/small-fragment-data/nudge-4.00%/slices/",
+        #"/home/jack/devel/volcart/small-fragment-data/nudge-2.00%/slices/",
+        #"/home/jack/devel/volcart/small-fragment-data/nudge-1.50%/slices/",
+        #"/home/jack/devel/volcart/small-fragment-data/nudge-1.00%/slices/",
+        #"/home/jack/devel/volcart/small-fragment-data/nudge-8.00%/slices/",
+        #"/home/jack/devel/volcart/small-fragment-data/nudge-0.50%/slices/".
+        "/home/jack/devel/volcart/small-fragment-data/flatfielded-slices/",
+        ]
 
-for xy in xys:
-    for z in zs:
-        for cushion in cushions:
-            for dropout in dropouts:
-                for path in paths:
-                    os.system("python3 main.py {} {} {} 1 {} {}".format(xy, z, cushion, dropout, path))
+try:
+    for xy in xys:
+        for z in zs:
+            for cushion in cushions:
+                for dropout in dropouts:
+                    for path in paths:
+                        os.system("python3 main.py {} {} {} {} {} {}".format(
+                                xy, z, cushion, overlap, dropout, path))
+
+except KeyboardInterrupt:
+    # stop everything, instead of just one script
+    #TODO make this work
+    sys.exit()

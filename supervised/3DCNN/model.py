@@ -9,7 +9,7 @@ def buildModel(x, y, args):
     conv2 = slim.batch_norm(slim.convolution(conv1, 16, args["receptiveField"], stride=2))
     conv3 = slim.batch_norm(slim.convolution(conv2, 32, args["receptiveField"], stride=2))
     conv4 = slim.batch_norm(slim.convolution(conv3, 64, args["receptiveField"], stride=2))
-    conv5 = slim.batch_norm(slim.convolution(conv4, 128, args["receptiveField"], stride=2))
+    conv5 = slim.batch_norm(slim.convolution(conv4, 128, args["receptiveField"], stride=1))
     conv6 = slim.batch_norm(slim.convolution(conv5, 256, args["receptiveField"], stride=2))
 
     fc1 = tf.nn.dropout(slim.fully_connected(slim.flatten(conv6), 512), args["dropout"])

@@ -41,8 +41,8 @@ args = {
     "predictStep": 20000,
     "displayStep": 20,
     "grabNewSamples": 20,
-    "surfaceThresh": 20500,
-    "notes": "trained on more of left portion, changed learningRate"
+    "surfaceThresh": 20000,
+    "notes": "Modified network"
 }
 
 
