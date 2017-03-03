@@ -13,8 +13,8 @@ import matplotlib.pyplot as plt
 from scipy.signal import argrelmax 
 
 fragment_threshold = 21500
-step_back = 30
-step_through = 30
+step_back = 40
+step_through = 90
 
 truth_file = "/home/jack/devel/volcart/small-fragment-data/ink-only-mask.tif"
 ground_truth = tiff.imread(truth_file)

@@ -9,10 +9,11 @@ __email__ = "jgba225@g.uky.edu"
 import numpy as np
 import tifffile as tiff
 import os
+import matplotlib.pyplot as plt
 from scipy.signal import argrelmax
 from scipy.stats import norm
 
-truth = np.load('/home/jack/devel/volcart/small-fragment-data/volume-truth.npy')
+truth = tiff.imread('/home/jack/devel/volcart/small-fragment-data/ink-only-mask.tif')
 vol = np.load('/home/jack/devel/volcart/small-fragment-data/volume.npy')
 output_dir = '/home/jack/devel/volcart/small-fragment-data/nudge-'
 output = np.zeros(vol.shape, dtype=np.uint16)
@@ -27,13 +28,17 @@ truth_value = np.max(truth)
 
 # parameters
 loc = 0
-scale = 2
+scale = 4
 #increase_percentages = np.arange(0, 1.5, .05)+.05
-increase_percentages = np.array([.5, 1.])
+#increase_percentages = np.array([.5, 1., 1.5, 2., 4., 8.])
+increase_percentages = np.array([ 1.5,])
 increase_decimals = increase_percentages / 100
 neigh = 4
 thresh = 20500
-span = 4
+reach_in = 10
+reach_back = 4
+span = max(reach_in, reach_back)
+shown_demo = True # set to False to display a sample graph
 
 
 # create the distribution array
@@ -71,19 +76,35 @@ for increase in increase_decimals:
                 before[i,j] = vector[peak]
 
                 # nudge each point around the peak
-                for x in range(peak - span, peak + span):
+                for x in range(peak - reach_back, peak):
+                    diff = abs(peak - x)
+                    proportion = float(diff) / float(reach_back)
+                    aligned_index = int(proportion * span)
+                    dist_weight = distribute[aligned_index]
+                    vector[x] += int(increase_parameter * truth_weight * dist_weight)
+                for x in range(peak, peak + reach_in):
                     diff = abs(peak - x)
                     dist_weight = distribute[diff]
                     vector[x] += int(increase_parameter * truth_weight * dist_weight)
 
+
                 outvol[i,j] = vector
                 after[i,j] = vector[peak]
+                if shown_demo == False and truth_weight > .9:
+                    xs = np.arange(vol.shape[2])
+                    plt.plot(thresh_vect, color='b')
+                    plt.plot(vector, color='g')
+                    plt.show()
+                    shown_demo = True
 
             except IndexError:
                 # for when no argrelmax exists
                 pass
-            
-        print("finished row {} / {} for increase {}".format(i, vol.shape[0] - neigh, increase))
+
+        #progress update
+        if (i % int((vol.shape[0] - neigh) / 10) == 0):
+            print("finished rows 0 to {} out of {} for increase {}".format(
+                i, vol.shape[0] - neigh, increase))
 
     # output
     current_output_dir = (output_dir + "{:.2f}%".format(increase * 100) + "/")
