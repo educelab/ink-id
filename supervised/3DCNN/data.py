@@ -34,10 +34,10 @@ class Volume:
         # allocate an empty array with appropriate size
         trainingSamples = np.zeros((args["numCubes"], args["x_Dimension"], args["y_Dimension"], args["z_Dimension"]), dtype=np.float32)
         groundTruth = np.zeros((args["numCubes"], args["n_Classes"]), dtype=np.float32)
-        # restrict training to left half
+        # restrict training
         #colBounds=[int(self.volume.shape[1]*args["train_portion"]), self.volume.shape[1] - args["x_Dimension"]]
-        colBounds=[0, int(self.volume.shape[1]-args["x_Dimension"])]
-        rowBounds=[0, int(self.volume.shape[0]*args["train_portion"])]
+        colBounds=[0, int(args["train_portion"] * (self.volume.shape[1]-args["x_Dimension"]))]
+        rowBounds=[200, int(self.volume.shape[0])]
 
         inks = 0
         for i in range(args["numCubes"]):
@@ -49,7 +49,7 @@ class Volume:
 
             # use this loop to only train on the surface
             # and make sure 90% of the ground truth in the area is the same
-            while (np.max(self.volume[yCoordinate, xCoordinate]) < args["surfaceThresh"] or \
+            while (np.min(np.max(self.volume[yCoordinate:yCoordinate+args["y_Dimension"], xCoordinate:xCoordinate+args["x_Dimension"]], axis=2)) < args["surfaceThresh"] or \
             label_avg in range(int(.1*255), int(.9*255))):
                 xCoordinate = np.random.randint(colBounds[0], colBounds[1])
                 yCoordinate = np.random.randint(rowBounds[0], rowBounds[1])
