@@ -30,16 +30,19 @@ class Volume:
         self.test_preds = []
 
 
-    def getTrainingSample(self, args):
+    def getTrainingSample(self, args, testSet=False):
         # allocate an empty array with appropriate size
         trainingSamples = np.zeros((args["numCubes"], args["x_Dimension"], args["y_Dimension"], args["z_Dimension"]), dtype=np.float32)
         groundTruth = np.zeros((args["numCubes"], args["n_Classes"]), dtype=np.float32)
+
         # restrict training
         #colBounds=[int(self.volume.shape[1]*args["train_portion"]), self.volume.shape[1] - args["x_Dimension"]]
         colBounds=[0, int(args["train_portion"] * (self.volume.shape[1]-args["x_Dimension"]))]
         rowBounds=[200, int(self.volume.shape[0])]
+        if testSet:
+            # get samples from "the other side" for test set
+            colBounds=[int(args["train_portion"] * (self.volume.shape[1]-args["x_Dimension"])), (self.volume.shape[1]-args["x_Dimension"])]
 
-        inks = 0
         for i in range(args["numCubes"]):
             xCoordinate = np.random.randint(colBounds[0], colBounds[1])
             yCoordinate = np.random.randint(rowBounds[0], rowBounds[1])
@@ -63,7 +66,6 @@ class Volume:
             trainingSamples[i, 0:sample.shape[0], 0:sample.shape[1], 0:sample.shape[2]] = sample
 
             if label_avg > (.9 * 255):
-                inks +=1
                 gt = [0.0,1.0]
                 self.trainingImage[yCoordinate,xCoordinate] = int(65534)
             else:
@@ -71,8 +73,6 @@ class Volume:
                 self.trainingImage[yCoordinate,xCoordinate] = int(65534/2)
             groundTruth[i] = gt
 
-        #pdb.set_trace()
-        #print("{} inks in batch".format(inks))
         return trainingSamples, groundTruth
 
 
