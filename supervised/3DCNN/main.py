@@ -19,9 +19,9 @@ start_time = time.time()
 args = {
     #"trainingDataPath": "/home/jack/devel/volcart/small-fragment-data/flatfielded-slices/",
     #"trainingDataPath" : "/home/jack/devel/volcart/small-fragment-data/nudge-0.50%/slices/"
-    "trainingDataPath" : str(sys.argv[6])
-    #"surfaceDataFile": "/home/jack/devel/volcart/small-fragment-data/surf-output-21500/surface-points-21500.tif",
-    "surfaceDataFile": "/home/jack/devel/volcart/small-fragment-data/polyfit-slices-degree32-cush16-thresh21500/surface.tif",
+    "trainingDataPath" : str(sys.argv[6]),
+    "surfaceDataFile": "/home/jack/devel/volcart/small-fragment-data/surf-output-21500/surface-points-21500.tif",
+    #"surfaceDataFile": "/home/jack/devel/volcart/small-fragment-data/polyfit-slices-degree32-cush16-thresh21500/surface.tif",
     "groundTruthFile": "/home/jack/devel/volcart/small-fragment-data/ink-only-mask.tif",
     "savePredictionPath": "/home/jack/devel/volcart/predictions/3dcnn/",
     "x_Dimension": int(sys.argv[1]),
@@ -32,17 +32,17 @@ args = {
     "receptiveField" : [5,5,5],
     "numCubes" : 250,
     "n_Classes": 2,
-    "train_portion" : .5,
-    "learningRate": 0.001,
+    "train_portion" : .6,
+    "learningRate": 0.0001,
     "batchSize": 30,
     "predictBatchSize": 500,
     "dropout": float(sys.argv[5]),
     "trainingIterations": 20001,
     "predictStep": 20000,
     "displayStep": 20,
-    "grabNewSamples": 50,
-    "surfaceThresh": 21500,
-    "notes": "trained on top portion"
+    "grabNewSamples": 20,
+    "surfaceThresh": 20500,
+    "notes": "trained on more of left portion, changed learningRate"
 }
 
 
@@ -62,12 +62,13 @@ with tf.Session() as sess:
     sess.run(init)
     epoch = 0
     avgOutputVolume = []
+    testX, testY = volume.getTrainingSample(args, testSet=True)
     while epoch < args["trainingIterations"]:
             if epoch % args["grabNewSamples"] == 0:
                 trainingSamples, groundTruth = volume.getTrainingSample(args)
 
 
-            if epoch % args["grabNewSamples"] % int(args["numCubes"]/8) == 0:
+            if epoch % args["grabNewSamples"] % int(args["numCubes"]/4) == 0:
                 # periodically shuffle input and labels in parallel
                 all_pairs = list(zip(trainingSamples, groundTruth))
                 np.random.shuffle(all_pairs)
@@ -83,9 +84,14 @@ with tf.Session() as sess:
             sess.run(optimizer, feed_dict={x: batchX, y: batchY, keep_prob: args["dropout"]})
 
             if epoch % args["displayStep"] == 0:
-                acc = sess.run(accuracy, feed_dict={x: batchX, y: batchY, keep_prob: 1.0})
-                evaluatedLoss = sess.run(loss, feed_dict={x: batchX, y: batchY, keep_prob: 1.0})
-                print("Epoch: " + str(epoch) + "  Loss: " + str(np.mean(evaluatedLoss)) + "  Acc: " + str(np.mean(acc)))
+                train_acc = sess.run(accuracy, feed_dict={x: batchX, y: batchY, keep_prob: 1.0})
+                test_acc = sess.run(accuracy, feed_dict={x:testX, y:testY, keep_prob: 1.0})
+                train_loss = sess.run(loss, feed_dict={x: batchX, y: batchY, keep_prob: 1.0})
+                test_loss = sess.run(loss, feed_dict={x: testX, y:testY, keep_prob: 1.0})
+                print("Epoch: {}".format(epoch))
+                print("Train Loss: {:.3f}\tTrain Acc: {:.3f}".format(train_loss, train_acc))
+                print("Test Loss: {:.3f}\tTest Acc: {:.3f}".format(test_loss, test_acc))
+                # + str(epoch) + "  Loss: " + str(np.mean(evaluatedLoss)) + "  Acc: " + str(np.mean(train_acc)))
 
             if epoch % args["predictStep"] == 0 and epoch > 0:
                 print("{} training iterations took {:.2f} minutes".format( \
