@@ -35,13 +35,13 @@ class Volume:
         trainingSamples = np.zeros((args["numCubes"], args["x_Dimension"], args["y_Dimension"], args["z_Dimension"]), dtype=np.float32)
         groundTruth = np.zeros((args["numCubes"], args["n_Classes"]), dtype=np.float32)
 
-        # restrict training
+        # restrict training to RIGHT portion
         #colBounds=[int(self.volume.shape[1]*args["train_portion"]), self.volume.shape[1] - args["x_Dimension"]]
-        colBounds=[0, int(args["train_portion"] * (self.volume.shape[1]-args["x_Dimension"]))]
-        rowBounds=[200, int(self.volume.shape[0] - args["y_Dimension"] - 100)]
+        colBounds=[int(args["train_portion"] * self.volume.shape[1]), self.volume.shape[1] - args["x_Dimension"]]
+        rowBounds=[0, int(self.volume.shape[0] - args["y_Dimension"])]
         if testSet:
             # get samples from "the other side" for test set
-            colBounds=[int(args["train_portion"] * (self.volume.shape[1]-args["x_Dimension"])), (self.volume.shape[1]-args["x_Dimension"])]
+            colBounds=[0, int(args["train_portion"] * (self.volume.shape[1]-args["x_Dimension"]))]
 
         for i in range(args["numCubes"]):
             xCoordinate = np.random.randint(colBounds[0], colBounds[1])
@@ -58,19 +58,26 @@ class Volume:
                 yCoordinate = np.random.randint(rowBounds[0], rowBounds[1])
                 label_avg = np.mean(self.groundTruth[yCoordinate:yCoordinate+args["y_Dimension"], \
                         xCoordinate:xCoordinate+args["x_Dimension"]])
-            jitter = np.random.randint(-10,10)
+            jitter = np.random.randint(-12,12)
             zCoordinate = np.maximum(0, self.surfaceImage[yCoordinate,xCoordinate] - args["surfaceCushion"] + jitter)
 
             # add sample to array, with appropriate shape
             sample = (self.volume[yCoordinate:yCoordinate+args["y_Dimension"], \
                         xCoordinate:xCoordinate+args["x_Dimension"], zCoordinate:zCoordinate+args["z_Dimension"]])
 
-            if jitter < 0:
-                sample = np.flip(sample, axis=2)
-            if jitter % 3 == 0:
-                sample = np.rot90(sample, axes=(0,1))
-            if jitter % 5 == 0:
-                sample = np.rot90(sample, axes=(0,1))
+            # twelve total possible augmentations, ensure equal probability
+            # for flip: original, flip left-right, flip up-down
+            if -12 < jitter < -4:
+                sample = np.flip(sample, axis=0)
+            elif -4 < jitter < 4:
+                sample = np.flip(sample, axis=1)
+            # for rotate: original, rotate 90, rotate 180, or rotate 270
+            if 6 < jitter < 12:
+                sample = np.rot90(sample, k=1, axes=(0,1))
+            elif 0 < jitter < 6:
+                sample = np.rot90(sample, k=2, axes=(0,1))
+            elif -6 < jitter < 0:
+                sample = np.rot90(sample, k=3, axes=(0,1))
 
             trainingSamples[i, 0:sample.shape[0], 0:sample.shape[1], 0:sample.shape[2]] = sample
 
