@@ -188,6 +188,8 @@ class Volume:
             description += arg+": " + str(args[arg]) + "\n"
 
         tiff.imsave(output_path + "/predictionInk-{}.tif".format(specstring), predictionImageInk)
+        predictionImageInk[:, self.volume.shape[1]*args["trainPortion"]:] = 0
+        tiff.imsave(output_path + "/predictionInkTest-{}.tif".format(specstring), predictionImageInk)
         tiff.imsave(output_path + "/predictionSurf-{}.tif".format(specstring), predictionImageSurf)
         tiff.imsave(output_path + "/training-{}.tif".format(specstring), self.trainingImage)
         all_confusion = confusion_matrix(self.all_truth, self.all_preds)
