@@ -58,7 +58,9 @@ class Volume:
                 yCoordinate = np.random.randint(rowBounds[0], rowBounds[1])
                 label_avg = np.mean(self.groundTruth[yCoordinate:yCoordinate+args["y_Dimension"], \
                         xCoordinate:xCoordinate+args["x_Dimension"]])
-            jitter = np.random.randint(-12,12)
+
+            jitter_range = [-6,6]
+            jitter = np.random.randint(jitter_range[0],jitter_range[1])
             zCoordinate = np.maximum(0, self.surfaceImage[yCoordinate,xCoordinate] - args["surfaceCushion"] + jitter)
 
             # add sample to array, with appropriate shape
@@ -67,16 +69,16 @@ class Volume:
 
             # twelve total possible augmentations, ensure equal probability
             # for flip: original, flip left-right, flip up-down
-            if -12 < jitter < -4:
+            if jitter_range[0] < jitter < jitter_range[0] / 3:
                 sample = np.flip(sample, axis=0)
-            elif -4 < jitter < 4:
+            elif jitter_range[0] / 3 < jitter < jitter_range[1] / 3:
                 sample = np.flip(sample, axis=1)
             # for rotate: original, rotate 90, rotate 180, or rotate 270
-            if 6 < jitter < 12:
+            if jitter_range[1] / 2 < jitter < jitter_range[1]:
                 sample = np.rot90(sample, k=1, axes=(0,1))
-            elif 0 < jitter < 6:
+            elif 0 < jitter < jitter_range[1] / 2:
                 sample = np.rot90(sample, k=2, axes=(0,1))
-            elif -6 < jitter < 0:
+            elif jitter_range[0] / 2 < jitter < 0:
                 sample = np.rot90(sample, k=3, axes=(0,1))
 
             trainingSamples[i, 0:sample.shape[0], 0:sample.shape[1], 0:sample.shape[2]] = sample
