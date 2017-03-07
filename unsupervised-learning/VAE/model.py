@@ -17,10 +17,10 @@ from ops import *
 
 networkParams = {
     "nFilter0": 1,
-    "nFilter1": 32,
-    "nFilter2": 64,
-    "nFilter3": 128,
-    "zSize": 20
+    "nFilter1": 100,
+    "nFilter2": 100,
+    "nFilter3": 100,
+    "zSize": 100
 }
 
 weights = {
@@ -53,12 +53,21 @@ biases = {
 }
 
 def buildModel(x, args):
-    l1, l2, l3, z_Mean, z_Stddev = encoder(x, args)
+    # 3D encoder
+    # l1, l2, l3, z_Mean, z_Stddev = encoder(x, args)
+
+    # 2D encoder
+    l1, l2, l3, z_Mean, z_Stddev = encoder_2d(x, args)
+
     batchSize = tf.shape(x)[0]
     randomSample = tf.random_normal([batchSize, networkParams["zSize"]], 0, 1, dtype=tf.float32)
     z = z_Mean + (z_Stddev * randomSample)
 
-    l4, l5, l6, finalLayer = decoder(z, args, batchSize)
+    # 3D decoder
+    # l4, l5, l6, finalLayer = decoder(z, args, batchSize)
+
+    # 2D decoder
+    l4, l5, l6, finalLayer = decoder_2d(z, args, batchSize)
 
     flattenedImage = tf.reshape(x, [-1, args["x_Dimension"]*args["y_Dimension"]*args["z_Dimension"]])
     flattenedG = tf.reshape(finalLayer, [-1, args["x_Dimension"]*args["y_Dimension"]*args["z_Dimension"]])
@@ -99,3 +108,42 @@ def decoder(z, args, batchSize):
     l6_Forward = tf.reshape(l6_Forward, [-1, args["x_Dimension"], args["y_Dimension"], args["z_Dimension"]])
 
     return l4, l5, l6, tf.nn.dropout(l6_Forward, args["dropout"])
+
+def encoder_2d(x, args):
+    x = tf.reshape(x, [-1, args["x_Dimension"], args["y_Dimension"], args["z_Dimension"], 1])
+    l1, l1_Forward = conv3d(x, weights["wc1"], biases["bc1"], strides=[2,2,1])
+    l2, l2_Forward = conv3d(l1_Forward, weights["wc2"], biases["bc2"], strides=[2,2,1])
+    l3, l3_Forward = conv3d(l2_Forward, weights["wc3"], biases["bc3"], strides=[2,2,1])
+
+    return l1, l2, l3, slim.fully_connected(slim.flatten(l3_Forward), networkParams["zSize"], activation_fn=None), slim.fully_connected(slim.flatten(l3_Forward), networkParams["zSize"], activation_fn=None)
+
+def decoder_2d(z, args, batchSize):
+    decodeLayer_OutputShape = [math.ceil(args["x_Dimension"]/8), math.ceil(args["y_Dimension"]/8), math.ceil(args["z_Dimension"]/8), networkParams["nFilter3"]]
+    decodeLayer = tf.reshape(slim.fully_connected(z, int(np.prod(decodeLayer_OutputShape)), activation_fn=None), [-1, math.ceil(args["x_Dimension"]/8), math.ceil(args["y_Dimension"]/8), math.ceil(args["z_Dimension"]/8), networkParams["nFilter3"]])
+
+    l4_OutputShape = [batchSize, int(math.ceil(float(args["x_Dimension"])/4.0)), int(math.ceil(float(args["y_Dimension"])/4.0)), int(math.ceil(float(args["z_Dimension"])/4.0)), networkParams["nFilter2"]]
+    l4, l4_Forward = conv3d_transpose(decodeLayer, weights["wdc1"], biases["bdc1"], l4_OutputShape)
+
+    l5_OutputShape = [batchSize, int(math.ceil(float(args["x_Dimension"])/2.0)), int(math.ceil(float(args["y_Dimension"])/2.0)), int(math.ceil(float(args["z_Dimension"])/2.0)), networkParams["nFilter1"]]
+    l5, l5_Forward = conv3d_transpose(l4_Forward, weights["wdc2"], biases["bdc2"], l5_OutputShape)
+
+    l6_OutputShape = [batchSize, args["x_Dimension"], args["y_Dimension"], args["z_Dimension"], networkParams["nFilter0"]]
+    l6, l6_Forward = conv3d_transpose(l5_Forward, weights["wdc3"], biases["bdc3"], l6_OutputShape, activation_fn=None)
+    l6_Forward = tf.reshape(l6_Forward, [-1, args["x_Dimension"], args["y_Dimension"], args["z_Dimension"]])
+
+    return l4, l5, l6, tf.nn.dropout(l6_Forward, args["dropout"])
+    # pdb.set_trace()
+    # decodeLayer_OutputShape = [math.ceil(args["x_Dimension"]/8), math.ceil(args["y_Dimension"]/8), args["z_Dimension"], networkParams["nFilter3"]]
+    # decodeLayer = tf.reshape(slim.fully_connected(z, int(np.prod(decodeLayer_OutputShape)), activation_fn=None), [-1, math.ceil(args["x_Dimension"]/8), math.ceil(args["y_Dimension"]/8), args["z_Dimension"], networkParams["nFilter3"]])
+    #
+    # l4_OutputShape = [batchSize, int(math.ceil(float(args["x_Dimension"])/4.0)), int(math.ceil(float(args["y_Dimension"])/4.0)), args["z_Dimension"], networkParams["nFilter2"]]
+    # l4, l4_Forward = conv3d_transpose(decodeLayer, weights["wdc1"], biases["bdc1"], l4_OutputShape)
+    #
+    # l5_OutputShape = [batchSize, int(math.ceil(float(args["x_Dimension"])/2.0)), int(math.ceil(float(args["y_Dimension"])/2.0)), args["z_Dimension"], networkParams["nFilter1"]]
+    # l5, l5_Forward = conv3d_transpose(l4_Forward, weights["wdc2"], biases["bdc2"], l5_OutputShape)
+    #
+    # l6_OutputShape = [batchSize, args["x_Dimension"], args["y_Dimension"], args["z_Dimension"], networkParams["nFilter0"]]
+    # l6, l6_Forward = conv3d_transpose(l5_Forward, weights["wdc3"], biases["bdc3"], l6_OutputShape, activation_fn=None)
+    # l6_Forward = tf.reshape(l6_Forward, [-1, args["x_Dimension"], args["y_Dimension"], args["z_Dimension"]])
+    #
+    # return l4, l5, l6, tf.nn.dropout(l6_Forward, args["dropout"])

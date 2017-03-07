@@ -16,7 +16,7 @@ def lrelu(x, leak=0.2, name="lrelu"):
         f2 = 0.5 * (1 - leak)
         return f1 * x + f2 * abs(x)
 
-def conv3d(x, weight, bias, padding="SAME"):
+def conv3d(x, weight, bias, padding="SAME", strides=[2,2,2]):
     if padding == "SAME":
         conv = tf.nn.convolution(x, weight, padding="SAME", dilation_rate=[3,3,3])
     else:
@@ -25,7 +25,7 @@ def conv3d(x, weight, bias, padding="SAME"):
     conv = tf.nn.bias_add(conv, bias)
     # conv = lrelu(conv)
     convForward = tf.nn.relu(conv)
-    convForward = tf.nn.pool(convForward, [3,3,3], pooling_type="AVG", padding="SAME", strides=[2,2,2])
+    convForward = tf.nn.pool(convForward, [3,3,3], pooling_type="AVG", padding="SAME", strides=strides)
     convForward = slim.batch_norm(convForward)
     return conv, convForward
 
