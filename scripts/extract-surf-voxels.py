@@ -35,7 +35,7 @@ def main():
 
     threshes = []
     threshes.append(21000)
-    threshes.append(21500)
+    #threshes.append(21500)
 
     for thresh in threshes:
         print("beginning threshold {} of {}".format(
@@ -56,7 +56,8 @@ def extract_volume_at_thresh(a_thresh):
     global state
     #state = resampleState() # surface = resampling
     #state = polyfitState() # surface = line of best fit
-    state = surfState() # surface = first point to cross THRESH of best fit
+    #state = surfState() # surface = first point to cross THRESH of best fit
+    state = widthState()
 
     print("finished intialization for threshold {}".format(THRESH))
 
@@ -147,6 +148,7 @@ class widthState(State):
         self.img_frnt[slice_num] = extract_width_for_slice(slice_num)
 
     def save_output(self):
+        self.img_frnt = 65535 * ((self.img_frnt - np.min(self.img_frnt)) / (np.max(self.img_frnt) - np.min(self.img_frnt)))
         tiff.imsave(self.output_path+"/front-{}.tif".format(THRESH), self.img_frnt)
         #np.savetxt(self.output_path+"/img-front-{}.txt".format(THRESH),
         #           self.img_frnt, fmt="%u", delimiter=",")
@@ -377,10 +379,10 @@ def extract_width_for_slice(a_slice_number):
 
             # find the valley next to that peak
             vect_valls = argrelmin(vect[:speak])[0]
-            svall = vect_valls[0]
+            svall = vect_valls[-1]
 
             # find the width between the two
-            dist = speak - svall
+            dist = vect[speak] - vect[svall]
             surface[v] = dist
 
         except Exception:
