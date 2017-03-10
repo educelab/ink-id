@@ -52,14 +52,29 @@ class Volume:
 
             # use this loop to only train on the surface
             # and make sure 90% of the ground truth in the area is the same
-            while (np.min(np.max(self.volume[yCoordinate:yCoordinate+args["y_Dimension"], xCoordinate:xCoordinate+args["x_Dimension"]], axis=2)) < args["surfaceThresh"] or \
-            label_avg in range(int(.1*255), int(.9*255))):
+            # while (np.min(np.max(self.volume[yCoordinate:yCoordinate+args["y_Dimension"], xCoordinate:xCoordinate+args["x_Dimension"]], axis=2)) < args["surfaceThresh"] or \
+            while label_avg in range(int(.1*255), int(.9*255)) or\
+                    np.min(self.volume[yCoordinate:yCoordinate+args["y_Dimension"], xCoordinate:xCoordinate+args["x_Dimension"]]) == 0:
                 xCoordinate = np.random.randint(colBounds[0], colBounds[1])
                 yCoordinate = np.random.randint(rowBounds[0], rowBounds[1])
                 label_avg = np.mean(self.groundTruth[yCoordinate:yCoordinate+args["y_Dimension"], \
                         xCoordinate:xCoordinate+args["x_Dimension"]])
 
-            jitter_range = [-6,6]
+
+            if args["addRandom"] and np.random.randint(20) == 8:
+                # make 5% of the training samples random data labeled as non-ink
+                v_min = np.min(self.volume[yCoordinate, xCoordinate])
+                v_max = np.max(self.volume[yCoordinate, xCoordinate])
+                v_median = np.median(self.volume[yCoordinate, xCoordinate])
+                low = v_median - args["randomRange"]
+                high = v_median + args["randomRange"]
+                sample = np.random.random([args["x_Dimension"], args["y_Dimension"], args["z_Dimension"]])
+                trainingSamples[i, :, :, :] = ((high - low) * sample) + low
+                groundTruth[i] = [1.0,0.0]
+                continue
+
+
+            jitter_range = args["jitterRange"]
             jitter = np.random.randint(jitter_range[0],jitter_range[1])
             zCoordinate = np.maximum(0, self.surfaceImage[yCoordinate,xCoordinate] - args["surfaceCushion"] + jitter)
 
@@ -164,11 +179,12 @@ class Volume:
                     self.test_truth.append(self.all_truth[-1])
 
 
-    def savePredictionImage(self, args):
+    def savePredictionImage(self, args, iteration):
         predictionImageInk = 65535 * ( (self.predictionImageInk.copy() - np.min(self.predictionImageInk)) / (np.amax(self.predictionImageInk) - np.min(self.predictionImageInk)) )
         predictionImageInk = np.array(predictionImageInk, dtype=np.uint16)
         predictionImageSurf = 65535 * ( (self.predictionImageSurf.copy() - np.min(self.predictionImageSurf)) / (np.amax(self.predictionImageSurf) - np.min(self.predictionImageSurf)) )
         predictionImageSurf = np.array(predictionImageSurf, dtype=np.uint16)
+
 
         tm = datetime.datetime.today().timetuple()
         tmstring = ""
@@ -176,36 +192,39 @@ class Volume:
             tmstring += str(tm[t])
             tmstring+= "-"
         tmstring += str(tm[3])
-        tmstring += ":"
-        tmstring += str(tm[4])
         tmstring += "h"
+
         specstring = "{}x{}x{}-".format(args["x_Dimension"], args["y_Dimension"], args["z_Dimension"])
         specstring = specstring + tmstring
 
-        output_path = args["savePredictionPath"] + specstring
-        os.mkdir(output_path)
+        output_path = args["savePredictionFolder"]
+        try:
+            os.mkdir(output_path)
+            os.mkdir(output_path + "{}/".format(iteration))
+        except:
+            pass
 
         description = ""
         for arg in sorted(args.keys()):
             description += arg+": " + str(args[arg]) + "\n"
 
-        tiff.imsave(output_path + "/predictionInk-{}.tif".format(specstring), predictionImageInk)
-        predictionImageInk[:, self.volume.shape[1]*args["trainPortion"]:] = 0
-        tiff.imsave(output_path + "/predictionInkTest-{}.tif".format(specstring), predictionImageInk)
-        tiff.imsave(output_path + "/predictionSurf-{}.tif".format(specstring), predictionImageSurf)
-        tiff.imsave(output_path + "/training-{}.tif".format(specstring), self.trainingImage)
+        tiff.imsave(output_path + "{}/predictionInk-{}.tif".format(iteration, specstring), predictionImageInk)
+        predictionImageInk[:, int(self.volume.shape[1]*args["train_portion"]):] = 0
+        tiff.imsave(output_path + "{}/predictionInkTest-{}.tif".format(iteration, specstring), predictionImageInk)
+        tiff.imsave(output_path + "{}/predictionSurf-{}.tif".format(iteration, specstring), predictionImageSurf)
+        tiff.imsave(output_path + "{}/training-{}.tif".format(iteration, specstring), self.trainingImage)
         all_confusion = confusion_matrix(self.all_truth, self.all_preds)
         test_confusion = confusion_matrix(self.test_truth, self.test_preds)
         all_norm_confusion = all_confusion.astype('float') / all_confusion.sum(axis=1)[:, np.newaxis]
         test_norm_confusion = test_confusion.astype('float') / test_confusion.sum(axis=1)[:, np.newaxis]
         print("Normalized confusion matrix for ALL points: \n{}".format(all_norm_confusion))
         print("Normalized confusion matrix for TEST points: \n{}".format(test_norm_confusion))
-        np.savetxt(output_path + "/all-confusion-{}.txt".format(specstring), all_confusion, fmt='%1.0f')
-        np.savetxt(output_path + "/all-confusion-norm-{}.txt".format(specstring), all_norm_confusion, fmt='%1.4f')
-        np.savetxt(output_path + "/test-confusion-{}.txt".format(specstring), test_confusion, fmt='%1.0f')
-        np.savetxt(output_path + "/test-confusion-norm-{}.txt".format(specstring), test_norm_confusion, fmt='%1.4f')
+        np.savetxt(output_path + "{}/all-confusion-{}.txt".format(iteration, specstring), all_confusion, fmt='%1.0f')
+        np.savetxt(output_path + "{}/all-confusion-norm-{}.txt".format(iteration, specstring), all_norm_confusion, fmt='%1.4f')
+        np.savetxt(output_path + "{}/test-confusion-{}.txt".format(iteration, specstring), test_confusion, fmt='%1.0f')
+        np.savetxt(output_path + "{}/test-confusion-norm-{}.txt".format(iteration, specstring), test_norm_confusion, fmt='%1.4f')
 
-        np.savetxt(output_path +'/description.txt', [description], delimiter=' ', fmt="%s")
+        np.savetxt(output_path +'description.txt', [description], delimiter=' ', fmt="%s")
 
 
     def totalPredictions(self, args):
