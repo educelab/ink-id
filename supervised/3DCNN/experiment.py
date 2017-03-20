@@ -1,9 +1,9 @@
 import os
 
 xys = [50]
-zs = [120]
+zs = [100]
 cushions = [20]
-dropouts = [0.6]
+dropouts = [0.5]
 overlap = 8
 paths = [
         #"/home/jack/devel/volcart/small-fragment-data/nudge-4.00%/slices/",

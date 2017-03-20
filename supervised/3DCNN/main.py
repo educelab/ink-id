@@ -29,10 +29,10 @@ args = {
     "y_Dimension": int(sys.argv[1]),
     "z_Dimension": int(sys.argv[2]),
     "savePredictionFolder" : "/home/jack/devel/volcart/predictions/3dcnn/{}x{}x{}-{}-{}-{}h/".format(
-        sys.argv[1], sys.argv[1], sys.argv[2],
-        datetime.datetime.today().timetuple()[1],
-        datetime.datetime.today().timetuple()[2],
-        datetime.datetime.today().timetuple()[3]),
+        sys.argv[1], sys.argv[1], sys.argv[2],  #x, y, z
+        datetime.datetime.today().timetuple()[1], # month
+        datetime.datetime.today().timetuple()[2], # day
+        datetime.datetime.today().timetuple()[3]), # hour
     "surfaceCushion" : int(sys.argv[3]),
     "overlapStep": int(sys.argv[4]),
     "receptiveField" : [3,3,3],
@@ -46,12 +46,12 @@ args = {
     "batchSize": 30,
     "predictBatchSize": 100,
     "dropout": float(sys.argv[5]),
-    "trainingIterations": 50001,
-    "predictStep": 2000,
-    "displayStep": 50,
+    "trainingIterations": 40001,
+    "predictStep": 1000,
+    "displayStep": 20,
     "grabNewSamples": 20,
     "surfaceThresh": 20000,
-    "notes": "Doubled neuron depth in first layer and removed downsampling"
+    "notes": "Changed stride of second layer to 1"
 }
 
 
@@ -119,7 +119,7 @@ with tf.Session() as sess:
                 test_fps.append(test_fp / args["numCubes"])
                 train_fps.append(train_fp / args["batchSize"])
 
-                if (test_fp / args["numCubes"] < .05) or (test_acc > .95):
+                if (test_fp / args["numCubes"] < .05) or (test_acc > .9):
                     # fewer than 5% false positives, make a full prediction
                     predict_flag = True
 
@@ -130,7 +130,7 @@ with tf.Session() as sess:
 
             if (predict_flag) or (epoch % args["predictStep"] == 0 and epoch > 0):
                 print("{} training iterations took {:.2f} minutes".format( \
-                    args["predictStep"], (time.time() - start_time)/60))
+                    epoch, (time.time() - start_time)/60))
                 startingCoordinates = [0,0]
                 predictionSamples, coordinates, nextCoordinates = volume.getPredictionSample(args, startingCoordinates)
 

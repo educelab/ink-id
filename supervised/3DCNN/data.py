@@ -173,8 +173,8 @@ class Volume:
                     else:
                         self.predictionImageSurf[xpoint,ypoint] = samples[i,0]
 
-                # test batch
-                if xpoint > int(self.volume.shape[1]*args["train_portion"]):
+                # test batch (left side)
+                if xpoint < int(self.volume.shape[1]*args["train_portion"]):
                     self.test_preds.append(self.all_preds[-1])
                     self.test_truth.append(self.all_truth[-1])
 
@@ -199,8 +199,8 @@ class Volume:
 
         output_path = args["savePredictionFolder"]
         try:
-            os.mkdir(output_path)
-            os.mkdir(output_path + "{}/".format(iteration))
+            #os.mkdir(output_path)
+            os.makedirs(output_path + "{}/".format(iteration))
         except:
             pass
 
