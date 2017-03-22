@@ -19,7 +19,7 @@ from scipy.stats import norm
 
 NEIGH_SZ = 20 
 
-data_path = "/home/jack/devel/ink-id/small-fragment-data"
+data_path = "/home/jack/devel/volcart/small-fragment-data"
 ref_photo = tiff.imread(data_path+"/registered/aligned-photo-contrast.tif")
 ground_truth = tiff.imread(data_path+"/registered/ground-truth-mask.tif")
 the_slice = tiff.imread(data_path+"/flatfielded-slices/slice0000.tif")

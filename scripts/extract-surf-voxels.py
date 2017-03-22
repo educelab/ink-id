@@ -12,6 +12,7 @@ import numpy as np
 from scipy.signal import argrelmax, argrelmin, resample
 from os import mkdir
 import time
+import warnings
 # import pickle as pickle
 
 
@@ -22,6 +23,7 @@ __email__ = "jgba225@g.uky.edu"
 def main():
     global data_path
     data_path = "/home/jack/devel/volcart/small-fragment-data"
+    warnings.simplefilter('ignore', np.RankWarning)
 
     ref_photo = tiff.imread(data_path+"/registered/aligned-photo-contrast.tif")
     global num_slices
@@ -32,7 +34,8 @@ def main():
     output_dims = (num_slices, slice_length)
 
     threshes = []
-    threshes.append(20500)
+    threshes.append(21000)
+    #threshes.append(21500)
 
     for thresh in threshes:
         print("beginning threshold {} of {}".format(
@@ -52,7 +55,9 @@ def extract_volume_at_thresh(a_thresh):
     # widthState():  # surface = distance between valley and peak
     global state
     #state = resampleState() # surface = resampling
-    state = polyfitState() # surface = line of best fit
+    #state = polyfitState() # surface = line of best fit
+    #state = surfState() # surface = first point to cross THRESH of best fit
+    state = widthState()
 
     print("finished intialization for threshold {}".format(THRESH))
 
@@ -62,6 +67,7 @@ def extract_volume_at_thresh(a_thresh):
     # # # # # # # # #
     start_time = time.time()
     #new_volume = []
+    state.say_my_name()
     for slice_number in range(num_slices):
         # worker
         state.extract_slice(slice_number)
@@ -100,25 +106,29 @@ class State(object):
 
 class polyfitState(State):
     def __init__(self):
-        self.line_wght = 4
-        self.peak_wght = 1
         self.degree = 32
+        self.cushion = 16
         self.mode_name = "polyfit"
         self.mode_description = "values from a line of best fit along the surface"
-        self.output_path = data_path + "/polyfit-output-" + str(THRESH)
+        self.output_path = data_path + "/polyfit-slices-degree{}-cush{}-thresh{}".format(
+                self.degree, self.cushion, THRESH)
         self.img_frnt = np.zeros(output_dims, dtype=np.uint16)
+        self.surface_points = np.zeros(output_dims, dtype=np.uint16)
         try:
             mkdir(self.output_path)
         except Exception:
             print("output directory \"{}\" may already exist".format(self.output_path))
     
     def extract_slice(self, slice_num):
-        self.img_frnt[slice_num] = polyfit_for_slice(
-                slice_num, degree=self.degree, line_wght=self.line_wght, peak_wght=self.peak_wght)
+        image, points = polyfit_for_slice(
+                slice_num, degree=self.degree, cushion=self.cushion)
+        self.surface_points[slice_num] = points
+
+        tiff.imsave(self.output_path+"/slice{}.tif".format(
+            "0000"[:4-len(str(slice_num))] + str(slice_num)),  image)
 
     def save_output(self):
-        tiff.imsave(self.output_path+"/polyfit-deg{}.tif".format(
-            self.line_wght, self.peak_wght, self.degree), self.img_frnt)
+        tiff.imsave(self.output_path+"/surface.tif", self.surface_points)
 
 
 
@@ -138,6 +148,7 @@ class widthState(State):
         self.img_frnt[slice_num] = extract_width_for_slice(slice_num)
 
     def save_output(self):
+        self.img_frnt = 65535 * ((self.img_frnt - np.min(self.img_frnt)) / (np.max(self.img_frnt) - np.min(self.img_frnt)))
         tiff.imsave(self.output_path+"/front-{}.tif".format(THRESH), self.img_frnt)
         #np.savetxt(self.output_path+"/img-front-{}.txt".format(THRESH),
         #           self.img_frnt, fmt="%u", delimiter=",")
@@ -148,6 +159,7 @@ class surfState(State):
         self.mode_name = "surface"
         self.mode_description = "output values at surface peak"
         self.img_frnt = np.zeros(output_dims, dtype=np.uint16)
+        self.surface_points = np.zeros(output_dims, dtype=np.uint16)
         self.output_path = data_path + "/surf-output-" + str(THRESH)
         self.skel_path = self.output_path + "/skeleton-slices"
         paths = [self.output_path,self.skel_path]
@@ -160,12 +172,13 @@ class surfState(State):
     def extract_slice(self,slice_num):
         skel_slice_name = (self.output_path+"/skeleton-slices/slice"
                         + "0000"[:4-len(str(slice_num))] + str(slice_num) + ".tif")
-        new_vect,skel_slice = extract_width_for_slice(slice_num)
+        new_vect, skel_slice, surf_points = extract_surface_for_slice(slice_num)
+        self.surface_points[slice_num] = surf_points
         self.img_frnt[slice_num] = new_vect
-        tiff.imsave(skel_slice_name,skel_slice)
-        self.img_frnt[slice_num] = extract_width_for_slice(slice_num)
+        #tiff.imsave(skel_slice_name,skel_slice)
         
-    def save_output(self): tiff.imsave(self.output_path+"/front-{}.tif".format(THRESH), self.img_frnt)
+    def save_output(self): tiff.imsave(self.output_path+"/surface-points-{}.tif".format(
+        THRESH), self.surface_points)
 
 
 class resampleState(State):
@@ -230,6 +243,7 @@ def extract_surface_for_slice(a_slice_number):
     thresh_mat = np.where(the_slice > THRESH, the_slice, 0)
 
     new_vect = [0]*len(the_slice)
+    surf_points = np.zeros(len(the_slice), dtype=np.uint16)
     for v in range(the_slice.shape[0]):
         # vect = the_slice[v]
         # filter out everything beneath the threshold
@@ -242,8 +256,9 @@ def extract_surface_for_slice(a_slice_number):
             skel_slice[v][start] = the_slice[v][start]
             skel_slice[v][end] = the_slice[v][end]
             new_vect[v] = np.average(the_slice[v][start:start+NUM_VOX])
+            surf_points[v] = start
 
-    return new_vect,skel_slice
+    return new_vect, skel_slice, surf_points
 
 
 def resample_surface_for_slice(a_slice_number):
@@ -286,7 +301,7 @@ def resample_surface_for_slice(a_slice_number):
 
 
 
-def polyfit_for_slice(a_slice_number, degree=32, line_wght=1, peak_wght=1):
+def polyfit_for_slice(a_slice_number, degree=32, cushion=2):
     i = a_slice_number
     the_slice_name = (data_path+"/flatfielded-slices/slice"
                       + "0000"[:4-len(str(i))] + str(i)+".tif")
@@ -294,44 +309,52 @@ def polyfit_for_slice(a_slice_number, degree=32, line_wght=1, peak_wght=1):
     thresh_mat = np.where(the_slice > THRESH, the_slice, 0)
 
     # initialize
-    surface_values = np.zeros(the_slice.shape[0])
-    surface_peaks = np.zeros(the_slice.shape[0])
+    return_slice = np.zeros(the_slice.shape, dtype=np.uint16)
+    return_points = np.zeros(the_slice.shape[0])
     x_vals = []
-    y_vals = []
+    y_vals_front = []
+    y_vals_back = []
 
     # extract the surface peaks
     for v in range(the_slice.shape[0]):
         try:
             thresh_vect = thresh_mat[v]
-
             # find peaks above threshold
             peaks = argrelmax(thresh_vect)[0]
-            ind = peaks[0]
-            surface_peaks[v] = ind
-            if ind > 0 and ind < the_slice.shape[1]:
+            front_ind = peaks[0]
+            back_ind = peaks[-1]
+
+            if (front_ind > 0 and front_ind < the_slice.shape[1] and 
+                    back_ind > 0 and back_ind < the_slice.shape[1] and
+                    front_ind != back_ind):
                 x_vals.append(v)
-                y_vals.append(ind)
+                y_vals_front.append(front_ind)
+                y_vals_back.append(back_ind)
+
         except Exception:
+            # when no relative maxima exist
             pass
 
 
-    # create line of best fit
-    try:
-        surf_line = np.poly1d(np.polyfit(x_vals, y_vals, degree))
+    # create lines of best fit
+    if len(x_vals) > 0:
+        front_surf_line = np.poly1d(np.polyfit(x_vals, y_vals_front, degree))
+        back_surf_line = np.poly1d(np.polyfit(x_vals, y_vals_back, degree))
         for v in range(the_slice.shape[0]):
-            approx_ind = int(surf_line(v))
-            if (approx_ind < 1 or approx_ind > the_slice.shape[1]-1):
-                surface_values[v] = the_slice[v, approx_ind]
-            else:
-                index = int((approx_ind * line_wght) + (surface_peaks[v]*peak_wght) /
-                        (line_wght+peak_wght))
-                index = max(0,min(index,the_slice.shape[1]-1))
-                surface_values[v] = the_slice[v, index]
-    except Exception:
-        # catches when polyfit fails
-        pass
+            approx_front_ind = int(front_surf_line(v))
+            approx_back_ind = int(back_surf_line(v))
 
-    return surface_values
+            if (approx_front_ind < cushion+1 or approx_back_ind > the_slice.shape[1]-cushion-1 or
+                    approx_back_ind < cushion+1 or approx_back_ind > the_slice.shape[1]-cushion-1):
+                pass
+            else:
+                start = approx_front_ind - cushion
+                end = approx_back_ind + cushion
+                return_slice[v, start:end] = the_slice[v, start:end]
+                return_points[v] = start
+
+
+    return return_slice, return_points
 
 
 
@@ -356,10 +379,10 @@ def extract_width_for_slice(a_slice_number):
 
             # find the valley next to that peak
             vect_valls = argrelmin(vect[:speak])[0]
-            svall = vect_valls[0]
+            svall = vect_valls[-1]
 
             # find the width between the two
-            dist = speak - svall
+            dist = vect[speak] - vect[svall]
             surface[v] = dist
 
         except Exception:
