@@ -226,6 +226,10 @@ class Volume:
 
         np.savetxt(output_path +'description.txt', [description], delimiter=' ', fmt="%s")
 
+        # zero-out prediction images so next output is correct
+        self.predictionImageInk = np.zeros((self.volume.shape[0], self.volume.shape[1]), dtype=np.float32)
+        self.predictionImageSurf = np.zeros((self.volume.shape[0], self.volume.shape[1]), dtype=np.float32)
+
 
     def totalPredictions(self, args):
         xSlides = (self.volume.shape[0] - args["x_Dimension"]) / args["overlapStep"]
