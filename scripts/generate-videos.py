@@ -1,17 +1,17 @@
 import os
 import pdb
 
-rootPath = "/home/volcart/UnsupervisedResults/CarbonPhantom-Feb2017/Column-6/Dimension-25-numNuerons-32-norm-zNotDownsampled/"
+rootPath = "/home/volcart/UnsupervisedResults/CarbonPhantom-Feb2017/Column-6/Dimension-25/"
 
 layers = os.listdir(rootPath)
 layers = [ x for x in layers if x.isdigit() ]
 
 saveVideosPath = rootPath + "videos/"
-for l in layers:
-    neurons = os.listdir(rootPath+l)
-    for n in neurons:
-        slices = rootPath+l+"/"+n+"/%04d.jpg"
-        os.system("ffmpeg -y -framerate 10 -start_number 0 -i " + slices + " -vcodec mpeg4 " + saveVideosPath+"layer-"+l+"-neuron-"+n+".mp4")
+# for l in layers:
+#     neurons = os.listdir(rootPath+l)
+#     for n in neurons:
+#         slices = rootPath+l+"/"+n+"/%04d.jpg"
+#         os.system("ffmpeg -y -framerate 10 -start_number 0 -i " + slices + " -vcodec mpeg4 " + saveVideosPath+"layer-"+l+"-neuron-"+n+".mp4")
 
 
 ffmpegFileListPath = rootPath + "videoList.txt"
@@ -27,5 +27,5 @@ for line in ffmpegConcatFileData:
     ffmpegFileList.write(line+"\n")
 ffmpegFileList.close()
 # generate the video
-outputConcatVideo = saveVideosPath + "allSamples.avi"
-os.system("ffmpeg -y -f concat -safe 0 -i " + ffmpegFileListPath + " -c copy " + outputConcatVideo)
+outputConcatVideo = saveVideosPath + "allSamples.mp4"
+os.system("ffmpeg -y -f concat -safe 0 -i " + ffmpegFileListPath + "  -vcodec mpeg4 -c copy " + outputConcatVideo)

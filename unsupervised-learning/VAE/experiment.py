@@ -12,7 +12,7 @@ import os
 
 savePath = "/home/volcart/UnsupervisedResults/CarbonPhantom-Feb2017/Column-6/"
 dataPath = "/home/volcart/volumes/packages/CarbonPhantom-Feb2017.volpkg/paths/20170221130948/layered/column-6/"
-numCubes = [1000, 500, 250]
+numCubes = [250, 500, 250]
 dimensions = [25, 50, 75]
 for i in range(3):
     saveSamplesPath = savePath + "Dimension-" + str(dimensions[i]) + "/"
