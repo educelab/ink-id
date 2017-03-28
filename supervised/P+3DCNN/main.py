@@ -25,7 +25,7 @@ args = {
     "dropout": 0.75,
     "trainingIterations": 50001,
     "grabNewSamples": 40,
-    "predictStep": 500,
+    "predictStep": 5000,
     "displayStep": 10
 }
 

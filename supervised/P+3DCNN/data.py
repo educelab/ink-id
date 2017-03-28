@@ -45,12 +45,12 @@ class Volume:
             # yCoordinate = np.random.randint(self.volume.shape[1]-args["y_Dimension"])
             zCoordinate = 0
 
-            groupedSamples = []
+            spectralSamples = []
             for j in range(self.volume.shape[0]):
-                groupedSamples.append(self.volume[j, xCoordinate:xCoordinate+args["x_Dimension"], \
+                spectralSamples.append(self.volume[j, xCoordinate:xCoordinate+args["x_Dimension"], \
                             yCoordinate:yCoordinate+args["y_Dimension"], zCoordinate:zCoordinate+args["z_Dimension"]])
 
-            trainingSamples.append(groupedSamples)
+            trainingSamples.append(spectralSamples)
 
             no_ink = len(np.where(self.groundTruth[xCoordinate:xCoordinate+args["x_Dimension"], \
                         yCoordinate:yCoordinate+args["y_Dimension"]] == 0)[0])
@@ -80,11 +80,11 @@ class Volume:
                 # yCoordinate = 0
                 break
 
-            groupedSamples = []
+            spectralSamples = []
             for i in range(self.volume.shape[0]):
-                groupedSamples.append(self.volume[i, xCoordinate:xCoordinate+args["x_Dimension"], \
+                spectralSamples.append(self.volume[i, xCoordinate:xCoordinate+args["x_Dimension"], \
                         yCoordinate:yCoordinate+args["y_Dimension"], zCoordinate:zCoordinate+args["z_Dimension"]])
-            predictionSamples.append(groupedSamples)
+            predictionSamples.append(spectralSamples)
 
             coordinates.append([xCoordinate, yCoordinate])
             xCoordinate += args["stride"]
