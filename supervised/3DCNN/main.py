@@ -8,6 +8,7 @@ import datetime
 import data
 import model
 import time
+import ops
 
 if len(sys.argv) < 5:
     print("Missing arguments")
@@ -18,6 +19,7 @@ print("Initializing...")
 start_time = time.time()
 
 args = {
+    ### Input configuration ###
     #"trainingDataPath": "/home/jack/devel/volcart/small-fragment-data/flatfielded-slices/",
     #"trainingDataPath" : "/home/jack/devel/volcart/small-fragment-data/nudge-0.50%/slices/"
     "trainingDataPath" : str(sys.argv[6]),
@@ -28,30 +30,39 @@ args = {
     "x_Dimension": int(sys.argv[1]),
     "y_Dimension": int(sys.argv[1]),
     "z_Dimension": int(sys.argv[2]),
-    "savePredictionFolder" : "/home/jack/devel/volcart/predictions/3dcnn/{}x{}x{}-{}-{}-{}h/".format(
-        sys.argv[1], sys.argv[1], sys.argv[2],  #x, y, z
-        datetime.datetime.today().timetuple()[1], # month
-        datetime.datetime.today().timetuple()[2], # day
-        datetime.datetime.today().timetuple()[3]), # hour
     "surfaceCushion" : int(sys.argv[3]),
-    "overlapStep": int(sys.argv[4]),
+
+    ### Network configuration ###
     "receptiveField" : [3,3,3],
-    "numCubes" : 250,
-    "addRandom" : True,
-    "randomRange" : 200,
-    "jitterRange" : [-12, 12],
-    "n_Classes": 2,
-    "train_portion" : .5,
     "learningRate": 0.0001,
     "batchSize": 30,
     "predictBatchSize": 100,
     "dropout": float(sys.argv[5]),
-    "trainingIterations": 40001,
-    "predictStep": 1000,
-    "displayStep": 20,
+    "trainingIterations": 30001,
+    "n_Classes": 2,
+
+    ### Data configuration ###
+    "numCubes" : 250,
+    "addRandom" : True,
+    "randomRange" : 200,
+    "useJitter" : True,
+    "jitterRange" : [-6, 6],
+    "train_portion" : .5,
     "grabNewSamples": 20,
-    "surfaceThresh": 20000,
-    "notes": "Changed stride of second layer to 1"
+    "surfaceThresh": 21000,
+    "restrictSurface": True,
+
+    ### Output configuration ###
+    "predictStep": 5000,
+    "displayStep": 20,
+    "overlapStep": int(sys.argv[4]),
+    "predict3d": True,
+    "savePredictionFolder" : "/home/jack/devel/volcart/predictions/3dcnn/{}x{}x{}-{}-{}-{}h/".format(
+            sys.argv[1], sys.argv[1], sys.argv[2],  #x, y, z
+            datetime.datetime.today().timetuple()[1], # month
+            datetime.datetime.today().timetuple()[2], # day
+            datetime.datetime.today().timetuple()[3]), # hour
+    "notes": "Added '3d training' for non-ink examples"
 }
 
 
@@ -119,7 +130,7 @@ with tf.Session() as sess:
                 test_fps.append(test_fp / args["numCubes"])
                 train_fps.append(train_fp / args["batchSize"])
 
-                if (test_fp / args["numCubes"] < .05) or (test_acc > .9):
+                if (test_acc > .9): # or (test_fp / args["numCubes"] < .05)
                     # fewer than 5% false positives, make a full prediction
                     predict_flag = True
 
@@ -148,24 +159,7 @@ with tf.Session() as sess:
                     count += 1
                 volume.savePredictionImage(args, epoch)
 
-                plt.figure(1)
-                plt.clf()
-                plt.subplot(311) # losses
-                axes = plt.gca()
-                axes.set_ylim([0,np.median(test_losses)+1])
-                xs = np.arange(len(train_accs))
-                plt.plot(train_losses, 'k.')
-                plt.plot(test_losses, 'g.')
-                plt.subplot(312) # accuracies
-                plt.plot(train_accs, 'k.')
-                plt.plot(xs, np.poly1d(np.polyfit(xs, train_accs, 1))(xs), color='k')
-                plt.plot(test_accs, 'g.')
-                plt.plot(xs, np.poly1d(np.polyfit(xs, test_accs, 1))(xs), color='g')
-                plt.subplot(313) # false positives
-                plt.plot(train_fps, 'k.')
-                plt.plot(test_fps, 'g.')
-                plt.savefig(args["savePredictionFolder"]+"plots-{}.png".format(epoch))
-                #plt.show()
+                ops.graph(args, epoch, test_accs, test_losses, train_accs, train_losses, test_fps, train_fps)
 
             epoch = epoch + 1
 
