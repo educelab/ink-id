@@ -39,11 +39,11 @@ def graph(args, epoch, test_accs, test_losses, train_accs, train_losses, test_fp
     plt.plot(xs, np.poly1d(np.polyfit(xs, train_accs, 1))(xs), color='k')
     plt.plot(xs, np.poly1d(np.polyfit(xs, test_accs, 1))(xs), color='g')
     plt.subplot(325) # false positives
-    plt.title("False positives")
+    plt.title("Ink Precision")
     plt.plot(train_fps, 'k.')
     plt.plot(test_fps, 'g.')
     plt.subplot(326)
-    plt.title("False positives, fit")
+    plt.title("Ink Precision, fit")
     #plt.plot(xs, np.poly1d(np.polyfit(xs, train_fps, 2))(xs), color='k')
     #plt.plot(xs, np.poly1d(np.polyfit(xs, test_fps, 2))(xs), color='g')
     plt.plot(xs, np.poly1d(np.polyfit(xs, train_fps, 1))(xs), color='k')
@@ -73,7 +73,7 @@ def bounds(args, shape, identifier):
 
 
 
-def findRandomCoordinate(args, colBounds, rowBounds, groundTruth, volume):
+def findRandomCoordinate(args, colBounds, rowBounds, groundTruth, surfaceImage, volume):
     max_truth = np.iinfo(groundTruth.dtype).max
     xCoordinate = np.random.randint(colBounds[0], colBounds[1])
     yCoordinate = np.random.randint(rowBounds[0], rowBounds[1])
@@ -89,6 +89,7 @@ def findRandomCoordinate(args, colBounds, rowBounds, groundTruth, volume):
                 #np.min(np.max(volume[yCoordinate-yStep:yCoordinate:yStep, xCoordinate-xStep:xCoordinate+xStep, :], axis=2)) < args["surfaceThresh"]:
             xCoordinate = np.random.randint(colBounds[0], colBounds[1])
             yCoordinate = np.random.randint(rowBounds[0], rowBounds[1])
+            zCoordinate = surfaceImage[yCoordinate+int(args["y_Dimension"]/2), xCoordinate+int(args["x_Dimension"]/2)] - args["surfaceCushion"]
             label_avg = np.mean(groundTruth[yCoordinate-yStep:yCoordinate:yStep, xCoordinate-xStep:xCoordinate+xStep])
 
 
@@ -98,7 +99,9 @@ def findRandomCoordinate(args, colBounds, rowBounds, groundTruth, volume):
                 #np.min(np.max(volume[yCoordinate-yStep:yCoordinate:yStep, xCoordinate-xStep:xCoordinate+xStep, :], axis=2)) < args["surfaceThresh"]:
             xCoordinate = np.random.randint(colBounds[0], colBounds[1])
             yCoordinate = np.random.randint(rowBounds[0], rowBounds[1])
-            if args["predict3d"]:
+            zCoordinate = surfaceImage[yCoordinate+int(args["y_Dimension"]/2), xCoordinate+int(args["x_Dimension"]/2)] - args["surfaceCushion"]
+            if args["addRandom"]:
+                # any zCoordinate on a non-ink point can still be classified as non-ink
                 zCoordinate = np.random.randint(0, volume.shape[2] - args["z_Dimension"])
             label_avg = np.mean(groundTruth[yCoordinate-yStep:yCoordinate:yStep, xCoordinate-xStep:xCoordinate+xStep])
 
