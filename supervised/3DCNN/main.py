@@ -10,9 +10,9 @@ import model
 import time
 import ops
 
-if len(sys.argv) < 5:
+if len(sys.argv) < 6:
     print("Missing arguments")
-    print("Usage: main.py  [xy Dimension]... [z Dimension]... [cushion]... [overlap step]... [dropout probability]... [data path]")
+    print("Usage: main.py  [xy Dimension]... [z Dimension]... [cushion]... [overlap step]... [layer1 neurons]... [data path]")
     exit()
 
 print("Initializing...")
@@ -37,7 +37,8 @@ args = {
     "learningRate": 0.0001,
     "batchSize": 30,
     "predictBatchSize": 100,
-    "dropout": float(sys.argv[5]),
+    "dropout": 0.5,
+    "layer1_neurons": int(sys.argv[5]),
     "trainingIterations": 30001,
     "n_Classes": 2,
 
@@ -47,7 +48,7 @@ args = {
     "randomRange" : 200,
     "useJitter" : True,
     "jitterRange" : [-6, 6],
-    "train_portion" : .5,
+    "train_portion" : .6,
     "grabNewSamples": 20,
     "surfaceThresh": 21000,
     "restrictSurface": True,
@@ -56,7 +57,8 @@ args = {
     "predictStep": 5000,
     "displayStep": 20,
     "overlapStep": int(sys.argv[4]),
-    "predict3d": True,
+    "predict3d": False,
+    "predictDepth" : 1,
     "savePredictionFolder" : "/home/jack/devel/volcart/predictions/3dcnn/{}x{}x{}-{}-{}-{}h/".format(
             sys.argv[1], sys.argv[1], sys.argv[2],  #x, y, z
             datetime.datetime.today().timetuple()[1], # month
@@ -77,8 +79,10 @@ zeros_like_trues = tf.zeros_like(y)
 optimizer = tf.train.AdamOptimizer(learning_rate=args["learningRate"]).minimize(loss)
 correct_pred = tf.equal(tf.argmax(pred, 1), tf.argmax(y, 1))
 accuracy = tf.reduce_mean(tf.cast(correct_pred, tf.float32))
-# for true positive, 1 * (1 - 1) = 0
+true_positives = tf.count_nonzero(tf.argmax(pred,1) * (tf.argmax(y,1)))
 false_positives = tf.count_nonzero(tf.argmax(pred,1) * (tf.argmax(y,1) - 1))
+ink_precision = true_positives / (true_positives + false_positives)
+
 init = tf.global_variables_initializer()
 
 volume = data.Volume(args)
@@ -90,10 +94,10 @@ with tf.Session() as sess:
     avgOutputVolume = []
     train_accs = []
     train_losses = []
-    train_fps = []
+    train_precs = []
     test_accs = []
     test_losses = []
-    test_fps = []
+    test_precs = []
     testX, testY = volume.getTrainingSample(args, testSet=True)
     while epoch < args["trainingIterations"]:
             predict_flag = False
@@ -121,22 +125,22 @@ with tf.Session() as sess:
                 test_acc = sess.run(accuracy, feed_dict={x:testX, y:testY, keep_prob: 1.0})
                 train_loss = sess.run(loss, feed_dict={x: batchX, y: batchY, keep_prob: 1.0})
                 test_loss = sess.run(loss, feed_dict={x: testX, y:testY, keep_prob: 1.0})
-                train_fp = sess.run(false_positives, feed_dict={x: batchX, y:batchY, keep_prob:1.0})
-                test_fp = sess.run(false_positives, feed_dict={x:testX, y:testY, keep_prob:1.0})
+                train_prec = sess.run(ink_precision, feed_dict={x: batchX, y:batchY, keep_prob:1.0})
+                test_prec = sess.run(ink_precision, feed_dict={x:testX, y:testY, keep_prob:1.0})
                 train_accs.append(train_acc)
                 test_accs.append(test_acc)
                 test_losses.append(test_loss)
                 train_losses.append(train_loss)
-                test_fps.append(test_fp / args["numCubes"])
-                train_fps.append(train_fp / args["batchSize"])
+                test_precs.append(test_prec)
+                train_precs.append(train_prec)
 
-                if (test_acc > .9): # or (test_fp / args["numCubes"] < .05)
+                if (test_prec > .95) and epoch > 5000: # or (test_prec / args["numCubes"] < .05)
                     # fewer than 5% false positives, make a full prediction
                     predict_flag = True
 
                 print("Epoch: {}".format(epoch))
-                print("Train Loss: {:.3f}\tTrain Acc: {:.3f}\tFp: {}".format(train_loss, train_acc, train_fp))
-                print("Test Loss: {:.3f}\tTest Acc: {:.3f}\t\tFp: {}".format(test_loss, test_acc, test_fp))
+                print("Train Loss: {:.3f}\tTrain Acc: {:.3f}\tInk Precision: {:.3f}".format(train_loss, train_acc, train_prec))
+                print("Test Loss: {:.3f}\tTest Acc: {:.3f}\t\tInk Precision: {:.3f}".format(test_loss, test_acc, test_prec))
                 # + str(epoch) + "  Loss: " + str(np.mean(evaluatedLoss)) + "  Acc: " + str(np.mean(train_acc)))
 
             if (predict_flag) or (epoch % args["predictStep"] == 0 and epoch > 0):
@@ -159,7 +163,7 @@ with tf.Session() as sess:
                     count += 1
                 volume.savePredictionImage(args, epoch)
 
-                ops.graph(args, epoch, test_accs, test_losses, train_accs, train_losses, test_fps, train_fps)
+                ops.graph(args, epoch, test_accs, test_losses, train_accs, train_losses, test_precs, train_precs)
 
             epoch = epoch + 1
 
