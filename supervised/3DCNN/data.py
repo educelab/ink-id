@@ -49,15 +49,9 @@ class Volume:
         for i in range(args["numCubes"]):
             xCoordinate, yCoordinate, zCoordinate, label_avg = ops.findRandomCoordinate(args, colBounds, rowBounds, self.groundTruth, self.volume)
 
-            if args["addRandom"] and label_avg < .1 and np.random.randint(10) == 8:
-                # make 5% of the non-ink samples random data labeled as non-ink
-                v_min = np.min(self.volume[yCoordinate, xCoordinate])
-                v_max = np.max(self.volume[yCoordinate, xCoordinate])
-                v_median = np.median(self.volume[yCoordinate, xCoordinate])
-                low = v_median - args["randomRange"]
-                high = v_median + args["randomRange"]
-                sample = np.random.random([args["x_Dimension"], args["y_Dimension"], args["z_Dimension"]])
-                trainingSamples[i, :, :, :] = ((high - low) * sample) + low
+            if args["addRandom"] and not testSet and label_avg < .1 and np.random.randint(5) == 4:
+                # make 20% of the non-ink samples random data labeled as non-ink
+                sample = getRandomBrick(args, self.volume, xCoordinate, yCoordinate)
                 groundTruth[i] = [1.0,0.0]
                 continue
 
@@ -151,19 +145,14 @@ class Volume:
                 else:
                     self.all_truth.append(0.0)
 
-                if np.argmax(samples[i,:]) == 1:
-                    self.all_preds.append(1.0)
-                    if(center_step > 0):
-                        self.predictionImageInk[xpoint-center_step:xpoint+center_step, ypoint-center_step:ypoint+center_step] = samples[i,1]
-                    else:
-                        self.predictionImageInk[xpoint,ypoint] = samples[i,1]
-
+                if(center_step > 0):
+                    self.predictionImageInk[xpoint-center_step:xpoint+center_step, ypoint-center_step:ypoint+center_step] = samples[i,1]
+                    self.predictionImageSurf[xpoint-center_step:xpoint+center_step, ypoint-center_step:ypoint+center_step] = samples[i,0]
                 else:
-                    self.all_preds.append(0.0)
-                    if(center_step > 0):
-                        self.predictionImageSurf[xpoint-center_step:xpoint+center_step, ypoint-center_step:ypoint+center_step] = samples[i,0]
-                    else:
-                        self.predictionImageSurf[xpoint,ypoint] = samples[i,0]
+                    self.predictionImageInk[xpoint,ypoint] = samples[i,1]
+                    self.predictionImageSurf[xpoint,ypoint] = samples[i,0]
+
+                self.all_preds.append(samples[i,:])
 
                 # test batch (left side)
                 if xpoint < int(self.volume.shape[1]*args["train_portion"]):
