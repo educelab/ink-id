@@ -13,24 +13,22 @@ import matplotlib.pyplot as plt
 from scipy.signal import argrelmax
 from scipy.stats import norm
 
-truth = tiff.imread('/home/jack/devel/volcart/small-fragment-data/ink-only-mask.tif')
+truth_mask = tiff.imread('/home/jack/devel/volcart/small-fragment-data/ink-only-mask.tif')
 vol = np.load('/home/jack/devel/volcart/small-fragment-data/volume.npy')
 output_dir = '/home/jack/devel/volcart/small-fragment-data/nudge-'
 output = np.zeros(vol.shape, dtype=np.uint16)
-before = np.zeros(truth.shape, dtype=np.uint16)
-after = np.zeros(truth.shape, dtype=np.uint16)
+before = np.zeros(truth_mask.shape, dtype=np.uint16)
+after = np.zeros(truth_mask.shape, dtype=np.uint16)
 cap = np.iinfo(vol.dtype).max
 vol_min = np.min(np.where(vol > 0, vol, cap))
 vol_max = np.max(vol)
 vol_range = (vol_max - vol_min)
-truth_value = np.max(truth)
+truth_value = np.max(truth_mask)
 
 
 # parameters
 loc = 0
-scale = 4
-#increase_percentages = np.arange(0, 1.5, .05)+.05
-#increase_percentages = np.array([.5, 1., 1.5, 2., 4., 8.])
+scale = 4 # how much to stretch the curve, lower = taller curve, higher = shorter/wider
 increase_percentages = np.array([ 1.5,])
 increase_decimals = increase_percentages / 100
 neigh = 4
@@ -38,6 +36,7 @@ thresh = 20500
 reach_in = 10
 reach_back = 4
 span = max(reach_in, reach_back)
+show_demo = False
 shown_demo = True # set to False to display a sample graph
 
 
@@ -53,8 +52,8 @@ for increase in increase_decimals:
     # re-initialize everything
     vol = np.load('/home/jack/devel/volcart/small-fragment-data/volume.npy')
     outvol = np.copy(vol)
-    before = np.zeros(truth.shape, dtype=np.uint16)
-    after = np.zeros(truth.shape, dtype=np.uint16)
+    before = np.zeros(truth_mask.shape, dtype=np.uint16)
+    after = np.zeros(truth_mask.shape, dtype=np.uint16)
 
     target_increase = increase * vol_range
     increase_parameter = (target_increase / distribute[0])
@@ -67,7 +66,7 @@ for increase in increase_decimals:
     for i in range(neigh, vol.shape[0] - neigh):
         for j in range(neigh, vol.shape[1] - neigh):
             vector = vol[i,j]
-            truth_weight = np.mean(truth[i-neigh:i+neigh, j-neigh:j+neigh]) / truth_value
+            truth_weight = np.mean(truth_mask[i-neigh:i+neigh, j-neigh:j+neigh]) / truth_value
 
             # set everything below threshold to 0
             thresh_vect = np.where(vector > thresh, vector, 0)
@@ -90,7 +89,7 @@ for increase in increase_decimals:
 
                 outvol[i,j] = vector
                 after[i,j] = vector[peak]
-                if shown_demo == False and truth_weight > .9:
+                if show_demo and not shown_demo and truth_weight > .9:
                     xs = np.arange(vol.shape[2])
                     plt.plot(thresh_vect, color='b')
                     plt.plot(vector, color='g')
@@ -133,8 +132,4 @@ for increase in increase_decimals:
         tiff.imsave(slice_dir+"slice" + "0000"[:4-zeros] + str(sl), outvol[sl])
 
     # 3: save the planet
-    #TODO 
-
-
-
-
+    #TODO
