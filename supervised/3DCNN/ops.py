@@ -106,6 +106,16 @@ def findRandomCoordinate(args, colBounds, rowBounds, groundTruth, volume):
     return xCoordinate, yCoordinate, zCoordinate, label_avg
 
 
+def getRandomBrick(args, volume, xCoordinate, yCoordinate):
+    v_min = np.min(volume[yCoordinate, xCoordinate])
+    v_max = np.max(volume[yCoordinate, xCoordinate])
+    v_median = np.median(volume[yCoordinate, xCoordinate])
+    low = v_median - args["randomRange"]
+    high = v_median + args["randomRange"]
+    sample = np.random.random([args["x_Dimension"], args["y_Dimension"], args["z_Dimension"]])
+    return ((high - low) * sample) + low
+
+
 
 def addRandomNoise(args, volume, coordinates, trainingSamples, groundTruth, index):
     #TODO
