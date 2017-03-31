@@ -1,9 +1,9 @@
 import os
 
 xys = [60]
-zs = [60, 120]
+zs = [60]
 cushions = [10]
-dropouts = [0.5]
+neurons = [5,10,15,20,25]
 overlap = 2
 paths = [
         #"/home/jack/devel/volcart/small-fragment-data/nudge-4.00%/slices/",
@@ -19,10 +19,10 @@ try:
     for xy in xys:
         for z in zs:
             for cushion in cushions:
-                for dropout in dropouts:
+                for neuron in neurons:
                     for path in paths:
                         os.system("python3 main.py {} {} {} {} {} {}".format(
-                                xy, z, cushion, overlap, dropout, path))
+                                xy, z, cushion, overlap, neuron, path))
 
 except KeyboardInterrupt:
     # stop everything, instead of just one script
