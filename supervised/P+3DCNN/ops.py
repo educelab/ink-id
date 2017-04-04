@@ -47,18 +47,34 @@ def findEdgeSubVolume(args, xCoordinate, yCoordinate, volume, i):
 
 def bounds(args, shape, identifier):
     if identifier == 0: # TOP
-        xBounds = [0, shape-args["x_Dimension"]]
-        yBounds = [0, int(shape[1]/2)-args["y_Dimension"]]
+        xBounds = [0, shape]
+        yBounds = [0, int(shape[1]/2)]
     elif identifier == 1: # RIGHT
-        xBounds = [int(shape[0]/2), shape[0]-args["x_Dimension"]]
-        yBounds = [0, shape[1]-args["y_Dimension"]]
+        xBounds = [int(shape[0]/2), shape[0]]
+        yBounds = [0, shape[1]]
     elif identifier == 2: # BOTTOM
-        xBounds = [0, shape[0]-args["x_Dimension"]]
-        yBounds = [int(shape[1]/2), shape[1]-args["y_Dimension"]]
+        xBounds = [0, shape[0]]
+        yBounds = [int(shape[1]/2), shape[1]]
     elif identifier == 3: # LEFT
-        xBounds = [0, int(shape[0]/2)-args["x_Dimension"]]
-        yBounds = [0, shape[1]-args["y_Dimension"]]
+        xBounds = [0, int(shape[0]/2)]
+        yBounds = [0, shape[1]]
     else:
         print("Bound identifier not recognized")
         sys.exit(0)
     return xBounds, yBounds
+
+def findRandomCoordinates(args, xBounds, yBounds, volume, groundTruth):
+    xCoordinate = np.random.randint(xBounds[0], xBounds[1])
+    yCoordinate = np.random.randint(yBounds[0], yBounds[1])
+    zCoordinate = 0 # TODO this will need to change when we do a per voxel prediction
+    label_avg = np.mean(groundTruth[xCoordinate:xCoordinate+args["x_Dimension"], \
+                yCoordinate:yCoordinate+args["y_Dimension"]])
+    # use this loop to only train on the surface
+    # and make sure 90% of the ground truth in the area is the same
+    # while (np.min(np.max(self.volume[yCoordinate:yCoordinate+args["y_Dimension"], xCoordinate:xCoordinate+args["x_Dimension"]], axis=2)) < args["surfaceThresh"] or \
+    while label_avg in range(int(.1*255), int(.9*255)):
+        xCoordinate = np.random.randint(xBounds[0], xBounds[1])
+        yCoordinate = np.random.randint(yBounds[0], yBounds[1])
+        label_avg = np.mean(groundTruth[xCoordinate:xCoordinate+args["x_Dimension"], \
+                yCoordinate:yCoordinate+args["y_Dimension"]])
+    return xCoordinate, yCoordinate, zCoordinate, label_avg

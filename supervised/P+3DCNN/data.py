@@ -44,7 +44,7 @@ class Volume:
 
         self.predictionImage = np.zeros((int(self.volume.shape[1]/args["stride"]), int(self.volume.shape[2]/args["stride"])), dtype=np.uint8)
 
-    def getTrainingSample(self, args, testSet=False, bounds=1):
+    def getTrainingSample(self, args, testSet=False, bounds=0):
         # grab training sample at random
 
         # bounds parameters: 0=TOP || 1=RIGHT || 2=BOTTOM || 3=LEFT
@@ -55,12 +55,9 @@ class Volume:
 
         trainingSamples = []
         groundTruth = []
-            
+
         for i in range(args["numCubes"]):
-            xCoordinate = np.random.randint(self.volume.shape[1]-args["x_Dimension"])
-            yCoordinate = np.random.randint(int(self.volume.shape[2]/2)-args["y_Dimension"])
-            # yCoordinate = np.random.randint(self.volume.shape[1]-args["y_Dimension"])
-            zCoordinate = 0
+            xCoordinate, yCoordinate, zCoordinate, label_avg = ops.findRandomCoordinates(args, xBounds, yBounds, self.volume, self.groundTruth)
 
             spectralSamples = []
             if ops.edge(xCoordinate, args["x_Dimension"], self.volume.shape[1]) or ops.edge(yCoordinate, args["y_Dimension"], self.volume.shape[2]):
@@ -95,10 +92,10 @@ class Volume:
         coordinates = np.zeros((args["predictBatchSize"], 2), dtype=np.int)
         count = 0
         while count < args["predictBatchSize"]:
-            if xCoordinate > self.volume.shape[1]: # TODO: get rid of the + x_Dimension
+            if xCoordinate > self.volume.shape[1]:
                 xCoordinate = 0
                 yCoordinate += args["stride"]
-            if yCoordinate > self.volume.shape[2]: # TODO: get rid of the + y_Dimension
+            if yCoordinate > self.volume.shape[2]:
                 # yCoordinate = 0
                 break
 

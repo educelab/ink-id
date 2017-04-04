@@ -7,10 +7,10 @@ import pdb
 gtPath = "/home/volcart/volumes/packages/CarbonPhantom_MP_2017.volpkg/paths/all-cols/"
 gtFiles = ["GroundTruth-IronGallInk.png", "GroundTruth-CarbonInk.png", "GroundTruth-Papyrus.png"]
 
-xCoordinates = [468,831]
-yCoordinates = [36,1422]
+xCoordinates = [1611,1896]
+yCoordinates = [81,1512]
 
-saveCroppedPath = "/home/volcart/volumes/packages/CarbonPhantom_MP_2017.volpkg/paths/all-cols/cropped/"
+saveCroppedPath = "/home/volcart/volumes/packages/CarbonPhantom_MP_2017.volpkg/paths/all-cols/col4-ground-truth/"
 for gt in gtFiles:
     gtData = np.array(Image.open(gtPath+gt))
     gtData = np.transpose(gtData, (1,0))
@@ -18,8 +18,9 @@ for gt in gtFiles:
     croppedGT = gtData[xCoordinates[0]:xCoordinates[1], yCoordinates[0]:yCoordinates[1]]
     cv2.imwrite(saveCroppedPath+gt, croppedGT)
 
-# slicePath = "/home/volcart/volumes/packages/CarbonPhantom-Feb2017.volpkg/paths/20170221130948/layered/registered/layers/full-layers/after-rotate/0007.tif"
-# sliceData = np.array(Image.open(slicePath))
-# sliceData = np.transpose(sliceData, (1,0))
-# croppedSlice = sliceData[xCoordinates[0]:xCoordinates[1], yCoordinates[0]:yCoordinates[1]]
-# cv2.imwrite(saveCroppedPath+"slice.tif", croppedSlice)
+slicePath = "/home/volcart/volumes/packages/CarbonPhantom_MP_2017.volpkg/paths/all-cols/layers_130/37.png"
+sliceData = np.array(Image.open(slicePath))
+sliceData = np.transpose(sliceData, (1,0))
+croppedSlice = sliceData[xCoordinates[0]:xCoordinates[1], yCoordinates[0]:yCoordinates[1]]
+croppedSlice = 255 * (croppedSlice - np.min(croppedSlice)) / (np.amax(croppedSlice) - np.min(croppedSlice))
+cv2.imwrite(saveCroppedPath+"slice.png", croppedSlice)
