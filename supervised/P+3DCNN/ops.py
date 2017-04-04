@@ -15,11 +15,7 @@ def findEdgeSubVolume(args, xCoordinate, yCoordinate, volume, i):
             sample[0:volume.shape[1]-xCoordinate,:,:] = volume[i,xCoordinate:volume.shape[1],yCoordinate:yCoordinate+args["y_Dimension"],:]
     elif not edge(xCoordinate, args["x_Dimension"], volume.shape[1]) and edge(yCoordinate, args["y_Dimension"], volume.shape[2]):
         if yCoordinate < args["y_Dimension"]:
-            try:
-                sample[:,args["y_Dimension"]-yCoordinate:args["y_Dimension"],:] = volume[i,xCoordinate:xCoordinate+args["x_Dimension"],0:yCoordinate,:]
-            except:
-                pdb.set_trace()
-                print
+            sample[:,args["y_Dimension"]-yCoordinate:args["y_Dimension"],:] = volume[i,xCoordinate:xCoordinate+args["x_Dimension"],0:yCoordinate,:]
         else:
             sample[:,0:volume.shape[2]-yCoordinate,:] = volume[i,xCoordinate:xCoordinate+args["x_Dimension"],yCoordinate:volume.shape[2],:]
     else:
@@ -47,7 +43,7 @@ def findEdgeSubVolume(args, xCoordinate, yCoordinate, volume, i):
 
 def bounds(args, shape, identifier):
     if identifier == 0: # TOP
-        xBounds = [0, shape]
+        xBounds = [0, shape[0]]
         yBounds = [0, int(shape[1]/2)]
     elif identifier == 1: # RIGHT
         xBounds = [int(shape[0]/2), shape[0]]

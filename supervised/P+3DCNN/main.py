@@ -25,19 +25,19 @@ args = {
     "cropY_high": int(sys.argv[4]),
     "x_Dimension": 25,
     "y_Dimension": 25,
-    "z_Dimension": 71,
+    "z_Dimension": 17,
     "stride": 1,
-    "numCubes": 100,
-    "predictBatchSize": 100,
+    "numCubes": 500,
+    "predictBatchSize": 500,
     "n_Classes": 2,
     "learningRate": 0.0001,
     "batchSize": 30,
     "dropout": 0.75,
     "trainingIterations": 30001,
     "grabNewSamples": 40,
-    "predictStep": 20,
+    "predictStep": 2000,
     "displayStep": 10,
-    "singleScanPath": "/home/volcart/volumes/packages/CarbonPhantom_MP_2017.volpkg/paths/all-cols/layers_130/"
+    "singleScanPath": "/home/volcart/volumes/packages/CarbonPhantom-Feb2017.volpkg/paths/20170221130948/layered/registered/layers/full-layers/after-rotate/"
 }
 
 x = tf.placeholder(tf.float32, [None, args["x_Dimension"], args["y_Dimension"], args["z_Dimension"], args["numChannels"]])

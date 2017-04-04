@@ -129,7 +129,10 @@ class Volume:
         # reconstruct prediction volume one prediction sample at a time
         for i in range(coordinates.shape[0]):
             if np.argmax(samples[i,:]) == 1:
-                self.predictionImage[int(coordinates[i,0]/args["stride"]), int(coordinates[i,1]/args["stride"])] = 255
+                try:
+                    self.predictionImage[int(coordinates[i,0]/args["stride"]), int(coordinates[i,1]/args["stride"])] = 255
+                except:
+                    pass
 
     def savePredictionImage(self, args, epoch):
         cv2.imwrite(args["savePredictionPath"] + str(epoch) + ".png", self.predictionImage)
