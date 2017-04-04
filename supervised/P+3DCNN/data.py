@@ -6,16 +6,18 @@ import math
 import cv2
 import re
 
+import ops
+
 class Volume:
     def __init__(self, args):
-        if args["mulitpower"]:
+        if args["mulitpower"] == "true":
             allDirectories = os.listdir(args["trainingDataPath"])
             layerDirectories = []
             for d in allDirectories:
                 if "layers" in d:
                     layerDirectories.append(args["trainingDataPath"]+d)
         else:
-            layerDirectories = [args["trainingDataPath"]]
+            layerDirectories = [args["singleScanPath"]]
 
         volume = []
         for l in layerDirectories:
@@ -33,12 +35,27 @@ class Volume:
         self.groundTruth = cv2.cvtColor(cv2.imread(args["groundTruthFile"]), cv2.COLOR_RGB2GRAY)
         self.groundTruth = np.transpose(self.groundTruth, (1,0))
 
+        if args["cropX_low"] and args["cropX_high"]:
+            self.volume = self.volume[:,args["cropX_low"]:args["cropX_high"],:,:]
+            self.groundTruth = self.groundTruth[args["cropX_low"]:args["cropX_high"],:]
+        if args["cropY_low"] and args["cropY_high"]:
+            self.volume = self.volume[:,:,args["cropY_low"]:args["cropY_high"],:]
+            self.groundTruth = self.groundTruth[:,args["cropY_low"]:args["cropY_high"]]
+
         self.predictionImage = np.zeros((int(self.volume.shape[1]/args["stride"]), int(self.volume.shape[2]/args["stride"])), dtype=np.uint8)
 
-    def getTrainingSample(self, args):
+    def getTrainingSample(self, args, testSet=False, bounds=1):
         # grab training sample at random
+
+        # bounds parameters: 0=TOP || 1=RIGHT || 2=BOTTOM || 3=LEFT
+        if testSet:
+            xBounds, yBounds = ops.bounds(args, [self.volume.shape[1], self.volume.shape[2]], (bounds+2)%4)
+        else:
+            xBounds, yBounds = ops.bounds(args, [self.volume.shape[1], self.volume.shape[2]], bounds)
+
         trainingSamples = []
         groundTruth = []
+            
         for i in range(args["numCubes"]):
             xCoordinate = np.random.randint(self.volume.shape[1]-args["x_Dimension"])
             yCoordinate = np.random.randint(int(self.volume.shape[2]/2)-args["y_Dimension"])
@@ -46,9 +63,14 @@ class Volume:
             zCoordinate = 0
 
             spectralSamples = []
-            for j in range(self.volume.shape[0]):
-                spectralSamples.append(self.volume[j, xCoordinate:xCoordinate+args["x_Dimension"], \
-                            yCoordinate:yCoordinate+args["y_Dimension"], zCoordinate:zCoordinate+args["z_Dimension"]])
+            if ops.edge(xCoordinate, args["x_Dimension"], self.volume.shape[1]) or ops.edge(yCoordinate, args["y_Dimension"], self.volume.shape[2]):
+                for j in range(self.volume.shape[0]):
+                    sample = ops.findEdgeSubVolume(args, xCoordinate, yCoordinate, self.volume, j)
+                    spectralSamples.append(sample)
+            else:
+                for j in range(self.volume.shape[0]):
+                    spectralSamples.append(self.volume[j, xCoordinate:xCoordinate+args["x_Dimension"], \
+                                yCoordinate:yCoordinate+args["y_Dimension"], zCoordinate:zCoordinate+args["z_Dimension"]])
 
             trainingSamples.append(spectralSamples)
 
@@ -65,32 +87,43 @@ class Volume:
         return np.transpose(np.array(trainingSamples), (0, 2, 3, 4, 1)), np.array(groundTruth)
 
     def getPredictionSample(self, args, startingCoordinates):
-        # return the prediction sample along side of coordinates
         xCoordinate = startingCoordinates[0]
         yCoordinate = startingCoordinates[1]
         zCoordinate = startingCoordinates[2]
-        predictionSamples = []
-        coordinates = []
+
+        predictionSamples = np.zeros((args["predictBatchSize"], args["numChannels"], args["x_Dimension"], args["y_Dimension"], args["z_Dimension"]), dtype=np.float32)
+        coordinates = np.zeros((args["predictBatchSize"], 2), dtype=np.int)
         count = 0
-        while count < args["numCubes"]:
-            if (xCoordinate + args["x_Dimension"]) > self.volume.shape[1]:
+        while count < args["predictBatchSize"]:
+            if xCoordinate > self.volume.shape[1]: # TODO: get rid of the + x_Dimension
                 xCoordinate = 0
                 yCoordinate += args["stride"]
-            if (yCoordinate + args["y_Dimension"]) > self.volume.shape[2]:
+            if yCoordinate > self.volume.shape[2]: # TODO: get rid of the + y_Dimension
                 # yCoordinate = 0
                 break
 
             spectralSamples = []
-            for i in range(self.volume.shape[0]):
-                spectralSamples.append(self.volume[i, xCoordinate:xCoordinate+args["x_Dimension"], \
-                        yCoordinate:yCoordinate+args["y_Dimension"], zCoordinate:zCoordinate+args["z_Dimension"]])
-            predictionSamples.append(spectralSamples)
+            if ops.edge(xCoordinate, args["x_Dimension"], self.volume.shape[1]) or ops.edge(yCoordinate, args["y_Dimension"], self.volume.shape[2]):
+                for i in range(self.volume.shape[0]):
+                    sample = ops.findEdgeSubVolume(args, xCoordinate, yCoordinate, self.volume, i)
+                    spectralSamples.append(sample)
+            else:
+                for i in range(self.volume.shape[0]):
+                    spectralSamples.append(self.volume[i, xCoordinate:xCoordinate+args["x_Dimension"], \
+                            yCoordinate:yCoordinate+args["y_Dimension"], zCoordinate:zCoordinate+args["z_Dimension"]])
 
-            coordinates.append([xCoordinate, yCoordinate])
+            predictionSamples[count,:,:,:,:] = spectralSamples
+            coordinates[count] = [xCoordinate, yCoordinate]
+
             xCoordinate += args["stride"]
             count += 1
 
-        return np.transpose(np.array(predictionSamples), (0, 2, 3, 4, 1)), np.array(coordinates), [xCoordinate, yCoordinate, zCoordinate]
+        return np.transpose(predictionSamples, (0,2,3,4,1)), coordinates, [xCoordinate, yCoordinate, zCoordinate]
+
+    def totalPredictions(self, args):
+        xSlides = (self.volume.shape[1] - args["x_Dimension"]) / args["stride"]
+        ySlides = (self.volume.shape[2] - args["y_Dimension"]) / args["stride"]
+        return int(xSlides * ySlides)
 
     def emptyPredictionVolume(self, args):
         self.predictionImage = np.zeros((int(self.volume.shape[1]/args["stride"]), int(self.volume.shape[2]/args["stride"])), dtype=np.uint8)
@@ -99,12 +132,7 @@ class Volume:
         # reconstruct prediction volume one prediction sample at a time
         for i in range(coordinates.shape[0]):
             if np.argmax(samples[i,:]) == 1:
-                # self.predictionImage[coordinates[i,0]+int(args["x_Dimension"]/2), \
-                #         coordinates[i,1]+int(args["y_Dimension"]/2)] = 1.0
                 self.predictionImage[int(coordinates[i,0]/args["stride"]), int(coordinates[i,1]/args["stride"])] = 255
 
     def savePredictionImage(self, args, epoch):
-        # if (np.amax(self.predictionImage) - np.min(self.predictionImage)) != 0:
-            # predictionImage = 65535 * ( (self.predictionImage.copy() - np.min(self.predictionImage)) / (np.amax(self.predictionImage) - np.min(self.predictionImage)) )
-            # predictionImage = np.array(predictionImage, dtype=np.uint16)
         cv2.imwrite(args["savePredictionPath"] + str(epoch) + ".png", self.predictionImage)

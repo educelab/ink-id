@@ -7,26 +7,37 @@ import sys
 import data
 import model
 
+# if sys.argv[5] == "true":
+#     mulitpower = True
+# else:
+#     multipower = False
+
 args = {
-    "trainingDataPath": "/home/volcart/volumes/packages/CarbonPhantom_MP_2017.volpkg/paths/all-cols/",
-    "mulitpower": True,
-    "groundTruthFile": "/home/volcart/volumes/packages/CarbonPhantom_MP_2017.volpkg/paths/all-cols/GroundTruth-CarbonInk.png",
-    "savePredictionPath": "/home/volcart/supervised-results/multipower/",
+    "trainingDataPath": "/home/volcart/volumes/packages/CarbonPhantom-Feb2017.volpkg/paths/20170221130948/layered/registered/layers/full-layers/after-rotate/",
+    "mulitpower": "false",
+    "groundTruthFile": "/home/volcart/volumes/packages/CarbonPhantom-Feb2017.volpkg/paths/20170221130948/layered/registered/ground-truth/GroundTruth-CarbonInk.png",
+    "savePredictionPath": "/home/volcart/supervised-results/CarbonPhantom-Feb2017/",
     "saveModelPath": "/home/volcart/prelim-InkDetection/src/results/models/",
-    "numChannels": 6,
+    "numChannels": 1,
+    "cropX_low": int(sys.argv[1]),
+    "cropX_high": int(sys.argv[2]),
+    "cropY_low": int(sys.argv[3]),
+    "cropY_high": int(sys.argv[4]),
     "x_Dimension": 25,
     "y_Dimension": 25,
     "z_Dimension": 71,
-    "stride": 2,
+    "stride": 1,
     "numCubes": 100,
+    "predictBatchSize": 100,
     "n_Classes": 2,
     "learningRate": 0.0001,
     "batchSize": 30,
     "dropout": 0.75,
-    "trainingIterations": 50001,
+    "trainingIterations": 30001,
     "grabNewSamples": 40,
-    "predictStep": 5000,
-    "displayStep": 10
+    "predictStep": 20,
+    "displayStep": 10,
+    "singleScanPath": "/home/volcart/volumes/packages/CarbonPhantom_MP_2017.volpkg/paths/all-cols/layers_130/"
 }
 
 x = tf.placeholder(tf.float32, [None, args["x_Dimension"], args["y_Dimension"], args["z_Dimension"], args["numChannels"]])
@@ -64,20 +75,19 @@ with tf.Session() as sess:
 
         if epoch % args["predictStep"] == 0 and epoch > 0:
             volume.emptyPredictionVolume(args)
+            total_num_predictions = volume.totalPredictions(args)
 
             startingCoordinates = [0,0,0]
             predictionSamples, coordinates, nextCoordinates = volume.getPredictionSample(args, startingCoordinates)
 
             count = 1
-            while predictionSamples.shape[0] == args["numCubes"]: # TODO what about the special case where the volume is a perfect multiple of the numCubes?
-                print("Predicting cubes " + str(count * args["numCubes"]))
+            while ((count-1)*args["predictBatchSize"]) < total_num_predictions: # TODO what about the special case where the volume is a perfect multiple of the numCubes?
+                print("Predicting cubes {} of {}".format((count * args["predictBatchSize"]), total_num_predictions))
                 predictionValues = sess.run(pred, feed_dict={x: predictionSamples, keep_prob: 1.0})
                 volume.reconstruct(args, predictionValues, coordinates)
                 predictionSamples, coordinates, nextCoordinates = volume.getPredictionSample(args, nextCoordinates)
                 count += 1
                 volume.savePredictionImage(args, epoch)
-            predictionValues = sess.run(pred, feed_dict={x: predictionSamples, keep_prob: 1.0})
-            volume.reconstruct(args, predictionValues, coordinates)
             volume.savePredictionImage(args, epoch)
             # save_path = saver.save(sess, args["saveModelPath"]+"model-epoch-"+str(epoch)+".ckpt")
             # print("Model saved in file: %s" % save_path)

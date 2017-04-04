@@ -1,24 +1,13 @@
 import os
+import pdb
 
-xys = [50]
-zs = [100]
-cushions = [20]
-dropouts = [0.5]
-overlap = 8
-paths = [
-        "/home/jack/devel/volcart/small-fragment-data/flatfielded-slices/",
-        ]
+savePath = "/home/volcart/supervised-results/multipower/"
+paths = [savePath + "col6_MP/", savePath + "col6/", savePath + "col5_MP/", savePath + "col5/", savePath + "col4_MP/", savePath + "col4/"]
 
-try:
-    for xy in xys:
-        for z in zs:
-            for cushion in cushions:
-                for dropout in dropouts:
-                    for path in paths:
-                        os.system("python3 main.py {} {} {} {} {} {}".format(
-                                xy, z, cushion, overlap, dropout, path))
-
-except KeyboardInterrupt:
-    # stop everything, instead of just one script
-    #TODO make this work
-    sys.exit()
+crop = [[[477, 819], [72, 1410]], [[1053,1347], [81,1476]], [[1611,1896], [81,1512]]]
+pathCount = 0
+for c in crop:
+    os.system("python3 main.py " + str(c[0][0]) + " " + str(c[0][1]) + " " + str(c[1][0]) + " " + str(c[1][1]) + " true " + paths[pathCount] + " 6")
+    pathCount += 1
+    os.system("python3 main.py " + str(c[0][0]) + " " + str(c[0][1]) + " " + str(c[1][0]) + " " + str(c[1][1]) + " false " + paths[pathCount] + " 1")
+    pathCount += 1

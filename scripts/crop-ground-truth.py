@@ -4,13 +4,13 @@ import cv2
 import numpy as np
 import pdb
 
-gtPath = "/home/volcart/volumes/packages/CarbonPhantom-Feb2017.volpkg/paths/20170221130948/layered/registered/ground-truth/"
+gtPath = "/home/volcart/volumes/packages/CarbonPhantom_MP_2017.volpkg/paths/all-cols/"
 gtFiles = ["GroundTruth-IronGallInk.png", "GroundTruth-CarbonInk.png", "GroundTruth-Papyrus.png"]
 
-xCoordinates = [1710,3318]
-yCoordinates = [34,1750]
+xCoordinates = [468,831]
+yCoordinates = [36,1422]
 
-saveCroppedPath = "/home/volcart/volumes/packages/CarbonPhantom-Feb2017.volpkg/paths/20170221130948/layered/registered/ground-truth/columns-1-2-3/"
+saveCroppedPath = "/home/volcart/volumes/packages/CarbonPhantom_MP_2017.volpkg/paths/all-cols/cropped/"
 for gt in gtFiles:
     gtData = np.array(Image.open(gtPath+gt))
     gtData = np.transpose(gtData, (1,0))
