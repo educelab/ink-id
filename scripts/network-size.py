@@ -56,6 +56,5 @@ print("Total variables per batch: {}".format(sum(layer_output) * batch_size))
 approx_total = (2*sum(layer_params)) + (sum(layer_output) * batch_size)
 num_bytes = approx_total * 4  #32 bits (4 bytes) per float
 print("Approximate megabytes required: {}".format(num_bytes / 1000000))
-
-
-
+print("\nWith approximately 7GB of free RAM, use up to {} samples in each prediction batch".format(
+        (7000000-sum(layer_params)) / (sum(layer_output)))))
