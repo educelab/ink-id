@@ -165,7 +165,7 @@ with tf.Session() as sess:
                     predictionSamples, coordinates, nextCoordinates = volume.getPredictionSample3D(args, nextCoordinates)
                     count += 1
                 volume.savePrediction3D(args, epoch)
-                volume.savePredictionMetrics(args)
+                volume.savePredictionMetrics(args, epoch)
 
                 ops.graph(args, epoch, test_accs, test_losses, train_accs, train_losses, test_precs, train_precs)
 

@@ -244,7 +244,7 @@ class Volume:
 
 
 
-    def savePredictionMetrics(self, args):
+    def savePredictionMetrics(self, args, iteration):
         output_path = args["savePredictionFolder"]
         all_confusion = confusion_matrix(self.all_truth, self.all_preds)
         test_confusion = confusion_matrix(self.test_truth, self.test_preds)
