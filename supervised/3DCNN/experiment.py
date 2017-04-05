@@ -2,9 +2,9 @@ import os
 
 xys = [60]
 zs = [60]
-cushions = [10]
-neurons = [5,10,15,20,25]
-overlap = 2
+cushions = [20]
+neurons = [16]
+overlap = 16
 paths = [
         #"/home/jack/devel/volcart/small-fragment-data/nudge-4.00%/slices/",
         #"/home/jack/devel/volcart/small-fragment-data/nudge-2.00%/slices/",

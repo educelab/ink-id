@@ -9,6 +9,7 @@ import data
 import model
 import time
 import ops
+from sklearn.metrics import precision_score
 
 if len(sys.argv) < 6:
     print("Missing arguments")
@@ -36,29 +37,30 @@ args = {
     "receptiveField" : [3,3,3],
     "learningRate": 0.0001,
     "batchSize": 30,
-    "predictBatchSize": 100,
-    "dropout": 0.5,
+    "predictBatchSize": 200,
+    "dropout": 0.6,
     "layer1_neurons": int(sys.argv[5]),
     "trainingIterations": 30001,
     "n_Classes": 2,
 
     ### Data configuration ###
-    "numCubes" : 250,
+    "numCubes" : 500,
     "addRandom" : True,
+    "randomStep" : 10, # one in every randomStep non-ink samples will be a random brick
     "randomRange" : 200,
     "useJitter" : True,
-    "jitterRange" : [-6, 6],
-    "train_portion" : .6,
-    "grabNewSamples": 20,
-    "surfaceThresh": 21000,
+    "jitterRange" : [-12, 12],
+    "addAugmentation" : True,
+    "train_portion" : .65,
+    "grabNewSamples": 50,
+    "surfaceThresh": 20500,
     "restrictSurface": True,
 
     ### Output configuration ###
-    "predictStep": 5000,
+    "predictStep": 100,
     "displayStep": 20,
     "overlapStep": int(sys.argv[4]),
-    "predict3d": False,
-    "predictDepth" : 1,
+    "predictDepth" : 2,
     "savePredictionFolder" : "/home/jack/devel/volcart/predictions/3dcnn/{}x{}x{}-{}-{}-{}h/".format(
             sys.argv[1], sys.argv[1], sys.argv[2],  #x, y, z
             datetime.datetime.today().timetuple()[1], # month
@@ -81,7 +83,7 @@ correct_pred = tf.equal(tf.argmax(pred, 1), tf.argmax(y, 1))
 accuracy = tf.reduce_mean(tf.cast(correct_pred, tf.float32))
 true_positives = tf.count_nonzero(tf.argmax(pred,1) * (tf.argmax(y,1)))
 false_positives = tf.count_nonzero(tf.argmax(pred,1) * (tf.argmax(y,1) - 1))
-ink_precision = true_positives / (true_positives + false_positives)
+ink_precision = tf.metrics.precision(tf.argmax(y,1), tf.argmax(pred,1))
 
 init = tf.global_variables_initializer()
 
@@ -113,7 +115,6 @@ with tf.Session() as sess:
                 trainingSamples = np.array(trainingSamples)
                 groundTruth = np.array(groundTruth)
 
-
             randomBatch = np.random.randint(trainingSamples.shape[0] - args["batchSize"])
             batchX = trainingSamples[randomBatch:randomBatch+args["batchSize"]]
             batchY = groundTruth[randomBatch:randomBatch+args["batchSize"]]
@@ -125,29 +126,31 @@ with tf.Session() as sess:
                 test_acc = sess.run(accuracy, feed_dict={x:testX, y:testY, keep_prob: 1.0})
                 train_loss = sess.run(loss, feed_dict={x: batchX, y: batchY, keep_prob: 1.0})
                 test_loss = sess.run(loss, feed_dict={x: testX, y:testY, keep_prob: 1.0})
-                train_prec = sess.run(ink_precision, feed_dict={x: batchX, y:batchY, keep_prob:1.0})
-                test_prec = sess.run(ink_precision, feed_dict={x:testX, y:testY, keep_prob:1.0})
+                train_preds = sess.run(pred, feed_dict={x: batchX, keep_prob: 1.0})
+                test_preds = sess.run(pred, feed_dict={x: testX, y:testY, keep_prob:1.0})
                 train_accs.append(train_acc)
                 test_accs.append(test_acc)
                 test_losses.append(test_loss)
                 train_losses.append(train_loss)
-                test_precs.append(test_prec)
-                train_precs.append(train_prec)
+                train_precs.append(precision_score(np.argmax(batchY, 1), np.argmax(train_preds, 1)))
+                test_precs.append(precision_score(np.argmax(testY, 1), np.argmax(test_preds, 1)))
 
-                if (test_prec > .95) and epoch > 5000: # or (test_prec / args["numCubes"] < .05)
-                    # fewer than 5% false positives, make a full prediction
-                    predict_flag = True
+                if (test_acc > .9) and epoch > 5000: # or (test_prec / args["numCubes"] < .05)
+                    pass # disabled for now
+                    # make a full prediction if results are tentatively spectacular
+                    predict_flag = False
 
                 print("Epoch: {}".format(epoch))
-                print("Train Loss: {:.3f}\tTrain Acc: {:.3f}\tInk Precision: {:.3f}".format(train_loss, train_acc, train_prec))
-                print("Test Loss: {:.3f}\tTest Acc: {:.3f}\t\tInk Precision: {:.3f}".format(test_loss, test_acc, test_prec))
+                print("Train Loss: {:.3f}\tTrain Acc: {:.3f}\tInk Precision: {:.3f}".format(train_loss, train_acc, train_precs[-1]))
+                print("Test Loss: {:.3f}\tTest Acc: {:.3f}\t\tInk Precision: {:.3f}".format(test_loss, test_acc, test_precs[-1]))
                 # + str(epoch) + "  Loss: " + str(np.mean(evaluatedLoss)) + "  Acc: " + str(np.mean(train_acc)))
+
 
             if (predict_flag) or (epoch % args["predictStep"] == 0 and epoch > 0):
                 print("{} training iterations took {:.2f} minutes".format( \
                     epoch, (time.time() - start_time)/60))
-                startingCoordinates = [0,0]
-                predictionSamples, coordinates, nextCoordinates = volume.getPredictionSample(args, startingCoordinates)
+                startingCoordinates = [0,0,0]
+                predictionSamples, coordinates, nextCoordinates = volume.getPredictionSample3D(args, startingCoordinates)
 
                 count = 1
                 total_predictions = volume.totalPredictions(args)
@@ -158,10 +161,11 @@ with tf.Session() as sess:
                         #update UI at 10% intervals
                         print("Predicting cubes {} of {}".format((count * args["predictBatchSize"]), total_predictions))
                     predictionValues = sess.run(pred, feed_dict={x: predictionSamples, keep_prob: 1.0})
-                    volume.reconstruct(args, predictionValues, coordinates)
-                    predictionSamples, coordinates, nextCoordinates = volume.getPredictionSample(args, nextCoordinates)
+                    volume.reconstruct3D(args, predictionValues, coordinates)
+                    predictionSamples, coordinates, nextCoordinates = volume.getPredictionSample3D(args, nextCoordinates)
                     count += 1
-                volume.savePredictionImage(args, epoch)
+                volume.savePrediction3D(args, epoch)
+                volume.savePredictionMetrics(args)
 
                 ops.graph(args, epoch, test_accs, test_losses, train_accs, train_losses, test_precs, train_precs)
 

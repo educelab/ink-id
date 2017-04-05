@@ -21,8 +21,10 @@ class Volume:
             sliceData = np.array(Image.open(args["trainingDataPath"]+f))
             volume.append(sliceData)
         self.volume = np.array(volume)
-        self.predictionVolume = np.array((self.volume.shape[0], self.volume.shape[1], args["predictDepth"]), dtype=np.float32)
+        self.predictionVolume = np.zeros((self.volume.shape[0], self.volume.shape[1], args["predictDepth"]), dtype=np.float32)
+
         self.groundTruth = tiff.imread(args["groundTruthFile"])
+        self.max_truth = np.iinfo(self.groundTruth.dtype).max
         self.predictionImageInk = np.zeros((self.volume.shape[0], self.volume.shape[1]), dtype=np.float32)
         self.predictionImageSurf = np.zeros((self.volume.shape[0], self.volume.shape[1]), dtype=np.float32)
         self.trainingImage = np.zeros(self.predictionImageInk.shape, dtype=np.uint16)
@@ -56,7 +58,6 @@ class Volume:
                 groundTruth[i] = [1.0,0.0]
                 continue
 
-
             jitter_range = args["jitterRange"]
             jitter = np.random.randint(jitter_range[0],jitter_range[1])
             if args["useJitter"]:
@@ -68,19 +69,16 @@ class Volume:
             if args["addAugmentation"]:
                 sample = ops.augmentSample(args, sample)
 
-            # add sample to array, with appropriate shape
-            trainingSamples[i, 0:sample.shape[0], 0:sample.shape[1], 0:sample.shape[2]] = sample
-
-
-            max_truth = np.iinfo(self.groundTruth.dtype).max
-            if label_avg > (.9 * max_truth):
+            if label_avg > (.9 * self.max_truth):
                 gt = [0.0,1.0]
                 self.trainingImage[yCoordinate,xCoordinate] = int(65534)
             else:
                 gt = [1.0,0.0]
                 self.trainingImage[yCoordinate,xCoordinate] = int(65534/2)
-            groundTruth[i] = gt
 
+
+            trainingSamples[i, 0:sample.shape[0], 0:sample.shape[1], 0:sample.shape[2]] = sample
+            groundTruth[i] = gt
 
         return trainingSamples, groundTruth
 
@@ -150,15 +148,13 @@ class Volume:
             sample = (self.volume[rowCoordinate:rowCoordinate+args["y_Dimension"], \
                     colCoordinate:colCoordinate+args["x_Dimension"], zCoordinate:zCoordinate+args["z_Dimension"]])
             predictionSamples[sample_count, 0:sample.shape[0], 0:sample.shape[1], 0:sample.shape[2]] = sample
-            coordinates[count] = [rowCoordinate, colCoordinate, depthCoordinate]
+            coordinates[sample_count] = [rowCoordinate, colCoordinate, depthCoordinate]
 
             # increment variables for next iteration
             colCoordinate += args["overlapStep"]
             sample_count += 1
 
-
         return (predictionSamples), (coordinates), [rowCoordinate, colCoordinate, depthCoordinate]
-
 
 
 
@@ -194,35 +190,39 @@ class Volume:
 
 
 
-    def reconstruct3D(self, args, samples, coordinates):
+    def reconstruct3D(self, args, predictionValues, coordinates):
         center_step = int(round(args["overlapStep"] / 2))
         for i in range(coordinates.shape[0]):
             xpoint = coordinates[i,0] + (int(args["x_Dimension"] / 2))
             ypoint = coordinates[i,1] + (int(args["y_Dimension"] / 2))
             zpoint = coordinates[i,2]
+            predictionValue = predictionValues[i,1]
             if(center_step > 0):
-                self.predictionVolume[xpoint-center_step:xpoint+center_step, ypoint-center_step:ypoint+center_step, zpoint] = samples[i,1]
+                self.predictionVolume[ypoint-center_step:ypoint+center_step, xpoint-center_step:xpoint+center_step, zpoint] = predictionValue
             else:
-                self.predictionVolume[xpoint, ypoint, zpoint] = samples[i,0]
+                self.predictionVolume[xpoint, ypoint, zpoint] = predictionValue
 
 
 
-    def savePredictionImage(self, args, iteration):
-        predictionImageInk = 65535 * ( (self.predictionImageInk.copy() - np.min(self.predictionImageInk)) / (np.amax(self.predictionImageInk) - np.min(self.predictionImageInk)) )
-        predictionImageInk = np.array(predictionImageInk, dtype=np.uint16)
-        predictionImageSurf = 65535 * ( (self.predictionImageSurf.copy() - np.min(self.predictionImageSurf)) / (np.amax(self.predictionImageSurf) - np.min(self.predictionImageSurf)) )
-        predictionImageSurf = np.array(predictionImageSurf, dtype=np.uint16)
+    def savePrediction3D(self, args, iteration):
+        for d in range(args["predictDepth"]):
+            self.savePredictionImage(args, iteration, predictValuesInk=self.predictionVolume[:,:,d], depth=d)
 
-        tm = datetime.datetime.today().timetuple()
-        tmstring = ""
-        for t in range(3):
-            tmstring += str(tm[t])
-            tmstring+= "-"
-        tmstring += str(tm[3])
-        tmstring += "h"
 
-        specstring = "{}x{}x{}-".format(args["x_Dimension"], args["y_Dimension"], args["z_Dimension"])
-        specstring = specstring + tmstring
+
+    def savePredictionImage(self, args, iteration, predictValuesInk=None, predictValuesSurf=None, depth=0):
+        if predictValuesInk is None:
+            #predictionImageInk = 65535 * ( (self.predictionImageInk.copy() - np.min(self.predictionImageInk)) / (np.amax(self.predictionImageInk) - np.min(self.predictionImageInk)) )
+            predictionImageInk = (65535 * self.predictionImageInk).astype(np.uint16)
+        else:
+            predictionImageInk = (65535 * predictValuesInk).astype(np.uint16)
+
+        if predictValuesSurf is None:
+            #predictionImageSurf = 65535 * ( (self.predictionImageSurf.copy() - np.min(self.predictionImageSurf)) / (np.amax(self.predictionImageSurf) - np.min(self.predictionImageSurf)) )
+            predictionImageSurf = (65535 * self.predictionImageSurf).astype(np.uint16)
+        else:
+            predictionImageInk = (65535 * predictValuesSurf).astype(np.uint16)
+
 
         output_path = args["savePredictionFolder"]
         folders = ['ink', 'surface']
@@ -235,12 +235,17 @@ class Volume:
         description = ""
         for arg in sorted(args.keys()):
             description += arg+": " + str(args[arg]) + "\n"
+        np.savetxt(output_path +'description.txt', [description], delimiter=' ', fmt="%s")
 
         #save the ink and predictions
-        tiff.imsave(output_path + "{}/predictionInk-{}.tif".format(folders[0], iteration), predictionImageInk)
-        tiff.imsave(output_path + "{}/predictionSurf-{}.tif".format(folders[1], iteration), predictionImageSurf)
+        tiff.imsave(output_path + "{}/predictionInk-depth{}-epoch{}.tif".format(folders[0], depth, iteration), predictionImageInk)
+        tiff.imsave(output_path + "{}/predictionSurf-depth{}-epoch{}.tif".format(folders[1], depth, iteration), predictionImageSurf)
         tiff.imsave(output_path + "training.tif", self.trainingImage)
-        #create confusion matrices
+
+
+
+    def savePredictionMetrics(self, args):
+        output_path = args["savePredictionFolder"]
         all_confusion = confusion_matrix(self.all_truth, self.all_preds)
         test_confusion = confusion_matrix(self.test_truth, self.test_preds)
         all_confusion_norm = all_confusion.astype('float') / all_confusion.sum(axis=1)[:, np.newaxis]
@@ -259,7 +264,6 @@ class Volume:
         np.savetxt(output_path + "confusion-all.csv", self.all_results_norm, fmt='%1.4f', header=column_names, delimiter=',')
         np.savetxt(output_path + "confusion-test.csv", self.test_results_norm, fmt='%1.4f', header=column_names, delimiter=',')
 
-        np.savetxt(output_path +'description.txt', [description], delimiter=' ', fmt="%s")
         #TODO shutil.copy model
         # zero-out predictions & images so next output is correct
         self.predictionImageInk = np.zeros((self.volume.shape[0], self.volume.shape[1]), dtype=np.float32)
@@ -270,11 +274,9 @@ class Volume:
         self.test_preds = []
 
 
+
     def totalPredictions(self, args):
         #TODO three-dimensions
         xSlides = (self.volume.shape[0] - args["x_Dimension"]) / args["overlapStep"]
         ySlides = (self.volume.shape[1] - args["y_Dimension"]) / args["overlapStep"]
-        if args["predict3d"]:
-            return int(xSlides * ySlides * args["predictDepth"])
-        else:
-            return int(xSlides * ySlides)
+        return int(xSlides * ySlides * args["predictDepth"])
