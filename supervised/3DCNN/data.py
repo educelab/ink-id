@@ -21,7 +21,7 @@ class Volume:
             sliceData = np.array(Image.open(args["trainingDataPath"]+f))
             volume.append(sliceData)
         self.volume = np.array(volume)
-        self.predictionVolume = np.array((volume.shape[0], volume.shape[1], args["predictDepth"]), dtype=np.float32)
+        self.predictionVolume = np.array((self.volume.shape[0], self.volume.shape[1], args["predictDepth"]), dtype=np.float32)
         self.groundTruth = tiff.imread(args["groundTruthFile"])
         self.predictionImageInk = np.zeros((self.volume.shape[0], self.volume.shape[1]), dtype=np.float32)
         self.predictionImageSurf = np.zeros((self.volume.shape[0], self.volume.shape[1]), dtype=np.float32)
@@ -50,8 +50,8 @@ class Volume:
         for i in range(args["numCubes"]):
             xCoordinate, yCoordinate, zCoordinate, label_avg = ops.findRandomCoordinate(args, colBounds, rowBounds, self.groundTruth, self.surfaceImage, self.volume)
 
-            if args["addRandom"] and not testSet and label_avg < .1 and np.random.randint(5) == 4:
-                # make 20% of the non-ink samples random data labeled as non-ink
+            if args["addRandom"] and not testSet and label_avg < .1 and np.random.randint(args["randomStep"]) == 0:
+                # make this non-ink sample random data labeled as non-ink
                 sample = ops.getRandomBrick(args, self.volume, xCoordinate, yCoordinate)
                 groundTruth[i] = [1.0,0.0]
                 continue
@@ -62,25 +62,15 @@ class Volume:
             if args["useJitter"]:
                 zCoordinate = np.maximum(0, zCoordinate + jitter)
 
-            # add sample to array, with appropriate shape
             sample = (self.volume[yCoordinate:yCoordinate+args["y_Dimension"], \
                         xCoordinate:xCoordinate+args["x_Dimension"], zCoordinate:zCoordinate+args["z_Dimension"]])
 
-            # twelve total possible augmentations, ensure equal probability
-            # for flip: original, flip left-right, flip up-down
-            if jitter_range[0] < jitter < jitter_range[0] / 3:
-                sample = np.flip(sample, axis=0)
-            elif jitter_range[0] / 3 < jitter < jitter_range[1] / 3:
-                sample = np.flip(sample, axis=1)
-            # for rotate: original, rotate 90, rotate 180, or rotate 270
-            if jitter_range[1] / 2 < jitter < jitter_range[1]:
-                sample = np.rot90(sample, k=1, axes=(0,1))
-            elif 0 < jitter < jitter_range[1] / 2:
-                sample = np.rot90(sample, k=2, axes=(0,1))
-            elif jitter_range[0] / 2 < jitter < 0:
-                sample = np.rot90(sample, k=3, axes=(0,1))
+            if args["addAugmentation"]:
+                sample = ops.augmentSample(args, sample)
 
+            # add sample to array, with appropriate shape
             trainingSamples[i, 0:sample.shape[0], 0:sample.shape[1], 0:sample.shape[2]] = sample
+
 
             max_truth = np.iinfo(self.groundTruth.dtype).max
             if label_avg > (.9 * max_truth):
@@ -90,6 +80,7 @@ class Volume:
                 gt = [1.0,0.0]
                 self.trainingImage[yCoordinate,xCoordinate] = int(65534/2)
             groundTruth[i] = gt
+
 
         return trainingSamples, groundTruth
 
