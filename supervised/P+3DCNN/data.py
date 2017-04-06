@@ -4,6 +4,7 @@ import os
 from PIL import Image
 import math
 import cv2
+import scipy.ndimage
 import re
 
 import ops
@@ -16,6 +17,7 @@ class Volume:
             for d in allDirectories:
                 if "layers" in d:
                     layerDirectories.append(args["trainingDataPath"]+d)
+            layerDirectories.sort()
         else:
             layerDirectories = [args["singleScanPath"]]
 
@@ -42,7 +44,9 @@ class Volume:
             self.volume = self.volume[:,:,args["cropY_low"]:args["cropY_high"],:]
             self.groundTruth = self.groundTruth[:,args["cropY_low"]:args["cropY_high"]]
 
-        self.predictionImage = np.zeros((int(self.volume.shape[1]/args["stride"]), int(self.volume.shape[2]/args["stride"])), dtype=np.uint8)
+        # for i in range(self.volume.shape[0]):
+        #     self.volume[i,:,:,:] = scipy.ndimage.interpolation.zoom(self.volume[i,:,:,:], args["scalingFactor"])
+        # self.groundTruth = scipy.ndimage.interpolation.zoom(self.groundTruth, args["scalingFactor"])
 
     def getTrainingSample(self, args, testSet=False, bounds=0):
         # grab training sample at random
@@ -58,16 +62,24 @@ class Volume:
 
         for i in range(args["batchSize"]):
             xCoordinate, yCoordinate, zCoordinate, label_avg = ops.findRandomCoordinates(args, xBounds, yBounds, self.volume, self.groundTruth)
+            xCoordinate2 = int(xCoordinate + math.ceil(float(args["x_Dimension"]) * float(1/args["scalingFactor"])))
+            yCoordinate2 = int(yCoordinate + math.ceil(float(args["y_Dimension"]) * float(1/args["scalingFactor"])))
+            zCoordinate2 = int(zCoordinate + math.ceil(float(args["z_Dimension"]) * float(1/args["scalingFactor"])))
 
             spectralSamples = []
-            if ops.edge(xCoordinate, args["x_Dimension"], self.volume.shape[1]) or ops.edge(yCoordinate, args["y_Dimension"], self.volume.shape[2]):
+            x = math.ceil(args["x_Dimension"]/args["scalingFactor"])
+            y = math.ceil(args["y_Dimension"]/args["scalingFactor"])
+            if ops.edge(xCoordinate, x, self.volume.shape[1]) or ops.edge(yCoordinate, y, self.volume.shape[2]):
                 for j in range(self.volume.shape[0]):
-                    sample = ops.findEdgeSubVolume(args, xCoordinate, yCoordinate, self.volume, j)
+                    sample = ops.findEdgeSubVolume(args, xCoordinate, xCoordinate2, yCoordinate, yCoordinate2, zCoordinate, zCoordinate2, self.volume, j)
                     spectralSamples.append(sample)
             else:
                 for j in range(self.volume.shape[0]):
-                    spectralSamples.append(self.volume[j, xCoordinate:xCoordinate+args["x_Dimension"], \
-                                yCoordinate:yCoordinate+args["y_Dimension"], zCoordinate:zCoordinate+args["z_Dimension"]])
+                    sample = self.volume[j, xCoordinate:xCoordinate2, \
+                                yCoordinate:yCoordinate2, zCoordinate:zCoordinate2]
+                    sample = scipy.ndimage.interpolation.zoom(sample, args["scalingFactor"])
+                    sample = ops.splice(sample, args)
+                    spectralSamples.append(sample)
 
             trainingSamples.append(spectralSamples)
 
@@ -95,15 +107,23 @@ class Volume:
 
         while len(trainingSamples) < args["batchSize"]:
             xCoordinate, yCoordinate, zCoordinate, label_avg = ops.findRandomCoordinates(args, xBounds, yBounds, self.volume, self.groundTruth)
+            xCoordinate2 = int(xCoordinate + math.ceil(float(args["x_Dimension"]) * float(1/args["scalingFactor"])))
+            yCoordinate2 = int(yCoordinate + math.ceil(float(args["y_Dimension"]) * float(1/args["scalingFactor"])))
+            zCoordinate2 = int(zCoordinate + math.ceil(float(args["z_Dimension"]) * float(1/args["scalingFactor"])))
 
-            if ops.edge(xCoordinate, args["x_Dimension"], self.volume.shape[1]) or ops.edge(yCoordinate, args["y_Dimension"], self.volume.shape[2]):
+            x = math.ceil(args["x_Dimension"]/args["scalingFactor"])
+            y = math.ceil(args["y_Dimension"]/args["scalingFactor"])
+            if ops.edge(xCoordinate, x, self.volume.shape[1]) or ops.edge(yCoordinate, y, self.volume.shape[2]):
                 for j in range(self.volume.shape[0]):
-                    sample = ops.findEdgeSubVolume(args, xCoordinate, yCoordinate, self.volume, j)
+                    sample = ops.findEdgeSubVolume(args, xCoordinate, xCoordinate2, yCoordinate, yCoordinate2, zCoordinate, zCoordinate2, self.volume, j)
                     trainingSamples.append(sample)
             else:
                 for j in range(self.volume.shape[0]):
-                    trainingSamples.append(self.volume[j, xCoordinate:xCoordinate+args["x_Dimension"], \
-                                yCoordinate:yCoordinate+args["y_Dimension"], zCoordinate:zCoordinate+args["z_Dimension"]])
+                    sample = self.volume[j, xCoordinate:xCoordinate2, \
+                                yCoordinate:yCoordinate2, zCoordinate:zCoordinate2]
+                    sample = scipy.ndimage.interpolation.zoom(sample, args["scalingFactor"])
+                    sample = ops.splice(sample, args)
+                    trainingSamples.append(sample)
 
             no_ink = len(np.where(self.groundTruth[xCoordinate:xCoordinate+args["x_Dimension"], \
                         yCoordinate:yCoordinate+args["y_Dimension"]] == 0)[0])
@@ -117,6 +137,7 @@ class Volume:
                 groundTruth.append(gt)
 
         return np.reshape(np.array(trainingSamples), (args["batchSize"], args["x_Dimension"], args["y_Dimension"], args["z_Dimension"], args["numChannels"])), np.array(groundTruth)
+        # return np.expand_dims(np.array(trainingSamples), axis=4)
 
     def getPredictionSample(self, args, startingCoordinates):
         xCoordinate = startingCoordinates[0]
@@ -134,15 +155,24 @@ class Volume:
                 # yCoordinate = 0
                 break
 
+            xCoordinate2 = int(xCoordinate + math.ceil(float(args["x_Dimension"]) * float(1/args["scalingFactor"])))
+            yCoordinate2 = int(yCoordinate + math.ceil(float(args["y_Dimension"]) * float(1/args["scalingFactor"])))
+            zCoordinate2 = int(zCoordinate + math.ceil(float(args["z_Dimension"]) * float(1/args["scalingFactor"])))
+
             spectralSamples = []
-            if ops.edge(xCoordinate, args["x_Dimension"], self.volume.shape[1]) or ops.edge(yCoordinate, args["y_Dimension"], self.volume.shape[2]):
+            x = math.ceil(args["x_Dimension"]/args["scalingFactor"])
+            y = math.ceil(args["y_Dimension"]/args["scalingFactor"])
+            if ops.edge(xCoordinate, x, self.volume.shape[1]) or ops.edge(yCoordinate, y, self.volume.shape[2]):
                 for i in range(self.volume.shape[0]):
-                    sample = ops.findEdgeSubVolume(args, xCoordinate, yCoordinate, self.volume, i)
+                    sample = ops.findEdgeSubVolume(args, xCoordinate, xCoordinate2, yCoordinate, yCoordinate2, zCoordinate, zCoordinate2, self.volume, i)
                     spectralSamples.append(sample)
             else:
                 for i in range(self.volume.shape[0]):
-                    spectralSamples.append(self.volume[i, xCoordinate:xCoordinate+args["x_Dimension"], \
-                            yCoordinate:yCoordinate+args["y_Dimension"], zCoordinate:zCoordinate+args["z_Dimension"]])
+                    sample = self.volume[i, xCoordinate:xCoordinate2, \
+                                yCoordinate:yCoordinate2, zCoordinate:zCoordinate2]
+                    sample = scipy.ndimage.interpolation.zoom(sample, args["scalingFactor"])
+                    sample = ops.splice(sample, args)
+                    spectralSamples.append(sample)
 
             predictionSamples[count,:,:,:,:] = spectralSamples
             coordinates[count] = [xCoordinate, yCoordinate]
@@ -168,15 +198,24 @@ class Volume:
                 # yCoordinate = 0
                 break
 
+            xCoordinate2 = int(xCoordinate + math.ceil(float(args["x_Dimension"]) * float(1/args["scalingFactor"])))
+            yCoordinate2 = int(yCoordinate + math.ceil(float(args["y_Dimension"]) * float(1/args["scalingFactor"])))
+            zCoordinate2 = int(zCoordinate + math.ceil(float(args["z_Dimension"]) * float(1/args["scalingFactor"])))
+
             spectralSamples = []
-            if ops.edge(xCoordinate, args["x_Dimension"], self.volume.shape[1]) or ops.edge(yCoordinate, args["y_Dimension"], self.volume.shape[2]):
+            x = math.ceil(args["x_Dimension"]/args["scalingFactor"])
+            y = math.ceil(args["y_Dimension"]/args["scalingFactor"])
+            if ops.edge(xCoordinate, x, self.volume.shape[1]) or ops.edge(yCoordinate, y, self.volume.shape[2]):
                 for i in range(self.volume.shape[0]):
-                    sample = ops.findEdgeSubVolume(args, xCoordinate, yCoordinate, self.volume, i)
+                    sample = ops.findEdgeSubVolume(args, xCoordinate, xCoordinate2, yCoordinate, yCoordinate2, zCoordinate, zCoordinate2, self.volume, i)
                     spectralSamples.append(sample)
             else:
                 for i in range(self.volume.shape[0]):
-                    spectralSamples.append(self.volume[i, xCoordinate:xCoordinate+args["x_Dimension"], \
-                            yCoordinate:yCoordinate+args["y_Dimension"], zCoordinate:zCoordinate+args["z_Dimension"]])
+                    sample = self.volume[i, xCoordinate:xCoordinate2, \
+                                yCoordinate:yCoordinate2, zCoordinate:zCoordinate2]
+                    sample = scipy.ndimage.interpolation.zoom(sample, args["scalingFactor"])
+                    sample = ops.splice(sample, args)
+                    spectralSamples.append(sample)
 
             predictionSamples[count,:,:,:,:] = spectralSamples
             coordinates[count] = [xCoordinate, yCoordinate]
@@ -191,10 +230,10 @@ class Volume:
         ySlides = (self.volume.shape[2] - args["y_Dimension"]) / args["stride"]
         return int(xSlides * ySlides)
 
-    def emptyPredictionVolume(self, args):
+    def emptyPredictionImage(self, args):
         self.predictionImage = np.zeros((int(self.volume.shape[1]/args["stride"]), int(self.volume.shape[2]/args["stride"])), dtype=np.uint8)
 
-    def initMultiplePredictionImages(self, args):
+    def initPredictionImages(self, args):
         self.predictionImages = []
         for i in range(self.volume.shape[0]):
             self.predictionImages.append(np.zeros((int(self.volume.shape[1]/args["stride"]), int(self.volume.shape[2]/args["stride"])), dtype=np.uint8))
@@ -223,4 +262,4 @@ class Volume:
 
     def savePredictionImages(self, args, epoch):
         for i in range(len(self.predictionImages)):
-            cv2.imwrite(args["savePredictionPath"] + "volume-" + str(i) + "-epoch-" + str(epoch) + ".png", self.predictionImage)
+            cv2.imwrite(args["savePredictionPath"] + "volume-" + str(i) + "-epoch-" + str(epoch) + ".png", self.predictionImages[i])

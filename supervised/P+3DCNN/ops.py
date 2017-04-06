@@ -1,44 +1,61 @@
 import numpy as np
 import pdb
+import math
+import scipy.ndimage
 
 def edge(coordinate, subVolumeShape, shape):
     if coordinate < subVolumeShape: return True
     if coordinate > (shape - subVolumeShape): return True
     return False
 
-def findEdgeSubVolume(args, xCoordinate, yCoordinate, volume, i):
-    sample = np.zeros((args["x_Dimension"], args["y_Dimension"], args["z_Dimension"]))
-    if edge(xCoordinate, args["x_Dimension"], volume.shape[1]) and not edge(yCoordinate, args["y_Dimension"], volume.shape[2]):
-        if xCoordinate < args["x_Dimension"]:
-            sample[args["x_Dimension"]-xCoordinate:args["x_Dimension"],:,:] = volume[i,0:xCoordinate,yCoordinate:yCoordinate+args["y_Dimension"],:]
+def findEdgeSubVolume(args, xCoordinate, xCoordinate2, yCoordinate, yCoordinate2, zCoordinate, zCoordinate2, volume, i):
+    x = math.ceil(args["x_Dimension"]/args["scalingFactor"])
+    y = math.ceil(args["y_Dimension"]/args["scalingFactor"])
+    z = math.ceil(args["z_Dimension"]/args["scalingFactor"])
+    sample = np.zeros((x, y, z))
+
+    if edge(xCoordinate, x, volume.shape[1]) and not edge(yCoordinate, y, volume.shape[2]):
+        if xCoordinate < x:
+            xCoordinate2 = int(xCoordinate - math.ceil(float(xCoordinate) * float(1/args["scalingFactor"])))
+            unscaledSample = volume[i,0:xCoordinate2,yCoordinate:yCoordinate2,zCoordinate:zCoordinate2]
+            sample[x - xCoordinate2: x, :, :] = unscaledSample
         else:
-            sample[0:volume.shape[1]-xCoordinate,:,:] = volume[i,xCoordinate:volume.shape[1],yCoordinate:yCoordinate+args["y_Dimension"],:]
-    elif not edge(xCoordinate, args["x_Dimension"], volume.shape[1]) and edge(yCoordinate, args["y_Dimension"], volume.shape[2]):
-        if yCoordinate < args["y_Dimension"]:
-            sample[:,args["y_Dimension"]-yCoordinate:args["y_Dimension"],:] = volume[i,xCoordinate:xCoordinate+args["x_Dimension"],0:yCoordinate,:]
+            unscaledSample = volume[i, xCoordinate:volume.shape[1], yCoordinate:yCoordinate2, zCoordinate:zCoordinate2]
+            sample[0:volume.shape[1]-xCoordinate,:,:] = unscaledSample
+
+    elif not edge(xCoordinate, x, volume.shape[1]) and edge(yCoordinate, y, volume.shape[2]):
+        if yCoordinate < y:
+            yCoordinate2 = int(yCoordinate - math.ceil(float(yCoordinate) * float(1/args["scalingFactor"])))
+            unscaledSample = volume[i,xCoordinate:xCoordinate2,0:yCoordinate2,zCoordinate:zCoordinate2]
+            sample[:, y-yCoordinate2:y, :] = unscaledSample
         else:
-            sample[:,0:volume.shape[2]-yCoordinate,:] = volume[i,xCoordinate:xCoordinate+args["x_Dimension"],yCoordinate:volume.shape[2],:]
+            unscaledSample = volume[i, xCoordinate:xCoordinate2, yCoordinate:volume.shape[2], zCoordinate:zCoordinate2]
+            sample[:,0:volume.shape[2]-yCoordinate,:] = unscaledSample
+
     else:
-        if xCoordinate < args["x_Dimension"] and yCoordinate < args["y_Dimension"]: # TOP LEFT corner
-            sample[args["x_Dimension"]-xCoordinate:args["x_Dimension"],\
-                args["y_Dimension"]-yCoordinate:args["y_Dimension"] ,:]\
-                    = volume[i,0:xCoordinate,0:yCoordinate,:]
+        if xCoordinate < x and yCoordinate < y: # TOP LEFT corner
+            xCoordinate2 = int(xCoordinate - math.ceil(float(xCoordinate) * float(1/args["scalingFactor"])))
+            yCoordinate2 = int(yCoordinate - math.ceil(float(yCoordinate) * float(1/args["scalingFactor"])))
+            unscaledSample = volume[i,0:xCoordinate2,0:yCoordinate2,zCoordinate:zCoordinate2]
+            sample[x-xCoordinate2:x, y-yCoordinate2:y, :] = unscaledSample
 
-        elif xCoordinate < args["x_Dimension"] and yCoordinate > args["y_Dimension"]: # BOTTOM LEFT corner
-            sample[args["x_Dimension"]-xCoordinate:args["x_Dimension"],\
-                0:volume.shape[2]-yCoordinate, :]\
-                    = volume[i,0:xCoordinate,yCoordinate:volume.shape[2],:]
+        elif xCoordinate < x and yCoordinate > y: # BOTTOM LEFT corner
+            xCoordinate2 = int(xCoordinate - math.ceil(float(xCoordinate) * float(1/args["scalingFactor"])))
+            unscaledSample = volume[i, 0:xCoordinate2, yCoordinate:volume.shape[2], zCoordinate:zCoordinate2]
+            sample[x-xCoordinate2:x, 0:volume.shape[2]-yCoordinate, :] = unscaledSample
 
-        elif xCoordinate > args["x_Dimension"] and yCoordinate < args["y_Dimension"]: # TOP RIGHT corner
-            sample[0:volume.shape[1]-xCoordinate,\
-                args["x_Dimension"]-yCoordinate:args["y_Dimension"], :]\
-                    = volume[i,xCoordinate:volume.shape[1],0:yCoordinate,:]
+        elif xCoordinate > x and yCoordinate < y: # TOP RIGHT corner
+            yCoordinate2 = int(yCoordinate - math.ceil(float(yCoordinate) * float(1/args["scalingFactor"])))
+            unscaledSample = volume[i, xCoordinate:volume.shape[1], 0:yCoordinate2, zCoordinate:zCoordinate2]
+            sample[0:volume.shape[1]-xCoordinate, y-yCoordinate2:y,:] = unscaledSample
 
         else: # BOTTOM RIGHT corner
-            sample[0:volume.shape[1]-xCoordinate,\
-                0:volume.shape[2]-yCoordinate, :]\
-                    = volume[i,xCoordinate:volume.shape[1],yCoordinate:volume.shape[2],:]
+            unscaledSample = volume[i, xCoordinate:volume.shape[1], yCoordinate:volume.shape[2], zCoordinate:zCoordinate2]
+            sample[0:volume.shape[1]-xCoordinate, 0:volume.shape[2]-yCoordinate,:] = unscaledSample
 
+
+    sample = scipy.ndimage.interpolation.zoom(sample, args["scalingFactor"])
+    sample = splice(sample, args)
     return sample
 
 def bounds(args, shape, identifier):
@@ -74,3 +91,12 @@ def findRandomCoordinates(args, xBounds, yBounds, volume, groundTruth):
         label_avg = np.mean(groundTruth[xCoordinate:xCoordinate+args["x_Dimension"], \
                 yCoordinate:yCoordinate+args["y_Dimension"]])
     return xCoordinate, yCoordinate, zCoordinate, label_avg
+
+def splice(sample, args):
+    if sample.shape[0] != args["x_Dimension"]:
+        sample = sample[0:args["x_Dimension"],:,:]
+    if sample.shape[1] != args["y_Dimension"]:
+        sample = sample[:,0:args["y_Dimension"],:]
+    if sample.shape[2] != args["z_Dimension"]:
+        sample = sample[:,:,0:args["z_Dimension"]]
+    return sample
