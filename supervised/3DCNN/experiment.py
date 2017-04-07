@@ -2,9 +2,9 @@ import os
 
 xys = [60]
 zs = [60]
-cushions = [20]
+cushions = [10]
 neurons = [16]
-overlap = 16
+overlap = 2
 paths = [
         #"/home/jack/devel/volcart/small-fragment-data/nudge-4.00%/slices/",
         #"/home/jack/devel/volcart/small-fragment-data/nudge-2.00%/slices/",
@@ -15,14 +15,16 @@ paths = [
         "/home/jack/devel/volcart/small-fragment-data/flatfielded-slices/",
         ]
 
+neuron = 16
 try:
     for xy in xys:
         for z in zs:
             for cushion in cushions:
-                for neuron in neurons:
-                    for path in paths:
+                for path in paths:
+                    while neuron < 100
                         os.system("python3 main.py {} {} {} {} {} {}".format(
                                 xy, z, cushion, overlap, neuron, path))
+                        neuron += 2
 
 except KeyboardInterrupt:
     # stop everything, instead of just one script

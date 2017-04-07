@@ -58,8 +58,7 @@ class Volume:
                 groundTruth[i] = [1.0,0.0]
                 continue
 
-            jitter_range = args["jitterRange"]
-            jitter = np.random.randint(jitter_range[0],jitter_range[1])
+            jitter = np.random.randint(args["jitterRange"][0], args["jitterRange"][1])
             if args["useJitter"]:
                 zCoordinate = np.maximum(0, zCoordinate + jitter)
 
@@ -249,7 +248,7 @@ class Volume:
             pass
 
         # save the ink and surface predictions
-        tiff.imsave(output_path + "{}/prediction-depth{}-epoch{}.tif".format(predictionName, depth, iteration), predictionImage)
+        tiff.imsave(output_path + "{}/prediction-epoch{}-depth{}.tif".format(predictionName, iteration, depth), predictionImage)
         tiff.imsave(output_path + "training.tif", self.trainingImage)
 
         # zero them out for the next predictions

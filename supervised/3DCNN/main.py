@@ -38,7 +38,7 @@ args = {
     "learningRate": 0.0001,
     "batchSize": 30,
     "predictBatchSize": 200,
-    "dropout": 0.6,
+    "dropout": 0.5,
     "layer1_neurons": int(sys.argv[5]),
     "trainingIterations": 30001,
     "n_Classes": 2,
@@ -47,20 +47,20 @@ args = {
     "numCubes" : 500,
     "addRandom" : True,
     "randomStep" : 10, # one in every randomStep non-ink samples will be a random brick
-    "randomRange" : 400,
+    "randomRange" : 200,
     "useJitter" : True,
-    "jitterRange" : [-12, 12],
+    "jitterRange" : [-6, 6],
     "addAugmentation" : True,
-    "train_portion" : .65,
-    "grabNewSamples": 50,
-    "surfaceThresh": 20500,
+    "train_portion" : .6,
+    "grabNewSamples": 20,
+    "surfaceThresh": 21000,
     "restrictSurface": True,
 
     ### Output configuration ###
     "predictStep": 5000,
     "displayStep": 20,
     "overlapStep": int(sys.argv[4]),
-    "predictDepth" : 4,
+    "predictDepth" : 1,
     "savePredictionFolder" : "/home/jack/devel/volcart/predictions/3dcnn/{}x{}x{}-{}-{}-{}h/".format(
             sys.argv[1], sys.argv[1], sys.argv[2],  #x, y, z
             datetime.datetime.today().timetuple()[1], # month
