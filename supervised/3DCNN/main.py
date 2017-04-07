@@ -25,9 +25,9 @@ args = {
     #"trainingDataPath" : "/home/jack/devel/volcart/small-fragment-data/nudge-0.50%/slices/"
     "trainingDataPath" : str(sys.argv[6]),
     #"surfaceDataFile": "/home/jack/devel/volcart/small-fragment-data/surf-output-21500/surface-points-21500.tif",
-    "surfaceDataFile": "/home/jack/devel/volcart/small-fragment-data/polyfit-slices-degree32-cush16-thresh21500/surface.tif",
-    "groundTruthFile": "/home/jack/devel/volcart/small-fragment-data/ink-only-mask.tif",
-    "savePredictionPath": "/home/jack/devel/volcart/predictions/3dcnn/",
+    "surfaceDataFile": "/home/tfusers/small-fragment-data/surface.tif",
+    "groundTruthFile": "/home/tfusers/small-fragment-data/ink-only-mask.tif",
+    "savePredictionPath": "/home/jack/predictions/3dcnn/",
     "x_Dimension": int(sys.argv[1]),
     "y_Dimension": int(sys.argv[1]),
     "z_Dimension": int(sys.argv[2]),

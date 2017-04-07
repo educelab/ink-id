@@ -12,7 +12,7 @@ paths = [
         #"/home/jack/devel/volcart/small-fragment-data/nudge-1.00%/slices/",
         #"/home/jack/devel/volcart/small-fragment-data/nudge-8.00%/slices/",
         #"/home/jack/devel/volcart/small-fragment-data/nudge-0.50%/slices/".
-        "/home/jack/devel/volcart/small-fragment-data/flatfielded-slices/",
+        "/home/tfusers/small-fragment-data/flatfielded-slices/",
         ]
 
 neuron = 16
@@ -21,7 +21,8 @@ try:
         for z in zs:
             for cushion in cushions:
                 for path in paths:
-                    while neuron < 100
+                    while neuron < 17:
+                        print("Running experiment with {} neurons".format(neuron))
                         os.system("python3 main.py {} {} {} {} {} {}".format(
                                 xy, z, cushion, overlap, neuron, path))
                         neuron += 2
