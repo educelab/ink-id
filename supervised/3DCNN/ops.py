@@ -31,7 +31,7 @@ def graph(args, epoch, test_accs, test_losses, train_accs, train_losses, test_fp
     plt.plot(xs, np.poly1d(np.polyfit(xs, train_losses, 1))(xs), color='k')
     plt.plot(xs, np.poly1d(np.polyfit(xs, test_losses, 1))(xs), color='g')
     # the line of best fit for the last training portion
-    plt.plot(xs[:-n_v], np.poly1d(np.polyfit(xs[:-n_v], test_losses[:-n_v], 1))(xs[:-n_v]), color='g')
+    #plt.plot(xs[:-n_v], np.poly1d(np.polyfit(xs[:-n_v], test_losses[:-n_v], 1))(xs[:-n_v]), color='g')
     raw_acc = plt.subplot(323) # accuracies
     plt.title("Accuracies")
     plt.plot(train_accs, 'k.')
@@ -42,7 +42,7 @@ def graph(args, epoch, test_accs, test_losses, train_accs, train_losses, test_fp
     #plt.plot(xs, np.poly1d(np.polyfit(xs, test_accs, 2))(xs), color='g')
     plt.plot(xs, np.poly1d(np.polyfit(xs, train_accs, 1))(xs), color='k')
     plt.plot(xs, np.poly1d(np.polyfit(xs, test_accs, 1))(xs), color='g')
-    plt.plot(xs[:-n_v], np.poly1d(np.polyfit(xs[:-n_v], test_accs[:-n_v], 1))(xs[:-n_v]), color='g')
+    #plt.plot(xs[:-n_v], np.poly1d(np.polyfit(xs[:-n_v], test_accs[:-n_v], 1))(xs[:-n_v]), color='g')
     raw_prec = plt.subplot(325) # false positives
     plt.title("Ink Precision")
     plt.plot(train_fps, 'k.')
@@ -53,7 +53,7 @@ def graph(args, epoch, test_accs, test_losses, train_accs, train_losses, test_fp
     #plt.plot(xs, np.poly1d(np.polyfit(xs, test_fps, 2))(xs), color='g')
     plt.plot(xs, np.poly1d(np.polyfit(xs, train_fps, 1))(xs), color='k')
     plt.plot(xs, np.poly1d(np.polyfit(xs, test_fps, 1))(xs), color='g')
-    plt.plot(xs[:-n_v], np.poly1d(np.polyfit(xs[:-n_v], test_fps[:-n_v], 1))(xs[:-n_v]), color='g')
+    #plt.plot(xs[:-n_v], np.poly1d(np.polyfit(xs[:-n_v], test_fps[:-n_v], 1))(xs[:-n_v]), color='g')
     plt.savefig(args["savePredictionFolder"]+"plots-{}.png".format(epoch))
     #plt.show()
 
