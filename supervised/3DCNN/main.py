@@ -47,7 +47,7 @@ args = {
     "numCubes" : 500,
     "addRandom" : True,
     "randomStep" : 10, # one in every randomStep non-ink samples will be a random brick
-    "randomRange" : 200,
+    "randomRange" : 400,
     "useJitter" : True,
     "jitterRange" : [-12, 12],
     "addAugmentation" : True,
@@ -57,10 +57,10 @@ args = {
     "restrictSurface": True,
 
     ### Output configuration ###
-    "predictStep": 100,
+    "predictStep": 5000,
     "displayStep": 20,
     "overlapStep": int(sys.argv[4]),
-    "predictDepth" : 2,
+    "predictDepth" : 4,
     "savePredictionFolder" : "/home/jack/devel/volcart/predictions/3dcnn/{}x{}x{}-{}-{}-{}h/".format(
             sys.argv[1], sys.argv[1], sys.argv[2],  #x, y, z
             datetime.datetime.today().timetuple()[1], # month
@@ -136,9 +136,8 @@ with tf.Session() as sess:
                 test_precs.append(precision_score(np.argmax(testY, 1), np.argmax(test_preds, 1)))
 
                 if (test_acc > .9) and epoch > 5000: # or (test_prec / args["numCubes"] < .05)
-                    pass # disabled for now
                     # make a full prediction if results are tentatively spectacular
-                    predict_flag = False
+                    predict_flag = True
 
                 print("Epoch: {}".format(epoch))
                 print("Train Loss: {:.3f}\tTrain Acc: {:.3f}\tInk Precision: {:.3f}".format(train_loss, train_acc, train_precs[-1]))

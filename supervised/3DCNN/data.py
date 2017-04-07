@@ -144,7 +144,12 @@ class Volume:
                 continue
 
             # grab the sample and place it in output
-            zCoordinate = depthCoordinate * int((self.volume.shape[2] - args["z_Dimension"]) / args["predictDepth"])
+            zCoordinate = self.surfaceImage[rowCoordinate+int(args["y_Dimension"]/2), colCoordinate+int(args["x_Dimension"]/2)] - args["surfaceCushion"]
+            if args["predictDepth"] > 1:
+                #TODO this z-mapping mapping will eventually be something more intelligent
+                zCoordinate += depthCoordinate
+                #zCoordinate = depthCoordinate * int((self.volume.shape[2] - args["z_Dimension"]) / args["predictDepth"])
+
             sample = (self.volume[rowCoordinate:rowCoordinate+args["y_Dimension"], \
                     colCoordinate:colCoordinate+args["x_Dimension"], zCoordinate:zCoordinate+args["z_Dimension"]])
             predictionSamples[sample_count, 0:sample.shape[0], 0:sample.shape[1], 0:sample.shape[2]] = sample
@@ -168,7 +173,7 @@ class Volume:
 
             # all_truth array for confusion matrix, 1=ink, 0=fragment
             #pdb.set_trace()
-            if(self.groundTruth[xpoint,ypoint]) > .9*np.iinfo(self.groundTruth.dtype).max:
+            if(self.groundTruth[xpoint,ypoint]) > .9*self.max_truth:
                 inks += 1
                 self.all_truth.append(1.0)
             else:
@@ -184,6 +189,7 @@ class Volume:
             self.all_preds.append(np.argmax(samples[i,:]))
 
             # test batch (right side)
+            #TODO  make this correspond to the specified train side
             if xpoint > int(self.volume.shape[1]*args["train_portion"]):
                 self.test_preds.append(self.all_preds[-1])
                 self.test_truth.append(self.all_truth[-1])
@@ -193,55 +199,62 @@ class Volume:
     def reconstruct3D(self, args, predictionValues, coordinates):
         center_step = int(round(args["overlapStep"] / 2))
         for i in range(coordinates.shape[0]):
-            xpoint = coordinates[i,0] + (int(args["x_Dimension"] / 2))
-            ypoint = coordinates[i,1] + (int(args["y_Dimension"] / 2))
+            rowpoint = coordinates[i,0] + (int(args["x_Dimension"] / 2))
+            colpoint = coordinates[i,1] + (int(args["y_Dimension"] / 2))
             zpoint = coordinates[i,2]
             predictionValue = predictionValues[i,1]
-            if(center_step > 0):
-                self.predictionVolume[ypoint-center_step:ypoint+center_step, xpoint-center_step:xpoint+center_step, zpoint] = predictionValue
+
+            self.all_preds.append(np.argmax(predictionValues[i,:]))
+            if(self.groundTruth[rowpoint,colpoint]) > .9*self.max_truth:
+                self.all_truth.append(1.0)
             else:
-                self.predictionVolume[xpoint, ypoint, zpoint] = predictionValue
+                self.all_truth.append(0.0)
+
+            if(center_step > 0):
+                self.predictionVolume[rowpoint-center_step:rowpoint+center_step, colpoint-center_step:colpoint+center_step, zpoint] = predictionValue
+            else:
+                self.predictionVolume[rowpoint, colpoint, zpoint] = predictionValue
+
+            #TODO make this correspond to the specified train side
+            if colpoint > int(self.volume.shape[1]*args["train_portion"]):
+                self.test_preds.append(self.all_preds[-1])
+                self.test_truth.append(self.all_truth[-1])
 
 
 
     def savePrediction3D(self, args, iteration):
+        # save individual pictures
         for d in range(args["predictDepth"]):
-            self.savePredictionImage(args, iteration, predictValuesInk=self.predictionVolume[:,:,d], depth=d)
+            self.savePredictionImage(args, iteration, predictValues=self.predictionVolume[:,:,d], predictionName='ink-3d', depth=d)
+
+        # save the average prediction
+        self.savePredictionImage(args, iteration, predictValues = np.mean(self.predictionVolume, axis=2), predictionName='ink-average')
+
+        # zero out the volume
+        self.predictionVolume = np.zeros((self.volume.shape[0], self.volume.shape[1], args["predictDepth"]), dtype=np.float32)
 
 
 
-    def savePredictionImage(self, args, iteration, predictValuesInk=None, predictValuesSurf=None, depth=0):
-        if predictValuesInk is None:
+    def savePredictionImage(self, args, iteration, predictValues=None, predictionName='ink', depth=0):
+        if predictValues is None:
             #predictionImageInk = 65535 * ( (self.predictionImageInk.copy() - np.min(self.predictionImageInk)) / (np.amax(self.predictionImageInk) - np.min(self.predictionImageInk)) )
-            predictionImageInk = (65535 * self.predictionImageInk).astype(np.uint16)
+            predictionImage = (65535 * self.predictionImage).astype(np.uint16)
         else:
-            predictionImageInk = (65535 * predictValuesInk).astype(np.uint16)
-
-        if predictValuesSurf is None:
-            #predictionImageSurf = 65535 * ( (self.predictionImageSurf.copy() - np.min(self.predictionImageSurf)) / (np.amax(self.predictionImageSurf) - np.min(self.predictionImageSurf)) )
-            predictionImageSurf = (65535 * self.predictionImageSurf).astype(np.uint16)
-        else:
-            predictionImageInk = (65535 * predictValuesSurf).astype(np.uint16)
-
+            predictionImage = (65535 * predictValues).astype(np.uint16)
 
         output_path = args["savePredictionFolder"]
-        folders = ['ink', 'surface']
-        for folder in folders:
-            try:
-                os.makedirs(output_path + "{}/".format(folder))
-            except:
-                pass
+        try:
+            os.makedirs(output_path + "{}/".format(predictionName))
+        except:
+            pass
 
-        description = ""
-        for arg in sorted(args.keys()):
-            description += arg+": " + str(args[arg]) + "\n"
-        np.savetxt(output_path +'description.txt', [description], delimiter=' ', fmt="%s")
-
-        #save the ink and predictions
-        tiff.imsave(output_path + "{}/predictionInk-depth{}-epoch{}.tif".format(folders[0], depth, iteration), predictionImageInk)
-        tiff.imsave(output_path + "{}/predictionSurf-depth{}-epoch{}.tif".format(folders[1], depth, iteration), predictionImageSurf)
+        # save the ink and surface predictions
+        tiff.imsave(output_path + "{}/prediction-depth{}-epoch{}.tif".format(predictionName, depth, iteration), predictionImage)
         tiff.imsave(output_path + "training.tif", self.trainingImage)
 
+        # zero them out for the next predictions
+        self.predictionImageInk = np.zeros((self.volume.shape[0], self.volume.shape[1]), dtype=np.float32)
+        self.predictionImageSurf = np.zeros((self.volume.shape[0], self.volume.shape[1]), dtype=np.float32)
 
 
     def savePredictionMetrics(self, args, iteration):
@@ -252,11 +265,13 @@ class Volume:
         test_confusion_norm = test_confusion.astype('float') / test_confusion.sum(axis=1)[:, np.newaxis]
         print("Normalized confusion matrix for ALL points: \n{}".format(all_confusion_norm))
         print("Normalized confusion matrix for TEST points: \n{}".format(test_confusion_norm))
+
         #calculate metrics
         all_precision = precision_score(self.all_truth, self.all_preds)
         all_recall = recall_score(self.all_truth, self.all_preds)
         test_precision = precision_score(self.test_truth, self.test_preds)
         test_recall = recall_score(self.test_truth, self.test_preds)
+
         #save results in csv
         column_names = 'iteration, true positive papyrus, false positive ink, false positive papyrus, true positive ink, precision, recall'
         self.test_results_norm.append([iteration] + test_confusion_norm.reshape(4).tolist() + [test_precision] + [test_recall])
@@ -264,10 +279,14 @@ class Volume:
         np.savetxt(output_path + "confusion-all.csv", self.all_results_norm, fmt='%1.4f', header=column_names, delimiter=',')
         np.savetxt(output_path + "confusion-test.csv", self.test_results_norm, fmt='%1.4f', header=column_names, delimiter=',')
 
+        # save description of this training session
+        description = ""
+        for arg in sorted(args.keys()):
+            description += arg+": " + str(args[arg]) + "\n"
+        np.savetxt(output_path +'description.txt', [description], delimiter=' ', fmt="%s")
+
         #TODO shutil.copy model
         # zero-out predictions & images so next output is correct
-        self.predictionImageInk = np.zeros((self.volume.shape[0], self.volume.shape[1]), dtype=np.float32)
-        self.predictionImageSurf = np.zeros((self.volume.shape[0], self.volume.shape[1]), dtype=np.float32)
         self.all_truth = []
         self.all_preds = []
         self.test_truth = []
@@ -279,4 +298,4 @@ class Volume:
         #TODO three-dimensions
         xSlides = (self.volume.shape[0] - args["x_Dimension"]) / args["overlapStep"]
         ySlides = (self.volume.shape[1] - args["y_Dimension"]) / args["overlapStep"]
-        return int(xSlides * ySlides * args["predictDepth"])
+        return int(xSlides * ySlides) * args["predictDepth"]
