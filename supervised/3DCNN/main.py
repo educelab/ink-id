@@ -3,7 +3,6 @@ import numpy as np
 import pdb
 import tifffile as tiff
 import sys
-import matplotlib.pyplot as plt
 import datetime
 import data
 import model
