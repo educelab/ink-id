@@ -40,6 +40,8 @@ command = str(crop[0][0]) + " " + str(crop[0][1]) + " " + str(crop[1][0]) + " " 
 
 os.system("python3 main.py " + command)
 
+exit()
+
 command = str(crop[0][0]) + " " + str(crop[0][1]) + " " + str(crop[1][0]) + " " + str(crop[1][1]) + " " + paths[1] + " " + experimentTypes[0] +\
     " " + paths[1] + " " + str(scalingFactors[1])
 

@@ -61,8 +61,8 @@ volume = data.Volume(args)
 
 with tf.Session() as sess:
     sess.run(init)
-    # saver.restore(sess, args["saveModelPath"]+"model-epoch-4000.ckpt") # NOTE: uncomment and change path to restore a graph model
-    epoch = 0
+    saver.restore(sess, args["saveModelPath"]+"run1/model-epoch-10000.ckpt") # NOTE: uncomment and change path to restore a graph model
+    epoch = 9999
     while epoch < args["trainingIterations"]:
 
         if args["experimentType"] == "multipower-single-channel":
