@@ -61,6 +61,7 @@ class Volume:
         for i in range(args["batchSize"]):
             rowCoord, colCoord, label, augment_seed = self.coordinate_pool[self.train_index]
             zCoord = self.surfaceImage[rowCoord, colCoord] - args["surfaceCushion"]
+
             if args["useJitter"]:
                 zCoord = np.maximum(0, zCoord +  np.random.randint(args["jitterRange"][0], args["jitterRange"][1]))
 
@@ -71,14 +72,15 @@ class Volume:
                 continue
 
             sample = self.volume[rowCoord-rowStep:rowCoord+rowStep, colCoord-colStep:colCoord+colStep, zCoord:zCoord+args["z_Dimension"]]
+
             if args["addAugmentation"]:
                 sample = ops.augmentSample(args, sample, augment_seed)
+                # change the augment seed for the next time around
                 self.coordinate_pool[self.train_index][3] = (augment_seed+1) % 4
-            label_avg = self.groundTruth[rowCoord-rowStep:rowCoord+rowStep, colCoord-colStep:colCoord+colStep]
 
             trainingSamples[i, 0:sample.shape[0], 0:sample.shape[1], 0:sample.shape[2]] = sample
             groundTruth[i, label] = 1.0
-            self.trainingImage[rowCoord,colCoord] = int(65534/2) +  int((65534/2) * label)
+            self.trainingImage[rowCoord,colCoord] = int(65534/2) +  int((65534/2)*label)
             # if label_avg is greater than .9*255, then groundTruth=[0, 1]
             self.train_index += 1
 
@@ -273,8 +275,7 @@ class Volume:
     def savePrediction3D(self, args, iteration):
         # save individual pictures
         for d in range(args["predictDepth"]):
-            self.savePredictionImage(args, iteration, predictValues=self.predictionVolume[:,:,d], predictionName='ink-3d', depth=d)
-
+            self.savePredictionImage(args, iteration, predictValues=self.predictionVolume[:,:,d], predictionName='ink', depth=d)
         # save the average prediction across depths if depth is more than one
         if args["predictDepth"] > 1:
             self.savePredictionImage(args, iteration, predictValues = np.mean(self.predictionVolume, axis=2), predictionName='ink-average')
@@ -282,7 +283,10 @@ class Volume:
         # save the output for samples not trained on
         rowBounds, colBounds = ops.bounds(args, [self.volume.shape[0], self.volume.shape[1]], args["trainBounds"])
         self.predictionVolume[rowBounds[0]:rowBounds[1], colBounds[0]:colBounds[1]] = 0
-        self.savePredictionImage(args, iteration, predictValues = np.mean(self.predictionVolume, axis=2), predictionName='ink-average-no-train')
+        for d in range(args["predictDepth"]):
+            self.savePredictionImage(args, iteration, predictValues=self.predictionVolume[:,:,d], predictionName='ink-no-train', depth=d)
+        if args["predictDepth"] > 1:
+            self.savePredictionImage(args, iteration, predictValues = np.mean(self.predictionVolume, axis=2), predictionName='ink-average-no-train')
 
         # zero out the volume
         self.predictionVolume = np.zeros((self.volume.shape[0], self.volume.shape[1], args["predictDepth"]), dtype=np.float32)
@@ -303,7 +307,7 @@ class Volume:
             pass
 
         # save the ink and surface predictions
-        tiff.imsave(output_path + "{}/prediction-epoch{}-depth{}.tif".format(predictionName, iteration, depth), predictionImage)
+        tiff.imsave(output_path + "{}/prediction-iteration{}-depth{}.tif".format(predictionName, iteration, depth), predictionImage)
         tiff.imsave(output_path + "training-{}.tif".format(iteration), self.trainingImage)
 
         # zero them out for the next predictions
