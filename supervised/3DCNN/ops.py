@@ -8,6 +8,8 @@ import numpy as np
 import sys
 import pdb
 import datetime
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
 def graph(args, epoch, test_accs, test_losses, train_accs, train_losses, test_fps, train_fps):
@@ -114,6 +116,40 @@ def findRandomCoordinate(args, colBounds, rowBounds, groundTruth, surfaceImage, 
 
 
 
+def generateCoordinatePool(args, volume, rowBounds, colBounds, groundTruth):
+    coordinates = []
+    ink_count = 0
+    truth_label_value = np.iinfo(groundTruth.dtype).max
+    rowStep = int(args["y_Dimension"]/2)
+    colStep = int(args["x_Dimension"]/2)
+    surf_maxes = np.max(volume, axis=2)
+    for row in range(rowBounds[0], rowBounds[1]):
+        for col in range(colBounds[0], colBounds[1]):
+            if args["restrictSurface"] and np.min(surf_maxes[row-rowStep:row+rowStep, col-colStep:col+colStep]) < args["surfaceThresh"]:
+                continue
+            label_avg = np.mean(groundTruth[row-rowStep:row+rowStep, col-colStep:col+colStep])
+            if .1*truth_label_value < label_avg < .9*truth_label_value:
+                continue
+            label = int(label_avg / (.9*truth_label_value))
+            augment_seed = np.random.randint(4)
+            ink_count += label # 0 if less than .9
+            coordinates.append([row, col, label, augment_seed])
+
+    ink_portion = ink_count / len(coordinates)
+    print("Initial coordinate pool is {:.3f} ink samples, balancing...".format(ink_portion))
+
+    while ink_portion < .49:
+        # delete random non-ink samples until balanced
+        index = np.random.randint(len(coordinates))
+        if coordinates[index][2] == 0:
+            del(coordinates[index])
+            ink_portion = ink_count / len(coordinates)
+
+    print("Final pool coordinate is {:.3f} ink samples".format(ink_count / len(coordinates)))
+    return coordinates
+
+
+
 def getRandomBrick(args, volume, xCoordinate, yCoordinate):
     v_min = np.min(volume[yCoordinate, xCoordinate])
     v_max = np.max(volume[yCoordinate, xCoordinate])
@@ -125,28 +161,24 @@ def getRandomBrick(args, volume, xCoordinate, yCoordinate):
 
 
 
-def augmentSample(args, sample):
+def augmentSample(args, sample, seed=None):
     augmentedSample = sample
-    # ensure equal probability for each augmentation, including no augmentation
+    if seed is None:
+        seed = np.random.randint(4)
 
-    # for flip: original, flip left-right, flip up-down, or both
-    flip = np.random.randint(3)
-    if flip == 0:
+    # ensure equal probability for each augmentation, including no augmentation
+    # for flip: original, flip left-right, flip up-down, both, or none
+    if seed == 0:
         augmentedSample = np.flip(augmentedSample, axis=0)
-    elif flip == 1:
+    elif seed == 1:
         augmentedSample = np.flip(augmentedSample, axis=1)
-    elif flip == 2:
+    elif seed == 2:
         augmentedSample = np.flip(augmentedSample, axis=0)
         augmentedSample = np.flip(augmentedSample, axis=1)
+    #implicit: no flip if seed == 2
 
     # for rotate: original, rotate 90, rotate 180, or rotate 270
-    rotate = np.random.randint(4)
-    if rotate == 0:
-        augmentedSample = np.rot90(augmentedSample, k=1, axes=(0,1))
-    elif rotate == 1:
-        augmentedSample = np.rot90(augmentedSample, k=2, axes=(0,1))
-    elif rotate == 2:
-        augmentedSample = np.rot90(augmentedSample, k=3, axes=(0,1))
+    augmentedSample = np.rot90(augmentedSample, k=seed, axes=(0,1))
 
     return augmentedSample
 
