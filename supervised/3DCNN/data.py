@@ -34,6 +34,56 @@ class Volume:
         self.test_results, self.test_results_norm = [], []
         self.all_results, self.all_results_norm = [], []
 
+        self.coordinate_pool = []
+        self.train_index = 0
+        self.epoch = 0
+
+
+
+    def getTrainingBatch(self, args, bounds=3):
+        if len(self.coordinate_pool) == 0: # initialization
+            rowBounds, colBounds = ops.bounds(args, [self.volume.shape[0], self.volume.shape[1]], bounds)
+            self.coordinate_pool = ops.generateCoordinatePool(args, self.volume, rowBounds, colBounds, self.groundTruth)
+            np.random.shuffle(self.coordinate_pool)
+        if self.train_index + args["batchSize"] > len(self.coordinate_pool): # end of epoch
+            print("finished epoch")
+            self.train_index = 0
+            self.trainingImage = np.zeros(self.predictionImageInk.shape, dtype=np.uint16)
+            self.epoch += 1
+            np.random.shuffle(self.coordinate_pool)
+
+        trainingSamples = np.zeros((args["batchSize"], args["x_Dimension"], args["y_Dimension"], args["z_Dimension"]), dtype=np.float32)
+        groundTruth = np.zeros((args["batchSize"], args["n_Classes"]), dtype=np.float32)
+        rowStep = int(args["y_Dimension"]/2)
+        colStep = int(args["x_Dimension"]/2)
+
+        # populate the samples and labels
+        for i in range(args["batchSize"]):
+            rowCoord, colCoord, label, augment_seed = self.coordinate_pool[self.train_index]
+            zCoord = self.surfaceImage[rowCoord, colCoord] - args["surfaceCushion"]
+            if args["useJitter"]:
+                zCoord = np.maximum(0, zCoord +  np.random.randint(args["jitterRange"][0], args["jitterRange"][1]))
+
+            if args["addRandom"] and label < .1 and np.random.randint(args["randomStep"]) == 0:
+                # make this non-ink sample random data labeled as non-ink
+                sample = ops.getRandomBrick(args, self.volume, colCoord, rowCoord)
+                groundTruth[i] = [1.0,0.0]
+                continue
+
+            sample = self.volume[rowCoord-rowStep:rowCoord+rowStep, colCoord-colStep:colCoord+colStep, zCoord:zCoord+args["z_Dimension"]]
+            if args["addAugmentation"]:
+                sample = ops.augmentSample(args, sample, augment_seed)
+                self.coordinate_pool[self.train_index][3] = (augment_seed+1) % 4
+            label_avg = self.groundTruth[rowCoord-rowStep:rowCoord+rowStep, colCoord-colStep:colCoord+colStep]
+
+            trainingSamples[i, 0:sample.shape[0], 0:sample.shape[1], 0:sample.shape[2]] = sample
+            groundTruth[i, label] = 1.0
+            self.trainingImage[rowCoord,colCoord] = int(65534/2) +  int((65534/2) * label)
+            # if label_avg is greater than .9*255, then groundTruth=[0, 1]
+            self.train_index += 1
+
+        return trainingSamples, groundTruth, self.epoch
+
 
 
     def getTrainingSample(self, args, testSet=False, bounds=3):
@@ -44,9 +94,9 @@ class Volume:
         # restrict training to TOP portion by default
         # bounds parameters: 0=TOP || 1=RIGHT || 2=BOTTOM || 3=LEFT
         if testSet:
-            rowBounds, colBounds = ops.bounds(args, [self.volume.shape[0], self.volume.shape[1]], (bounds+2)%4)
+            rowBounds, colBounds = ops.bounds(args, [self.volume.shape[0], self.volume.shape[1]], (args["trainBounds"]+2)%4)
         else:
-            rowBounds, colBounds = ops.bounds(args, [self.volume.shape[0], self.volume.shape[1]], bounds)
+            rowBounds, colBounds = ops.bounds(args, [self.volume.shape[0], self.volume.shape[1]], args["trainBounds"])
 
 
         for i in range(args["numCubes"]):
@@ -58,9 +108,8 @@ class Volume:
                 groundTruth[i] = [1.0,0.0]
                 continue
 
-            jitter = np.random.randint(args["jitterRange"][0], args["jitterRange"][1])
             if args["useJitter"]:
-                zCoordinate = np.maximum(0, zCoordinate + jitter)
+                zCoordinate = np.maximum(0, zCoordinate +  np.random.randint(args["jitterRange"][0], args["jitterRange"][1]))
 
             sample = (self.volume[yCoordinate:yCoordinate+args["y_Dimension"], \
                         xCoordinate:xCoordinate+args["x_Dimension"], zCoordinate:zCoordinate+args["z_Dimension"]])
@@ -146,7 +195,7 @@ class Volume:
             zCoordinate = self.surfaceImage[rowCoordinate+int(args["y_Dimension"]/2), colCoordinate+int(args["x_Dimension"]/2)] - args["surfaceCushion"]
             if args["predictDepth"] > 1:
                 #TODO this z-mapping mapping will eventually be something more intelligent
-                zCoordinate += depthCoordinate
+                zCoordinate += (depthCoordinate * 4)
                 #zCoordinate = depthCoordinate * int((self.volume.shape[2] - args["z_Dimension"]) / args["predictDepth"])
 
             sample = (self.volume[rowCoordinate:rowCoordinate+args["y_Dimension"], \
@@ -226,8 +275,14 @@ class Volume:
         for d in range(args["predictDepth"]):
             self.savePredictionImage(args, iteration, predictValues=self.predictionVolume[:,:,d], predictionName='ink-3d', depth=d)
 
-        # save the average prediction
-        self.savePredictionImage(args, iteration, predictValues = np.mean(self.predictionVolume, axis=2), predictionName='ink-average')
+        # save the average prediction across depths if depth is more than one
+        if args["predictDepth"] > 1:
+            self.savePredictionImage(args, iteration, predictValues = np.mean(self.predictionVolume, axis=2), predictionName='ink-average')
+
+        # save the output for samples not trained on
+        rowBounds, colBounds = ops.bounds(args, [self.volume.shape[0], self.volume.shape[1]], args["trainBounds"])
+        self.predictionVolume[rowBounds[0]:rowBounds[1], colBounds[0]:colBounds[1]] = 0
+        self.savePredictionImage(args, iteration, predictValues = np.mean(self.predictionVolume, axis=2), predictionName='ink-average-no-train')
 
         # zero out the volume
         self.predictionVolume = np.zeros((self.volume.shape[0], self.volume.shape[1], args["predictDepth"]), dtype=np.float32)
@@ -249,14 +304,14 @@ class Volume:
 
         # save the ink and surface predictions
         tiff.imsave(output_path + "{}/prediction-epoch{}-depth{}.tif".format(predictionName, iteration, depth), predictionImage)
-        tiff.imsave(output_path + "training.tif", self.trainingImage)
+        tiff.imsave(output_path + "training-{}.tif".format(iteration), self.trainingImage)
 
         # zero them out for the next predictions
         self.predictionImageInk = np.zeros((self.volume.shape[0], self.volume.shape[1]), dtype=np.float32)
         self.predictionImageSurf = np.zeros((self.volume.shape[0], self.volume.shape[1]), dtype=np.float32)
 
 
-    def savePredictionMetrics(self, args, iteration):
+    def savePredictionMetrics(self, args, iteration, minutes):
         output_path = args["savePredictionFolder"]
         all_confusion = confusion_matrix(self.all_truth, self.all_preds)
         test_confusion = confusion_matrix(self.test_truth, self.test_preds)
@@ -272,9 +327,9 @@ class Volume:
         test_recall = recall_score(self.test_truth, self.test_preds)
 
         #save results in csv
-        column_names = 'iteration, true positive papyrus, false positive ink, false positive papyrus, true positive ink, precision, recall'
-        self.test_results_norm.append([iteration] + test_confusion_norm.reshape(4).tolist() + [test_precision] + [test_recall])
-        self.all_results_norm.append([iteration] + all_confusion_norm.reshape(4).tolist() + [all_precision] + [all_recall])
+        column_names = 'iteration, minutes, true positive papyrus, false positive ink, false positive papyrus, true positive ink, precision, recall'
+        self.test_results_norm.append([iteration] + [minutes] + test_confusion_norm.reshape(4).tolist() + [test_precision] + [test_recall])
+        self.all_results_norm.append([iteration] + [minutes] + all_confusion_norm.reshape(4).tolist() + [all_precision] + [all_recall])
         np.savetxt(output_path + "confusion-all.csv", self.all_results_norm, fmt='%1.4f', header=column_names, delimiter=',')
         np.savetxt(output_path + "confusion-test.csv", self.test_results_norm, fmt='%1.4f', header=column_names, delimiter=',')
 
