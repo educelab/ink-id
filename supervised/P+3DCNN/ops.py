@@ -2,6 +2,62 @@ import numpy as np
 import pdb
 import math
 import scipy.ndimage
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+
+def graph(args, iteration, test_accs, test_losses, train_accs, train_losses, test_fps, train_fps):
+    # n_values_in_session = int(args["predictStep"] / args["displayStep"])
+    # n_v = n_values_in_session
+    plt.figure(1)
+    plt.figure(figsize=(16,8))
+    plt.clf()
+    raw_loss = plt.subplot(321) # losses
+    plt.title("Losses")
+    axes = plt.gca()
+    axes.set_ylim([0,np.median(test_losses)+ 2*(np.std(test_losses))])
+    xs = np.arange(len(train_accs))
+    plt.plot(train_losses, 'k.')
+    plt.plot(test_losses, 'g.')
+    plt.subplot(322, sharey=raw_loss) # losses, best-fit
+    plt.title("Losses, fit")
+    #plt.plot(xs, np.poly1d(np.polyfit(xs, train_losses, 2))(xs), color='k')
+    #plt.plot(xs, np.poly1d(np.polyfit(xs, test_losses, 2))(xs), color='g')
+    plt.plot(xs, np.poly1d(np.polyfit(xs, train_losses, 1))(xs), color='k')
+    plt.plot(xs, np.poly1d(np.polyfit(xs, test_losses, 1))(xs), color='g')
+    # the line of best fit for the last training portion
+    #plt.plot(xs[:-n_v], np.poly1d(np.polyfit(xs[:-n_v], test_losses[:-n_v], 1))(xs[:-n_v]), color='g')
+    raw_acc = plt.subplot(323) # accuracies
+    plt.title("Accuracies")
+    plt.plot(train_accs, 'k.')
+    plt.plot(test_accs, 'g.')
+    plt.subplot(324, sharey=raw_acc)
+    plt.title("Accuracies, fit")
+    #plt.plot(xs, np.poly1d(np.polyfit(xs, train_accs, 2))(xs), color='k')
+    #plt.plot(xs, np.poly1d(np.polyfit(xs, test_accs, 2))(xs), color='g')
+    plt.plot(xs, np.poly1d(np.polyfit(xs, train_accs, 1))(xs), color='k')
+    plt.plot(xs, np.poly1d(np.polyfit(xs, test_accs, 1))(xs), color='g')
+    #plt.plot(xs[:-n_v], np.poly1d(np.polyfit(xs[:-n_v], test_accs[:-n_v], 1))(xs[:-n_v]), color='g')
+    raw_prec = plt.subplot(325) # false positives
+    plt.title("Ink Precision")
+    plt.plot(train_fps, 'k.')
+    plt.plot(test_fps, 'g.')
+    plt.subplot(326, sharey=raw_prec)
+    plt.title("Ink Precision, fit")
+    #plt.plot(xs, np.poly1d(np.polyfit(xs, train_fps, 2))(xs), color='k')
+    #plt.plot(xs, np.poly1d(np.polyfit(xs, test_fps, 2))(xs), color='g')
+    plt.plot(xs, np.poly1d(np.polyfit(xs, train_fps, 1))(xs), color='k')
+    plt.plot(xs, np.poly1d(np.polyfit(xs, test_fps, 1))(xs), color='g')
+    #plt.plot(xs[:-n_v], np.poly1d(np.polyfit(xs[:-n_v], test_fps[:-n_v], 1))(xs[:-n_v]), color='g')
+    plt.savefig(args["savePredictionPath"]+"plots-{}.png".format(iteration))
+    #plt.show()
+
+    np.savetxt(args["savePredictionPath"]+"test_accs.csv", test_accs, delimiter=",")
+    np.savetxt(args["savePredictionPath"]+"train_accs.csv", train_accs, delimiter=",")
+    np.savetxt(args["savePredictionPath"]+"test_losses.csv", test_losses, delimiter=",")
+    np.savetxt(args["savePredictionPath"]+"train_losses.csv", train_losses, delimiter=",")
+    np.savetxt(args["savePredictionPath"]+"test_precs.csv", test_fps, delimiter=",")
+    np.savetxt(args["savePredictionPath"]+"train_precs.csv", train_fps, delimiter=",")
 
 def edge(coordinate, subVolumeShape, shape):
     if coordinate < subVolumeShape: return True
@@ -100,3 +156,6 @@ def splice(sample, args):
     if sample.shape[2] != args["z_Dimension"]:
         sample = sample[:,:,0:args["z_Dimension"]]
     return sample
+
+# def customeReshape(args, batchX):
+#     num_batches = int(batchX.shape[0] / args["numVolumes"])

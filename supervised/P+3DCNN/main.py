@@ -4,9 +4,11 @@ import pdb
 import sys
 import json
 import matplotlib.pyplot as plt
+from sklearn.metrics import precision_score
 
 import data
 import model
+import ops
 
 args = {
     "trainingDataPath": "/home/volcart/volumes/packages/CarbonPhantom_MP_2017.volpkg/paths/all-cols/",
@@ -32,11 +34,12 @@ args = {
     "epochs": 2,
     "predictStep": 200000,
     "displayStep": 100,
-    "saveModelStep": 1,
+    "saveModelStep": 1000,
     "singleScanPath": "/home/volcart/volumes/packages/CarbonPhantom-Feb2017.volpkg/paths/20170221130948/layered/registered/layers/full-layers/after-rotate/",
     "experimentType": sys.argv[6],
     "scalingFactor": float(sys.argv[8]),
-    "randomTrainingSamples": False
+    "randomTrainingSamples": False,
+    "graphStep": 1000
 }
 
 with open(args["savePredictionPath"]+'info.txt', 'w') as outfile:
@@ -64,30 +67,23 @@ volume = data.Volume(args)
 
 with tf.Session() as sess:
     # train_writer = tf.summary.FileWriter('/tmp/tb/', sess.graph)
+    # saver.restore(sess, args["saveModelPath"]+"run1/model-epoch-10000.ckpt") # NOTE: uncomment and change path to restore a graph model
 
     init = tf.global_variables_initializer()
     sess.run(init)
-    # saver.restore(sess, args["saveModelPath"]+"run1/model-epoch-10000.ckpt") # NOTE: uncomment and change path to restore a graph model
     epoch = 1
 
-    avgOutputVolume = []
     train_accs = []
     train_losses = []
-    train_fps = []
+    train_precs = []
     test_accs = []
     test_losses = []
-    test_fps = []
+    test_precs = []
 
     test_coordinates = volume.getRandomTestCoordinates(args)
     testX, testY = volume.getSamples(args, test_coordinates)
 
     while epoch < args["epochs"]:
-
-        # if args["experimentType"] == "multipower-single-channel":
-        #     trainingSamples, groundTruth = volume.getTrainingSample_MultipowerSingleChannel(args)
-        # elif args["experimentType"] == "multipower-multinetwork":
-        #     trainingSamples, groundTruth = volume.getTrainingSample(args)
-
         coordinates = volume.getTrainingCoordinates(args)
         for i in range(0,coordinates.shape[0],args["batchSize"]):
             if i < (coordinates.shape[0] - args["batchSize"]):
@@ -102,49 +98,39 @@ with tf.Session() as sess:
                 test_acc = sess.run(accuracy, feed_dict={x:testX, y:testY, keep_prob: 1.0})
                 train_loss = sess.run(loss, feed_dict={x: batchX, y: batchY, keep_prob: 1.0})
                 test_loss = sess.run(loss, feed_dict={x: testX, y:testY, keep_prob: 1.0})
-                train_fp = sess.run(false_positives, feed_dict={x: batchX, y:batchY, keep_prob:1.0})
-                test_fp = sess.run(false_positives, feed_dict={x:testX, y:testY, keep_prob:1.0})
+                train_preds = sess.run(pred, feed_dict={x: batchX, keep_prob: 1.0})
+                test_preds = sess.run(pred, feed_dict={x: testX, y:testY, keep_prob:1.0})
+                train_prec = precision_score(np.argmax(batchY, 1), np.argmax(train_preds, 1))
+                test_prec = precision_score(np.argmax(testY, 1), np.argmax(test_preds, 1))
                 train_accs.append(train_acc)
                 test_accs.append(test_acc)
                 test_losses.append(test_loss)
                 train_losses.append(train_loss)
-                test_fps.append(test_fp / args["batchSize"])
-                train_fps.append(train_fp / args["batchSize"])
+                train_precs.append(train_prec)
+                test_precs.append(test_prec)
 
                 print("Epoch: {}\tIteration: {}\tTotal # iterations: {}".format(epoch, i, coordinates.shape[0]))
-                print("Train Loss: {:.3f}\tTrain Acc: {:.3f}\tFp: {}".format(train_loss, train_acc, train_fp))
-                print("Test Loss: {:.3f}\tTest Acc: {:.3f}\t\tFp: {}".format(test_loss, test_acc, test_fp))
+                print("Train Loss: {:.3f}\tTrain Acc: {:.3f}\tInk Precision: {:.3f}".format(train_loss, train_acc, train_precs[-1]))
+                print("Test Loss: {:.3f}\tTest Acc: {:.3f}\t\tInk Precision: {:.3f}".format(test_loss, test_acc, test_precs[-1]))
 
+            if i % (args["batchSize"] * args["graphStep"]) == 0 and i > 0:
+                ops.graph(args, i, test_accs, test_losses, train_accs, train_losses, test_precs, train_precs)
 
-        pdb.set_trace()
-        plt.figure(1)
-        plt.clf()
-        plt.subplot(311) # losses
-        axes = plt.gca()
-        axes.set_ylim([0,np.median(test_losses)+1])
-        xs = np.arange(len(train_accs))
-        plt.plot(train_losses, 'k.')
-        plt.plot(test_losses, 'g.')
-        plt.subplot(312) # accuracies
-        plt.plot(train_accs, 'k.')
-        plt.plot(xs, np.poly1d(np.polyfit(xs, train_accs, 1))(xs), color='k')
-        plt.plot(test_accs, 'g.')
-        plt.plot(xs, np.poly1d(np.polyfit(xs, test_accs, 1))(xs), color='g')
-        plt.subplot(313) # false positives
-        plt.plot(train_fps, 'k.')
-        plt.plot(test_fps, 'g.')
-        plt.savefig(args["savePredictionPath"]+"plots-{}.png".format(epoch))
-
-        # NOTE: uncomment to save model
-        if epoch % args["saveModelStep"] == 0 and epoch > 0:
-            save_path = saver.save(sess, args["saveModelPath"]+"model-epoch-"+str(epoch)+".ckpt")
-            print("Model saved in file: %s" % save_path)
+            # NOTE: uncomment/comment to save model
+            if i % (args["batchSize"] * args["saveModelStep"]) == 0 and epoch > 0:
+                save_path = saver.save(sess, args["saveModelPath"]+"model-epoch-"+str(epoch)+".ckpt")
+                print("Model saved in file: %s" % save_path)
 
         epoch = epoch + 1
 
 
     # NOTE ----------------------------
         # make a single prediction after training has completed
+
+    if args["experimentType"] == "multipower-single-channel":
+        volume.initPredictionImages(args, args["numVolumes"])
+    else:
+        volume.initPredictionImages(args, 1)
 
     coordinates = volume.getPredictionCoordinates()
     predictionValues = []
@@ -154,34 +140,20 @@ with tf.Session() as sess:
         else:
             batchX, batchY = volume.getSamples(args, coordinates[i:coordinates.shape[0],:])
 
-        predictionValues.append(sess.run(pred, feed_dict={x: batchX, keep_prob: 1.0}))
-
-    total_num_predictions = volume.totalPredictions(args)
-    startingCoordinates = [0,0,0]
-    count = 1
-
-    if args["experimentType"] == "multipower-single-channel":
-        volume.initPredictionImages(args)
-        predictionSamples, coordinates, nextCoordinates = volume.getPredictionSample_MultipowerSingleChannel(args, startingCoordinates)
-        while ((count-1)*args["predictBatchSize"]) < total_num_predictions:
-            print("Predicting cubes {} of {}".format((count * args["predictBatchSize"]), total_num_predictions))
+        if args["experimentType"] == "multipower-single-channel":
+            num_batches = int(batchX.shape[0] / args["numVolumes"])
+            batchX = batchX.reshape((num_batches, args["x_Dimension"], args["y_Dimension"], args["z_Dimension"], args["numVolumes"]))
+            # batchX = ops.customeReshape(args, batchX)
             predictionValues = []
-            for i in range(predictionSamples.shape[4]):
-                predictionValues.append(sess.run(pred, feed_dict={x: predictionSamples[:,:,:,:,i:i+1], keep_prob: 1.0}))
-            volume.reconstruct_MulipowerSingleChannel(args, predictionValues, coordinates)
-            predictionSamples, coordinates, nextCoordinates = volume.getPredictionSample_MultipowerSingleChannel(args, nextCoordinates)
-            count += 1
-            volume.savePredictionImages(args, epoch)
-        volume.savePredictionImages(args, epoch)
+            for j in range(batchX.shape[4]):
+                predictionValues.append(sess.run(pred, feed_dict={x: batchX[:,:,:,:,j:j+1], keep_prob: 1.0}))
+        else:
+            predictionValues = [sess.run(pred, feed_dict={x: batchX, keep_prob: 1.0})]
 
-    elif args["experimentType"] == "multipower-multinetwork":
-        volume.emptyPredictionImage(args)
-        predictionSamples, coordinates, nextCoordinates = volume.getPredictionSample_MultipowerSingleChannel(args, startingCoordinates)
-        while ((count-1)*args["predictBatchSize"]) < total_num_predictions:
-            print("Predicting cubes {} of {}".format((count * args["predictBatchSize"]), total_num_predictions))
-            predictionValues = sess.run(pred, feed_dict={x: predictionSamples, keep_prob: 1.0})
-            volume.reconstruct(args, predictionValues, coordinates)
-            predictionSamples, coordinates, nextCoordinates = volume.getPredictionSample_MultipowerSingleChannel(args, nextCoordinates)
-            count += 1
-            volume.savePredictionImage(args, epoch)
-        volume.savePredictionImage(args, epoch)
+        if i < (coordinates.shape[0] - args["batchSize"]):
+            volume.reconstruct(args, predictionValues, coordinates[i:i+args["batchSize"],:])
+        else:
+            volume.reconstruct(args, predictionValues, coordinates[i:coordinates.shape[0],:])
+
+        volume.savePredictionImages(args, epoch)
+        print("Predicting iteration: {}\t Total number of iterations: {}".format(i, coordinates.shape[0]))
