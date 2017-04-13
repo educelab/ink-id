@@ -48,23 +48,43 @@ class Volume:
         #     self.volume[i,:,:,:] = scipy.ndimage.interpolation.zoom(self.volume[i,:,:,:], args["scalingFactor"])
         # self.groundTruth = scipy.ndimage.interpolation.zoom(self.groundTruth, args["scalingFactor"])
 
-    def getEpochTrainingCoordinates(self, args, testSet=False, bounds=0):
+    def getTrainingCoordinates(self, args, bounds=0, shuffle=True):
         # bounds parameters: 0=TOP || 1=RIGHT || 2=BOTTOM || 3=LEFT
         if testSet:
             xBounds, yBounds = ops.bounds(args, [self.volume.shape[1], self.volume.shape[2]], (bounds+2)%4)
         else:
             xBounds, yBounds = ops.bounds(args, [self.volume.shape[1], self.volume.shape[2]], bounds)
 
-
         coordinates = []
         for x in range(xBounds[0], xBounds[1]):
             for y in range(yBounds[0], yBounds[1]):
                 coordinates.append([x,y])
 
-        np.random.shuffle(coordinates)
-        return coordinates
+        if shuffle:
+            np.random.shuffle(coordinates)
+        return np.array(coordinates)
 
-    def getEpochTrainingSamples(self, args, coordinates):
+    def getRandomTestCoordinates(self, args, bounds=0):
+        xBounds, yBounds = ops.bounds(args, [self.volume.shape[1], self.volume.shape[2]], (bounds+2)%4)
+        coordinates = []
+        for x in range(xBounds[0], xBounds[1]):
+            for y in range(yBounds[0], yBounds[1]):
+                coordinates.append([x,y])
+        np.random.shuffle(coordinates)
+        return np.array(coordinates)[0:args["batchSize"],:]
+
+    def getPredictionCoordinates(self):
+        x_resolution = self.volume.shape[1]
+        y_resolution = self.volume.shape[2]
+
+        coordinates = []
+        for x in x_resolution:
+            for y in y_resolution:
+                coordinates.append([x,y])
+
+        return np.array(coordinates)
+
+    def getSamples(self, args, coordinates):
         trainingSamples = []
         groundTruth = []
 
@@ -113,108 +133,115 @@ class Volume:
             if args["experimentType"] == "multipower-single-channel":
                 for j in range(self.volume.shape[0]):
                     groundTruth.append(gt)
-                return np.reshape(np.array(trainingSamples), (args["batchSize"], args["x_Dimension"], args["y_Dimension"], args["z_Dimension"], args["numChannels"])), np.array(groundTruth)
             else:
                 groundTruth.append(gt)
-                return np.transpose(np.array(trainingSamples), (0, 2, 3, 4, 1)), np.array(groundTruth)
 
-    def getRandomTrainingSample(self, args, testSet=False, bounds=0):
-        # grab training sample at random
-
-        # bounds parameters: 0=TOP || 1=RIGHT || 2=BOTTOM || 3=LEFT
-        if testSet:
-            xBounds, yBounds = ops.bounds(args, [self.volume.shape[1], self.volume.shape[2]], (bounds+2)%4)
+        if args["experimentType"] == "multipower-single-channel":
+            return np.reshape(np.array(trainingSamples), (args["batchSize"], args["x_Dimension"], args["y_Dimension"], args["z_Dimension"], args["numChannels"])), np.array(groundTruth)
         else:
-            xBounds, yBounds = ops.bounds(args, [self.volume.shape[1], self.volume.shape[2]], bounds)
+            return np.transpose(np.array(trainingSamples), (0, 2, 3, 4, 1)), np.array(groundTruth)
 
-        trainingSamples = []
-        groundTruth = []
 
-        for i in range(args["batchSize"]):
-            xCoordinate, yCoordinate, zCoordinate, label_avg = ops.findRandomCoordinates(args, xBounds, yBounds, self.volume, self.groundTruth)
-            xCoordinate2 = int(xCoordinate + math.ceil(float(args["x_Dimension"]) * float(1/args["scalingFactor"])))
-            yCoordinate2 = int(yCoordinate + math.ceil(float(args["y_Dimension"]) * float(1/args["scalingFactor"])))
-            zCoordinate2 = int(zCoordinate + math.ceil(float(args["z_Dimension"]) * float(1/args["scalingFactor"])))
-
-            spectralSamples = []
-            x = math.ceil(args["x_Dimension"]/args["scalingFactor"])
-            y = math.ceil(args["y_Dimension"]/args["scalingFactor"])
-            if ops.edge(xCoordinate, x, self.volume.shape[1]) or ops.edge(yCoordinate, y, self.volume.shape[2]):
-                for j in range(self.volume.shape[0]):
-                    sample = ops.findEdgeSubVolume(args, xCoordinate, xCoordinate2, yCoordinate, yCoordinate2, zCoordinate, zCoordinate2, self.volume, j)
-                    spectralSamples.append(sample)
-            else:
-                for j in range(self.volume.shape[0]):
-                    sample = self.volume[j, xCoordinate:xCoordinate2, \
-                                yCoordinate:yCoordinate2, zCoordinate:zCoordinate2]
-                    sample = scipy.ndimage.interpolation.zoom(sample, args["scalingFactor"])
-                    sample = ops.splice(sample, args)
-                    spectralSamples.append(sample)
-
-            trainingSamples.append(spectralSamples)
-
-            no_ink = len(np.where(self.groundTruth[xCoordinate:xCoordinate+args["x_Dimension"], \
-                        yCoordinate:yCoordinate+args["y_Dimension"]] == 0)[0])
-            ink = len(np.where(self.groundTruth[xCoordinate:xCoordinate+args["x_Dimension"], \
-                        yCoordinate:yCoordinate+args["y_Dimension"]] == 255)[0])
-
-            classification = np.argmax([no_ink, ink])
-            gt = [0,0]
-            gt[classification] = 1.0
-            groundTruth.append(gt)
-
-        return np.transpose(np.array(trainingSamples), (0, 2, 3, 4, 1)), np.array(groundTruth)
-
-    def getRandomTrainingSample_MultipowerSingleChannel(self, args, testSet=False, bounds=0):
-        # bounds parameters: 0=TOP || 1=RIGHT || 2=BOTTOM || 3=LEFT
-        if testSet:
-            xBounds, yBounds = ops.bounds(args, [self.volume.shape[1], self.volume.shape[2]], (bounds+2)%4)
-        else:
-            xBounds, yBounds = ops.bounds(args, [self.volume.shape[1], self.volume.shape[2]], bounds)
-
-        trainingSamples = []
-        groundTruth = []
-
-        while len(trainingSamples) < args["batchSize"]:
-            xCoordinate, yCoordinate, zCoordinate, label_avg = ops.findRandomCoordinates(args, xBounds, yBounds, self.volume, self.groundTruth)
-            xCoordinate2 = int(xCoordinate + math.ceil(float(args["x_Dimension"]) * float(1/args["scalingFactor"])))
-            yCoordinate2 = int(yCoordinate + math.ceil(float(args["y_Dimension"]) * float(1/args["scalingFactor"])))
-            zCoordinate2 = int(zCoordinate + math.ceil(float(args["z_Dimension"]) * float(1/args["scalingFactor"])))
-
-            x = math.ceil(args["x_Dimension"]/args["scalingFactor"])
-            y = math.ceil(args["y_Dimension"]/args["scalingFactor"])
-            if ops.edge(xCoordinate, x, self.volume.shape[1]) or ops.edge(yCoordinate, y, self.volume.shape[2]):
-                for j in range(self.volume.shape[0]):
-                    sample = ops.findEdgeSubVolume(args, xCoordinate, xCoordinate2, yCoordinate, yCoordinate2, zCoordinate, zCoordinate2, self.volume, j)
-                    trainingSamples.append(sample)
-            else:
-                for j in range(self.volume.shape[0]):
-                    sample = self.volume[j, xCoordinate:xCoordinate2, \
-                                yCoordinate:yCoordinate2, zCoordinate:zCoordinate2]
-                    sample = scipy.ndimage.interpolation.zoom(sample, args["scalingFactor"])
-                    sample = ops.splice(sample, args)
-                    trainingSamples.append(sample)
-
-            no_ink = len(np.where(self.groundTruth[xCoordinate:xCoordinate+args["x_Dimension"], \
-                        yCoordinate:yCoordinate+args["y_Dimension"]] == 0)[0])
-            ink = len(np.where(self.groundTruth[xCoordinate:xCoordinate+args["x_Dimension"], \
-                        yCoordinate:yCoordinate+args["y_Dimension"]] == 255)[0])
-
-            classification = np.argmax([no_ink, ink])
-            gt = [0,0]
-            gt[classification] = 1.0
-            for j in range(self.volume.shape[0]):
-                groundTruth.append(gt)
-
-        return np.reshape(np.array(trainingSamples), (args["batchSize"], args["x_Dimension"], args["y_Dimension"], args["z_Dimension"], args["numChannels"])), np.array(groundTruth)
-        # return np.expand_dims(np.array(trainingSamples), axis=4)
+    # def getRandomTrainingSample(self, args, testSet=False, bounds=0):
+    #     # grab training sample at random
+    #
+    #     # bounds parameters: 0=TOP || 1=RIGHT || 2=BOTTOM || 3=LEFT
+    #     if testSet:
+    #         xBounds, yBounds = ops.bounds(args, [self.volume.shape[1], self.volume.shape[2]], (bounds+2)%4)
+    #     else:
+    #         xBounds, yBounds = ops.bounds(args, [self.volume.shape[1], self.volume.shape[2]], bounds)
+    #
+    #     trainingSamples = []
+    #     groundTruth = []
+    #
+    #     for i in range(args["batchSize"]):
+    #         xCoordinate, yCoordinate, zCoordinate, label_avg = ops.findRandomCoordinates(args, xBounds, yBounds, self.volume, self.groundTruth)
+    #         xCoordinate2 = int(xCoordinate + math.ceil(float(args["x_Dimension"]) * float(1/args["scalingFactor"])))
+    #         yCoordinate2 = int(yCoordinate + math.ceil(float(args["y_Dimension"]) * float(1/args["scalingFactor"])))
+    #         zCoordinate2 = int(zCoordinate + math.ceil(float(args["z_Dimension"]) * float(1/args["scalingFactor"])))
+    #
+    #         spectralSamples = []
+    #         x = math.ceil(args["x_Dimension"]/args["scalingFactor"])
+    #         y = math.ceil(args["y_Dimension"]/args["scalingFactor"])
+    #         if ops.edge(xCoordinate, x, self.volume.shape[1]) or ops.edge(yCoordinate, y, self.volume.shape[2]):
+    #             for j in range(self.volume.shape[0]):
+    #                 sample = ops.findEdgeSubVolume(args, xCoordinate, xCoordinate2, yCoordinate, yCoordinate2, zCoordinate, zCoordinate2, self.volume, j)
+    #                 spectralSamples.append(sample)
+    #         else:
+    #             for j in range(self.volume.shape[0]):
+    #                 sample = self.volume[j, xCoordinate:xCoordinate2, \
+    #                             yCoordinate:yCoordinate2, zCoordinate:zCoordinate2]
+    #                 sample = scipy.ndimage.interpolation.zoom(sample, args["scalingFactor"])
+    #                 sample = ops.splice(sample, args)
+    #                 spectralSamples.append(sample)
+    #
+    #         trainingSamples.append(spectralSamples)
+    #
+    #         no_ink = len(np.where(self.groundTruth[xCoordinate:xCoordinate+args["x_Dimension"], \
+    #                     yCoordinate:yCoordinate+args["y_Dimension"]] == 0)[0])
+    #         ink = len(np.where(self.groundTruth[xCoordinate:xCoordinate+args["x_Dimension"], \
+    #                     yCoordinate:yCoordinate+args["y_Dimension"]] == 255)[0])
+    #
+    #         classification = np.argmax([no_ink, ink])
+    #         gt = [0,0]
+    #         gt[classification] = 1.0
+    #         groundTruth.append(gt)
+    #
+    #     return np.transpose(np.array(trainingSamples), (0, 2, 3, 4, 1)), np.array(groundTruth)
+    #
+    # def getRandomTrainingSample_MultipowerSingleChannel(self, args, testSet=False, bounds=0):
+    #     # bounds parameters: 0=TOP || 1=RIGHT || 2=BOTTOM || 3=LEFT
+    #     if testSet:
+    #         xBounds, yBounds = ops.bounds(args, [self.volume.shape[1], self.volume.shape[2]], (bounds+2)%4)
+    #     else:
+    #         xBounds, yBounds = ops.bounds(args, [self.volume.shape[1], self.volume.shape[2]], bounds)
+    #
+    #     trainingSamples = []
+    #     groundTruth = []
+    #
+    #     while len(trainingSamples) < args["batchSize"]:
+    #         xCoordinate, yCoordinate, zCoordinate, label_avg = ops.findRandomCoordinates(args, xBounds, yBounds, self.volume, self.groundTruth)
+    #         xCoordinate2 = int(xCoordinate + math.ceil(float(args["x_Dimension"]) * float(1/args["scalingFactor"])))
+    #         yCoordinate2 = int(yCoordinate + math.ceil(float(args["y_Dimension"]) * float(1/args["scalingFactor"])))
+    #         zCoordinate2 = int(zCoordinate + math.ceil(float(args["z_Dimension"]) * float(1/args["scalingFactor"])))
+    #
+    #         x = math.ceil(args["x_Dimension"]/args["scalingFactor"])
+    #         y = math.ceil(args["y_Dimension"]/args["scalingFactor"])
+    #         if ops.edge(xCoordinate, x, self.volume.shape[1]) or ops.edge(yCoordinate, y, self.volume.shape[2]):
+    #             for j in range(self.volume.shape[0]):
+    #                 sample = ops.findEdgeSubVolume(args, xCoordinate, xCoordinate2, yCoordinate, yCoordinate2, zCoordinate, zCoordinate2, self.volume, j)
+    #                 trainingSamples.append(sample)
+    #         else:
+    #             for j in range(self.volume.shape[0]):
+    #                 sample = self.volume[j, xCoordinate:xCoordinate2, \
+    #                             yCoordinate:yCoordinate2, zCoordinate:zCoordinate2]
+    #                 sample = scipy.ndimage.interpolation.zoom(sample, args["scalingFactor"])
+    #                 sample = ops.splice(sample, args)
+    #                 trainingSamples.append(sample)
+    #
+    #         no_ink = len(np.where(self.groundTruth[xCoordinate:xCoordinate+args["x_Dimension"], \
+    #                     yCoordinate:yCoordinate+args["y_Dimension"]] == 0)[0])
+    #         ink = len(np.where(self.groundTruth[xCoordinate:xCoordinate+args["x_Dimension"], \
+    #                     yCoordinate:yCoordinate+args["y_Dimension"]] == 255)[0])
+    #
+    #         classification = np.argmax([no_ink, ink])
+    #         gt = [0,0]
+    #         gt[classification] = 1.0
+    #         for j in range(self.volume.shape[0]):
+    #             groundTruth.append(gt)
+    #
+    #     return np.reshape(np.array(trainingSamples), (args["batchSize"], args["x_Dimension"], args["y_Dimension"], args["z_Dimension"], args["numChannels"])), np.array(groundTruth)
+    #     # return np.expand_dims(np.array(trainingSamples), axis=4)
 
     def getPredictionSample(self, args, startingCoordinates):
         xCoordinate = startingCoordinates[0]
         yCoordinate = startingCoordinates[1]
         zCoordinate = startingCoordinates[2]
 
-        predictionSamples = np.zeros((args["predictBatchSize"], args["numChannels"], args["x_Dimension"], args["y_Dimension"], args["z_Dimension"]), dtype=np.float32)
+        if args["experimentType"] == "multipower-single-channel":
+            predictionSamples = np.zeros((args["predictBatchSize"], args["numVolumes"], args["x_Dimension"], args["y_Dimension"], args["z_Dimension"]), dtype=np.float32)
+        else:
+            predictionSamples = np.zeros((args["predictBatchSize"], args["numChannels"], args["x_Dimension"], args["y_Dimension"], args["z_Dimension"]), dtype=np.float32)
         coordinates = np.zeros((args["predictBatchSize"], 2), dtype=np.int)
         count = 0
         while count < args["predictBatchSize"]:
@@ -252,48 +279,48 @@ class Volume:
 
         return np.transpose(predictionSamples, (0,2,3,4,1)), coordinates, [xCoordinate, yCoordinate, zCoordinate]
 
-    def getPredictionSample_MultipowerSingleChannel(self, args, startingCoordinates):
-        xCoordinate = startingCoordinates[0]
-        yCoordinate = startingCoordinates[1]
-        zCoordinate = startingCoordinates[2]
-
-        predictionSamples = np.zeros((args["predictBatchSize"], args["numVolumes"], args["x_Dimension"], args["y_Dimension"], args["z_Dimension"]), dtype=np.float32)
-        coordinates = np.zeros((args["predictBatchSize"], 2), dtype=np.int)
-        count = 0
-        while count < args["predictBatchSize"]:
-            if xCoordinate > self.volume.shape[1]:
-                xCoordinate = 0
-                yCoordinate += args["stride"]
-            if yCoordinate > self.volume.shape[2]:
-                # yCoordinate = 0
-                break
-
-            xCoordinate2 = int(xCoordinate + math.ceil(float(args["x_Dimension"]) * float(1/args["scalingFactor"])))
-            yCoordinate2 = int(yCoordinate + math.ceil(float(args["y_Dimension"]) * float(1/args["scalingFactor"])))
-            zCoordinate2 = int(zCoordinate + math.ceil(float(args["z_Dimension"]) * float(1/args["scalingFactor"])))
-
-            spectralSamples = []
-            x = math.ceil(args["x_Dimension"]/args["scalingFactor"])
-            y = math.ceil(args["y_Dimension"]/args["scalingFactor"])
-            if ops.edge(xCoordinate, x, self.volume.shape[1]) or ops.edge(yCoordinate, y, self.volume.shape[2]):
-                for i in range(self.volume.shape[0]):
-                    sample = ops.findEdgeSubVolume(args, xCoordinate, xCoordinate2, yCoordinate, yCoordinate2, zCoordinate, zCoordinate2, self.volume, i)
-                    spectralSamples.append(sample)
-            else:
-                for i in range(self.volume.shape[0]):
-                    sample = self.volume[i, xCoordinate:xCoordinate2, \
-                                yCoordinate:yCoordinate2, zCoordinate:zCoordinate2]
-                    sample = scipy.ndimage.interpolation.zoom(sample, args["scalingFactor"])
-                    sample = ops.splice(sample, args)
-                    spectralSamples.append(sample)
-
-            predictionSamples[count,:,:,:,:] = spectralSamples
-            coordinates[count] = [xCoordinate, yCoordinate]
-
-            xCoordinate += args["stride"]
-            count += 1
-
-        return np.transpose(predictionSamples, (0,2,3,4,1)), coordinates, [xCoordinate, yCoordinate, zCoordinate]
+    # def getPredictionSample_MultipowerSingleChannel(self, args, startingCoordinates):
+    #     xCoordinate = startingCoordinates[0]
+    #     yCoordinate = startingCoordinates[1]
+    #     zCoordinate = startingCoordinates[2]
+    #
+    #     predictionSamples = np.zeros((args["predictBatchSize"], args["numVolumes"], args["x_Dimension"], args["y_Dimension"], args["z_Dimension"]), dtype=np.float32)
+    #     coordinates = np.zeros((args["predictBatchSize"], 2), dtype=np.int)
+    #     count = 0
+    #     while count < args["predictBatchSize"]:
+    #         if xCoordinate > self.volume.shape[1]:
+    #             xCoordinate = 0
+    #             yCoordinate += args["stride"]
+    #         if yCoordinate > self.volume.shape[2]:
+    #             # yCoordinate = 0
+    #             break
+    #
+    #         xCoordinate2 = int(xCoordinate + math.ceil(float(args["x_Dimension"]) * float(1/args["scalingFactor"])))
+    #         yCoordinate2 = int(yCoordinate + math.ceil(float(args["y_Dimension"]) * float(1/args["scalingFactor"])))
+    #         zCoordinate2 = int(zCoordinate + math.ceil(float(args["z_Dimension"]) * float(1/args["scalingFactor"])))
+    #
+    #         spectralSamples = []
+    #         x = math.ceil(args["x_Dimension"]/args["scalingFactor"])
+    #         y = math.ceil(args["y_Dimension"]/args["scalingFactor"])
+    #         if ops.edge(xCoordinate, x, self.volume.shape[1]) or ops.edge(yCoordinate, y, self.volume.shape[2]):
+    #             for i in range(self.volume.shape[0]):
+    #                 sample = ops.findEdgeSubVolume(args, xCoordinate, xCoordinate2, yCoordinate, yCoordinate2, zCoordinate, zCoordinate2, self.volume, i)
+    #                 spectralSamples.append(sample)
+    #         else:
+    #             for i in range(self.volume.shape[0]):
+    #                 sample = self.volume[i, xCoordinate:xCoordinate2, \
+    #                             yCoordinate:yCoordinate2, zCoordinate:zCoordinate2]
+    #                 sample = scipy.ndimage.interpolation.zoom(sample, args["scalingFactor"])
+    #                 sample = ops.splice(sample, args)
+    #                 spectralSamples.append(sample)
+    #
+    #         predictionSamples[count,:,:,:,:] = spectralSamples
+    #         coordinates[count] = [xCoordinate, yCoordinate]
+    #
+    #         xCoordinate += args["stride"]
+    #         count += 1
+    #
+    #     return np.transpose(predictionSamples, (0,2,3,4,1)), coordinates, [xCoordinate, yCoordinate, zCoordinate]
 
     def totalPredictions(self, args):
         xSlides = (self.volume.shape[1] - args["x_Dimension"]) / args["stride"]

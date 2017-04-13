@@ -3,6 +3,7 @@ import numpy as np
 import pdb
 import sys
 import json
+import matplotlib.pyplot as plt
 
 import data
 import model
@@ -34,7 +35,8 @@ args = {
     "saveModelStep": 1,
     "singleScanPath": "/home/volcart/volumes/packages/CarbonPhantom-Feb2017.volpkg/paths/20170221130948/layered/registered/layers/full-layers/after-rotate/",
     "experimentType": sys.argv[6],
-    "scalingFactor": float(sys.argv[8])
+    "scalingFactor": float(sys.argv[8]),
+    "randomTrainingSamples": False
 }
 
 with open(args["savePredictionPath"]+'info.txt', 'w') as outfile:
@@ -75,7 +77,9 @@ with tf.Session() as sess:
     test_accs = []
     test_losses = []
     test_fps = []
-    testX, testY = volume.getRandomTrainingSample(args, testSet=True)
+
+    test_coordinates = volume.getRandomTestCoordinates(args)
+    testX, testY = volume.getSamples(args, test_coordinates)
 
     while epoch < args["epochs"]:
 
@@ -84,10 +88,12 @@ with tf.Session() as sess:
         # elif args["experimentType"] == "multipower-multinetwork":
         #     trainingSamples, groundTruth = volume.getTrainingSample(args)
 
-        coordinates = np.array(volume.getEpochTrainingCoordinates(args))
-        pdb.set_trace()
+        coordinates = volume.getTrainingCoordinates(args)
         for i in range(0,coordinates.shape[0],args["batchSize"]):
-            batchX, batchY = volume.getEpochTrainingSamples(args, coordinates[i:i+args["batchSize"],:])
+            if i < (coordinates.shape[0] - args["batchSize"]):
+                batchX, batchY = volume.getSamples(args, coordinates[i:i+args["batchSize"],:])
+            else:
+                batchX, batchY = volume.getSamples(args, coordinates[i:coordinates.shape[0],:])
             sess.run(optimizer, feed_dict={x: batchX, y: batchY, keep_prob: args["dropout"]})
 
             if i % (args["batchSize"] * 5) == 0:
@@ -110,6 +116,7 @@ with tf.Session() as sess:
                 print("Test Loss: {:.3f}\tTest Acc: {:.3f}\t\tFp: {}".format(test_loss, test_acc, test_fp))
 
 
+        pdb.set_trace()
         plt.figure(1)
         plt.clf()
         plt.subplot(311) # losses
@@ -126,40 +133,7 @@ with tf.Session() as sess:
         plt.subplot(313) # false positives
         plt.plot(train_fps, 'k.')
         plt.plot(test_fps, 'g.')
-        plt.savefig(args["savePredictionFolder"]+"plots-{}.png".format(epoch))
-
-        # if epoch % args["predictStep"] == 0 and epoch > 0:
-        #
-        #     total_num_predictions = volume.totalPredictions(args)
-        #     startingCoordinates = [0,0,0]
-        #     count = 1
-        #
-        #     if args["experimentType"] == "multipower-single-channel":
-        #         volume.initPredictionImages(args)
-        #         predictionSamples, coordinates, nextCoordinates = volume.getPredictionSample_MultipowerSingleChannel(args, startingCoordinates)
-        #         while ((count-1)*args["predictBatchSize"]) < total_num_predictions:
-        #             print("Predicting cubes {} of {}".format((count * args["predictBatchSize"]), total_num_predictions))
-        #             predictionValues = []
-        #             for i in range(predictionSamples.shape[4]):
-        #                 predictionValues.append(sess.run(pred, feed_dict={x: predictionSamples[:,:,:,:,i:i+1], keep_prob: 1.0}))
-        #             volume.reconstruct_MulipowerSingleChannel(args, predictionValues, coordinates)
-        #             predictionSamples, coordinates, nextCoordinates = volume.getPredictionSample_MultipowerSingleChannel(args, nextCoordinates)
-        #             count += 1
-        #             volume.savePredictionImages(args, epoch)
-        #         volume.savePredictionImages(args, epoch)
-        #
-        #     elif args["experimentType"] == "multipower-multinetwork":
-        #         volume.emptyPredictionImage(args)
-        #         predictionSamples, coordinates, nextCoordinates = volume.getPredictionSample_MultipowerSingleChannel(args, startingCoordinates)
-        #         while ((count-1)*args["predictBatchSize"]) < total_num_predictions:
-        #             print("Predicting cubes {} of {}".format((count * args["predictBatchSize"]), total_num_predictions))
-        #             predictionValues = sess.run(pred, feed_dict={x: predictionSamples, keep_prob: 1.0})
-        #             volume.reconstruct(args, predictionValues, coordinates)
-        #             predictionSamples, coordinates, nextCoordinates = volume.getPredictionSample_MultipowerSingleChannel(args, nextCoordinates)
-        #             count += 1
-        #             volume.savePredictionImage(args, epoch)
-        #         volume.savePredictionImage(args, epoch)
-
+        plt.savefig(args["savePredictionPath"]+"plots-{}.png".format(epoch))
 
         # NOTE: uncomment to save model
         if epoch % args["saveModelStep"] == 0 and epoch > 0:
@@ -171,6 +145,16 @@ with tf.Session() as sess:
 
     # NOTE ----------------------------
         # make a single prediction after training has completed
+
+    coordinates = volume.getPredictionCoordinates()
+    predictionValues = []
+    for i in range(0,coordinates.shape[0],args["batchSize"]):
+        if i < (coordinates.shape[0] - args["batchSize"]):
+            batchX, batchY = volume.getSamples(args, coordinates[i:i+args["batchSize"],:])
+        else:
+            batchX, batchY = volume.getSamples(args, coordinates[i:coordinates.shape[0],:])
+
+        predictionValues.append(sess.run(pred, feed_dict={x: batchX, keep_prob: 1.0}))
 
     total_num_predictions = volume.totalPredictions(args)
     startingCoordinates = [0,0,0]

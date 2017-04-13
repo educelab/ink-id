@@ -34,6 +34,8 @@ experimentTypes = ["multipower-single-channel", "multipower-multinetwork"]
 scalingFactors = [1, 1.8, 5]
 
 crop = [[456, 825], [66, 1404]]
+crop = [[456, 460], [66, 166]]
+
 
 # command = str(crop[0][0]) + " " + str(crop[0][1]) + " " + str(crop[1][0]) + " " + str(crop[1][1]) + " " + paths[0] + " " + experimentTypes[0] +\
 #     " " + paths[0] + " " + str(scalingFactors[0])
