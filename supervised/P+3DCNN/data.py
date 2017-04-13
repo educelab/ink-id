@@ -48,7 +48,77 @@ class Volume:
         #     self.volume[i,:,:,:] = scipy.ndimage.interpolation.zoom(self.volume[i,:,:,:], args["scalingFactor"])
         # self.groundTruth = scipy.ndimage.interpolation.zoom(self.groundTruth, args["scalingFactor"])
 
-    def getTrainingSample(self, args, testSet=False, bounds=0):
+    def getEpochTrainingCoordinates(self, args, testSet=False, bounds=0):
+        # bounds parameters: 0=TOP || 1=RIGHT || 2=BOTTOM || 3=LEFT
+        if testSet:
+            xBounds, yBounds = ops.bounds(args, [self.volume.shape[1], self.volume.shape[2]], (bounds+2)%4)
+        else:
+            xBounds, yBounds = ops.bounds(args, [self.volume.shape[1], self.volume.shape[2]], bounds)
+
+
+        coordinates = []
+        for x in range(xBounds[0], xBounds[1]):
+            for y in range(yBounds[0], yBounds[1]):
+                coordinates.append([x,y])
+
+        np.random.shuffle(coordinates)
+        return coordinates
+
+    def getEpochTrainingSamples(self, args, coordinates):
+        trainingSamples = []
+        groundTruth = []
+
+        for i in range(coordinates.shape[0]):
+
+            xCoordinate = coordinates[i][0]
+            yCoordinate = coordinates[i][1]
+            zCoordinate = 0
+            xCoordinate2 = int(xCoordinate + math.ceil(float(args["x_Dimension"]) * float(1/args["scalingFactor"])))
+            yCoordinate2 = int(yCoordinate + math.ceil(float(args["y_Dimension"]) * float(1/args["scalingFactor"])))
+            zCoordinate2 = int(zCoordinate + math.ceil(float(args["z_Dimension"]) * float(1/args["scalingFactor"])))
+
+            spectralSamples = []
+            x = math.ceil(args["x_Dimension"]/args["scalingFactor"])
+            y = math.ceil(args["y_Dimension"]/args["scalingFactor"])
+            if ops.edge(xCoordinate, x, self.volume.shape[1]) or ops.edge(yCoordinate, y, self.volume.shape[2]):
+                for j in range(self.volume.shape[0]):
+                    sample = ops.findEdgeSubVolume(args, xCoordinate, xCoordinate2, yCoordinate, yCoordinate2, zCoordinate, zCoordinate2, self.volume, j)
+                    if args["experimentType"] == "multipower-single-channel":
+                        trainingSamples.append(sample)
+                    else:
+                        spectralSamples.append(sample)
+            else:
+                for j in range(self.volume.shape[0]):
+                    sample = self.volume[j, xCoordinate:xCoordinate2, \
+                                yCoordinate:yCoordinate2, zCoordinate:zCoordinate2]
+                    sample = scipy.ndimage.interpolation.zoom(sample, args["scalingFactor"])
+                    sample = ops.splice(sample, args)
+                    if args["experimentType"] == "multipower-single-channel":
+                        trainingSamples.append(sample)
+                    else:
+                        spectralSamples.append(sample)
+
+            if args["experimentType"] != "multipower-single-channel":
+                trainingSamples.append(spectralSamples)
+
+            no_ink = len(np.where(self.groundTruth[xCoordinate:xCoordinate+args["x_Dimension"], \
+                        yCoordinate:yCoordinate+args["y_Dimension"]] == 0)[0])
+            ink = len(np.where(self.groundTruth[xCoordinate:xCoordinate+args["x_Dimension"], \
+                        yCoordinate:yCoordinate+args["y_Dimension"]] == 255)[0])
+
+            gt = [0,0]
+            classification = np.argmax([no_ink, ink])
+            gt[classification] = 1.0
+
+            if args["experimentType"] == "multipower-single-channel":
+                for j in range(self.volume.shape[0]):
+                    groundTruth.append(gt)
+                return np.reshape(np.array(trainingSamples), (args["batchSize"], args["x_Dimension"], args["y_Dimension"], args["z_Dimension"], args["numChannels"])), np.array(groundTruth)
+            else:
+                groundTruth.append(gt)
+                return np.transpose(np.array(trainingSamples), (0, 2, 3, 4, 1)), np.array(groundTruth)
+
+    def getRandomTrainingSample(self, args, testSet=False, bounds=0):
         # grab training sample at random
 
         # bounds parameters: 0=TOP || 1=RIGHT || 2=BOTTOM || 3=LEFT
@@ -95,7 +165,7 @@ class Volume:
 
         return np.transpose(np.array(trainingSamples), (0, 2, 3, 4, 1)), np.array(groundTruth)
 
-    def getTrainingSample_MultipowerSingleChannel(self, args, testSet=False, bounds=0):
+    def getRandomTrainingSample_MultipowerSingleChannel(self, args, testSet=False, bounds=0):
         # bounds parameters: 0=TOP || 1=RIGHT || 2=BOTTOM || 3=LEFT
         if testSet:
             xBounds, yBounds = ops.bounds(args, [self.volume.shape[1], self.volume.shape[2]], (bounds+2)%4)

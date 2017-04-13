@@ -23,15 +23,15 @@ args = {
     "y_Dimension": 25,
     "z_Dimension": 71,
     "stride": 1,
-    "predictBatchSize": 120, # NOTE: for multipower single channel, this must be a multiple of numVolumes
+    "predictBatchSize": 24, # NOTE: for multipower single channel, this must be a multiple of numVolumes
     "n_Classes": 2,
     "learningRate": 0.0001,
-    "batchSize": 36, # NOTE: for multipower single channel, this must be a multiple of numVolumes
+    "batchSize": 24, # NOTE: for multipower single channel, this must be a multiple of numVolumes
     "dropout": 0.75,
-    "trainingIterations": 30001,
-    "predictStep": 2000,
+    "epochs": 2,
+    "predictStep": 200000,
     "displayStep": 100,
-    "saveModelStep": 5000,
+    "saveModelStep": 1,
     "singleScanPath": "/home/volcart/volumes/packages/CarbonPhantom-Feb2017.volpkg/paths/20170221130948/layered/registered/layers/full-layers/after-rotate/",
     "experimentType": sys.argv[6],
     "scalingFactor": float(sys.argv[8])
@@ -54,59 +54,111 @@ elif args["experimentType"] == "multipower-multinetwork":
 optimizer = tf.train.AdamOptimizer(learning_rate=args["learningRate"]).minimize(loss)
 correct_pred = tf.equal(tf.argmax(pred, 1), tf.argmax(y, 1))
 accuracy = tf.reduce_mean(tf.cast(correct_pred, tf.float32))
-init = tf.global_variables_initializer()
+false_positives = tf.count_nonzero(tf.argmax(pred,1) * (tf.argmax(y,1) - 1))
+
 saver = tf.train.Saver()
 
 volume = data.Volume(args)
 
 with tf.Session() as sess:
+    # train_writer = tf.summary.FileWriter('/tmp/tb/', sess.graph)
+
+    init = tf.global_variables_initializer()
     sess.run(init)
-    saver.restore(sess, args["saveModelPath"]+"run1/model-epoch-10000.ckpt") # NOTE: uncomment and change path to restore a graph model
-    epoch = 9999
-    while epoch < args["trainingIterations"]:
+    # saver.restore(sess, args["saveModelPath"]+"run1/model-epoch-10000.ckpt") # NOTE: uncomment and change path to restore a graph model
+    epoch = 1
 
-        if args["experimentType"] == "multipower-single-channel":
-            trainingSamples, groundTruth = volume.getTrainingSample_MultipowerSingleChannel(args)
-        elif args["experimentType"] == "multipower-multinetwork":
-            trainingSamples, groundTruth = volume.getTrainingSample(args)
+    avgOutputVolume = []
+    train_accs = []
+    train_losses = []
+    train_fps = []
+    test_accs = []
+    test_losses = []
+    test_fps = []
+    testX, testY = volume.getRandomTrainingSample(args, testSet=True)
 
-        sess.run(optimizer, feed_dict={x: trainingSamples, y: groundTruth, keep_prob: args["dropout"]})
+    while epoch < args["epochs"]:
 
-        if epoch % args["displayStep"] == 0:
-            acc, evaluatedLoss = sess.run([accuracy, loss], feed_dict={x: trainingSamples, y: groundTruth, keep_prob: 1.0})
-            print("Epoch: " + str(epoch) + "  Loss: " + str(np.mean(evaluatedLoss)) + "  Acc: " + str(np.mean(acc)))
+        # if args["experimentType"] == "multipower-single-channel":
+        #     trainingSamples, groundTruth = volume.getTrainingSample_MultipowerSingleChannel(args)
+        # elif args["experimentType"] == "multipower-multinetwork":
+        #     trainingSamples, groundTruth = volume.getTrainingSample(args)
 
-        if epoch % args["predictStep"] == 0 and epoch > 0:
+        coordinates = np.array(volume.getEpochTrainingCoordinates(args))
+        pdb.set_trace()
+        for i in range(0,coordinates.shape[0],args["batchSize"]):
+            batchX, batchY = volume.getEpochTrainingSamples(args, coordinates[i:i+args["batchSize"],:])
+            sess.run(optimizer, feed_dict={x: batchX, y: batchY, keep_prob: args["dropout"]})
 
-            total_num_predictions = volume.totalPredictions(args)
-            startingCoordinates = [0,0,0]
-            count = 1
+            if i % (args["batchSize"] * 5) == 0:
 
-            if args["experimentType"] == "multipower-single-channel":
-                volume.initPredictionImages(args)
-                predictionSamples, coordinates, nextCoordinates = volume.getPredictionSample_MultipowerSingleChannel(args, startingCoordinates)
-                while ((count-1)*args["predictBatchSize"]) < total_num_predictions:
-                    print("Predicting cubes {} of {}".format((count * args["predictBatchSize"]), total_num_predictions))
-                    predictionValues = []
-                    for i in range(predictionSamples.shape[4]):
-                        predictionValues.append(sess.run(pred, feed_dict={x: predictionSamples[:,:,:,:,i:i+1], keep_prob: 1.0}))
-                    volume.reconstruct_MulipowerSingleChannel(args, predictionValues, coordinates)
-                    predictionSamples, coordinates, nextCoordinates = volume.getPredictionSample_MultipowerSingleChannel(args, nextCoordinates)
-                    count += 1
-                    volume.savePredictionImages(args, epoch)
-                volume.savePredictionImages(args, epoch)
+                train_acc = sess.run(accuracy, feed_dict={x: batchX, y: batchY, keep_prob: 1.0})
+                test_acc = sess.run(accuracy, feed_dict={x:testX, y:testY, keep_prob: 1.0})
+                train_loss = sess.run(loss, feed_dict={x: batchX, y: batchY, keep_prob: 1.0})
+                test_loss = sess.run(loss, feed_dict={x: testX, y:testY, keep_prob: 1.0})
+                train_fp = sess.run(false_positives, feed_dict={x: batchX, y:batchY, keep_prob:1.0})
+                test_fp = sess.run(false_positives, feed_dict={x:testX, y:testY, keep_prob:1.0})
+                train_accs.append(train_acc)
+                test_accs.append(test_acc)
+                test_losses.append(test_loss)
+                train_losses.append(train_loss)
+                test_fps.append(test_fp / args["batchSize"])
+                train_fps.append(train_fp / args["batchSize"])
 
-            elif args["experimentType"] == "multipower-multinetwork":
-                volume.emptyPredictionImage(args)
-                predictionSamples, coordinates, nextCoordinates = volume.getPredictionSample_MultipowerSingleChannel(args, startingCoordinates)
-                while ((count-1)*args["predictBatchSize"]) < total_num_predictions:
-                    print("Predicting cubes {} of {}".format((count * args["predictBatchSize"]), total_num_predictions))
-                    predictionValues = sess.run(pred, feed_dict={x: predictionSamples, keep_prob: 1.0})
-                    volume.reconstruct(args, predictionValues, coordinates)
-                    predictionSamples, coordinates, nextCoordinates = volume.getPredictionSample_MultipowerSingleChannel(args, nextCoordinates)
-                    count += 1
-                    volume.savePredictionImage(args, epoch)
-                volume.savePredictionImage(args, epoch)
+                print("Epoch: {}\tIteration: {}\tTotal # iterations: {}".format(epoch, i, coordinates.shape[0]))
+                print("Train Loss: {:.3f}\tTrain Acc: {:.3f}\tFp: {}".format(train_loss, train_acc, train_fp))
+                print("Test Loss: {:.3f}\tTest Acc: {:.3f}\t\tFp: {}".format(test_loss, test_acc, test_fp))
+
+
+        plt.figure(1)
+        plt.clf()
+        plt.subplot(311) # losses
+        axes = plt.gca()
+        axes.set_ylim([0,np.median(test_losses)+1])
+        xs = np.arange(len(train_accs))
+        plt.plot(train_losses, 'k.')
+        plt.plot(test_losses, 'g.')
+        plt.subplot(312) # accuracies
+        plt.plot(train_accs, 'k.')
+        plt.plot(xs, np.poly1d(np.polyfit(xs, train_accs, 1))(xs), color='k')
+        plt.plot(test_accs, 'g.')
+        plt.plot(xs, np.poly1d(np.polyfit(xs, test_accs, 1))(xs), color='g')
+        plt.subplot(313) # false positives
+        plt.plot(train_fps, 'k.')
+        plt.plot(test_fps, 'g.')
+        plt.savefig(args["savePredictionFolder"]+"plots-{}.png".format(epoch))
+
+        # if epoch % args["predictStep"] == 0 and epoch > 0:
+        #
+        #     total_num_predictions = volume.totalPredictions(args)
+        #     startingCoordinates = [0,0,0]
+        #     count = 1
+        #
+        #     if args["experimentType"] == "multipower-single-channel":
+        #         volume.initPredictionImages(args)
+        #         predictionSamples, coordinates, nextCoordinates = volume.getPredictionSample_MultipowerSingleChannel(args, startingCoordinates)
+        #         while ((count-1)*args["predictBatchSize"]) < total_num_predictions:
+        #             print("Predicting cubes {} of {}".format((count * args["predictBatchSize"]), total_num_predictions))
+        #             predictionValues = []
+        #             for i in range(predictionSamples.shape[4]):
+        #                 predictionValues.append(sess.run(pred, feed_dict={x: predictionSamples[:,:,:,:,i:i+1], keep_prob: 1.0}))
+        #             volume.reconstruct_MulipowerSingleChannel(args, predictionValues, coordinates)
+        #             predictionSamples, coordinates, nextCoordinates = volume.getPredictionSample_MultipowerSingleChannel(args, nextCoordinates)
+        #             count += 1
+        #             volume.savePredictionImages(args, epoch)
+        #         volume.savePredictionImages(args, epoch)
+        #
+        #     elif args["experimentType"] == "multipower-multinetwork":
+        #         volume.emptyPredictionImage(args)
+        #         predictionSamples, coordinates, nextCoordinates = volume.getPredictionSample_MultipowerSingleChannel(args, startingCoordinates)
+        #         while ((count-1)*args["predictBatchSize"]) < total_num_predictions:
+        #             print("Predicting cubes {} of {}".format((count * args["predictBatchSize"]), total_num_predictions))
+        #             predictionValues = sess.run(pred, feed_dict={x: predictionSamples, keep_prob: 1.0})
+        #             volume.reconstruct(args, predictionValues, coordinates)
+        #             predictionSamples, coordinates, nextCoordinates = volume.getPredictionSample_MultipowerSingleChannel(args, nextCoordinates)
+        #             count += 1
+        #             volume.savePredictionImage(args, epoch)
+        #         volume.savePredictionImage(args, epoch)
 
 
         # NOTE: uncomment to save model
@@ -115,3 +167,37 @@ with tf.Session() as sess:
             print("Model saved in file: %s" % save_path)
 
         epoch = epoch + 1
+
+
+    # NOTE ----------------------------
+        # make a single prediction after training has completed
+
+    total_num_predictions = volume.totalPredictions(args)
+    startingCoordinates = [0,0,0]
+    count = 1
+
+    if args["experimentType"] == "multipower-single-channel":
+        volume.initPredictionImages(args)
+        predictionSamples, coordinates, nextCoordinates = volume.getPredictionSample_MultipowerSingleChannel(args, startingCoordinates)
+        while ((count-1)*args["predictBatchSize"]) < total_num_predictions:
+            print("Predicting cubes {} of {}".format((count * args["predictBatchSize"]), total_num_predictions))
+            predictionValues = []
+            for i in range(predictionSamples.shape[4]):
+                predictionValues.append(sess.run(pred, feed_dict={x: predictionSamples[:,:,:,:,i:i+1], keep_prob: 1.0}))
+            volume.reconstruct_MulipowerSingleChannel(args, predictionValues, coordinates)
+            predictionSamples, coordinates, nextCoordinates = volume.getPredictionSample_MultipowerSingleChannel(args, nextCoordinates)
+            count += 1
+            volume.savePredictionImages(args, epoch)
+        volume.savePredictionImages(args, epoch)
+
+    elif args["experimentType"] == "multipower-multinetwork":
+        volume.emptyPredictionImage(args)
+        predictionSamples, coordinates, nextCoordinates = volume.getPredictionSample_MultipowerSingleChannel(args, startingCoordinates)
+        while ((count-1)*args["predictBatchSize"]) < total_num_predictions:
+            print("Predicting cubes {} of {}".format((count * args["predictBatchSize"]), total_num_predictions))
+            predictionValues = sess.run(pred, feed_dict={x: predictionSamples, keep_prob: 1.0})
+            volume.reconstruct(args, predictionValues, coordinates)
+            predictionSamples, coordinates, nextCoordinates = volume.getPredictionSample_MultipowerSingleChannel(args, nextCoordinates)
+            count += 1
+            volume.savePredictionImage(args, epoch)
+        volume.savePredictionImage(args, epoch)

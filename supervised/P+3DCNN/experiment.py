@@ -35,22 +35,22 @@ scalingFactors = [1, 1.8, 5]
 
 crop = [[456, 825], [66, 1404]]
 
-command = str(crop[0][0]) + " " + str(crop[0][1]) + " " + str(crop[1][0]) + " " + str(crop[1][1]) + " " + paths[0] + " " + experimentTypes[0] +\
-    " " + paths[0] + " " + str(scalingFactors[0])
-
-os.system("python3 main.py " + command)
-
-exit()
-
-command = str(crop[0][0]) + " " + str(crop[0][1]) + " " + str(crop[1][0]) + " " + str(crop[1][1]) + " " + paths[1] + " " + experimentTypes[0] +\
-    " " + paths[1] + " " + str(scalingFactors[1])
-
-os.system("python3 main.py " + command)
-
-command = str(crop[0][0]) + " " + str(crop[0][1]) + " " + str(crop[1][0]) + " " + str(crop[1][1]) + " " + paths[2] + " " + experimentTypes[0] +\
-    " " + paths[2] + " " + str(scalingFactors[2])
-
-os.system("python3 main.py " + command)
+# command = str(crop[0][0]) + " " + str(crop[0][1]) + " " + str(crop[1][0]) + " " + str(crop[1][1]) + " " + paths[0] + " " + experimentTypes[0] +\
+#     " " + paths[0] + " " + str(scalingFactors[0])
+#
+# os.system("python3 main.py " + command)
+#
+# exit()
+#
+# command = str(crop[0][0]) + " " + str(crop[0][1]) + " " + str(crop[1][0]) + " " + str(crop[1][1]) + " " + paths[1] + " " + experimentTypes[0] +\
+#     " " + paths[1] + " " + str(scalingFactors[1])
+#
+# os.system("python3 main.py " + command)
+#
+# command = str(crop[0][0]) + " " + str(crop[0][1]) + " " + str(crop[1][0]) + " " + str(crop[1][1]) + " " + paths[2] + " " + experimentTypes[0] +\
+#     " " + paths[2] + " " + str(scalingFactors[2])
+#
+# os.system("python3 main.py " + command)
 
 
 command = str(crop[0][0]) + " " + str(crop[0][1]) + " " + str(crop[1][0]) + " " + str(crop[1][1]) + " " + paths[3] + " " + experimentTypes[1] +\
@@ -58,12 +58,19 @@ command = str(crop[0][0]) + " " + str(crop[0][1]) + " " + str(crop[1][0]) + " " 
 
 os.system("python3 main.py " + command)
 
-command = str(crop[0][0]) + " " + str(crop[0][1]) + " " + str(crop[1][0]) + " " + str(crop[1][1]) + " " + paths[4] + " " + experimentTypes[1] +\
-    " " + paths[4] + " " + str(scalingFactors[1])
+# NOTE: this is the same as the first one commented out
+command = str(crop[0][0]) + " " + str(crop[0][1]) + " " + str(crop[1][0]) + " " + str(crop[1][1]) + " " + paths[0] + " " + experimentTypes[0] +\
+    " " + paths[0] + " " + str(scalingFactors[0])
 
 os.system("python3 main.py " + command)
 
-command = str(crop[0][0]) + " " + str(crop[0][1]) + " " + str(crop[1][0]) + " " + str(crop[1][1]) + " " + paths[5] + " " + experimentTypes[1] +\
-    " " + paths[5] + " " + str(scalingFactors[2])
 
-os.system("python3 main.py " + command)
+# command = str(crop[0][0]) + " " + str(crop[0][1]) + " " + str(crop[1][0]) + " " + str(crop[1][1]) + " " + paths[4] + " " + experimentTypes[1] +\
+#     " " + paths[4] + " " + str(scalingFactors[1])
+#
+# os.system("python3 main.py " + command)
+#
+# command = str(crop[0][0]) + " " + str(crop[0][1]) + " " + str(crop[1][0]) + " " + str(crop[1][1]) + " " + paths[5] + " " + experimentTypes[1] +\
+#     " " + paths[5] + " " + str(scalingFactors[2])
+#
+# os.system("python3 main.py " + command)
