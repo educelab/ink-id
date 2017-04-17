@@ -1,10 +1,10 @@
 import os
 
-xys = [60]
-zs = [60]
-cushions = [10]
-neurons = [4]
+xys = [64]
+zs = [64]
+neurons = [2,4,8]
 overlap = 2
+bounds = [3,0,1,2] # bounds parameters: 0=TOP || 1=RIGHT || 2=BOTTOM || 3=LEFT
 paths = [
         #"/home/jack/devel/volcart/small-fragment-data/nudge-4.00%/slices/",
         #"/home/jack/devel/volcart/small-fragment-data/nudge-2.00%/slices/",
@@ -12,20 +12,17 @@ paths = [
         #"/home/jack/devel/volcart/small-fragment-data/nudge-1.00%/slices/",
         #"/home/jack/devel/volcart/small-fragment-data/nudge-8.00%/slices/",
         #"/home/jack/devel/volcart/small-fragment-data/nudge-0.50%/slices/".
-        "/home/tfusers/small-fragment-data/flatfielded-slices/",
+        "/home/jack/devel/volcart/small-fragment-data/flatfielded-slices/",
         ]
 
-neuron = 16
 try:
     for xy in xys:
         for z in zs:
-            for cushion in cushions:
+            for bound in bounds:
                 for path in paths:
-                    while neuron < 100:
-                        print("Running experiment with {} neurons".format(neuron))
-                        os.system("python3 main.py {} {} {} {} {} {}".format(
-                                xy, z, cushion, overlap, neuron, path))
-                        neuron += 2
+                    for neuron in neurons:
+                        os.system("python3 main.py {} {} {} {} {}".format(
+                                xy, z, bound, neuron, path))
 
 
 except KeyboardInterrupt:

@@ -117,6 +117,7 @@ def findRandomCoordinate(args, colBounds, rowBounds, groundTruth, surfaceImage, 
 
 
 def generateCoordinatePool(args, volume, rowBounds, colBounds, groundTruth):
+    print("Generating coordinate pool...")
     coordinates = []
     ink_count = 0
     truth_label_value = np.iinfo(groundTruth.dtype).max
@@ -127,16 +128,19 @@ def generateCoordinatePool(args, volume, rowBounds, colBounds, groundTruth):
         for col in range(colBounds[0], colBounds[1]):
             if args["restrictSurface"] and np.min(surf_maxes[row-rowStep:row+rowStep, col-colStep:col+colStep]) < args["surfaceThresh"]:
                 continue
+
             label_avg = np.mean(groundTruth[row-rowStep:row+rowStep, col-colStep:col+colStep])
             if .1*truth_label_value < label_avg < .9*truth_label_value:
                 continue
-            label = int(label_avg / (.9*truth_label_value))
+
+            label = int(groundTruth[row,col] / truth_label_value)
             augment_seed = np.random.randint(4)
             ink_count += label # 0 if less than .9
             coordinates.append([row, col, label, augment_seed])
 
     ink_portion = ink_count / len(coordinates)
     print("Initial coordinate pool is {:.3f} ink samples, balancing...".format(ink_portion))
+
 
     while ink_portion < .49:
         # delete random non-ink samples until balanced
@@ -177,6 +181,11 @@ def augmentSample(args, sample, seed=None):
         augmentedSample = np.flip(augmentedSample, axis=1)
     #implicit: no flip if seed == 2
 
+
+    '''# reverse surface, i.e. flip in the z direction, 50% of the time
+    if seed % 2 == 0:
+        augmentedSample = np.flip(augmentedSample, axis=2)
+    '''
     # for rotate: original, rotate 90, rotate 180, or rotate 270
     augmentedSample = np.rot90(augmentedSample, k=seed, axes=(0,1))
 

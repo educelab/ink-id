@@ -197,7 +197,7 @@ class Volume:
             zCoordinate = self.surfaceImage[rowCoordinate+int(args["y_Dimension"]/2), colCoordinate+int(args["x_Dimension"]/2)] - args["surfaceCushion"]
             if args["predictDepth"] > 1:
                 #TODO this z-mapping mapping will eventually be something more intelligent
-                zCoordinate += (depthCoordinate * 4)
+                zCoordinate += (depthCoordinate)
                 #zCoordinate = depthCoordinate * int((self.volume.shape[2] - args["z_Dimension"]) / args["predictDepth"])
 
             sample = (self.volume[rowCoordinate:rowCoordinate+args["y_Dimension"], \
@@ -342,8 +342,8 @@ class Volume:
         for arg in sorted(args.keys()):
             description += arg+": " + str(args[arg]) + "\n"
         np.savetxt(output_path +'description.txt', [description], delimiter=' ', fmt="%s")
+        shutil.copy('model.py', output_path + 'network_model.txt')
 
-        #TODO shutil.copy model
         # zero-out predictions & images so next output is correct
         self.all_truth = []
         self.all_preds = []

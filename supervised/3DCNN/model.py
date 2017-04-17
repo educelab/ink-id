@@ -6,8 +6,8 @@ import pdb
 def buildModel(x, y, args):
     x = tf.reshape(x, [-1, args["x_Dimension"], args["y_Dimension"], args["z_Dimension"], 1])
     conv1 = slim.batch_norm(slim.convolution(x, args["layer1_neurons"], args["receptiveField"], stride=[2,2,2]))
-    conv2 = slim.batch_norm(slim.convolution(conv1, 2*args["layer1_neurons"], args["receptiveField"], stride=[2,2,2]))
-    conv3 = slim.batch_norm(slim.convolution(conv2, 4*args["layer1_neurons"], args["receptiveField"], stride=[1,1,1]))
+    conv2 = slim.batch_norm(slim.convolution(conv1, 2*args["layer1_neurons"], args["receptiveField"], stride=[1,1,1]))
+    conv3 = slim.batch_norm(slim.convolution(conv2, 4*args["layer1_neurons"], args["receptiveField"], stride=[2,2,2]))
     conv4 = slim.batch_norm(slim.convolution(conv3, 8*args["layer1_neurons"], args["receptiveField"], stride=[2,2,2]))
     #conv5 = slim.batch_norm(slim.convolution(conv3, 16*args["layer1_neurons"], args["receptiveField"], stride=[2,2,2]))
 

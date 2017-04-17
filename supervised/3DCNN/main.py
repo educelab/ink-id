@@ -22,25 +22,25 @@ args = {
     ### Input configuration ###
     #"trainingDataPath": "/home/jack/devel/volcart/small-fragment-data/flatfielded-slices/",
     #"trainingDataPath" : "/home/jack/devel/volcart/small-fragment-data/nudge-0.50%/slices/"
-    "trainingDataPath" : str(sys.argv[6]),
+    "trainingDataPath" : str(sys.argv[5]),
     #"surfaceDataFile": "/home/jack/devel/volcart/small-fragment-data/surf-output-21500/surface-points-21500.tif",
-    "surfaceDataFile": "/home/tfusers/small-fragment-data/surface.tif",
-    "groundTruthFile": "/home/tfusers/small-fragment-data/ink-only-mask.tif",
-    "savePredictionPath": "/home/jack/predictions/3dcnn/",
+    "surfaceDataFile": "/home/jack/devel/volcart/small-fragment-data/polyfit-slices-degree32-cush16-thresh20500/surface.tif",
+    "groundTruthFile": "/home/jack/devel/volcart/small-fragment-data/ink-only-mask.tif",
+    "savePredictionPath": "/home/jack/devel/volcart/predictions/3dcnn/",
     "x_Dimension": int(sys.argv[1]),
     "y_Dimension": int(sys.argv[1]),
     "z_Dimension": int(sys.argv[2]),
-    "surfaceCushion" : int(sys.argv[3]),
+    "surfaceCushion" : 20,
 
     ### Network configuration ###
     "receptiveField" : [3,3,3],
     "learningRate": 0.0001,
-    "batchSize": 10,
+    "batchSize": 30,
     "predictBatchSize": 200,
     "dropout": 0.5,
-    "layer1_neurons": int(sys.argv[5]),
+    "layer1_neurons": int(sys.argv[4]),
     "trainingIterations": 30001,
-    "trainingEpochs": 2,
+    "trainingEpochs": 3,
     "n_Classes": 2,
 
     ### Data configuration ###
@@ -49,25 +49,25 @@ args = {
     "randomStep" : 10, # one in every randomStep non-ink samples will be a random brick
     "randomRange" : 200,
     "useJitter" : True,
-    "jitterRange" : [-5, 5],
+    "jitterRange" : [-8, 8],
     "addAugmentation" : True,
     "train_portion" : .5,
-    "trainBounds" : 3, # bounds parameters: 0=TOP || 1=RIGHT || 2=BOTTOM || 3=LEFT
+    "trainBounds" : int(sys.argv[3]), # bounds parameters: 0=TOP || 1=RIGHT || 2=BOTTOM || 3=LEFT
     "grabNewSamples": 20,
     "surfaceThresh": 20400,
     "restrictSurface": True,
 
     ### Output configuration ###
-    "predictStep": 10000,
+    "predictStep": 5000,
     "displayStep": 50,
-    "overlapStep": int(sys.argv[4]),
-    "predictDepth" : 1,
+    "overlapStep": 2,
+    "predictDepth" : 5,
     "savePredictionFolder" : "/home/jack/devel/volcart/predictions/3dcnn/{}x{}x{}-{}-{}-{}h/".format(
             sys.argv[1], sys.argv[1], sys.argv[2],  #x, y, z
             datetime.datetime.today().timetuple()[1], # month
             datetime.datetime.today().timetuple()[2], # day
             datetime.datetime.today().timetuple()[3]), # hour
-    "notes": "Set to four convolutional layers, down from six"
+    "notes": "Four convolutional layers, no z-axis flips, no extra non-ink jitter"
 }
 
 
@@ -126,7 +126,7 @@ with tf.Session() as sess:
                 train_precs.append(train_prec)
                 test_precs.append(test_prec)
 
-                if ( (test_acc > .9) or (test_prec > .7) ) and iteration > 5000: # or (test_prec / args["numCubes"] < .05)
+                if (test_acc > .9) and iteration > 5000: # or (test_prec / args["numCubes"] < .05)
                     # make a full prediction if results are tentatively spectacular
                     predict_flag = True
 
@@ -153,7 +153,7 @@ with tf.Session() as sess:
                     volume.reconstruct3D(args, predictionValues, coordinates)
                     predictionSamples, coordinates, nextCoordinates = volume.getPredictionSample3D(args, nextCoordinates)
                     count += 1
-                minutes = "{:.2f}".format( (time.time() - start_time) /60 )
+                minutes = ( (time.time() - start_time) /60 )
                 volume.savePrediction3D(args, iteration)
                 volume.savePredictionMetrics(args, iteration, minutes)
 
