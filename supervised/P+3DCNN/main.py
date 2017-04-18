@@ -61,17 +61,20 @@ correct_pred = tf.equal(tf.argmax(pred, 1), tf.argmax(y, 1))
 accuracy = tf.reduce_mean(tf.cast(correct_pred, tf.float32))
 false_positives = tf.count_nonzero(tf.argmax(pred,1) * (tf.argmax(y,1) - 1))
 
-saver = tf.train.Saver()
 
 volume = data.Volume(args)
 
 with tf.Session() as sess:
-    # train_writer = tf.summary.FileWriter('/tmp/tb/', sess.graph)
-    # saver.restore(sess, args["saveModelPath"]+"run1/model-epoch-10000.ckpt") # NOTE: uncomment and change path to restore a graph model
 
-    init = tf.global_variables_initializer()
-    sess.run(init)
-    epoch = 1
+    # NOTE: if restoring a session, comment out lines tf.global_variables_initializer() and sess.run(init)
+    saver = tf.train.Saver()
+    saver.restore(sess, args["saveModelPath"]+"model-iteration-240000.ckpt") # NOTE: uncomment and change path to restore a graph model
+
+    # init = tf.global_variables_initializer()
+    # sess.run(init)
+    # train_writer = tf.summary.FileWriter('/tmp/tb/', sess.graph)
+
+    epoch = 2
 
     train_accs = []
     train_losses = []
@@ -85,7 +88,8 @@ with tf.Session() as sess:
 
     while epoch < args["epochs"]:
         coordinates = volume.getTrainingCoordinates(args)
-        for i in range(0,coordinates.shape[0],args["batchSize"]):
+        # for i in range(0,coordinates.shape[0],args["batchSize"]):
+        for i in range(0,2):
             if i < (coordinates.shape[0] - args["batchSize"]):
                 batchX, batchY = volume.getSamples(args, coordinates[i:i+args["batchSize"],:])
             else:
@@ -113,15 +117,18 @@ with tf.Session() as sess:
                 print("Train Loss: {:.3f}\tTrain Acc: {:.3f}\tInk Precision: {:.3f}".format(train_loss, train_acc, train_precs[-1]))
                 print("Test Loss: {:.3f}\tTest Acc: {:.3f}\t\tInk Precision: {:.3f}".format(test_loss, test_acc, test_precs[-1]))
 
-            if i % (args["batchSize"] * args["graphStep"]) == 0 and i > 0:
-                ops.graph(args, i, test_accs, test_losses, train_accs, train_losses, test_precs, train_precs)
+            # if i % (args["batchSize"] * args["graphStep"]) == 0 and i > 0:
+            #     ops.graph(args, i, test_accs, test_losses, train_accs, train_losses, test_precs, train_precs)
 
             # NOTE: uncomment/comment to save model
-            if i % (args["batchSize"] * args["saveModelStep"]) == 0 and epoch > 0:
-                save_path = saver.save(sess, args["saveModelPath"]+"model-epoch-"+str(epoch)+".ckpt")
-                print("Model saved in file: %s" % save_path)
+            # if i % (args["batchSize"] * args["saveModelStep"]) == 0 and i > 0:
+            #     save_path = saver.save(sess, args["saveModelPath"]+"model-iteration-"+str(i)+".ckpt")
+            #     print("Model saved in file: %s" % save_path)
 
         epoch = epoch + 1
+
+        # save_path = saver.save(sess, args["saveModelPath"]+"model-epoch-"+str(epoch)+".ckpt")
+        # print("Model saved in file: %s" % save_path)
 
 
     # NOTE ----------------------------
@@ -142,8 +149,8 @@ with tf.Session() as sess:
 
         if args["experimentType"] == "multipower-single-channel":
             num_batches = int(batchX.shape[0] / args["numVolumes"])
-            batchX = batchX.reshape((num_batches, args["x_Dimension"], args["y_Dimension"], args["z_Dimension"], args["numVolumes"]))
-            # batchX = ops.customeReshape(args, batchX)
+            # batchX = batchX.reshape((num_batches, args["x_Dimension"], args["y_Dimension"], args["z_Dimension"], args["numVolumes"]))
+            batchX = ops.customReshape(args, batchX)
             predictionValues = []
             for j in range(batchX.shape[4]):
                 predictionValues.append(sess.run(pred, feed_dict={x: batchX[:,:,:,:,j:j+1], keep_prob: 1.0}))

@@ -54,16 +54,14 @@ crop = [[456, 825], [66, 1404]]
 # os.system("python3 main.py " + command)
 
 
-
-
-command = str(crop[0][0]) + " " + str(crop[0][1]) + " " + str(crop[1][0]) + " " + str(crop[1][1]) + " " + paths[3] + " " + experimentTypes[1] +\
-    " " + paths[3] + " " + str(scalingFactors[0])
-
-os.system("python3 main.py " + command)
-
 # NOTE: this is the same as the first one commented out
 command = str(crop[0][0]) + " " + str(crop[0][1]) + " " + str(crop[1][0]) + " " + str(crop[1][1]) + " " + paths[0] + " " + experimentTypes[0] +\
     " " + paths[0] + " " + str(scalingFactors[0])
+
+os.system("python3 main.py " + command)
+
+command = str(crop[0][0]) + " " + str(crop[0][1]) + " " + str(crop[1][0]) + " " + str(crop[1][1]) + " " + paths[3] + " " + experimentTypes[1] +\
+    " " + paths[3] + " " + str(scalingFactors[0])
 
 os.system("python3 main.py " + command)
 

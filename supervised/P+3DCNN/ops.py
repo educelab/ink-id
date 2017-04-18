@@ -157,5 +157,14 @@ def splice(sample, args):
         sample = sample[:,:,0:args["z_Dimension"]]
     return sample
 
-# def customeReshape(args, batchX):
-#     num_batches = int(batchX.shape[0] / args["numVolumes"])
+def customReshape(args, batchX):
+    num_batches = int(batchX.shape[0] / args["numVolumes"])
+
+    out_batch = np.zeros((num_batches, args["x_Dimension"], args["y_Dimension"], args["z_Dimension"], args["numVolumes"]))
+    count = 0
+    for i in range(0,batchX.shape[0],args["numVolumes"]):
+        for j in range(args["numVolumes"]):
+            out_batch[count,:,:,:,j] = batchX[i+j,:,:,:,0]
+        count += 1
+
+    return out_batch
