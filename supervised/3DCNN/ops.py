@@ -88,8 +88,12 @@ def findRandomCoordinate(args, colBounds, rowBounds, groundTruth, surfaceImage, 
     max_truth = np.iinfo(groundTruth.dtype).max
     xCoordinate = np.random.randint(colBounds[0], colBounds[1])
     yCoordinate = np.random.randint(rowBounds[0], rowBounds[1])
+
     yStep = int(args["y_Dimension"]/2)
     xStep = int(args["x_Dimension"]/2)
+    #uncomment for quadrant training
+    #xCoordinate = np.random.randint(xStep, int(volume.shape[1]/2))
+    #yCoordinate = np.random.randint(yStep, int(volume.shape[0]/2))
     zCoordinate = 0
     label_avg = np.mean(groundTruth[yCoordinate-yStep:yCoordinate:yStep, xCoordinate-xStep:xCoordinate+xStep])
 
@@ -124,8 +128,15 @@ def generateCoordinatePool(args, volume, rowBounds, colBounds, groundTruth):
     rowStep = int(args["y_Dimension"]/2)
     colStep = int(args["x_Dimension"]/2)
     surf_maxes = np.max(volume, axis=2)
+
     for row in range(rowBounds[0], rowBounds[1]):
         for col in range(colBounds[0], colBounds[1]):
+    # uncomment for quadrant training
+    #for row in range(rowStep, volume.shape[0] - rowStep):
+    #    for col in range(colStep, volume.shape[1] - colStep):
+    #        if row < (volume.shape[0]/2) and col < (volume.shape[1] / 2):
+    #            continue
+
             if args["restrictSurface"] and np.min(surf_maxes[row-rowStep:row+rowStep, col-colStep:col+colStep]) < args["surfaceThresh"]:
                 continue
 
@@ -142,7 +153,7 @@ def generateCoordinatePool(args, volume, rowBounds, colBounds, groundTruth):
     print("Initial coordinate pool is {:.3f} ink samples, balancing...".format(ink_portion))
 
 
-    while ink_portion < .49:
+    while args["balance_samples"] and ink_portion < .49:
         # delete random non-ink samples until balanced
         index = np.random.randint(len(coordinates))
         if coordinates[index][2] == 0:

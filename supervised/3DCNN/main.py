@@ -30,7 +30,7 @@ args = {
     "x_Dimension": int(sys.argv[1]),
     "y_Dimension": int(sys.argv[1]),
     "z_Dimension": int(sys.argv[2]),
-    "surfaceCushion" : 20,
+    "surfaceCushion" : 15,
 
     ### Network configuration ###
     "receptiveField" : [3,3,3],
@@ -40,7 +40,7 @@ args = {
     "dropout": 0.5,
     "layer1_neurons": int(sys.argv[4]),
     "trainingIterations": 30001,
-    "trainingEpochs": 3,
+    "trainingEpochs": 5,
     "n_Classes": 2,
 
     ### Data configuration ###
@@ -49,25 +49,26 @@ args = {
     "randomStep" : 10, # one in every randomStep non-ink samples will be a random brick
     "randomRange" : 200,
     "useJitter" : True,
-    "jitterRange" : [-8, 8],
+    "jitterRange" : [-6, 6],
     "addAugmentation" : True,
-    "train_portion" : .5,
+    "train_portion" : .6,
+    "balance_samples" : True,
     "trainBounds" : int(sys.argv[3]), # bounds parameters: 0=TOP || 1=RIGHT || 2=BOTTOM || 3=LEFT
     "grabNewSamples": 20,
     "surfaceThresh": 20400,
-    "restrictSurface": True,
+    "restrictSurface": False,
 
     ### Output configuration ###
     "predictStep": 5000,
     "displayStep": 50,
     "overlapStep": 2,
-    "predictDepth" : 5,
+    "predictDepth" : 1,
     "savePredictionFolder" : "/home/jack/devel/volcart/predictions/3dcnn/{}x{}x{}-{}-{}-{}h/".format(
             sys.argv[1], sys.argv[1], sys.argv[2],  #x, y, z
             datetime.datetime.today().timetuple()[1], # month
             datetime.datetime.today().timetuple()[2], # day
             datetime.datetime.today().timetuple()[3]), # hour
-    "notes": "Four convolutional layers, no z-axis flips, no extra non-ink jitter"
+    "notes": "Major change to network model"
 }
 
 
