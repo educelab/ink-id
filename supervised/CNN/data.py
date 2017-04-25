@@ -43,6 +43,7 @@ class Volume:
 
         if config["surface_segmentation"]:
             self.surfaceImage = cv2.cvtColor(cv2.imread(config["surfaceDataFile"]), cv2.COLOR_RGB2GRAY)
+            self.surfaceImage = np.transpose(self.surfaceImage, (1,0))
 
         # NOTE: to resample the entire volume & ground truth, uncomment the lines below
         # for i in range(self.volume.shape[0]):
@@ -57,9 +58,16 @@ class Volume:
             xBounds, yBounds = ops.bounds(config, [self.volume.shape[1], self.volume.shape[2]], bounds)
 
         coordinates = []
+        truth_label_value = np.amax(self.groundTruth)
         for x in range(xBounds[0], xBounds[1]):
             for y in range(yBounds[0], yBounds[1]):
-                coordinates.append([x,y])
+                x_range = math.ceil(config["x_Dimension"]/config["scalingFactor"])
+                y_range = math.ceil(config["y_Dimension"]/config["scalingFactor"])
+                if not ops.edge(x, x_range, self.volume.shape[1]) and not ops.edge(y, y_range, self.volume.shape[2]):
+                    label_avg = np.mean(self.groundTruth[x:x+config["x_Dimension"], y:y+config["y_Dimension"]])
+                    if 0.1*truth_label_value < label_avg < 0.9*truth_label_value:
+                        continue
+                    coordinates.append([x,y])
 
         if shuffle:
             np.random.shuffle(coordinates)
@@ -68,13 +76,20 @@ class Volume:
     def getRandomTestCoordinates(self, config, bounds=0):
         xBounds, yBounds = ops.bounds(config, [self.volume.shape[1], self.volume.shape[2]], (bounds+2)%4)
         coordinates = []
+        truth_label_value = np.amax(self.groundTruth)
         for x in range(xBounds[0], xBounds[1]):
             for y in range(yBounds[0], yBounds[1]):
-                coordinates.append([x,y])
+                x_range = math.ceil(config["x_Dimension"]/config["scalingFactor"])
+                y_range = math.ceil(config["y_Dimension"]/config["scalingFactor"])
+                if not ops.edge(x, x_range, self.volume.shape[1]) and not ops.edge(y, y_range, self.volume.shape[2]):
+                    label_avg = np.mean(self.groundTruth[x:x+config["x_Dimension"], y:y+config["y_Dimension"]])
+                    if 0.1*truth_label_value < label_avg < 0.9*truth_label_value:
+                        continue
+                    coordinates.append([x,y])
         np.random.shuffle(coordinates)
         return np.array(coordinates)[0:config["batchSize"],:]
 
-    def getPredictionCoordinates(self):
+    def get2DPredictionCoordinates(self):
         x_resolution = self.volume.shape[1]
         y_resolution = self.volume.shape[2]
 
@@ -85,32 +100,69 @@ class Volume:
 
         return np.array(coordinates)
 
+    def get3DPredictionCoordinates(self):
+        x_resolution = self.volume.shape[1]
+        y_resolution = self.volume.shape[2]
+        z_resolution = self.volume.shape[3]
+
+        coordinates = []
+        for x in range(x_resolution):
+            for y in range(y_resolution):
+                for z in range(z_resolution):
+                    coordinates.append([x,y,z])
+
+        return np.array(coordinates)
+
     def getSamples(self, config, coordinates):
         trainingSamples = []
         groundTruth = []
 
         for i in range(coordinates.shape[0]):
 
+            spectralSamples = []
+
             xCoordinate = coordinates[i][0]
             yCoordinate = coordinates[i][1]
-            zCoordinate = 0
+            if coordinates[0,:].shape == 3: # NOTE: case where an [x,y,z] coordinate has been passed
+                pdb.set_trace()
+                print
+                zCoordinate = coordinates[i,2]
+            else:
+                if config["surface_segmentation"]:
+                    zCoordinate = self.surfaceImage[xCoordinate, yCoordinate] - config["surfaceCushion"]
+                    if config["useJitter"]:
+                        zCoordinate = np.maximum(0, zCoordinate +  np.random.randint(config["jitterRange"][0], config["jitterRange"][1]))
+                else:
+                    zCoordinate = 0
             xCoordinate2 = int(xCoordinate + math.ceil(float(config["x_Dimension"]) * float(1/config["scalingFactor"])))
             yCoordinate2 = int(yCoordinate + math.ceil(float(config["y_Dimension"]) * float(1/config["scalingFactor"])))
             zCoordinate2 = int(zCoordinate + math.ceil(float(config["z_Dimension"]) * float(1/config["scalingFactor"])))
 
-            spectralSamples = []
             x = math.ceil(config["x_Dimension"]/config["scalingFactor"])
             y = math.ceil(config["y_Dimension"]/config["scalingFactor"])
             if ops.edge(xCoordinate, x, self.volume.shape[1]) or ops.edge(yCoordinate, y, self.volume.shape[2]):
                 for j in range(self.volume.shape[0]):
                     sample = ops.findEdgeSubVolume(config, xCoordinate, xCoordinate2, yCoordinate, yCoordinate2, zCoordinate, zCoordinate2, self.volume, j)
+                    if config["addAugmentation"]:
+                        sample = ops.augmentSample(sample)
                     spectralSamples.append(sample)
             else:
+                if config["addRandom"] and (i % config["randomStep"] == 0):
+                    for j in range(self.volume.shape[0]):
+                        sample = ops.getRandomBrick(config, np.median(self.volume[j, xCoordinate:xCoordinate2, yCoordinate:yCoordinate2, zCoordinate:zCoordinate2]))
+                        if config["addAugmentation"]:
+                            sample = ops.augmentSample(sample)
+                        spectralSamples.append(sample)
+                    trainingSamples.append(spectralSamples)
+                    groundTruth.append([1.0,0.0])
+                    continue
                 for j in range(self.volume.shape[0]):
                     sample = self.volume[j, xCoordinate:xCoordinate2, \
                                 yCoordinate:yCoordinate2, zCoordinate:zCoordinate2]
                     sample = scipy.ndimage.interpolation.zoom(sample, config["scalingFactor"])
                     sample = ops.splice(sample, config)
+                    if config["addAugmentation"]:
+                        sample = ops.augmentSample(sample)
                     spectralSamples.append(sample)
             trainingSamples.append(spectralSamples)
 
@@ -136,7 +188,12 @@ class Volume:
         for i in range(num_images):
             self.predictionImages.append(np.zeros((int(self.volume.shape[1]/config["stride"]), int(self.volume.shape[2]/config["stride"])), dtype=np.uint8))
 
-    def reconstruct(self, config, samples, coordinates):
+    def initPredictionVolumes(self, config, num_volumes):
+        self.predictionVolumes = []
+        for i in range(num_volumes):
+            self.predictionVolumes.append(np.zeros((int(self.volume.shape[1]/config["stride"]), int(self.volume.shape[2]/config["stride"]), int(self.volume.shape[3]/config["stride"])), dtype=np.uint8))
+
+    def reconstruct2D(self, config, samples, coordinates):
         # reconstruct prediction volume one prediction sample at a time
         for i in range(len(self.predictionImages)):
             for j in range(coordinates.shape[0]):
@@ -146,6 +203,21 @@ class Volume:
                     except:
                         pass
 
+    def reconstruct3D(self, config, samples, coordinates):
+        # reconstruct prediction volume one prediction sample at a time
+        for i in range(len(self.predictionVolumes)):
+            for j in range(coordinates.shape[0]):
+                if np.argmax(samples[i][j,:]) == 1:
+                    try:
+                        self.predictionVolumes[i][int(coordinates[j,0]/config["stride"]), int(coordinates[j,1]/config["stride"]), int(coordinates[j,2]/config["stride"])] = 255
+                    except:
+                        pass
+
     def savePredictionImages(self, config, epoch):
         for i in range(len(self.predictionImages)):
             cv2.imwrite(config["savePredictionPath"] + "volume-" + str(i) + "-epoch-" + str(epoch) + ".png", self.predictionImages[i])
+
+    def savePredictionVolumes(self, config, epoch):
+        for i in range(len(self.predictionVolumes)):
+            for j in range(self.predictionVolumes[i].shape[2]):
+                cv2.imwrite(config["savePredictionPath"] + "volume-" + str(i) + "-slice-" + str(j) + "-epoch-" + str(epoch) + ".png", self.predictionVolumes[i][:,:,j])

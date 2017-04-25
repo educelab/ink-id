@@ -1,3 +1,36 @@
+# Configuration:
+
+... how to configure
+
+... i.e. you can run experiments with multiple different configurations by changing the config dictionary
+
+**TODO**: change the configuration dictionary to a configuration file
+
+# Assumptions:
+
+We have developed `data.py` and `ops.py` for mulitpurposes uses. It is up to *you* to write a `main.py` file and even add additional models to `model.py`
+
+# data.py:
+
+...
+
+# ops.py:
+
+...
+
+# Multipower-single-channel:
+
+... how to configure
+
+# Multipower-multi-channel:
+
+... how to configure
+
+# Multipower-multi-network:
+
+... how to configure
+
+
 # INFO on code... to be filled in later
 
 ## @Jack NOTES for data.py:

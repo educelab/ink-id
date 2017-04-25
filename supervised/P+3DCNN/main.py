@@ -11,20 +11,20 @@ import model
 import ops
 
 args = {
-    "trainingDataPath": "/home/volcart/volumes/packages/CarbonPhantom_MP_2017.volpkg/paths/all-cols/",
+    "trainingDataPath": "/home/volcart/volumes/test/input_MP/",
     "mulitpower": "true",
-    "groundTruthFile": "/home/volcart/volumes/packages/CarbonPhantom_MP_2017.volpkg/paths/all-cols/GroundTruth-CarbonInk.png",
-    "savePredictionPath": sys.argv[5],
-    "saveModelPath": sys.argv[7],
+    "groundTruthFile": "/home/volcart/volumes/test/gt.png",
+    "savePredictionPath": sys.argv[1],
+    "saveModelPath": sys.argv[1],
     "numChannels": 1,
-    "numVolumes": 6,
-    "cropX_low": int(sys.argv[1]),
-    "cropX_high": int(sys.argv[2]),
-    "cropY_low": int(sys.argv[3]),
-    "cropY_high": int(sys.argv[4]),
+    "numVolumes": 2,
+    "cropX_low": False,
+    "cropX_high": False,
+    "cropY_low": False,
+    "cropY_high": False,
     "x_Dimension": 25,
     "y_Dimension": 25,
-    "z_Dimension": 71,
+    "z_Dimension": 30,
     "stride": 1,
     "predictBatchSize": 24, # NOTE: for multipower single channel, this must be a multiple of numVolumes
     "n_Classes": 2,
@@ -36,8 +36,8 @@ args = {
     "displayStep": 100,
     "saveModelStep": 1000,
     "singleScanPath": "/home/volcart/volumes/packages/CarbonPhantom-Feb2017.volpkg/paths/20170221130948/layered/registered/layers/full-layers/after-rotate/",
-    "experimentType": sys.argv[6],
-    "scalingFactor": float(sys.argv[8]),
+    "experimentType": sys.argv[2],
+    "scalingFactor": 1.0,
     "randomTrainingSamples": False,
     "graphStep": 1000
 }
@@ -67,14 +67,14 @@ volume = data.Volume(args)
 with tf.Session() as sess:
 
     # NOTE: if restoring a session, comment out lines tf.global_variables_initializer() and sess.run(init)
-    saver = tf.train.Saver()
-    saver.restore(sess, args["saveModelPath"]+"model-iteration-240000.ckpt") # NOTE: uncomment and change path to restore a graph model
+    # saver = tf.train.Saver()
+    # saver.restore(sess, args["saveModelPath"]+"model-iteration-240000.ckpt") # NOTE: uncomment and change path to restore a graph model
 
-    # init = tf.global_variables_initializer()
-    # sess.run(init)
+    init = tf.global_variables_initializer()
+    sess.run(init)
     # train_writer = tf.summary.FileWriter('/tmp/tb/', sess.graph)
 
-    epoch = 2
+    epoch = 1
 
     train_accs = []
     train_losses = []
@@ -89,7 +89,7 @@ with tf.Session() as sess:
     while epoch < args["epochs"]:
         coordinates = volume.getTrainingCoordinates(args)
         # for i in range(0,coordinates.shape[0],args["batchSize"]):
-        for i in range(0,2):
+        for i in range(len(coordinates)):
             if i < (coordinates.shape[0] - args["batchSize"]):
                 batchX, batchY = volume.getSamples(args, coordinates[i:i+args["batchSize"],:])
             else:

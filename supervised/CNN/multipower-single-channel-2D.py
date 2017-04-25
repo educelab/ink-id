@@ -14,8 +14,10 @@ config = {
     "trainingDataPath": "/home/volcart/volumes/test/input_MP/",
     "mulitpower": True,
     "groundTruthFile": "/home/volcart/volumes/test/gt.png",
-    "savePredictionPath": "/home/volcart/volumes/test/",
-    "saveModelPath": "/home/volcart/volumes/test/",
+    "savePredictionPath": "/home/volcart/volumes/test/MP-single-channel_model/",
+    "saveModelPath": "/home/volcart/volumes/test/MP-single-channel_model/",
+    "surface_segmentation": True,
+    "surfaceDataFile": "/home/volcart/volumes/test/surface.png",
     "numChannels": 1,
     "numVolumes": 2,
     "crop": False,
@@ -23,8 +25,8 @@ config = {
     "cropX_high": 600,
     "cropY_low": 450,
     "cropY_high": 500,
-    "x_Dimension": 25,
-    "y_Dimension": 25,
+    "x_Dimension": 10,
+    "y_Dimension": 10,
     "z_Dimension": 30,
     "stride": 1,
     "predictBatchSize": 24, # NOTE: for multipower single channel, this must be a multiple of numVolumes
@@ -37,7 +39,14 @@ config = {
     "displayStep": 100,
     "saveModelStep": 100,
     "scalingFactor": 1.0,
-    "graphStep": 1000
+    "graphStep": 1000,
+    "addRandom": True,
+    "randomStep": 10,
+    "randomRange" : 200,
+    "addAugmentation": True,
+    "surfaceCushion" : 5,
+    "jitterRange" : [-3, 3],
+    "useJitter": True
 }
 
 with open(config["savePredictionPath"]+'info.txt', 'w') as outfile:
@@ -125,7 +134,7 @@ with tf.Session() as sess:
 
     volume.initPredictionImages(config, config["numVolumes"])
 
-    coordinates = volume.getPredictionCoordinates()
+    coordinates = volume.get2DPredictionCoordinates()
     predictionValues = []
     for i in range(0,coordinates.shape[0],config["batchSize"]):
         if i < (coordinates.shape[0] - config["batchSize"]):
@@ -138,9 +147,9 @@ with tf.Session() as sess:
             predictionValues.append(sess.run(pred, feed_dict={x: batchX[:,:,:,:,j:j+1], keep_prob: 1.0}))
 
         if i < (coordinates.shape[0] - config["batchSize"]):
-            volume.reconstruct(config, predictionValues, coordinates[i:i+config["batchSize"],:])
+            volume.reconstruct2D(config, predictionValues, coordinates[i:i+config["batchSize"],:])
         else:
-            volume.reconstruct(config, predictionValues, coordinates[i:coordinates.shape[0],:])
+            volume.reconstruct2D(config, predictionValues, coordinates[i:coordinates.shape[0],:])
 
         volume.savePredictionImages(config, epoch)
         print("Predicting iteration: {}\t Total number of iterations: {}".format(i, coordinates.shape[0]))

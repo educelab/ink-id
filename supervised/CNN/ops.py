@@ -59,6 +59,38 @@ def graph(config, iteration, test_accs, test_losses, train_accs, train_losses, t
     np.savetxt(config["savePredictionPath"]+"test_precs.csv", test_fps, delimiter=",")
     np.savetxt(config["savePredictionPath"]+"train_precs.csv", train_fps, delimiter=",")
 
+def getRandomBrick(config, median):
+    low = median - config["randomRange"]
+    high = median + config["randomRange"]
+
+    sample = np.random.random([config["x_Dimension"], config["y_Dimension"], config["z_Dimension"]])
+    return ((high - low) * sample) + low
+
+def augmentSample(sample):
+    augmentedSample = sample
+    seed = np.random.randint(4)
+
+    # ensure equal probability for each augmentation, including no augmentation
+    # for flip: original, flip left-right, flip up-down, both, or none
+    if seed == 0:
+        augmentedSample = np.flip(augmentedSample, axis=0)
+    elif seed == 1:
+        augmentedSample = np.flip(augmentedSample, axis=1)
+    elif seed == 2:
+        augmentedSample = np.flip(augmentedSample, axis=0)
+        augmentedSample = np.flip(augmentedSample, axis=1)
+    #implicit: no flip if seed == 2
+
+
+    '''# reverse surface, i.e. flip in the z direction, 50% of the time
+    if seed % 2 == 0:
+        augmentedSample = np.flip(augmentedSample, axis=2)
+    '''
+    # for rotate: original, rotate 90, rotate 180, or rotate 270
+    augmentedSample = np.rot90(augmentedSample, k=seed, axes=(0,1))
+
+    return augmentedSample
+
 def edge(coordinate, subVolumeShape, shape):
     if coordinate < subVolumeShape: return True
     if coordinate > (shape - subVolumeShape): return True
