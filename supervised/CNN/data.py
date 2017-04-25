@@ -19,7 +19,7 @@ class Volume:
                     layerDirectories.append(config["trainingDataPath"]+d)
             layerDirectories.sort()
         else:
-            layerDirectories = [config["singleScanPath"]]
+            layerDirectories = [config["trainingDataPath"]]
 
         volume = []
         for l in layerDirectories:
@@ -37,13 +37,15 @@ class Volume:
         self.groundTruth = cv2.cvtColor(cv2.imread(config["groundTruthFile"]), cv2.COLOR_RGB2GRAY)
         self.groundTruth = np.transpose(self.groundTruth, (1,0))
 
-        if config["crop"]:
-            self.volume = self.volume[:,config["cropX_low"]:config["cropX_high"],config["cropY_low"]:config["cropY_high"],:]
-            self.groundTruth = self.groundTruth[config["cropX_low"]:config["cropX_high"],config["cropY_low"]:config["cropY_high"]]
-
         if config["surface_segmentation"]:
             self.surfaceImage = cv2.cvtColor(cv2.imread(config["surfaceDataFile"]), cv2.COLOR_RGB2GRAY)
             self.surfaceImage = np.transpose(self.surfaceImage, (1,0))
+
+        if config["crop"]:
+            self.volume = self.volume[:,config["cropX_low"]:config["cropX_high"],config["cropY_low"]:config["cropY_high"],:]
+            self.groundTruth = self.groundTruth[config["cropX_low"]:config["cropX_high"],config["cropY_low"]:config["cropY_high"]]
+            if config["surface_segmentation"]:
+                self.surfaceImage = self.surfaceImage[config["cropX_low"]:config["cropX_high"], config["cropY_low"]:config["cropY_high"]]
 
         # NOTE: to resample the entire volume & ground truth, uncomment the lines below
         # for i in range(self.volume.shape[0]):
@@ -59,12 +61,14 @@ class Volume:
 
         coordinates = []
         truth_label_value = np.amax(self.groundTruth)
-        for x in range(xBounds[0], xBounds[1]):
-            for y in range(yBounds[0], yBounds[1]):
+        for x in range(xBounds[0], xBounds[1], config["stride"]):
+            for y in range(yBounds[0], yBounds[1], config["stride"]):
                 x_range = math.ceil(config["x_Dimension"]/config["scalingFactor"])
                 y_range = math.ceil(config["y_Dimension"]/config["scalingFactor"])
                 if not ops.edge(x, x_range, self.volume.shape[1]) and not ops.edge(y, y_range, self.volume.shape[2]):
-                    label_avg = np.mean(self.groundTruth[x:x+config["x_Dimension"], y:y+config["y_Dimension"]])
+                    xCoordinate2 = int(x + math.ceil(float(config["x_Dimension"]) * float(1/config["scalingFactor"])))
+                    yCoordinate2 = int(y + math.ceil(float(config["y_Dimension"]) * float(1/config["scalingFactor"])))
+                    label_avg = np.mean(self.groundTruth[x:xCoordinate2, y:yCoordinate2])
                     if 0.1*truth_label_value < label_avg < 0.9*truth_label_value:
                         continue
                     coordinates.append([x,y])
@@ -77,38 +81,40 @@ class Volume:
         xBounds, yBounds = ops.bounds(config, [self.volume.shape[1], self.volume.shape[2]], (bounds+2)%4)
         coordinates = []
         truth_label_value = np.amax(self.groundTruth)
-        for x in range(xBounds[0], xBounds[1]):
-            for y in range(yBounds[0], yBounds[1]):
+        for x in range(xBounds[0], xBounds[1], config["stride"]):
+            for y in range(yBounds[0], yBounds[1], config["stride"]):
                 x_range = math.ceil(config["x_Dimension"]/config["scalingFactor"])
                 y_range = math.ceil(config["y_Dimension"]/config["scalingFactor"])
                 if not ops.edge(x, x_range, self.volume.shape[1]) and not ops.edge(y, y_range, self.volume.shape[2]):
-                    label_avg = np.mean(self.groundTruth[x:x+config["x_Dimension"], y:y+config["y_Dimension"]])
+                    xCoordinate2 = int(x + math.ceil(float(config["x_Dimension"]) * float(1/config["scalingFactor"])))
+                    yCoordinate2 = int(y + math.ceil(float(config["y_Dimension"]) * float(1/config["scalingFactor"])))
+                    label_avg = np.mean(self.groundTruth[x:xCoordinate2, y:yCoordinate2])
                     if 0.1*truth_label_value < label_avg < 0.9*truth_label_value:
                         continue
                     coordinates.append([x,y])
         np.random.shuffle(coordinates)
         return np.array(coordinates)[0:config["batchSize"],:]
 
-    def get2DPredictionCoordinates(self):
+    def get2DPredictionCoordinates(self, config):
         x_resolution = self.volume.shape[1]
         y_resolution = self.volume.shape[2]
 
         coordinates = []
-        for x in range(x_resolution):
-            for y in range(y_resolution):
+        for x in range(0,x_resolution,config["stride"]):
+            for y in range(0,y_resolution,config["stride"]):
                 coordinates.append([x,y])
 
         return np.array(coordinates)
 
-    def get3DPredictionCoordinates(self):
+    def get3DPredictionCoordinates(self, config):
         x_resolution = self.volume.shape[1]
         y_resolution = self.volume.shape[2]
         z_resolution = self.volume.shape[3]
 
         coordinates = []
-        for x in range(x_resolution):
-            for y in range(y_resolution):
-                for z in range(z_resolution):
+        for x in range(0,x_resolution,config["stride"]):
+            for y in range(0,y_resolution,config["stride"]):
+                for z in range(0,z_resolution,config["stride"]):
                     coordinates.append([x,y,z])
 
         return np.array(coordinates)

@@ -1,6 +1,7 @@
 import numpy as np
 import pdb
 import math
+import datetime
 import scipy.ndimage
 import matplotlib
 matplotlib.use('Agg')
@@ -199,3 +200,17 @@ def customReshape(config, batchX):
         count += 1
 
     return out_batch
+
+def getSpecString(args):
+    tm = datetime.datetime.today().timetuple()
+    tmstring = ""
+    for t in range(3):
+        tmstring += str(tm[t])
+        tmstring+= "-"
+    tmstring += str(tm[3])
+    tmstring += "h"
+
+    specstring = "{}x{}x{}-".format(args["x_Dimension"], args["y_Dimension"], args["z_Dimension"])
+    specstring = specstring + tmstring
+
+    return specstring

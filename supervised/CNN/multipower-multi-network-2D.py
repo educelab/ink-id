@@ -37,7 +37,7 @@ config = {
     "epochs": 2,
     "predictStep": 200000,
     "displayStep": 100,
-    "saveModelStep": 3,
+    "saveModelStep": 300,
     "scalingFactor": 1.0,
     "graphStep": 1000,
     "addRandom": True,
@@ -133,7 +133,7 @@ with tf.Session() as sess:
 
     volume.initPredictionImages(config, 1)
 
-    coordinates = volume.getPredictionCoordinates()
+    coordinates = volume.get2DPredictionCoordinates(config)
     predictionValues = []
     for i in range(0,coordinates.shape[0],config["batchSize"]):
         if i < (coordinates.shape[0] - config["batchSize"]):
@@ -144,9 +144,9 @@ with tf.Session() as sess:
         predictionValues = [sess.run(pred, feed_dict={x: batchX, keep_prob: 1.0})]
 
         if i < (coordinates.shape[0] - config["batchSize"]):
-            volume.reconstruct(config, predictionValues, coordinates[i:i+config["batchSize"],:])
+            volume.reconstruct2D(config, predictionValues, coordinates[i:i+config["batchSize"],:])
         else:
-            volume.reconstruct(config, predictionValues, coordinates[i:coordinates.shape[0],:])
+            volume.reconstruct2D(config, predictionValues, coordinates[i:coordinates.shape[0],:])
 
         volume.savePredictionImages(config, epoch-1)
         print("Predicting iteration: {}\t Total number of iterations: {}".format(i, coordinates.shape[0]))
