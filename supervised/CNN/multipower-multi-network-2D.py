@@ -11,42 +11,51 @@ import model
 import ops
 
 config = {
-    "trainingDataPath": "/home/volcart/volumes/test/input_MP/",
-    "mulitpower": True,
-    "groundTruthFile": "/home/volcart/volumes/test/gt.png",
-    "savePredictionPath": "/home/volcart/volumes/test/MP-multi-network_model/",
-    "saveModelPath": "/home/volcart/volumes/test/MP-multi-network_model/",
+    # FLAGS
     "surface_segmentation": True,
-    "surfaceDataFile": "/home/volcart/volumes/test/surface.png",
-    "numChannels": 1,
-    "numVolumes": 2,
+    "mulitpower": True,
     "crop": False,
-    "cropX_low": 550,
-    "cropX_high": 600,
-    "cropY_low": 450,
-    "cropY_high": 500,
+    "addRandom": True,
+    "useJitter": True,
+
+    # PATHS
+    "trainingDataPath": "/home/volcart/volumes/test/input_MP/",
+    "groundTruthFile": "/home/volcart/volumes/test/gt.png",
+    "savePredictionPath": "/home/volcart/volumes/test/MP-single-channel_model/",
+    "saveModelPath": "/home/volcart/volumes/test/MP-single-channel_model/",
+    "surfaceDataFile": "/home/volcart/volumes/test/surface.png",
+
+    # DATA
+    "numVolumes": 2,
     "x_Dimension": 10,
     "y_Dimension": 10,
     "z_Dimension": 30,
-    "stride": 1,
-    "predictBatchSize": 24, # NOTE: for multipower single channel, this must be a multiple of numVolumes
-    "n_Classes": 2,
-    "learningRate": 0.0001,
-    "batchSize": 24, # NOTE: for multipower single channel, this must be a multiple of numVolumes
-    "dropout": 0.75,
-    "epochs": 2,
-    "predictStep": 200000,
-    "displayStep": 100,
-    "saveModelStep": 300,
+    "stride": 2,
     "scalingFactor": 1.0,
-    "graphStep": 1000,
-    "addRandom": True,
     "randomStep": 10,
     "randomRange" : 200,
     "addAugmentation": True,
     "surfaceCushion" : 5,
     "jitterRange" : [-3, 3],
-    "useJitter": True
+    "cropX_low": 550,
+    "cropX_high": 600,
+    "cropY_low": 450,
+    "cropY_high": 500,
+
+    # MODEL
+    "numChannels": 1,
+    "n_Classes": 2,
+    "learningRate": 0.0001,
+
+    # SESSION
+    "epochs": 2,
+    "batchSize": 24, # NOTE: for multipower single channel, this must be a multiple of numVolumes
+    "predictBatchSize": 24, # NOTE: for multipower single channel, this must be a multiple of numVolumes
+    "dropout": 0.75,
+    "predictStep": 200000,
+    "displayStep": 100,
+    "saveModelStep": 100,
+    "graphStep": 1000,
 }
 
 with open(config["savePredictionPath"]+'info.txt', 'w') as outfile:
@@ -56,7 +65,7 @@ x = tf.placeholder(tf.float32, [None, config["x_Dimension"], config["y_Dimension
 y = tf.placeholder(tf.float32, [None, config["n_Classes"]])
 keep_prob = tf.placeholder(tf.float32)
 
-pred, loss = model.buildMultiNetworkModel(x, y, config)
+pred, loss = model.buildMultiNetworkModel(x, y, keep_prob, config)
 optimizer = tf.train.AdamOptimizer(learning_rate=config["learningRate"]).minimize(loss)
 correct_pred = tf.equal(tf.argmax(pred, 1), tf.argmax(y, 1))
 accuracy = tf.reduce_mean(tf.cast(correct_pred, tf.float32))

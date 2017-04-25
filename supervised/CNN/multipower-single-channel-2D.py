@@ -12,24 +12,24 @@ import ops
 
 config = {
     # FLAGS
-    "surface_segmentation": True,
-    "mulitpower": True,
-    "crop": False,
+    "surface_segmentation": False,
+    "mulitpower": False,
+    "crop": True,
     "addRandom": True,
-    "useJitter": True,
+    "useJitter": False,
 
     # PATHS
-    "trainingDataPath": "/home/volcart/volumes/test/input_MP/",
-    "groundTruthFile": "/home/volcart/volumes/test/gt.png",
-    "savePredictionPath": "/home/volcart/volumes/test/MP-single-channel_model/",
-    "saveModelPath": "/home/volcart/volumes/test/MP-single-channel_model/",
+    "trainingDataPath": "/home/volcart/volumes/packages/CarbonPhantom-Feb2017.volpkg/paths/20170221130948/layered/registered/layers/full-layers/after-rotate/",
+    "groundTruthFile": "/home/volcart/volumes/packages/CarbonPhantom-Feb2017.volpkg/paths/20170221130948/layered/registered/ground-truth/GroundTruth-CarbonInk.png",
+    "savePredictionPath": "/home/volcart/supervised-results/CarbonPhantom-Feb2017/column-6/10x10-step2/",
+    "saveModelPath": "/home/volcart/supervised-results/CarbonPhantom-Feb2017/column-6/10x10-step2/models/",
     "surfaceDataFile": "/home/volcart/volumes/test/surface.png",
 
     # DATA
-    "numVolumes": 2,
+    "numVolumes": 1,
     "x_Dimension": 10,
     "y_Dimension": 10,
-    "z_Dimension": 30,
+    "z_Dimension": 17,
     "stride": 2,
     "scalingFactor": 1.0,
     "randomStep": 10,
@@ -37,10 +37,10 @@ config = {
     "addAugmentation": True,
     "surfaceCushion" : 5,
     "jitterRange" : [-3, 3],
-    "cropX_low": 550,
-    "cropX_high": 600,
-    "cropY_low": 450,
-    "cropY_high": 500,
+    "cropX_low": 100,
+    "cropX_high": 548,
+    "cropY_low": 420,
+    "cropY_high": 1758,
 
     # MODEL
     "numChannels": 1,

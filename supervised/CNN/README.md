@@ -3,7 +3,7 @@
 This application uses a dictionary called `config` as a sort-of global configuration variable throughout the entirety of the app. Defining `config` makes experimentation simpler and more accessible. For example, write a `experiment.py` script and pass configuration variables to the `main.py` program.
 
 **Example `config` dictionary:**:
-```
+```[python]
 config = {
     # FLAGS
     "surface_segmentation": False,
@@ -115,58 +115,40 @@ We have developed `data.py` and `ops.py` for multipurpose use. It is up to *you*
 
 # ops.py:
 
-...
+`graph()`:
+  - graphs:
+    - test accuracy
+    - test loss
+    - train accuracy
+    - train loss
+    - test precision
+    - train precision
+  - saves to image, location defined in `config`
 
-# Multipower-single-channel:
+`getRandomBrick()`:
+  - returns a sub-volume filled with random noise
+  - distribution of values are aligned with the median value of the actual sub-volume
 
-... how to configure
+`edge()`:
+  - accepts coordinate, sub-volume size, and axis shape
+  - returns True if coordinate is located on volume edge
+  - else returns False
 
-# Multipower-multi-channel:
+`findEdgeSubVolume()`:
+  - returns a edge sub-volume with zero padding
 
-... how to configure
+`bounds()`:
+  - returns the bounds tuples for X and Y dimensions
+    - used in finding training vs testing coordinates
 
-# Multipower-multi-network:
+`findRandomCoordinates()`: (deprecated -- not used)
+  - returns x, y, z coordinates in random locations within the bounds parameters
 
-... how to configure
+`splice()`:
+  - splices edges off sub-volume that has been scaled beyond the size of the defined sub-volume size
 
+`customReshape()`: (deprecated -- not used)
+  - reshapes a list of multipower volumes to shape [batch, x, y, z, num_volumes]
 
-# INFO on code... to be filled in later
-
-## @Jack NOTES for data.py:
-- `init()`:
-  - reads in list of volumes & the ground truth
-    - if there is a single volume, then you must specify config["multipower"]: False
-    - self.volume is of shape [num_volumes, x, y, z]
-    - self.groundTruth is of shape [x, y]
-  - if config["crop"] == True: then crops based on config[] crop values
-  - if config["surface_segmentation"] == True: then open surface segmentation file
-
-
-- `getSamples()`:
-  - grabs samples of size sub-volume from the defined coordinate positions
-    - parameters:
-      - config dictionary
-      - coordinates
-      - FLAGS: addNoise, augment, addJitter, includeEdgeSubVolumes
-    - returns batch of shape [batch_size, x, y, z, num_volumes]
-
-*TODO:*
-- @Jack create your own `"main"` file and name it appropriately
-  - I have already created two of my own --> for testing
-- add the following IF conditions based on flag parameters to `getSamples()`
-  - addNoise
-  - augment
-  - addJitter
-  - includeEdgeSubVolumes
-- in `getTrainingCoordinates()` make sure that we check that there is at least 90% ink or no ink
-- do the same thing for getRandomTestCoordinates() ^^^
-- add surface option to `zCoordinate` in `getSamples()`
-- 3D predictions:
-  - NOTE: just add a z-coordinate to the functions `get***Coordinates()`
-    - because then the coordinates will be passed to `getSamples()`
-    - NOTE: assign `coordinates[i][2]` to `zCoordinate` in `getSamples()`
-  - for 3D recontructions:
-    - pass num_images = z_depth as a parameters to `initPredictionImages()`
-    - you may need to make minor adjustment to `main` file
-- add metric variables such as `self.all_truth` ?
-- verify that functions in `ops.py` are the same
+`getSpecString()`:
+  - returns string with date, time, and sub-volume size
