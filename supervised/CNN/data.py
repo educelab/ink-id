@@ -127,19 +127,17 @@ class Volume:
 
 
     def getSamples(self, config, coordinates):
-        #TODO clean this up
+    ''' given a list of coordinates, retrieve samples from those coordinates'''
         trainingSamples = []
         groundTruth = []
 
         for i in range(coordinates.shape[0]):
-
+            # a list of the samples at this coordinate, 1 for a single scan
             spectralSamples = []
 
             xCoordinate = coordinates[i][0]
             yCoordinate = coordinates[i][1]
             if coordinates[0,:].shape == 3: # NOTE: case where an [x,y,z] coordinate has been passed
-                pdb.set_trace()
-                print
                 zCoordinate = coordinates[i,2]
             else:
                 if config["surface_segmentation"]:
@@ -148,6 +146,7 @@ class Volume:
                         zCoordinate = np.maximum(0, zCoordinate +  np.random.randint(config["jitterRange"][0], config["jitterRange"][1]))
                 else:
                     zCoordinate = 0
+
             xCoordinate2 = int(xCoordinate + math.ceil(float(config["x_Dimension"]) * float(1/config["scalingFactor"])))
             yCoordinate2 = int(yCoordinate + math.ceil(float(config["y_Dimension"]) * float(1/config["scalingFactor"])))
             zCoordinate2 = int(zCoordinate + math.ceil(float(config["z_Dimension"]) * float(1/config["scalingFactor"])))
@@ -161,11 +160,10 @@ class Volume:
                         sample = ops.augmentSample(sample)
                     spectralSamples.append(sample)
             else:
-                if config["addRandom"] and (i % config["randomStep"] == 0):
+                if config["addRandom"] and (np.random.randint(config["randomStep"]) == 0):
+                    #TODO test set should never have random bricks
                     for j in range(self.volume.shape[0]):
                         sample = ops.getRandomBrick(config, np.median(self.volume[j, xCoordinate:xCoordinate2, yCoordinate:yCoordinate2, zCoordinate:zCoordinate2]))
-                        if config["addAugmentation"]:
-                            sample = ops.augmentSample(sample)
                         spectralSamples.append(sample)
                     trainingSamples.append(spectralSamples)
                     groundTruth.append([1.0,0.0])
@@ -178,6 +176,7 @@ class Volume:
                     if config["addAugmentation"]:
                         sample = ops.augmentSample(sample)
                     spectralSamples.append(sample)
+
             trainingSamples.append(spectralSamples)
 
             no_ink = len(np.where(self.groundTruth[xCoordinate:xCoordinate+config["x_Dimension"], \
