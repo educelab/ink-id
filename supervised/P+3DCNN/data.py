@@ -44,6 +44,7 @@ class Volume:
             self.volume = self.volume[:,:,args["cropY_low"]:args["cropY_high"],:]
             self.groundTruth = self.groundTruth[:,args["cropY_low"]:args["cropY_high"]]
 
+        # NOTE: to resample the entire volume & ground truth, uncomment the lines below
         # for i in range(self.volume.shape[0]):
         #     self.volume[i,:,:,:] = scipy.ndimage.interpolation.zoom(self.volume[i,:,:,:], args["scalingFactor"])
         # self.groundTruth = scipy.ndimage.interpolation.zoom(self.groundTruth, args["scalingFactor"])
