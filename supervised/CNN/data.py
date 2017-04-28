@@ -52,7 +52,9 @@ class Volume:
         #     self.volume[i,:,:,:] = scipy.ndimage.interpolation.zoom(self.volume[i,:,:,:], config["scalingFactor"])
         # self.groundTruth = scipy.ndimage.interpolation.zoom(self.groundTruth, config["scalingFactor"])
 
+
     def getTrainingCoordinates(self, config, bounds=0, shuffle=True, testSet=False):
+        #TODO set up for quadrant training
         # bounds parameters: 0=TOP || 1=RIGHT || 2=BOTTOM || 3=LEFT
         if testSet:
             xBounds, yBounds = ops.bounds(config, [self.volume.shape[1], self.volume.shape[2]], (bounds+2)%4)
@@ -77,7 +79,9 @@ class Volume:
             np.random.shuffle(coordinates)
         return np.array(coordinates)
 
+
     def getRandomTestCoordinates(self, config, bounds=0):
+        #TODO set up for quadrant training
         xBounds, yBounds = ops.bounds(config, [self.volume.shape[1], self.volume.shape[2]], (bounds+2)%4)
         coordinates = []
         truth_label_value = np.amax(self.groundTruth)
@@ -95,6 +99,7 @@ class Volume:
         np.random.shuffle(coordinates)
         return np.array(coordinates)[0:config["batchSize"],:]
 
+
     def get2DPredictionCoordinates(self, config):
         x_resolution = self.volume.shape[1]
         y_resolution = self.volume.shape[2]
@@ -106,20 +111,23 @@ class Volume:
 
         return np.array(coordinates)
 
+
     def get3DPredictionCoordinates(self, config):
         x_resolution = self.volume.shape[1]
         y_resolution = self.volume.shape[2]
         z_resolution = self.volume.shape[3]
 
         coordinates = []
-        for x in range(0,x_resolution,config["stride"]):
-            for y in range(0,y_resolution,config["stride"]):
-                for z in range(0,z_resolution,config["stride"]):
+        for x in range(0, x_resolution, config["stride"]):
+            for y in range(0, y_resolution, config["stride"]):
+                for z in range(0, z_resolution, config["stride"]):
                     coordinates.append([x,y,z])
 
         return np.array(coordinates)
 
+
     def getSamples(self, config, coordinates):
+        #TODO clean this up
         trainingSamples = []
         groundTruth = []
 
@@ -184,20 +192,24 @@ class Volume:
 
         return np.transpose(np.array(trainingSamples), (0, 2, 3, 4, 1)), np.array(groundTruth)
 
+
     def totalPredictions(self, config):
         xSlides = (self.volume.shape[1] - config["x_Dimension"]) / config["stride"]
         ySlides = (self.volume.shape[2] - config["y_Dimension"]) / config["stride"]
         return int(xSlides * ySlides)
+
 
     def initPredictionImages(self, config, num_images):
         self.predictionImages = []
         for i in range(num_images):
             self.predictionImages.append(np.zeros((int(self.volume.shape[1]/config["stride"]), int(self.volume.shape[2]/config["stride"])), dtype=np.uint8))
 
+
     def initPredictionVolumes(self, config, num_volumes):
         self.predictionVolumes = []
         for i in range(num_volumes):
             self.predictionVolumes.append(np.zeros((int(self.volume.shape[1]/config["stride"]), int(self.volume.shape[2]/config["stride"]), int(self.volume.shape[3]/config["stride"])), dtype=np.uint8))
+
 
     def reconstruct2D(self, config, samples, coordinates):
         # reconstruct prediction volume one prediction sample at a time
@@ -205,9 +217,11 @@ class Volume:
             for j in range(coordinates.shape[0]):
                 if np.argmax(samples[i][j,:]) == 1:
                     try:
+                        #TODO use actual prediction value instead of 255
                         self.predictionImages[i][int(coordinates[j,0]/config["stride"]), int(coordinates[j,1]/config["stride"])] = 255
                     except:
                         pass
+
 
     def reconstruct3D(self, config, samples, coordinates):
         # reconstruct prediction volume one prediction sample at a time
@@ -215,13 +229,16 @@ class Volume:
             for j in range(coordinates.shape[0]):
                 if np.argmax(samples[i][j,:]) == 1:
                     try:
+                        #TODO use actual prediction value instead of 255
                         self.predictionVolumes[i][int(coordinates[j,0]/config["stride"]), int(coordinates[j,1]/config["stride"]), int(coordinates[j,2]/config["stride"])] = 255
                     except:
                         pass
 
+
     def savePredictionImages(self, config, epoch):
         for i in range(len(self.predictionImages)):
             cv2.imwrite(config["savePredictionPath"] + "volume-" + str(i) + "-epoch-" + str(epoch) + ".png", self.predictionImages[i])
+
 
     def savePredictionVolumes(self, config, epoch):
         for i in range(len(self.predictionVolumes)):
