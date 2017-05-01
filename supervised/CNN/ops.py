@@ -163,7 +163,8 @@ def findEdgeSubVolume(config, xCoordinate, xCoordinate2, yCoordinate, yCoordinat
             unscaledSample = volume[i, xCoordinate:volume.shape[1], yCoordinate:volume.shape[2], zCoordinate:zCoordinate2]
             sample[0:volume.shape[1]-xCoordinate, 0:volume.shape[2]-yCoordinate,:] = unscaledSample
 
-    sample = scipy.ndimage.interpolation.zoom(sample, config["scalingFactor"])
+    if config["scalingFactor"] != 1.0:
+        sample = scipy.ndimage.interpolation.zoom(sample, config["scalingFactor"])
     sample = splice(sample, config)
     return sample
 

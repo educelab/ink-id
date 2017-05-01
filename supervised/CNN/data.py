@@ -11,7 +11,7 @@ import ops
 
 class Volume:
     def __init__(self, config):
-        if config["mulitpower"] == True:
+        if config["multipower"] == True:
             allDirectories = os.listdir(config["trainingDataPath"])
             layerDirectories = []
             for d in allDirectories:
@@ -126,8 +126,8 @@ class Volume:
         return np.array(coordinates)
 
 
-    def getSamples(self, config, coordinates):
-    ''' given a list of coordinates, retrieve samples from those coordinates'''
+    def getSamples(self, config, coordinates, predictionSamples=False):
+        ''' given a list of coordinates, retrieve samples from those coordinates'''
         trainingSamples = []
         groundTruth = []
 
@@ -141,8 +141,8 @@ class Volume:
                 zCoordinate = coordinates[i,2]
             else:
                 if config["surface_segmentation"]:
-                    zCoordinate = self.surfaceImage[xCoordinate, yCoordinate] - config["surfaceCushion"]
-                    if config["useJitter"]:
+                    zCoordinate = np.maximum(0, self.surfaceImage[xCoordinate, yCoordinate] - config["surfaceCushion"])
+                    if config["useJitter"] and not predictionSamples:
                         zCoordinate = np.maximum(0, zCoordinate +  np.random.randint(config["jitterRange"][0], config["jitterRange"][1]))
                 else:
                     zCoordinate = 0
@@ -156,11 +156,11 @@ class Volume:
             if ops.edge(xCoordinate, x, self.volume.shape[1]) or ops.edge(yCoordinate, y, self.volume.shape[2]):
                 for j in range(self.volume.shape[0]):
                     sample = ops.findEdgeSubVolume(config, xCoordinate, xCoordinate2, yCoordinate, yCoordinate2, zCoordinate, zCoordinate2, self.volume, j)
-                    if config["addAugmentation"]:
+                    if config["addAugmentation"] and not predictionSamples:
                         sample = ops.augmentSample(sample)
                     spectralSamples.append(sample)
             else:
-                if config["addRandom"] and (np.random.randint(config["randomStep"]) == 0):
+                if not predictionSamples and config["addRandom"] and (np.random.randint(config["randomStep"]) == 0):
                     #TODO test set should never have random bricks
                     for j in range(self.volume.shape[0]):
                         sample = ops.getRandomBrick(config, np.median(self.volume[j, xCoordinate:xCoordinate2, yCoordinate:yCoordinate2, zCoordinate:zCoordinate2]))
@@ -171,9 +171,10 @@ class Volume:
                 for j in range(self.volume.shape[0]):
                     sample = self.volume[j, xCoordinate:xCoordinate2, \
                                 yCoordinate:yCoordinate2, zCoordinate:zCoordinate2]
-                    sample = scipy.ndimage.interpolation.zoom(sample, config["scalingFactor"])
+                    if config["scalingFactor"] != 1.0:
+                        sample = scipy.ndimage.interpolation.zoom(sample, config["scalingFactor"])
                     sample = ops.splice(sample, config)
-                    if config["addAugmentation"]:
+                    if config["addAugmentation"] and not predictionSamples:
                         sample = ops.augmentSample(sample)
                     spectralSamples.append(sample)
 
@@ -235,11 +236,15 @@ class Volume:
 
 
     def savePredictionImages(self, config, epoch):
+        try: os.makedirs(config["savePredictionPath"])
+        except: pass
         for i in range(len(self.predictionImages)):
             cv2.imwrite(config["savePredictionPath"] + "volume-" + str(i) + "-epoch-" + str(epoch) + ".png", self.predictionImages[i])
 
 
     def savePredictionVolumes(self, config, epoch):
+        try: os.makedirs(config["savePredictionPath"])
+        except: pass
         for i in range(len(self.predictionVolumes)):
             for j in range(self.predictionVolumes[i].shape[2]):
                 cv2.imwrite(config["savePredictionPath"] + "volume-" + str(i) + "-slice-" + str(j) + "-epoch-" + str(epoch) + ".png", self.predictionVolumes[i][:,:,j])
