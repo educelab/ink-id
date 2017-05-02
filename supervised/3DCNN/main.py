@@ -10,9 +10,9 @@ import time
 import ops
 from sklearn.metrics import precision_score
 
-if len(sys.argv) < 6:
+if len(sys.argv) < 2:
     print("Missing arguments")
-    print("Usage: main.py  [xy Dimension]... [z Dimension]... [cushion]... [overlap step]... [layer1 neurons]... [data path]")
+    print("Usage: main.py  [xy Dimension]... [z Dimension]... ")
     exit()
 
 print("Initializing...")
@@ -22,7 +22,7 @@ args = {
     ### Input configuration ###
     #"trainingDataPath": "/home/jack/devel/volcart/small-fragment-data/flatfielded-slices/",
     #"trainingDataPath" : "/home/jack/devel/volcart/small-fragment-data/nudge-0.50%/slices/"
-    "trainingDataPath" : str(sys.argv[5]),
+    "trainingDataPath" : "/home/jack/devel/volcart/small-fragment-data/flatfielded-slices/",
     #"surfaceDataFile": "/home/jack/devel/volcart/small-fragment-data/surf-output-21500/surface-points-21500.tif",
     "surfaceDataFile": "/home/jack/devel/volcart/small-fragment-data/polyfit-slices-degree32-cush16-thresh20500/surface.tif",
     "groundTruthFile": "/home/jack/devel/volcart/small-fragment-data/ink-only-mask.tif",
@@ -30,45 +30,50 @@ args = {
     "x_Dimension": int(sys.argv[1]),
     "y_Dimension": int(sys.argv[1]),
     "z_Dimension": int(sys.argv[2]),
-    "surfaceCushion" : 15,
+
+    ### Back off from the surface point some distance
+    "surfaceCushion" : 20,
 
     ### Network configuration ###
+    # Misnamed. Is actually filter size
     "receptiveField" : [3,3,3],
     "learningRate": 0.0001,
     "batchSize": 30,
     "predictBatchSize": 200,
+    # % of neurons you will use
     "dropout": 0.5,
-    "layer1_neurons": int(sys.argv[4]),
-    "trainingIterations": 30001,
-    "trainingEpochs": 5,
+    "neurons": [4, 8, 16, 32],
+    "trainingIterations": 10001,
+    "trainingEpochs": 1,
     "n_Classes": 2,
 
     ### Data configuration ###
     "numCubes" : 500,
-    "addRandom" : False,
+    "addRandom" : True,
     "randomStep" : 10, # one in every randomStep non-ink samples will be a random brick
     "randomRange" : 200,
     "useJitter" : True,
     "jitterRange" : [-6, 6],
     "addAugmentation" : True,
-    "train_portion" : .6,
+    "train_portion" : .6, # Percent of division between train and predict regions
     "balance_samples" : True,
-    "trainBounds" : int(sys.argv[3]), # bounds parameters: 0=TOP || 1=RIGHT || 2=BOTTOM || 3=LEFT
+    "train_quadrants" : -1, # parameters: 0=test top left (else train) || 1=test top right || 2=test bottom left || 3=test bottom right
+    "trainBounds" : 3, # bounds parameters: 0=TOP || 1=RIGHT || 2=BOTTOM || 3=LEFT
     "grabNewSamples": 20,
     "surfaceThresh": 20400,
     "restrictSurface": False,
 
     ### Output configuration ###
-    "predictStep": 5000,
+    "predictStep": 20000,
     "displayStep": 50,
-    "overlapStep": 2,
+    "overlapStep": 4,
     "predictDepth" : 1,
     "savePredictionFolder" : "/home/jack/devel/volcart/predictions/3dcnn/{}x{}x{}-{}-{}-{}h/".format(
             sys.argv[1], sys.argv[1], sys.argv[2],  #x, y, z
             datetime.datetime.today().timetuple()[1], # month
             datetime.datetime.today().timetuple()[2], # day
             datetime.datetime.today().timetuple()[3]), # hour
-    "notes": "Major change to network model"
+    "notes": "Neuron experiment"
 }
 
 
@@ -76,7 +81,7 @@ x = tf.placeholder(tf.float32, [None, args["x_Dimension"], args["y_Dimension"], 
 y = tf.placeholder(tf.float32, [None, args["n_Classes"]])
 keep_prob = tf.placeholder(tf.float32)
 
-pred, loss = model.buildModel(x, y, args)
+pred, loss = model.buildModel(x, y, args, keep_prob)
 ones_like_preds = tf.ones_like(pred)
 zeros_like_trues = tf.zeros_like(y)
 
@@ -95,7 +100,9 @@ with tf.Session() as sess:
     sess.run(init)
     predict_flag = False
     iteration = 0
+    iterations_since_prediction = 0
     epoch = 0
+    predictions_made = 0
     avgOutputVolume = []
     train_accs = []
     train_losses = []
@@ -105,6 +112,7 @@ with tf.Session() as sess:
     test_precs = []
     testX, testY = volume.getTrainingSample(args, testSet=True)
     while epoch < args["trainingEpochs"]:
+#    while iteration < args["trainingIterations"]:
             predict_flag = False
 
             batchX, batchY, epoch = volume.getTrainingBatch(args)
@@ -127,7 +135,7 @@ with tf.Session() as sess:
                 train_precs.append(train_prec)
                 test_precs.append(test_prec)
 
-                if (test_acc > .9) and iteration > 5000: # or (test_prec / args["numCubes"] < .05)
+                if (test_acc > .9) or (test_prec > .8) and (iterations_since_prediction > 1000) and (predictions_made < 4): # or (test_prec / args["numCubes"] < .05)
                     # make a full prediction if results are tentatively spectacular
                     predict_flag = True
 
@@ -137,6 +145,8 @@ with tf.Session() as sess:
 
 
             if (predict_flag) or (iteration % args["predictStep"] == 0 and iteration > 0):
+                iterations_since_prediction = 0
+                predictions_made += 1
                 print("{} training iterations took {:.2f} minutes".format( \
                     iteration, (time.time() - start_time)/60))
                 startingCoordinates = [0,0,0]
@@ -160,6 +170,30 @@ with tf.Session() as sess:
 
                 ops.graph(args, iteration, test_accs, test_losses, train_accs, train_losses, test_precs, train_precs)
 
-            iteration = iteration + 1
+            iteration += 1
+            iterations_since_prediction += 1
+
+
+    # make one last prediction after everything finishes
+    startingCoordinates = [0,0,0]
+    predictionSamples, coordinates, nextCoordinates = volume.getPredictionSample3D(args, startingCoordinates)
+    count = 1
+    total_predictions = volume.totalPredictions(args)
+    total_prediction_batches = int(total_predictions / args["predictBatchSize"])
+    print("Beginning predictions...")
+    while ((count-1)*args["predictBatchSize"]) < total_predictions:
+        if (count % int(total_prediction_batches / 10) == 0):
+            #update UI at 10% intervals
+            print("Predicting cubes {} of {}".format((count * args["predictBatchSize"]), total_predictions))
+        predictionValues = sess.run(pred, feed_dict={x: predictionSamples, keep_prob: 1.0})
+        volume.reconstruct3D(args, predictionValues, coordinates)
+        predictionSamples, coordinates, nextCoordinates = volume.getPredictionSample3D(args, nextCoordinates)
+        count += 1
+    minutes = ( (time.time() - start_time) /60 )
+    volume.savePrediction3D(args, iteration)
+    volume.savePredictionMetrics(args, iteration, minutes)
+
+    ops.graph(args, iteration, test_accs, test_losses, train_accs, train_losses, test_precs, train_precs)
+
 
 print("full script took {:.2f} minutes".format((time.time() - start_time)/60))

@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt
 from scipy.signal import argrelmax
 from scipy.stats import norm
 
-truth_mask = tiff.imread('/home/jack/devel/volcart/small-fragment-data/ink-only-mask.tif')
+truth_mask = tiff.imread('/home/jack/devel/volcart/predictions/3dcnn/Quadrant Experiment/new.tif')
 vol = np.load('/home/jack/devel/volcart/small-fragment-data/volume.npy')
 output_dir = '/home/jack/devel/volcart/small-fragment-data/nudge-'
 output = np.zeros(vol.shape, dtype=np.uint16)
@@ -29,7 +29,7 @@ truth_value = np.max(truth_mask)
 # parameters
 loc = 0
 scale = 4 # how much to stretch the curve, lower = taller curve, higher = shorter/wider
-increase_percentages = np.array([ 1.5,])
+increase_percentages = np.array([ 8,])
 increase_decimals = increase_percentages / 100
 neigh = 4
 thresh = 20500
