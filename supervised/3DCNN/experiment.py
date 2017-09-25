@@ -1,20 +1,8 @@
 import os
 
-xys = [64]
-zs = [64]
-
-paths = [
-        "/home/jack/devel/volcart/small-fragment-data/flatfielded-slices/",
-        ]
-
-try:
-    for xy in xys:
-        for z in zs:
-            os.system("python3 main.py {} {}".format(
-                                xy, z))
+neurons = []
+neurons.append([16, 8, 4, 2])
 
 
-except KeyboardInterrupt:
-    # stop everything, instead of just one script
-    #TODO make this work
-    sys.exit()
+for brain in neurons:
+    os.system("python3 main.py {} {} {} {}".format(brain[0], brain[1], brain[2], brain[3]))
