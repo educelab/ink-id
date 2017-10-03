@@ -23,6 +23,8 @@ class Volume:
             volume.append(sliceData)
         self.volume = np.array(volume)
         self.wobbled_volume = np.array(volume)
+        self.wobbled_axes = []
+        self.wobbled_angle = 0.0
         self.predictionVolume = np.zeros((self.volume.shape[0], self.volume.shape[1], args["predict_depth"]), dtype=np.float32)
 
         self.groundTruth = tiff.imread(args["groundTruthFile"])
@@ -31,8 +33,14 @@ class Volume:
         self.predictionImageSurf = np.zeros((self.volume.shape[0], self.volume.shape[1]), dtype=np.float32)
         self.predictionPlusSurf = np.zeros((self.volume.shape[0], self.volume.shape[1]), dtype=np.float32)
         self.trainingImage = np.zeros(self.predictionImageInk.shape, dtype=np.uint16)
-        self.surfaceImage = tiff.imread(args["surfaceDataFile"])
-        self.surfaceMaskImage = tiff.imread(args["surfaceMaskFile"])
+        if len(args["surfaceDataFile"]) > 0:
+            self.surfaceImage = tiff.imread(args["surfaceDataFile"])
+        else:
+            self.surfaceImage = np.zeros((self.volume.shape[0], self.volume.shape[1]), dtype=np.int)
+        if len(args["surfaceMaskFile"]) > 0:
+            self.surfaceMaskImage = tiff.imread(args["surfaceMaskFile"])
+        else:
+            self.surfaceMaskImage = np.zeros((self.volume.shape[0], self.volume.shape[1]), dtype=np.int)
         self.surfaceMask = self.surfaceMaskImage / np.iinfo(self.surfaceMaskImage.dtype).max
         self.all_truth, self.all_preds = [], []
         self.test_truth, self.test_preds = [], []
@@ -69,14 +77,6 @@ class Volume:
                     # fewer than 50% ink samples
                     self.moveToNextPositiveSample(args)
 
-                # check if moving to sample bumped to next epoch
-                if self.train_index >= len(self.coordinate_pool):
-                    print("finished epoch")
-                    self.train_index = 0
-                    self.trainingImage = np.zeros(self.predictionImageInk.shape, dtype=np.uint16)
-                    self.epoch += 1
-                    np.random.shuffle(self.coordinate_pool)
-
             rowCoord, colCoord, label, augment_seed = self.coordinate_pool[self.train_index]
             zCoord = self.surfaceImage[rowCoord, colCoord] - args["surface_cushion"]
 
@@ -90,6 +90,7 @@ class Volume:
                 continue
 
             if args["wobble_volume"]:
+                zCoord = ops.adjustDepthForWobble(args, rowCoord, colCoord, zCoord, self.wobbled_angle, self.wobbled_axes, self.volume.shape)
                 sample = self.wobbled_volume[rowCoord-rowStep:rowCoord+rowStep, colCoord-colStep:colCoord+colStep, zCoord:zCoord+args["z_Dimension"]]
             else:
                 sample = self.volume[rowCoord-rowStep:rowCoord+rowStep, colCoord-colStep:colCoord+colStep, zCoord:zCoord+args["z_Dimension"]]
@@ -123,7 +124,7 @@ class Volume:
 
 
         for i in range(args["num_test_cubes"]):
-            rowCoordinate, colCoordinate, zCoordinate, label_avg = ops.findRandomCoordinate(args, colBounds, rowBounds, self.groundTruth, self.surfaceImage, self.volume, testSet)
+            rowCoordinate, colCoordinate, zCoordinate, label_avg = ops.findRandomCoordinate(args, colBounds, rowBounds, self.groundTruth, self.surfaceImage, self.surfaceMask, self.volume, testSet)
 
             if args["add_random"] and not testSet and label_avg < .1 and np.random.randint(args["random_step"]) == 0:
                 # make this non-ink sample random data labeled as non-ink
@@ -131,13 +132,14 @@ class Volume:
                 groundTruth[i] = [1.0,0.0]
                 continue
 
-            if args["use_jitter"]:
+            if args["use_jitter"] and not testSet:
                 zCoordinate = np.maximum(0, zCoordinate +  np.random.randint(args["jitter_range"][0], args["jitter_range"][1]))
+
 
             sample = (self.volume[rowCoordinate:rowCoordinate+args["y_Dimension"], \
                         colCoordinate:colCoordinate+args["x_Dimension"], zCoordinate:zCoordinate+args["z_Dimension"]])
 
-            if args["add_augmentation"]:
+            if args["add_augmentation"] and not testSet:
                 sample = ops.augmentSample(args, sample)
 
             if label_avg > (.9 * self.max_truth):
@@ -146,7 +148,6 @@ class Volume:
             else:
                 gt = [1.0,0.0]
                 self.trainingImage[rowCoordinate,colCoordinate] = int(65534/2)
-
 
             trainingSamples[i, 0:sample.shape[0], 0:sample.shape[1], 0:sample.shape[2]] = sample
             groundTruth[i] = gt
@@ -230,7 +231,7 @@ class Volume:
             predictionSamples[sample_count, 0:sample.shape[0], 0:sample.shape[1], 0:sample.shape[2]] = sample
             # populate the "prediction plus surface" with the initial surface value
             self.predictionPlusSurf[rowCoordinate:rowCoordinate+args["y_Dimension"], \
-                    colCoordinate:colCoordinate+args["x_Dimension"]] = self.volume[rowCoordinate+int(args["y_Dimension"]/2), colCoordinate+int(args["x_Dimension"]/2), zCoordinate]
+                    colCoordinate:colCoordinate+args["x_Dimension"]] = self.volume[rowCoordinate+int(args["y_Dimension"]/2), colCoordinate+int(args["x_Dimension"]/2), max(0,min(285,zCoordinate))]
             coordinates[sample_count] = [rowCoordinate, colCoordinate, depthCoordinate]
 
             # increment variables for next iteration
@@ -291,11 +292,11 @@ class Volume:
 
             if(center_step > 0):
                 self.predictionVolume[rowpoint-center_step:rowpoint+center_step, colpoint-center_step:colpoint+center_step, zpoint] = predictionValue
-                self.predictionPlusSurface[rowpoint-center_step:rowpoint+center_step, colpoint-center_step:colpoint+center_step] *= predictionValue
+                self.predictionPlusSurf[rowpoint-center_step:rowpoint+center_step, colpoint-center_step:colpoint+center_step] *= predictionValue
 
             else:
                 self.predictionVolume[rowpoint, colpoint, zpoint] = predictionValue
-                self.predictionPlusSurface[rowpoint, colpoint] *= predictionValue
+                self.predictionPlusSurf[rowpoint, colpoint] *= predictionValue
 
 
             if ops.isInTestSet(args, rowpoint, colpoint, self.volume.shape):
@@ -313,27 +314,22 @@ class Volume:
             self.savePredictionImage(args, iteration, predictValues = np.mean(self.predictionVolume, axis=2), predictionName='ink-average')
 
         # save the output for samples not trained on
-        if args["use_quadrant_training"]:
-            # zero out the appropriate quadrant
-            if args["train_quadrant"] == 0:
-                # keep top left predictions
-                self.predictionVolume[ int(self.volume.shape[0] / 2):, :] = 0
+        if args["use_grid_training"]:
+            # zero out the appropriate column
+            if args["grid_test_square"] % 2 == 0:
+                # test is on left side
                 self.predictionVolume[ :, int(self.volume.shape[1] / 2):] = 0
-
-            elif args["train_quadrant"] == 1:
-                # keep top right predictions
-                self.predictionVolume[ int(self.volume.shape[0] / 2):, :] = 0
+            else:
+                # test is on right side
                 self.predictionVolume[ :, :int(self.volume.shape[1] / 2)] = 0
 
-            elif args["train_quadrant"] == 2:
-                # keep bottom left predictions
-                self.predictionVolume[ :int(self.volume.shape[0] / 2):, :] = 0
-                self.predictionVolume[ :, int(self.volume.shape[1] / 2):] = 0
+            n_rows = int(args["grid_n_squares"] / 2)
+            voxels_per_row = int(self.volume.shape[0] / n_rows)
+            start_row_number = int(args["grid_test_square"] / 2)
+            end_row_number = start_row_number + 1
+            self.predictionVolume[:(start_row_number*voxels_per_row), :] = 0
+            self.predictionVolume[(end_row_number*voxels_per_row):, :] = 0
 
-            elif args["train_quadrant"] == 3:
-                # keep bottom right predictions
-                self.predictionVolume[ :int(self.volume.shape[0] / 2), :] = 0
-                self.predictionVolume[ :, :int(self.volume.shape[1] / 2)] = 0
         else:
             rowBounds, colBounds = ops.bounds(args, [self.volume.shape[0], self.volume.shape[1]], args["train_bounds"])
             self.predictionVolume[rowBounds[0]:rowBounds[1], colBounds[0]:colBounds[1]] = 0
@@ -355,7 +351,9 @@ class Volume:
         else:
             predictionImage = (65535 * predictValues).astype(np.uint16)
 
-        predictionPlusSurfImage = (65535 * self.predictionPlusSurf).astype(np.uint16)
+        mn = np.min(self.predictionPlusSurf)
+        mx = np.min(self.predictionPlusSurf)
+        predictionPlusSurfImage = (65535 * (self.predictionPlusSurf - mn) / (mx-mn)).astype(np.uint16)
         output_path = args["output_path"]
         try:
             os.makedirs(output_path + "/{}/".format(predictionName))
@@ -413,10 +411,11 @@ class Volume:
 
     def wobble_volume(self, args):
         wobble_start_time = time.time()
-        random_angle = ((2*args["wobble_max_degrees"])*np.random.random_sample()) - args["wobble_max_degrees"]
-        print("Wobbling volume {:.2f} degrees...".format(random_angle))
-        random_axes = np.random.choice(3,2, replace=False)
-        self.wobbled_volume = rotate(self.volume, random_angle, random_axes, reshape=False)
+        self.wobbled_angle =  ((2*args["wobble_max_degrees"])*np.random.random_sample()) - args["wobble_max_degrees"]
+        print("Wobbling volume {:.2f} degrees...".format(self.wobbled_angle))
+        self.wobbled_axes = np.random.choice(3,2, replace=False)
+        self.wobbled_volume = rotate(self.volume, self.wobbled_angle, self.wobbled_axes, order=2, mode='nearest', reshape=False)
+        #TODO adjust surface points to match up with wobbled volume
         print("Wobbling took {:.2f} minutes".format((time.time() - wobble_start_time)/60))
 
 

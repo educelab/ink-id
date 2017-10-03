@@ -60,12 +60,31 @@ def graph(args, epoch, test_accs, test_losses, train_accs, train_losses, test_fp
     #plt.show()
 
 
+def adjustDepthForWobble(args, rowCoord, colCoord, zCoordinate, angle, axes, volume_shape):
+    if set(axes) == {0,2}:
+        # plane of rotation = yz
+        adjacent_length =  (volume_shape[0] / 2) - rowCoord
+        offset = adjacent_length * np.tan(np.deg2rad(angle))
+        newZ = int(zCoordinate + offset)
+
+    elif set(axes) == {1,2}:
+        # plane of rotation = xz
+        adjacent_length = colCoord - (volume_shape[1] / 2)
+        offset = adjacent_length * np.tan(np.deg2rad(angle))
+        newZ = int(zCoordinate + offset)
+
+    else:
+        # either no wobble or rotation plane = xy (does not affect depth)
+        newZ = zCoordinate
+
+    return newZ
+
 
 def bounds(args, shape, identifier):
     yStep = int(args["y_Dimension"]/2)
     xStep = int(args["x_Dimension"]/2)
 
-    if args["use_quadrant_training"]:
+    if args["use_grid_training"]:
         colBounds = [xStep, shape[1]-xStep]
         rowBounds = [yStep, shape[0]-yStep]
 
@@ -90,7 +109,7 @@ def bounds(args, shape, identifier):
 
 
 
-def findRandomCoordinate(args, colBounds, rowBounds, groundTruth, surfaceImage, volume, testSet=False):
+def findRandomCoordinate(args, colBounds, rowBounds, groundTruth, surfaceImage, surfaceMask, volume, testSet=False):
     max_truth = np.iinfo(groundTruth.dtype).max
     if testSet:
         rowCoordinate, colCoordinate = getTestCoordinate(args, colBounds, rowBounds, volume.shape)
@@ -117,7 +136,7 @@ def findRandomCoordinate(args, colBounds, rowBounds, groundTruth, surfaceImage, 
     else: # make it NON-INK
         # make sure 90% of the ground truth in this block is NON-ink
         while label_avg > (.1*max_truth) or \
-                (args["restrict_surface"] and np.min(np.max(volume[rowCoordinate-rowStep:rowCoordinate+rowStep, colCoordinate-colStep:colCoordinate+colStep, :], axis=2)) < args["surface_threshold"]):
+                (args["restrict_surface"] and np.min(surfaceMask[rowCoordinate-rowStep:rowCoordinate+rowStep, colCoordinate-colStep:colCoordinate+colStep]) == 0):
             if testSet:
                 rowCoordinate, colCoordinate = getTestCoordinate(args, colBounds, rowBounds, volume.shape)
             else:
@@ -131,21 +150,21 @@ def findRandomCoordinate(args, colBounds, rowBounds, groundTruth, surfaceImage, 
 
 
 def getTestCoordinate(args, colBounds, rowBounds, volume_shape):
-    if args["use_quadrant_training"]:
-        return getQuadTestCoordinate(args, volume_shape)
+    if args["use_grid_training"]:
+        return getGridTestCoordinate(args, colBounds, rowBounds, volume_shape)
     else:
         return np.random.randint(rowBounds[0], rowBounds[1]), np.random.randint(colBounds[0], colBounds[1])
 
 
 
 def getTrainCoordinate(args, colBounds, rowBounds, volume_shape):
-    if args["use_quadrant_training"]:
-        return getQuadTrainCoordinate(args, colBounds, rowBounds, volume_shape)
+    if args["use_grid_training"]:
+        return getGridTrainCoordinate(args, colBounds, rowBounds, volume_shape)
     else:
         return np.random.randint(rowBounds[0], rowBounds[1]), np.random.randint(colBounds[0], colBounds[1])
 
 
-
+'''
 def getQuadTrainCoordinate(args, colBounds, rowBounds, volume_shape):
     row, col = np.random.randint(rowBounds[0], rowBounds[1]), np.random.randint(colBounds[0], colBounds[1])
     found = False
@@ -183,9 +202,47 @@ def getQuadTrainCoordinate(args, colBounds, rowBounds, volume_shape):
                 found = True
 
     return row, col
+'''
 
 
+def getGridTrainCoordinate(args, colBounds, rowBounds, volume_shape):
+    row, col = np.random.randint(rowBounds[0], rowBounds[1]), np.random.randint(colBounds[0], colBounds[1])
+    found = False
+    n_rows = int(args["grid_n_squares"] / 2)
+    voxels_per_row = int(volume_shape[0] / n_rows)
+    voxels_per_col = int(volume_shape[1] / 2)
 
+    row_number = int(args["grid_test_square"] / 2)
+    col_number = args["grid_test_square"] % 2
+
+    while not found:
+        if row not in range(row_number*voxels_per_row, (row_number+1)*voxels_per_row) and col in range(col_number*voxels_per_col, (col_number+1)*voxels_per_col):
+            found = True
+        else:
+            row, col = np.random.randint(rowBounds[0], rowBounds[1]), np.random.randint(colBounds[0], colBounds[1])
+
+    return row, col
+
+
+def getGridTestCoordinate(args, colBounds, rowBounds, volume_shape):
+    #TODO check validity of test square
+    n_rows = int(args["grid_n_squares"] / 2)
+    voxels_per_row = int(volume_shape[0] / n_rows)
+    row_number = int(args["grid_test_square"] / 2)
+
+    row = np.random.randint(int(args["y_Dimension"]/2)+(voxels_per_row*row_number), (voxels_per_row*(row_number+1)))
+
+    if args["grid_test_square"] % 2 == 0:
+        # testing on the left side
+        col = np.random.randint(int(args["x_Dimension"]/2), int(volume_shape[1] / 2))
+    else:
+        # testing on the right side
+        col = np.random.randint(int(volume_shape[1] / 2), volume_shape[1]-int(args["x_Dimension"]/2))
+
+    return row,col
+
+
+'''
 def getQuadTestCoordinate(args, volume_shape):
     if args["train_quadrant"] == 0:
         # test top left
@@ -208,11 +265,21 @@ def getQuadTestCoordinate(args, volume_shape):
         col = np.random.randint(int(volume_shape[1] / 2), volume_shape[1]-int(args["x_Dimension"]/2))
 
     return row,col
-
+'''
 
 
 def isInTestSet(args, rowPoint, colPoint, volume_shape):
-    if args["use_quadrant_training"]:
+    if args["use_grid_training"]:
+        n_rows = int(args["grid_n_squares"] / 2)
+        voxels_per_row = int(volume_shape[0] / n_rows)
+        row_number = int(args["grid_test_square"] / 2)
+
+        if args["grid_test_square"] % 2 == 0:
+            return rowPoint in range(voxels_per_row*row_number, voxels_per_row*(row_number+1)) and colPoint < (volume_shape[1]/2)
+        else:
+            return rowPoint in range(voxels_per_row*row_number, voxels_per_row*(row_number+1)) and colPoint > (volume_shape[1]/2)
+            '''
+    elif args["use_quadrant_training"]:
         if args["train_quadrant"] == 0:
             # test top left
             return (rowPoint < int(volume_shape[0] / 2)) and (colPoint < int(volume_shape[1] / 2))
@@ -228,7 +295,7 @@ def isInTestSet(args, rowPoint, colPoint, volume_shape):
         elif args["train_quadrant"] == 3:
             # test bottom right
             return (rowPoint > int(volume_shape[0] / 2)) and (colPoint > int(volume_shape[1] / 2))
-
+            '''
     else:
         if args["train_bounds"] == 0: # train top / test bottom
             return rowPoint > (volume_shape[0] * args["train_portion"])
@@ -252,26 +319,9 @@ def generateCoordinatePool(args, volume, rowBounds, colBounds, groundTruth, surf
     for row in range(rowBounds[0], rowBounds[1]):
         for col in range(colBounds[0], colBounds[1]):
             # Dang this if chain is embarassingly large
-            if args["use_quadrant_training"]:
-                if args["train_quadrant"] == 0:
-                    # test top left
-                    if row < (volume.shape[0] / 2) and col < (volume.shape[1] / 2):
-                        continue
-
-                elif args["train_quadrant"] == 1:
-                    # test top right
-                    if row < (volume.shape[0] / 2) and col > (volume.shape[1] / 2):
-                        continue
-
-                elif args["train_quadrant"] == 2:
-                    # test bottom left
-                    if row > (volume.shape[0] / 2) and col < (volume.shape[1] / 2):
-                        continue
-
-                elif args["train_quadrant"] == 3:
-                    # test bottom right
-                    if row > (volume.shape[0] / 2) and col > (volume.shape[1] / 2):
-                        continue
+            if args["use_grid_training"]:
+                if isInTestSet(args,row,col, volume.shape):
+                    continue
 
 
             if args["restrict_surface"] and np.min(surfaceMask[row-rowStep:row+rowStep, col-colStep:col+colStep]) == 0:

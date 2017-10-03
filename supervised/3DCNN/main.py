@@ -17,6 +17,7 @@ start_time = time.time()
 
 args = {
     ### Input configuration ###
+
     "trainingDataPath" : "/home/jack/devel/volcart/small-fragment-data/flatfielded-slices/",
     "surfaceDataFile": "/home/jack/devel/volcart/small-fragment-surface.tif",
     "groundTruthFile": "/home/jack/devel/volcart/small-fragment-data/ink-only-mask.tif",
@@ -25,14 +26,17 @@ args = {
     "y_Dimension": 48,
     "z_Dimension": 48,
 
+
     ### Back off from the surface point some distance
     "surface_cushion" : 12,
 
     ### Network configuration ###
-    "filter_size" : [3,3,3],
-    "learning_rate": 0.001,
+    "use_multitask_training": False,
+    "shallow_learning_rate":.001,
+    "learning_rate": .001,
     "batch_size": 24,
     "prediction_batch_size": 1000,
+    "filter_size" : [3,3,3],
     "dropout": 0.5,
     "neurons": [sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]],
     "training_iterations": 10000,
@@ -42,7 +46,7 @@ args = {
 
     ### Data configuration ###
     "wobble_volume" : True,
-    "wobble_step" : 500,
+    "wobble_step" : 1000,
     "wobble_max_degrees" : 3,
     "num_test_cubes" : 1000,
     "add_random" : False,
@@ -52,9 +56,10 @@ args = {
     "jitter_range" : [-4, 4],
     "add_augmentation" : True,
     "train_portion" : .6, # Percent of division between train and predict regions
-    "balance_samples" : False,
-    "use_quadrant_training": False,
-    "train_quadrant" : -1, # parameters: 0=test top left (else train) || 1=test top right || 2=test bottom left || 3=test bottom right
+    "balance_samples" : True,
+    "use_grid_training": True,
+    "grid_n_squares":10,
+    "grid_test_square": int(sys.argv[5]),
     "train_bounds" : 3, # bounds parameters: 0=TOP || 1=RIGHT || 2=BOTTOM || 3=LEFT
     "surface_threshold": 20400,
     "restrict_surface": True,
@@ -77,7 +82,12 @@ x = tf.placeholder(tf.float32, [None, args["x_Dimension"], args["y_Dimension"], 
 y = tf.placeholder(tf.float32, [None, args["n_classes"]])
 drop_rate = tf.placeholder(tf.float32)
 
-pred, loss = model.buildModel(x, y, drop_rate, args)
+
+if args["use_multitask_training"]:
+    pred, shallow_loss, loss = model.buildMultitaskModel(x, y, drop_rate, args)
+    shallow_optimizer = tf.train.AdamOptimizer(learning_rate=args["shallow_learning_rate"]).minimize(shallow_loss)
+else:
+    pred, loss = model.buildModel(x, y, drop_rate, args)
 
 optimizer = tf.train.AdamOptimizer(learning_rate=args["learning_rate"]).minimize(loss)
 correct_pred = tf.equal(tf.argmax(pred, 1), tf.argmax(y, 1))
@@ -86,6 +96,8 @@ false_positives = tf.equal(tf.argmax(y,1) + 1, tf.argmax(pred, 1))
 false_positive_rate = tf.reduce_mean(tf.cast(false_positives, tf.float32))
 tf.summary.scalar('accuracy', accuracy)
 tf.summary.scalar('xentropy-loss', loss)
+if args["use_multitask_training"]:
+    tf.summary.scalar('xentropy-shallow-loss', loss)
 tf.summary.scalar('false_positive_rate', false_positive_rate)
 
 
@@ -125,12 +137,16 @@ with tf.Session() as sess:
 
     try:
         while epoch < args["training_epochs"]:
+        #while iteration < args["training_iterations"]:
 
             predict_flag = False
 
             batchX, batchY, epoch = volume.getTrainingBatch(args)
+            if args["use_multitask_training"]:
+                summary, _, _ = sess.run([merged, optimizer, shallow_optimizer], feed_dict={x: batchX, y: batchY, drop_rate:args["dropout"]})
+            else:
+                summary, _ = sess.run([merged, optimizer], feed_dict={x: batchX, y: batchY, drop_rate:args["dropout"]})
 
-            summary, _ = sess.run([merged, optimizer], feed_dict={x: batchX, y: batchY, drop_rate:args["dropout"]})
             train_writer.add_summary(summary, iteration)
 
             if iteration % args["display_step"] == 0:
@@ -150,7 +166,7 @@ with tf.Session() as sess:
 
                 test_writer.add_summary(test_summary, iteration)
 
-                if (test_acc > .9) or (test_prec > .8) and (iterations_since_prediction > 1000) and (predictions_made < 4): # or (test_prec / args["numCubes"] < .05)
+                if (test_acc > .9): #or (test_prec > .8) and (iterations_since_prediction > 1000) and (predictions_made < 4): # or (test_prec / args["numCubes"] < .05)
                     # make a full prediction if results are tentatively spectacular
                     predict_flag = True
 
