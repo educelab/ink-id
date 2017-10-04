@@ -60,12 +60,14 @@ def graph(config, iteration, test_accs, test_losses, train_accs, train_losses, t
     np.savetxt(config["savePredictionPath"]+"test_precs.csv", test_fps, delimiter=",")
     np.savetxt(config["savePredictionPath"]+"train_precs.csv", train_fps, delimiter=",")
 
+
 def getRandomBrick(config, median):
     low = median - config["randomRange"]
     high = median + config["randomRange"]
 
     sample = np.random.random([config["x_Dimension"], config["y_Dimension"], config["z_Dimension"]])
     return ((high - low) * sample) + low
+
 
 def augmentSample(sample):
     augmentedSample = sample
@@ -92,10 +94,30 @@ def augmentSample(sample):
 
     return augmentedSample
 
+
 def edge(coordinate, subVolumeShape, shape):
     if coordinate < subVolumeShape: return True
     if coordinate > (shape - subVolumeShape): return True
     return False
+
+
+def coordinateInTestQuadrant(args, shape, row, col):
+    if args["train_quadrants"] == 0:
+        # use top left as test
+        return (row < shape[0]/2) and (col < shape[1]/2)
+
+    elif args["train_quadrants"] == 1:
+        # use top right as test
+        return (row < shape[0]/2) and (col > shape[1]/2)
+
+    elif args["train_quadrants"] == 2:
+        # use bottom left as test
+        return (row > shape[0]/2) and (col < shape[1]/2)
+
+    elif args["train_quadrants"] == 3:
+        # use bottom right as test
+        return (row > shape[0]/2) and (col > shape[1]/2)
+
 
 def findEdgeSubVolume(config, xCoordinate, xCoordinate2, yCoordinate, yCoordinate2, zCoordinate, zCoordinate2, volume, i):
     x = int(math.ceil(config["x_Dimension"]/config["scalingFactor"]))
@@ -141,10 +163,11 @@ def findEdgeSubVolume(config, xCoordinate, xCoordinate2, yCoordinate, yCoordinat
             unscaledSample = volume[i, xCoordinate:volume.shape[1], yCoordinate:volume.shape[2], zCoordinate:zCoordinate2]
             sample[0:volume.shape[1]-xCoordinate, 0:volume.shape[2]-yCoordinate,:] = unscaledSample
 
-
-    sample = scipy.ndimage.interpolation.zoom(sample, config["scalingFactor"])
+    if config["scalingFactor"] != 1.0:
+        sample = scipy.ndimage.interpolation.zoom(sample, config["scalingFactor"])
     sample = splice(sample, config)
     return sample
+
 
 def bounds(config, shape, identifier):
     if identifier == 0: # TOP
@@ -164,6 +187,7 @@ def bounds(config, shape, identifier):
         sys.exit(0)
     return xBounds, yBounds
 
+
 def findRandomCoordinates(config, xBounds, yBounds, volume, groundTruth):
     xCoordinate = np.random.randint(xBounds[0], xBounds[1])
     yCoordinate = np.random.randint(yBounds[0], yBounds[1])
@@ -180,7 +204,9 @@ def findRandomCoordinates(config, xBounds, yBounds, volume, groundTruth):
                 yCoordinate:yCoordinate+config["y_Dimension"]])
     return xCoordinate, yCoordinate, zCoordinate, label_avg
 
+
 def splice(sample, config):
+    '''remove edges from a sample to make its dimensions fit the network'''
     if sample.shape[0] != config["x_Dimension"]:
         sample = sample[0:config["x_Dimension"],:,:]
     if sample.shape[1] != config["y_Dimension"]:
@@ -188,6 +214,7 @@ def splice(sample, config):
     if sample.shape[2] != config["z_Dimension"]:
         sample = sample[:,:,0:config["z_Dimension"]]
     return sample
+
 
 def customReshape(config, batchX):
     num_batches = int(batchX.shape[0] / config["numVolumes"])
@@ -200,6 +227,7 @@ def customReshape(config, batchX):
         count += 1
 
     return out_batch
+
 
 def getSpecString(args):
     tm = datetime.datetime.today().timetuple()

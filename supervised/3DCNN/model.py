@@ -1,24 +1,39 @@
 import tensorflow as tf
 import tensorflow.contrib.slim as slim
+from tensorflow.contrib.layers import xavier_initializer as xavier
+from tensorflow import layers
 import pdb
 
 
-def buildModel(x, y, args):
-    x = tf.reshape(x, [-1, args["x_Dimension"], args["y_Dimension"], args["z_Dimension"], 1])
-    conv1 = slim.batch_norm(slim.convolution(x, args["layer1_neurons"], args["receptiveField"], stride=[2,2,2]))
-    conv2 = slim.batch_norm(slim.convolution(conv1, 2*args["layer1_neurons"], args["receptiveField"], stride=[1,1,1]))
-    conv3 = slim.batch_norm(slim.convolution(conv2, 4*args["layer1_neurons"], args["receptiveField"], stride=[2,2,2]))
-    conv4 = slim.batch_norm(slim.convolution(conv3, 8*args["layer1_neurons"], args["receptiveField"], stride=[2,2,2]))
-    #conv5 = slim.batch_norm(slim.convolution(conv3, 16*args["layer1_neurons"], args["receptiveField"], stride=[2,2,2]))
+def buildModel(x, y, drop_rate, args):
+    x = (tf.reshape(x, [-1, args["x_Dimension"], args["y_Dimension"], args["z_Dimension"], 1]))
+    conv1 = slim.batch_norm(slim.convolution(x, args["neurons"][0], [3, 3, 3], stride=[2,2,2], padding='valid'))
+    conv2 = slim.batch_norm(slim.convolution(conv1, args["neurons"][1], [3, 3, 3], stride=[2,2,2], padding='valid'))
+    conv3 = slim.batch_norm(slim.convolution(conv2, args["neurons"][2], [3, 3, 3], stride=[2,2,2], padding='valid'))
+    conv4 = slim.batch_norm(slim.convolution(conv3, args["neurons"][3], [3, 3, 3], stride=[2,2,2], padding='valid'))
 
-    #conv7 = slim.batch_norm(slim.convolution(conv6, 256, args["receptiveField"], stride=2))
-    #conv8 = slim.batch_norm(slim.convolution(conv7, 512, args["receptiveField"], stride=2))
+    net = layers.dropout(slim.fully_connected(slim.flatten(conv4), args["n_classes"], activation_fn=None), rate=drop_rate)
 
-    #fc1 = tf.nn.dropout(slim.fully_connected(slim.flatten(conv3), 8*args["layer1_neurons"]), args["dropout"])
-    net = tf.nn.dropout(slim.fully_connected(slim.flatten(conv4), args["n_Classes"], activation_fn=None), args["dropout"])
-    loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=net, labels=y))
-    #loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(logits=net, labels=y))
-    # a positive error is weighted to prioritize precision over recall
-    #loss = tf.reduce_mean(tf.nn.weighted_cross_entropy_with_logits(logits=net, targets=y, pos_weight=4.0))
+    #loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=y, logits=net))
+    targets_1d = y[:,1]
+    logits_1d = net[:,1]
+    loss = tf.reduce_mean(tf.nn.weighted_cross_entropy_with_logits(logits=logits_1d, targets=targets_1d, pos_weight=args["pos_weight"]))
 
     return tf.nn.softmax(net), loss
+
+
+def buildMultitaskModel(x, y, drop_rate, args):
+    x = tf.reshape(x, [-1, args["x_Dimension"], args["y_Dimension"], args["z_Dimension"], 1])
+    conv1 = slim.batch_norm(slim.convolution(x, args["neurons"][0], [3, 3, 3], stride=[2,2,2], padding='valid'))
+    conv2 = slim.batch_norm(slim.convolution(conv1, args["neurons"][1], [3, 3, 3], stride=[2,2,2], padding='valid'))
+    conv3 = slim.batch_norm(slim.convolution(conv2, args["neurons"][2], [3, 3, 3], stride=[2,2,2], padding='valid'))
+    conv4 = slim.batch_norm(slim.convolution(conv3, args["neurons"][3], [3, 3, 3], stride=[1,1,1], padding='valid'))
+    conv5 = slim.batch_norm(slim.convolution(conv4, args["neurons"][3], [3, 3, 3], stride=[1,1,1], padding='valid'))
+
+    shallow_net = layers.dropout(slim.fully_connected(slim.flatten(conv4), args["n_classes"], activation_fn=None), rate=drop_rate)
+    net = layers.dropout(slim.fully_connected(slim.flatten(conv5), args["n_classes"], activation_fn=None), rate=drop_rate)
+
+    shallow_loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=y, logits=shallow_net))
+    loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=y, logits=net))
+
+    return tf.nn.softmax(net), shallow_loss, loss

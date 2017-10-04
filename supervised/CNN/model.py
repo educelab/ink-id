@@ -16,6 +16,19 @@ def buildModel(x, y, keep_prob, config):
 
     return tf.nn.softmax(pred), loss
 
+
+def buildBaseModel(x, y, keep_prob, config):
+    x = tf.reshape(x, [-1, config["x_Dimension"], config["y_Dimension"], config["z_Dimension"], config["numChannels"]])
+    conv1 = slim.batch_norm(slim.convolution(x, config["neurons"][0], config["filter"], stride=[1,1,1]))
+    conv2 = slim.batch_norm(slim.convolution(conv1, config["neurons"][1], config["filter"], stride=[2,2,2]))
+    conv3 = slim.batch_norm(slim.convolution(conv2, config["neurons"][2], config["filter"], stride=[2,2,2]))
+    conv4 = slim.batch_norm(slim.convolution(conv3, config["neurons"][3], config["filter"], stride=[2,2,2]))
+    pred = tf.nn.dropout(slim.fully_connected(slim.flatten(conv4), config["n_Classes"], activation_fn=None), keep_prob)
+    loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=pred, labels=y))
+
+    return tf.nn.softmax(pred), loss
+
+
 def buildMultiNetworkModel(x, y, keep_prob, config):
 
     volumes = tf.split(x, config["numVolumes"], axis=4)
