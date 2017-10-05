@@ -215,12 +215,14 @@ class Volume:
                 break
 
             # don't predict on it if it's not on the fragment
-            if np.max(self.volume[rowCoordinate, colCoordinate]) < args["surface_threshold"]:
+            if not ops.isOnSurface(args, rowCoordinate, colCoordinate, self.surfaceMask):
                 colCoordinate += args["overlap_step"]
                 continue
 
             # grab the sample and place it in output
-            zCoordinate = self.surfaceImage[rowCoordinate+int(args["y_Dimension"]/2), colCoordinate+int(args["x_Dimension"]/2)] - args["surface_cushion"]
+            center_row = rowCoordinate+int(args["y_Dimension"]/2)
+            center_col = colCoordinate+int(args["x_Dimension"]/2)
+            zCoordinate = self.surfaceImage[center_row, center_col] - args["surface_cushion"]
             if args["predict_depth"] > 1:
                 #TODO this z-mapping mapping will eventually be something more intelligent
                 zCoordinate += (depthCoordinate)
@@ -230,8 +232,9 @@ class Volume:
                     colCoordinate:colCoordinate+args["x_Dimension"], zCoordinate:zCoordinate+args["z_Dimension"]])
             predictionSamples[sample_count, 0:sample.shape[0], 0:sample.shape[1], 0:sample.shape[2]] = sample
             # populate the "prediction plus surface" with the initial surface value
-            self.predictionPlusSurf[rowCoordinate:rowCoordinate+args["y_Dimension"], \
-                    colCoordinate:colCoordinate+args["x_Dimension"]] = self.volume[rowCoordinate+int(args["y_Dimension"]/2), colCoordinate+int(args["x_Dimension"]/2), max(0,min(285,zCoordinate))]
+            olap = args["overlap_step"]
+            self.predictionPlusSurf[center_row-olap:center_row+olap, \
+                    center_col-olap:center_col+olap] = self.volume[center_row, center_col, max(0,min(self.volume.shape[2]-1,zCoordinate))]
             coordinates[sample_count] = [rowCoordinate, colCoordinate, depthCoordinate]
 
             # increment variables for next iteration
@@ -415,7 +418,6 @@ class Volume:
         print("Wobbling volume {:.2f} degrees...".format(self.wobbled_angle))
         self.wobbled_axes = np.random.choice(3,2, replace=False)
         self.wobbled_volume = rotate(self.volume, self.wobbled_angle, self.wobbled_axes, order=2, mode='nearest', reshape=False)
-        #TODO adjust surface points to match up with wobbled volume
         print("Wobbling took {:.2f} minutes".format((time.time() - wobble_start_time)/60))
 
 

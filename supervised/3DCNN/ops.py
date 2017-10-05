@@ -323,10 +323,7 @@ def generateCoordinatePool(args, volume, rowBounds, colBounds, groundTruth, surf
                 if isInTestSet(args,row,col, volume.shape):
                     continue
 
-
-            if args["restrict_surface"] and np.min(surfaceMask[row-rowStep:row+rowStep, col-colStep:col+colStep]) == 0:
-                # alternatively, check if the maximum value in the vector crosses a threshold
-                # for now, just check our mask
+            if args["restrict_surface"] and not isOnSurface(args, row, col, surfaceMask):
                 continue
 
             label_avg = np.mean(groundTruth[row-rowStep:row+rowStep, col-colStep:col+colStep])
@@ -388,6 +385,14 @@ def augmentSample(args, sample, seed=None):
 
     return augmentedSample
 
+
+def isOnSurface(args, rowCoordinate, colCoordinate, surfaceMask):
+    # alternatively, check if the maximum value in the vector crosses a threshold
+    # for now, just check our mask
+    rowStep = int(args["y_Dimension"] / 2)
+    colStep = int(args["x_Dimension"] / 2)
+    square = surfaceMask[rowCoordinate-rowStep:rowCoordinate+rowStep, colCoordinate-colStep:colCoordinate+colStep]
+    return np.size(square) > 0 and np.min(square) != 0
 
 
 def getSpecString(args):

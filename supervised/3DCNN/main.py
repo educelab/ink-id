@@ -40,7 +40,7 @@ args = {
     "dropout": 0.5,
     "neurons": [sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]],
     "training_iterations": 10000,
-    "training_epochs": 10,
+    "training_epochs": 2,
     "n_classes": 2,
     "pos_weight": .5,
 
