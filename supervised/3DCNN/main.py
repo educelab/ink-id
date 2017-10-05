@@ -5,6 +5,7 @@ import tifffile as tiff
 import sys
 import datetime
 import data
+import multidata
 import model
 import time
 import ops
@@ -18,10 +19,10 @@ start_time = time.time()
 args = {
     ### Input configuration ###
 
-    "trainingDataPath" : "/home/jack/devel/volcart/small-fragment-data/flatfielded-slices/",
-    "surfaceDataFile": "/home/jack/devel/volcart/small-fragment-surface.tif",
-    "groundTruthFile": "/home/jack/devel/volcart/small-fragment-data/ink-only-mask.tif",
-    "surfaceMaskFile": "/home/jack/devel/volcart/small-fragment-outline.tif",
+    "trainingDataPaths" : ["/home/jack/devel/volcart/ReconstructedCarbonSquares/B_blank_0_rec/", "/home/jack/devel/volcart/ReconstructedCarbonSquares/B_inked_1_rec/"],
+    "surfaceDataFiles": ["",""],
+    "groundTruthFiles": ["/home/jack/devel/volcart/ReconstructedCarbonSquares/black.tif", "/home/jack/devel/volcart/ReconstructedCarbonSquares/white.tif"],
+    "surfaceMaskFiles": ["", ""],
     "x_Dimension": 48,
     "y_Dimension": 48,
     "z_Dimension": 48,
@@ -57,10 +58,10 @@ args = {
     "add_augmentation" : True,
     "train_portion" : .6, # Percent of division between train and predict regions
     "balance_samples" : True,
-    "use_grid_training": True,
+    "use_grid_training": False,
     "grid_n_squares":10,
     "grid_test_square": int(sys.argv[5]),
-    "train_bounds" : 3, # bounds parameters: 0=TOP || 1=RIGHT || 2=BOTTOM || 3=LEFT
+    "train_bounds" : [3,3], # bounds parameters: 0=TOP || 1=RIGHT || 2=BOTTOM || 3=LEFT
     "surface_threshold": 20400,
     "restrict_surface": True,
 
@@ -77,6 +78,8 @@ args = {
     "notes": ""
 }
 
+if not (len(args["trainingDataPaths"]) == len(args["surfaceDataFiles"]) == len(args["groundTruthFiles"]) == len(args["surfaceMaskFiles"]) == len(args["train_bounds"])):
+    print("Please specify an equal number of data paths, surface files, ground truth files, surface masks, and train bounds in the 'args' dictionary")
 
 x = tf.placeholder(tf.float32, [None, args["x_Dimension"], args["y_Dimension"], args["z_Dimension"]])
 y = tf.placeholder(tf.float32, [None, args["n_classes"]])
@@ -102,7 +105,7 @@ tf.summary.scalar('false_positive_rate', false_positive_rate)
 
 
 merged = tf.summary.merge_all()
-volume = data.Volume(args)
+volumes = multidata.VolumeSet(args)
 
 # create summary writer directory
 if tf.gfile.Exists(args["output_path"]):
@@ -133,7 +136,7 @@ with tf.Session() as sess:
     test_accs = []
     test_losses = []
     test_precs = []
-    testX, testY = volume.getTrainingSample(args, testSet=True)
+    testX, testY = volumes.getTrainingBatch(args, testSet=True)
 
     try:
         while epoch < args["training_epochs"]:
@@ -141,7 +144,7 @@ with tf.Session() as sess:
 
             predict_flag = False
 
-            batchX, batchY, epoch = volume.getTrainingBatch(args)
+            batchX, batchY, epoch = volumes.getTrainingBatch(args)
             if args["use_multitask_training"]:
                 summary, _, _ = sess.run([merged, optimizer, shallow_optimizer], feed_dict={x: batchX, y: batchY, drop_rate:args["dropout"]})
             else:
@@ -181,23 +184,19 @@ with tf.Session() as sess:
                 print("{} training iterations took {:.2f} minutes".format( \
                     iteration, (time.time() - start_time)/60))
                 startingCoordinates = [0,0,0]
-                predictionSamples, coordinates, nextCoordinates = volume.getPredictionSample3D(args, startingCoordinates)
+                predictionSamples, coordinates, nextCoordinates = volumes.getPredictionBatch(args, startingCoordinates)
 
-                count = 1
-                total_predictions = volume.totalPredictions(args)
-                total_prediction_batches = int(total_predictions / args["prediction_batch_size"])
-                print("Beginning predictions...")
-                while ((count-1)*args["prediction_batch_size"]) < total_predictions:
+                print("Beginning predictions on volume 0...")
+                while nextCoordinates is not None:
                     if (count % int(total_prediction_batches / 10) == 0):
                         #update UI at 10% intervals
                         print("Predicting cubes {} of {}".format((count * args["prediction_batch_size"]), total_predictions))
                     predictionValues = sess.run(pred, feed_dict={x: predictionSamples, drop_rate: 1.0})
-                    volume.reconstruct3D(args, predictionValues, coordinates)
-                    predictionSamples, coordinates, nextCoordinates = volume.getPredictionSample3D(args, nextCoordinates)
-                    count += 1
+                    volumes.reconstruct(args, predictionValues, coordinates)
+                    predictionSamples, coordinates, nextCoordinates = volumes.getPredictionBatch(args, nextCoordinates)
                 minutes = ( (time.time() - start_time) /60 )
-                volume.savePrediction3D(args, iteration)
-                volume.savePredictionMetrics(args, iteration, minutes)
+                volumes.saveAllPredictions(args, iteration)
+                volumes.saveAllPredictionMetrics(args, iteration, minutes)
 
             if args["wobble_volume"] and iteration >= args["wobble_step"] and (iteration % args["wobble_step"]) == 0:
                 # ex. wobble at iteration 1000, or after the prediction for the previous wobble

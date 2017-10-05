@@ -3,7 +3,7 @@ import os
 neurons = []
 neurons.append([16, 8, 4, 2])
 
-squares = [3,5,7,9]
+squares = [3]
 
 for brain in neurons:
     for square in squares:

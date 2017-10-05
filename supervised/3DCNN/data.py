@@ -12,33 +12,34 @@ import shutil
 import time
 
 class Volume:
-    def __init__(self, args):
-        dataFiles = os.listdir(args["trainingDataPath"])
+    def __init__(self, args, volume_number, volume_path, truth_path, surface_mask_path, surface_point_path):
+        dataFiles = os.listdir(volume_path)
         dataFiles.sort()
         #dataFiles.sort(key=lambda f: int(filter(str.isdigit, f)))
 
         volume = []
         for f in dataFiles:
-            sliceData = np.array(Image.open(args["trainingDataPath"]+f))
+            sliceData = np.array(Image.open(volume_path+f))
             volume.append(sliceData)
         self.volume = np.array(volume)
+        self.volume_number = volume_number
         self.wobbled_volume = np.array(volume)
         self.wobbled_axes = []
         self.wobbled_angle = 0.0
         self.predictionVolume = np.zeros((self.volume.shape[0], self.volume.shape[1], args["predict_depth"]), dtype=np.float32)
 
-        self.groundTruth = tiff.imread(args["groundTruthFile"])
+        self.groundTruth = tiff.imread(truth_path)
         self.max_truth = np.iinfo(self.groundTruth.dtype).max
         self.predictionImageInk = np.zeros((self.volume.shape[0], self.volume.shape[1]), dtype=np.float32)
         self.predictionImageSurf = np.zeros((self.volume.shape[0], self.volume.shape[1]), dtype=np.float32)
         self.predictionPlusSurf = np.zeros((self.volume.shape[0], self.volume.shape[1]), dtype=np.float32)
         self.trainingImage = np.zeros(self.predictionImageInk.shape, dtype=np.uint16)
-        if len(args["surfaceDataFile"]) > 0:
-            self.surfaceImage = tiff.imread(args["surfaceDataFile"])
+        if len(surface_point_path) > 0:
+            self.surfaceImage = tiff.imread(surface_point_path)
         else:
             self.surfaceImage = np.zeros((self.volume.shape[0], self.volume.shape[1]), dtype=np.int)
-        if len(args["surfaceMaskFile"]) > 0:
-            self.surfaceMaskImage = tiff.imread(args["surfaceMaskFile"])
+        if len(surface_mask_path) > 0:
+            self.surfaceMaskImage = tiff.imread(surface_mask_path)
         else:
             self.surfaceMaskImage = np.zeros((self.volume.shape[0], self.volume.shape[1]), dtype=np.int)
         self.surfaceMask = self.surfaceMaskImage / np.iinfo(self.surfaceMaskImage.dtype).max
@@ -53,22 +54,21 @@ class Volume:
 
 
 
-    def getTrainingBatch(self, args):
+    def getTrainingBatch(self, args, n_samples):
         if len(self.coordinate_pool) == 0: # initialization
-            rowBounds, colBounds = ops.bounds(args, [self.volume.shape[0], self.volume.shape[1]], args["train_bounds"])
+            rowBounds, colBounds = ops.bounds(args, [self.volume.shape[0], self.volume.shape[1]], args["train_bounds"][self.volume_number])
             self.coordinate_pool = ops.generateCoordinatePool(args, self.volume, rowBounds, colBounds, self.groundTruth, self.surfaceMask)
             np.random.shuffle(self.coordinate_pool)
         if self.train_index + args["batch_size"] >= len(self.coordinate_pool): # end of epoch
             self.incrementEpoch(args)
 
-
-        trainingSamples = np.zeros((args["batch_size"], args["x_Dimension"], args["y_Dimension"], args["z_Dimension"]), dtype=np.float32)
-        groundTruth = np.zeros((args["batch_size"], args["n_classes"]), dtype=np.float32)
+        trainingSamples = np.zeros((n_samples, args["x_Dimension"], args["y_Dimension"], args["z_Dimension"]), dtype=np.float32)
+        groundTruth = np.zeros((n_samples, args["n_classes"]), dtype=np.float32)
         rowStep = int(args["y_Dimension"]/2)
         colStep = int(args["x_Dimension"]/2)
 
         # populate the samples and labels
-        for i in range(args["batch_size"]):
+        for i in range(n_samples):
             if args["balance_samples"] and (i > args["batch_size"] / 2):
                 if np.sum(groundTruth[:,1] / i) > .5:
                     # more than 50% ink samples
@@ -118,9 +118,9 @@ class Volume:
         # restrict training to TOP portion by default
         # bounds parameters: 0=TOP || 1=RIGHT || 2=BOTTOM || 3=LEFT
         if testSet:
-            rowBounds, colBounds = ops.bounds(args, [self.volume.shape[0], self.volume.shape[1]], (args["train_bounds"]+2)%4)
+            rowBounds, colBounds = ops.bounds(args, [self.volume.shape[0], self.volume.shape[1]], (args["train_bounds"][self.volume_number]+2)%4)
         else:
-            rowBounds, colBounds = ops.bounds(args, [self.volume.shape[0], self.volume.shape[1]], args["train_bounds"])
+            rowBounds, colBounds = ops.bounds(args, [self.volume.shape[0], self.volume.shape[1]], args["train_bounds"][self.volume_number])
 
 
         for i in range(args["num_test_cubes"]):
@@ -334,7 +334,7 @@ class Volume:
             self.predictionVolume[(end_row_number*voxels_per_row):, :] = 0
 
         else:
-            rowBounds, colBounds = ops.bounds(args, [self.volume.shape[0], self.volume.shape[1]], args["train_bounds"])
+            rowBounds, colBounds = ops.bounds(args, [self.volume.shape[0], self.volume.shape[1]], args["train_bounds"][self.volume_number])
             self.predictionVolume[rowBounds[0]:rowBounds[1], colBounds[0]:colBounds[1]] = 0
 
         for d in range(args["predict_depth"]):
@@ -412,7 +412,7 @@ class Volume:
         self.test_preds = []
 
 
-    def wobble_volume(self, args):
+    def wobbleVolume(self, args):
         wobble_start_time = time.time()
         self.wobbled_angle =  ((2*args["wobble_max_degrees"])*np.random.random_sample()) - args["wobble_max_degrees"]
         print("Wobbling volume {:.2f} degrees...".format(self.wobbled_angle))
