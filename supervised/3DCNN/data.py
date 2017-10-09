@@ -215,7 +215,7 @@ class Volume:
                 break
 
             # don't predict on it if it's not on the fragment
-            if np.max(self.volume[rowCoordinate, colCoordinate]) < args["surface_threshold"]:
+            if not ops.isOnSurface(rowCoordinate, colCoordinate):
                 colCoordinate += args["overlap_step"]
                 continue
 
@@ -422,7 +422,7 @@ class Volume:
 
     def moveToNextPositiveSample(self, args):
         while self.coordinate_pool[self.train_index][2] == 0:
-            if self.train_index + 1 == len(self.coordinate_pool):
+            if self.train_index + 1 >= len(self.coordinate_pool):
                 self.incrementEpoch(args)
             else:
                 self.train_index += 1
@@ -430,7 +430,7 @@ class Volume:
 
     def moveToNextNegativeSample(self, args):
         while self.coordinate_pool[self.train_index][2] == 1:
-            if self.train_index + 1 == len(self.coordinate_pool):
+            if self.train_index + 1 >= len(self.coordinate_pool):
                 self.incrementEpoch(args)
             else:
                 self.train_index += 1

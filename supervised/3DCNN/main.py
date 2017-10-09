@@ -19,11 +19,11 @@ args = {
     ### Input configuration ###
 
     "trainingDataPath" : "/home/jack/devel/volcart/small-fragment-data/flatfielded-slices/",
-    "surfaceDataFile": "/home/jack/devel/volcart/small-fragment-surface.tif",
+    "surfaceDataFile": "/home/jack/devel/volcart/small-fragment-data/polyfit-slices-degree32-cush16-thresh20500/surface.tif",
     "groundTruthFile": "/home/jack/devel/volcart/small-fragment-data/ink-only-mask.tif",
     "surfaceMaskFile": "/home/jack/devel/volcart/small-fragment-outline.tif",
-    "x_Dimension": 48,
-    "y_Dimension": 48,
+    "x_Dimension": int(sys.argv[5]),
+    "y_Dimension": int(sys.argv[5]),
     "z_Dimension": 48,
 
 
@@ -33,14 +33,14 @@ args = {
     ### Network configuration ###
     "use_multitask_training": False,
     "shallow_learning_rate":.001,
-    "learning_rate": .001,
+    "learning_rate": .0001,
     "batch_size": 24,
-    "prediction_batch_size": 1000,
+    "prediction_batch_size": 500,
     "filter_size" : [3,3,3],
     "dropout": 0.5,
     "neurons": [sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]],
     "training_iterations": 10000,
-    "training_epochs": 10,
+    "training_epochs": 2,
     "n_classes": 2,
     "pos_weight": .5,
 
@@ -48,7 +48,7 @@ args = {
     "wobble_volume" : True,
     "wobble_step" : 1000,
     "wobble_max_degrees" : 3,
-    "num_test_cubes" : 1000,
+    "num_test_cubes" : 500,
     "add_random" : False,
     "random_step" : 10, # one in every randomStep non-ink samples will be a random brick
     "random_range" : 200,
@@ -57,7 +57,7 @@ args = {
     "add_augmentation" : True,
     "train_portion" : .6, # Percent of division between train and predict regions
     "balance_samples" : True,
-    "use_grid_training": True,
+    "use_grid_training": False,
     "grid_n_squares":10,
     "grid_test_square": int(sys.argv[5]),
     "train_bounds" : 3, # bounds parameters: 0=TOP || 1=RIGHT || 2=BOTTOM || 3=LEFT
