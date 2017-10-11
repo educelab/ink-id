@@ -43,7 +43,7 @@ args = {
     "training_epochs": 2,
     "n_classes": 2,
     "pos_weight": .5,
-    "batch_norm_momentum": .99,
+    "batch_norm_momentum": .9,
 
     ### Data configuration ###
     "wobble_volume" : False,
@@ -90,7 +90,9 @@ if args["use_multitask_training"]:
 else:
     pred, loss = model.buildModel(x, y, drop_rate, args, train_flag)
 
-optimizer = tf.train.AdamOptimizer(learning_rate=args["learning_rate"]).minimize(loss)
+update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
+with tf.control_dependencies(update_ops):
+    optimizer = tf.train.AdamOptimizer(learning_rate=args["learning_rate"]).minimize(loss)
 correct_pred = tf.equal(tf.argmax(pred, 1), tf.argmax(y, 1))
 accuracy = tf.reduce_mean(tf.cast(correct_pred, tf.float32))
 false_positives = tf.equal(tf.argmax(y,1) + 1, tf.argmax(pred, 1))

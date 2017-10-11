@@ -445,6 +445,7 @@ class Volume:
 
 
     def totalPredictions(self, args):
+        #TODO this should actually be based on how many points are on the fragment
         xSlides = (self.volume.shape[0] - args["x_Dimension"]) / args["overlap_step"]
         ySlides = (self.volume.shape[1] - args["y_Dimension"]) / args["overlap_step"]
         return int(xSlides * ySlides) * args["predict_depth"]
