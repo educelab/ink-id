@@ -2,7 +2,7 @@ import os
 
 neurons = []
 neurons.append([16, 8, 4, 2])
-lengths = [104,112,120]
+lengths = [96]
 
 for brain in neurons:
     for length in lengths:

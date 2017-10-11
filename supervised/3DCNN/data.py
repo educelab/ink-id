@@ -215,7 +215,7 @@ class Volume:
                 break
 
             # don't predict on it if it's not on the fragment
-            if not ops.isOnSurface(rowCoordinate, colCoordinate):
+            if self.surfaceMask[rowCoordinate, colCoordinate] == 0:
                 colCoordinate += args["overlap_step"]
                 continue
 

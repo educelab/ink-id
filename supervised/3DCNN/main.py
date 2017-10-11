@@ -34,7 +34,7 @@ args = {
     "use_multitask_training": False,
     "shallow_learning_rate":.001,
     "learning_rate": .0001,
-    "batch_size": 24,
+    "batch_size": 50,
     "prediction_batch_size": 500,
     "filter_size" : [3,3,3],
     "dropout": 0.5,
@@ -43,11 +43,12 @@ args = {
     "training_epochs": 2,
     "n_classes": 2,
     "pos_weight": .5,
+    "batch_norm_momentum": .99,
 
     ### Data configuration ###
-    "wobble_volume" : True,
+    "wobble_volume" : False,
     "wobble_step" : 1000,
-    "wobble_max_degrees" : 3,
+    "wobble_max_degrees" : 2,
     "num_test_cubes" : 500,
     "add_random" : False,
     "random_step" : 10, # one in every randomStep non-ink samples will be a random brick
@@ -65,7 +66,7 @@ args = {
     "restrict_surface": True,
 
     ### Output configuration ###
-    "predict_step": 5000, # make a prediction every x steps
+    "predict_step": 1000, # make a prediction every x steps
     "overlap_step": 4, # during prediction, predict on one sample for each _ by _ voxel square
     "display_step": 50, # output stats every x steps
     "predict_depth" : 1,
@@ -81,13 +82,13 @@ args = {
 x = tf.placeholder(tf.float32, [None, args["x_Dimension"], args["y_Dimension"], args["z_Dimension"]])
 y = tf.placeholder(tf.float32, [None, args["n_classes"]])
 drop_rate = tf.placeholder(tf.float32)
-
+train_flag = tf.placeholder(tf.bool)
 
 if args["use_multitask_training"]:
-    pred, shallow_loss, loss = model.buildMultitaskModel(x, y, drop_rate, args)
+    pred, shallow_loss, loss = model.buildMultitaskModel(x, y, drop_rate, args, train_flag)
     shallow_optimizer = tf.train.AdamOptimizer(learning_rate=args["shallow_learning_rate"]).minimize(shallow_loss)
 else:
-    pred, loss = model.buildModel(x, y, drop_rate, args)
+    pred, loss = model.buildModel(x, y, drop_rate, args, train_flag)
 
 optimizer = tf.train.AdamOptimizer(learning_rate=args["learning_rate"]).minimize(loss)
 correct_pred = tf.equal(tf.argmax(pred, 1), tf.argmax(y, 1))
@@ -95,6 +96,7 @@ accuracy = tf.reduce_mean(tf.cast(correct_pred, tf.float32))
 false_positives = tf.equal(tf.argmax(y,1) + 1, tf.argmax(pred, 1))
 false_positive_rate = tf.reduce_mean(tf.cast(false_positives, tf.float32))
 tf.summary.scalar('accuracy', accuracy)
+tf.summary.histogram('prediction_values', pred[:,1])
 tf.summary.scalar('xentropy-loss', loss)
 if args["use_multitask_training"]:
     tf.summary.scalar('xentropy-shallow-loss', loss)
@@ -143,17 +145,17 @@ with tf.Session() as sess:
 
             batchX, batchY, epoch = volume.getTrainingBatch(args)
             if args["use_multitask_training"]:
-                summary, _, _ = sess.run([merged, optimizer, shallow_optimizer], feed_dict={x: batchX, y: batchY, drop_rate:args["dropout"]})
+                summary, _, _ = sess.run([merged, optimizer, shallow_optimizer], feed_dict={x: batchX, y: batchY, drop_rate:args["dropout"], train_flag:True})
             else:
-                summary, _ = sess.run([merged, optimizer], feed_dict={x: batchX, y: batchY, drop_rate:args["dropout"]})
+                summary, _ = sess.run([merged, optimizer], feed_dict={x: batchX, y: batchY, drop_rate:args["dropout"], train_flag:True})
 
             train_writer.add_summary(summary, iteration)
 
             if iteration % args["display_step"] == 0:
                 train_acc, train_loss, train_preds, train_summary = \
-                    sess.run([accuracy, loss, pred, merged], feed_dict={x: batchX, y: batchY, drop_rate: 0.0})
+                    sess.run([accuracy, loss, pred, merged], feed_dict={x: batchX, y: batchY, drop_rate: 0.0, train_flag:False})
                 test_acc, test_loss, test_preds, test_summary = \
-                    sess.run([accuracy, loss, pred, merged], feed_dict={x: testX, y: testY, drop_rate:0.0})
+                    sess.run([accuracy, loss, pred, merged], feed_dict={x: testX, y: testY, drop_rate:0.0, train_flag:False})
                 train_prec = precision_score(np.argmax(batchY, 1), np.argmax(train_preds, 1))
                 test_prec = precision_score(np.argmax(testY, 1), np.argmax(test_preds, 1))
 
@@ -191,7 +193,7 @@ with tf.Session() as sess:
                     if (count % int(total_prediction_batches / 10) == 0):
                         #update UI at 10% intervals
                         print("Predicting cubes {} of {}".format((count * args["prediction_batch_size"]), total_predictions))
-                    predictionValues = sess.run(pred, feed_dict={x: predictionSamples, drop_rate: 1.0})
+                    predictionValues = sess.run(pred, feed_dict={x: predictionSamples, drop_rate: 1.0, train_flag:False})
                     volume.reconstruct3D(args, predictionValues, coordinates)
                     predictionSamples, coordinates, nextCoordinates = volume.getPredictionSample3D(args, nextCoordinates)
                     count += 1
@@ -222,7 +224,7 @@ with tf.Session() as sess:
             if (count % int(total_prediction_batches / 10) == 0):
                 #update UI at 10% intervals
                 print("Predicting cubes {} of {}".format((count * args["prediction_batch_size"]), total_predictions))
-            predictionValues = sess.run(pred, feed_dict={x: predictionSamples, drop_rate: 1.0})
+            predictionValues = sess.run(pred, feed_dict={x: predictionSamples, drop_rate: 1.0, train_flag:False})
             volume.reconstruct3D(args, predictionValues, coordinates)
             predictionSamples, coordinates, nextCoordinates = volume.getPredictionSample3D(args, nextCoordinates)
             count += 1
