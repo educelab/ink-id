@@ -13,12 +13,13 @@ class VolumeSet:
         self.n_volumes = len(args["trainingDataPaths"])
 
         for i in range(self.n_volumes):
+            print("Initializing volume {} of {}...".format(i+1,self.n_volumes))
             self.volume_set.append(data.Volume(args, volume_number=i, volume_path=args["trainingDataPaths"][i], \
                 truth_path=args["groundTruthFiles"][i], surface_mask_path=args["surfaceMaskFiles"][i], surface_point_path=args["surfaceDataFiles"][i]))
 
 
 
-    def getTrainingBatch(self, args, testSet=False):
+    def getTrainingBatch(self, args):
         # gather training samples from other volumes
         # should be as simple as getting batches from each volume and combining them
         trainingSamples = np.zeros((args["batch_size"], args["x_Dimension"], args["y_Dimension"], args["z_Dimension"]), dtype=np.float32)
@@ -28,9 +29,40 @@ class VolumeSet:
             start = i*samples_per_volume
             end = (i+1)*samples_per_volume
             if i == self.n_volumes-1: # make sure to 'fill up' all the slots
-                end = self.n_volumes-1
+                end = args["batch_size"]-1
 
             volume_samples, volume_truth, volume_epoch = self.volume_set[i].getTrainingBatch(args, end-start)
+            trainingSamples[start:end] = volume_samples
+            groundTruth[start:end] = volume_truth
+
+        for j in range(args["batch_size"]):
+            # randomly swap samples
+            # pretty sure this is statistically invalid because certain items are more likely to get swapped
+            index_a, index_b = np.random.choice(args["batch_size"], 2, replace=False)
+            tmpSample = trainingSamples[index_a]
+            tmpTruth = groundTruth[index_a]
+            trainingSamples[index_a] = trainingSamples[index_b]
+            trainingSamples[index_b] = tmpSample
+            groundTruth[index_a] = groundTruth[index_b]
+            groundTruth[index_b] = tmpTruth
+
+        #TODO return actual epoch instead of 0
+        return trainingSamples, groundTruth, 0
+
+
+
+    def getTestBatch(self, args):
+        # gather testing samples from other volumes
+        trainingSamples = np.zeros((args["num_test_cubes"], args["x_Dimension"], args["y_Dimension"], args["z_Dimension"]), dtype=np.float32)
+        groundTruth = np.zeros((args["num_test_cubes"], args["n_classes"]), dtype=np.float32)
+        samples_per_volume = int(args["num_test_cubes"] / self.n_volumes)
+        for i in range(self.n_volumes):
+            start = i*samples_per_volume
+            end = (i+1)*samples_per_volume
+            if i == self.n_volumes-1: # make sure to 'fill up' all the slots
+                end = args["num_test_cubes"]-1
+
+            volume_samples, volume_truth = self.volume_set[i].getTestBatch(args, end-start)
             trainingSamples[start:end] = volume_samples
             groundTruth[start:end] = volume_truth
 
@@ -50,17 +82,19 @@ class VolumeSet:
             if self.current_prediction_batch % int(self.current_prediction_total_batches / 10) == 0:
                 print("Predicting batch {}/{}...".format(self.current_prediction_batch, self.current_prediction_total_batches))
 
-        elif current_prediction_volume + 1 != self.n_volumes:
+        elif self.current_prediction_volume + 1 != self.n_volumes:
             # case 2: finished volume, if there is another volume, go to it
-            print("\nFinished predictions on volume {}...".format(current_prediction_volume))
+            print("\nFinished predictions on volume {}...".format(self.current_prediction_volume))
             self.current_prediction_volume += 1
             self.current_prediction_batch = 0
             samples, coordinates, nextCoordinates = self.volume_set[self.current_prediction_volume].getPredictionSample3D(args, starting_coordinates)
-            print("\nBeginning predictions on volume {}...".format(current_prediction_volume))
+            print("\nBeginning predictions on volume {}...".format(self.current_prediction_volume))
 
         else:
             # case 3: finished volume, no other volume to predict
             samples, coordinates, nextCoordinates = None, None, None
+            self.current_prediction_volume = 0
+            self.current_prediction_batch = 0
 
         return samples, coordinates, nextCoordinates
 
@@ -82,7 +116,8 @@ class VolumeSet:
     def saveAllPredictionMetrics(self, args, iteration, minutes):
         # save metrics on performance
         for i in range(self.n_volumes):
-            self.volume_set[i].savePredictionMetrics(args, iteration)
+            self.volume_set[i].savePredictionMetrics(args, iteration, minutes)
+
 
 
     def wobbleVolumes(self, args):

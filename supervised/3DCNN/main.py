@@ -19,13 +19,13 @@ start_time = time.time()
 args = {
     ### Input configuration ###
 
-    "trainingDataPaths" : ["/home/jack/devel/volcart/ReconstructedCarbonSquares/B_blank_0_rec/", "/home/jack/devel/volcart/ReconstructedCarbonSquares/B_inked_1_rec/"],
-    "surfaceDataFiles": ["",""],
+    "trainingDataPaths" : ["/home/jack/devel/volcart/ReconstructedCarbonSquares/B_blank_0_cropped/", "/home/jack/devel/volcart/ReconstructedCarbonSquares/B_inked_1_cropped/"],
     "groundTruthFiles": ["/home/jack/devel/volcart/ReconstructedCarbonSquares/black.tif", "/home/jack/devel/volcart/ReconstructedCarbonSquares/white.tif"],
     "surfaceMaskFiles": ["", ""],
-    "x_Dimension": 48,
-    "y_Dimension": 48,
-    "z_Dimension": 48,
+    "surfaceDataFiles": ["",""],
+    "x_Dimension": 20,
+    "y_Dimension": 20,
+    "z_Dimension": 64,
 
 
     ### Back off from the surface point some distance
@@ -39,14 +39,14 @@ args = {
     "prediction_batch_size": 1000,
     "filter_size" : [3,3,3],
     "dropout": 0.5,
-    "neurons": [sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]],
+    "neurons": [16,8,4,2],
     "training_iterations": 10000,
     "training_epochs": 2,
     "n_classes": 2,
     "pos_weight": .5,
 
     ### Data configuration ###
-    "wobble_volume" : True,
+    "wobble_volume" : False,
     "wobble_step" : 1000,
     "wobble_max_degrees" : 3,
     "num_test_cubes" : 1000,
@@ -57,13 +57,13 @@ args = {
     "jitter_range" : [-4, 4],
     "add_augmentation" : True,
     "train_portion" : .6, # Percent of division between train and predict regions
-    "balance_samples" : True,
+    "balance_samples" : False,
     "use_grid_training": False,
     "grid_n_squares":10,
-    "grid_test_square": int(sys.argv[5]),
+    "grid_test_square": -1,
     "train_bounds" : [3,3], # bounds parameters: 0=TOP || 1=RIGHT || 2=BOTTOM || 3=LEFT
     "surface_threshold": 20400,
-    "restrict_surface": True,
+    "restrict_surface": False,
 
     ### Output configuration ###
     "predict_step": 5000, # make a prediction every x steps
@@ -136,7 +136,7 @@ with tf.Session() as sess:
     test_accs = []
     test_losses = []
     test_precs = []
-    testX, testY = volumes.getTrainingBatch(args, testSet=True)
+    testX, testY = volumes.getTestBatch(args)
 
     try:
         while epoch < args["training_epochs"]:
@@ -186,11 +186,9 @@ with tf.Session() as sess:
                 startingCoordinates = [0,0,0]
                 predictionSamples, coordinates, nextCoordinates = volumes.getPredictionBatch(args, startingCoordinates)
 
-                print("Beginning predictions on volume 0...")
+                print("Beginning predictions on volumes...")
                 while nextCoordinates is not None:
-                    if (count % int(total_prediction_batches / 10) == 0):
-                        #update UI at 10% intervals
-                        print("Predicting cubes {} of {}".format((count * args["prediction_batch_size"]), total_predictions))
+                    #TODO add back the output
                     predictionValues = sess.run(pred, feed_dict={x: predictionSamples, drop_rate: 1.0})
                     volumes.reconstruct(args, predictionValues, coordinates)
                     predictionSamples, coordinates, nextCoordinates = volumes.getPredictionBatch(args, nextCoordinates)
@@ -200,7 +198,7 @@ with tf.Session() as sess:
 
             if args["wobble_volume"] and iteration >= args["wobble_step"] and (iteration % args["wobble_step"]) == 0:
                 # ex. wobble at iteration 1000, or after the prediction for the previous wobble
-                volume.wobble_volume(args)
+                volumes.wobbleVolumes(args)
 
             iteration += 1
             iterations_since_prediction += 1
@@ -212,22 +210,17 @@ with tf.Session() as sess:
     if iterations_since_prediction > 1:
         # make one last prediction after everything finishes
         startingCoordinates = [0,0,0]
-        predictionSamples, coordinates, nextCoordinates = volume.getPredictionSample3D(args, startingCoordinates)
+        predictionSamples, coordinates, nextCoordinates = volumes.getPredictionBatch(args, startingCoordinates)
         count = 1
-        total_predictions = volume.totalPredictions(args)
-        total_prediction_batches = int(total_predictions / args["prediction_batch_size"])
         print("Beginning predictions...")
-        while ((count-1)*args["prediction_batch_size"]) < total_predictions:
-            if (count % int(total_prediction_batches / 10) == 0):
-                #update UI at 10% intervals
-                print("Predicting cubes {} of {}".format((count * args["prediction_batch_size"]), total_predictions))
+        while nextCoordinates is not None:
+            #TODO add back the output
             predictionValues = sess.run(pred, feed_dict={x: predictionSamples, drop_rate: 1.0})
-            volume.reconstruct3D(args, predictionValues, coordinates)
-            predictionSamples, coordinates, nextCoordinates = volume.getPredictionSample3D(args, nextCoordinates)
-            count += 1
+            volumes.reconstruct(args, predictionValues, coordinates)
+            predictionSamples, coordinates, nextCoordinates = volumes.getPredictionBatch(args, nextCoordinates)
         minutes = ( (time.time() - start_time) /60 )
-        volume.savePrediction3D(args, iteration)
-        volume.savePredictionMetrics(args, iteration, minutes)
+        volumes.saveAllPredictions(args, iteration)
+        volumes.saveAllPredictionMetrics(args, iteration, minutes)
 
 
 
