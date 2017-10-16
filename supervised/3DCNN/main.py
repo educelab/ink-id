@@ -35,7 +35,7 @@ args = {
     "use_multitask_training": False,
     "shallow_learning_rate":.001,
     "learning_rate": .001,
-    "batch_size": 24,
+    "batch_size": 40,
     "prediction_batch_size": 1000,
     "filter_size" : [3,3,3],
     "dropout": 0.5,
@@ -44,6 +44,7 @@ args = {
     "training_epochs": 2,
     "n_classes": 2,
     "pos_weight": .5,
+    "batch_norm_momentum": .9,
 
     ### Data configuration ###
     "wobble_volume" : False,
@@ -84,13 +85,14 @@ if not (len(args["trainingDataPaths"]) == len(args["surfaceDataFiles"]) == len(a
 x = tf.placeholder(tf.float32, [None, args["x_Dimension"], args["y_Dimension"], args["z_Dimension"]])
 y = tf.placeholder(tf.float32, [None, args["n_classes"]])
 drop_rate = tf.placeholder(tf.float32)
+train_flag = tf.placeholder(tf.bool)
 
 
 if args["use_multitask_training"]:
-    pred, shallow_loss, loss = model.buildMultitaskModel(x, y, drop_rate, args)
+    pred, shallow_loss, loss = model.buildMultitaskModel(x, y, drop_rate, args, train_flag)
     shallow_optimizer = tf.train.AdamOptimizer(learning_rate=args["shallow_learning_rate"]).minimize(shallow_loss)
 else:
-    pred, loss = model.buildModel(x, y, drop_rate, args)
+    pred, loss = model.buildModel(x, y, drop_rate, args, train_flag)
 
 optimizer = tf.train.AdamOptimizer(learning_rate=args["learning_rate"]).minimize(loss)
 correct_pred = tf.equal(tf.argmax(pred, 1), tf.argmax(y, 1))
@@ -146,17 +148,17 @@ with tf.Session() as sess:
 
             batchX, batchY, epoch = volumes.getTrainingBatch(args)
             if args["use_multitask_training"]:
-                summary, _, _ = sess.run([merged, optimizer, shallow_optimizer], feed_dict={x: batchX, y: batchY, drop_rate:args["dropout"]})
+                summary, _, _ = sess.run([merged, optimizer, shallow_optimizer], feed_dict={x: batchX, y: batchY, drop_rate:args["dropout"], train_flag:True})
             else:
-                summary, _ = sess.run([merged, optimizer], feed_dict={x: batchX, y: batchY, drop_rate:args["dropout"]})
+                summary, _ = sess.run([merged, optimizer], feed_dict={x: batchX, y: batchY, drop_rate:args["dropout"], train_flag:True})
 
             train_writer.add_summary(summary, iteration)
 
             if iteration % args["display_step"] == 0:
                 train_acc, train_loss, train_preds, train_summary = \
-                    sess.run([accuracy, loss, pred, merged], feed_dict={x: batchX, y: batchY, drop_rate: 0.0})
+                    sess.run([accuracy, loss, pred, merged], feed_dict={x: batchX, y: batchY, drop_rate: 0.0, train_flag:False})
                 test_acc, test_loss, test_preds, test_summary = \
-                    sess.run([accuracy, loss, pred, merged], feed_dict={x: testX, y: testY, drop_rate:0.0})
+                    sess.run([accuracy, loss, pred, merged], feed_dict={x: testX, y: testY, drop_rate:0.0, train_flag:False})
                 train_prec = precision_score(np.argmax(batchY, 1), np.argmax(train_preds, 1))
                 test_prec = precision_score(np.argmax(testY, 1), np.argmax(test_preds, 1))
 
@@ -189,7 +191,7 @@ with tf.Session() as sess:
                 print("Beginning predictions on volumes...")
                 while nextCoordinates is not None:
                     #TODO add back the output
-                    predictionValues = sess.run(pred, feed_dict={x: predictionSamples, drop_rate: 1.0})
+                    predictionValues = sess.run(pred, feed_dict={x: predictionSamples, drop_rate: 0.0, train_flag:False})
                     volumes.reconstruct(args, predictionValues, coordinates)
                     predictionSamples, coordinates, nextCoordinates = volumes.getPredictionBatch(args, nextCoordinates)
                 minutes = ( (time.time() - start_time) /60 )
@@ -215,7 +217,7 @@ with tf.Session() as sess:
         print("Beginning predictions...")
         while nextCoordinates is not None:
             #TODO add back the output
-            predictionValues = sess.run(pred, feed_dict={x: predictionSamples, drop_rate: 1.0})
+            predictionValues = sess.run(pred, feed_dict={x: predictionSamples, drop_rate: 0.0, train_flag:False})
             volumes.reconstruct(args, predictionValues, coordinates)
             predictionSamples, coordinates, nextCoordinates = volumes.getPredictionBatch(args, nextCoordinates)
         minutes = ( (time.time() - start_time) /60 )
