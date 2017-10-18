@@ -36,7 +36,7 @@ def adjustDepthForWobble(args, rowCoord, colCoord, zCoordinate, angle, axes, vol
 
 
 
-def bounds(args, volume_shape, identifier):
+def bounds(args, volume_shape, identifier, train_portion):
     yStep = int(args["y_Dimension"]/2)
     xStep = int(args["x_Dimension"]/2)
 
@@ -47,15 +47,15 @@ def bounds(args, volume_shape, identifier):
     else:
         if identifier == 0: # TOP
             colBounds = [xStep, volume_shape[1]-xStep]
-            rowBounds = [yStep, int(volume_shape[0] * args["train_portion"])-yStep]
+            rowBounds = [yStep, int(volume_shape[0] * train_portion)-yStep]
         elif identifier == 1: # RIGHT
-            colBounds = [int(volume_shape[1] * args["train_portion"]), volume_shape[1]-xStep]
+            colBounds = [int(volume_shape[1] * train_portion), volume_shape[1]-xStep]
             rowBounds = [yStep, volume_shape[0]-yStep]
         elif identifier == 2: # BOTTOM
             colBounds = [xStep, volume_shape[1]-xStep]
-            rowBounds = [int(volume_shape[0] * args["train_portion"]), volume_shape[0]-yStep]
+            rowBounds = [int(volume_shape[0] * train_portion), volume_shape[0]-yStep]
         elif identifier == 3: # LEFT
-            colBounds = [xStep, int(volume_shape[1] * args["train_portion"])-xStep]
+            colBounds = [xStep, int(volume_shape[1] * train_portion)-xStep]
             rowBounds = [yStep, volume_shape[0]-yStep]
         else:
             print("Bound identifier not recognized")
@@ -100,8 +100,8 @@ def findRandomCoordinate(args, colBounds, rowBounds, groundTruth, surfaceImage, 
                 rowCoordinate, colCoordinate = getTrainCoordinate(args, colBounds, rowBounds, volume.shape)
             label_avg = np.mean(groundTruth[rowCoordinate-rowStep:rowCoordinate+rowStep, colCoordinate-colStep:colCoordinate+colStep])
     '''
-
-    zCoordinate = max(0,surfaceImage[rowCoordinate+rowStep, colCoordinate+colStep] - args["surface_cushion"])
+    putative_z = minimumSurfaceInSample(args, rowCoordinate, colCoordinate, surfaceImage)
+    zCoordinate = max(0, putative_z - args["surface_cushion"])
     return rowCoordinate, colCoordinate, zCoordinate, label_avg
 
 
@@ -162,7 +162,7 @@ def getGridTestCoordinate(args, colBounds, rowBounds, volume_shape):
 
 
 
-def isInTestSet(args, rowPoint, colPoint, volume_shape):
+def isInTestSet(args, rowPoint, colPoint, volume_shape, train_bounds, train_portion):
     if args["use_grid_training"]:
         n_rows = int(args["grid_n_squares"] / 2)
         voxels_per_row = int(volume_shape[0] / n_rows)
@@ -174,33 +174,32 @@ def isInTestSet(args, rowPoint, colPoint, volume_shape):
             return rowPoint in range(voxels_per_row*row_number, voxels_per_row*(row_number+1)) and colPoint > (volume_shape[1]/2)
 
     else:
-        if args["train_bounds"] == 0: # train top / test bottom
-            return rowPoint > (volume_shape[0] * args["train_portion"])
-        elif args["train_bounds"] == 1: # train right / test left
-            return colPoint < (volume_shape[1] * (1 - args["train_portion"]))
-        elif args["train_bounds"] == 2: # train bottom / test top
-            return rowPoint < (volume_shape[0] * (1 - args["train_portion"]))
-        elif args["train_bounds"] == 3: # train left / test right
-            return colPoint > (volume_shape[1] * args["train_portion"])
+        if train_bounds == 0: # train top / test bottom
+            return rowPoint > (volume_shape[0] * train_portion)
+        elif train_bounds == 1: # train right / test left
+            return colPoint < (volume_shape[1] * (1 - train_portion))
+        elif train_bounds == 2: # train bottom / test top
+            return rowPoint < (volume_shape[0] * (1 - train_portion))
+        elif train_bounds == 3: # train left / test right
+            return colPoint > (volume_shape[1] * train_portion)
 
 
 
-def generateCoordinatePool(args, volume, rowBounds, colBounds, groundTruth, surfaceMask):
-    print("Generating coordinate pool...")
+def generateCoordinatePool(args, volume, rowBounds, colBounds, groundTruth, surfaceMask, train_bounds, train_portion):
     coordinates = []
     ink_count = 0
     truth_label_value = np.iinfo(groundTruth.dtype).max
     rowStep = int(args["y_Dimension"]/2)
     colStep = int(args["x_Dimension"]/2)
 
-    print("rowbounds: {}".format(rowBounds))
-    print("colbounds: {}".format(colBounds))
+    print(" rowbounds: {}".format(rowBounds))
+    print(" colbounds: {}".format(colBounds))
 
     for row in range(rowBounds[0], rowBounds[1]):
         for col in range(colBounds[0], colBounds[1]):
             # Dang this if chain is embarassingly large
             if args["use_grid_training"]:
-                if isInTestSet(args,row,col, volume.shape):
+                if isInTestSet(args,row,col, volume.shape, train_bounds, train_portion):
                     continue
 
             if args["restrict_surface"] and not isOnSurface(args, row, col, surfaceMask):
@@ -220,7 +219,6 @@ def generateCoordinatePool(args, volume, rowBounds, colBounds, groundTruth, surf
 
     ink_portion = ink_count / len(coordinates)
 
-    print("Final pool coordinate is {:.3f} ink samples".format(ink_count / len(coordinates)))
     return coordinates
 
 
@@ -258,6 +256,28 @@ def augmentSample(args, sample, seed=None):
     return augmentedSample
 
 
+def generateSurfaceApproximation(args, volume):
+    surface_points = np.zeros((volume.shape[0:2]), dtype=np.int)
+
+    for row in range(1, volume.shape[0], 3):
+        for col in range(1, volume.shape[1], 3):
+            max_sum_index = 0
+            max_sum = 0
+            for i in range(0, volume.shape[2]-10, 2):
+                sum_from_i = np.sum(volume[row,col,i:i+10])
+                if sum_from_i > max_sum:
+                    max_sum_index = i
+                    max_sum = sum_from_i
+            surface_points[row-1:row+2, col-1:col+2] = max_sum_index
+            # | | | |
+            # | |+| |
+            # | | | |
+
+            # fill in every blank around the + with the value at +
+
+    return surface_points
+
+
 def isOnSurface(args, rowCoordinate, colCoordinate, surfaceMask):
     # alternatively, check if the maximum value in the vector crosses a threshold
     # for now, just check our mask
@@ -265,6 +285,17 @@ def isOnSurface(args, rowCoordinate, colCoordinate, surfaceMask):
     colStep = int(args["x_Dimension"] / 2)
     square = surfaceMask[rowCoordinate-rowStep:rowCoordinate+rowStep, colCoordinate-colStep:colCoordinate+colStep]
     return np.size(square) > 0 and np.min(square) != 0
+
+
+def minimumSurfaceInSample(args, row, col, surfaceImage):
+    rowStep = int(args["y_Dimension"] / 2)
+    colStep = int(args["x_Dimension"] / 2)
+
+    square = surfaceImage[row-rowStep:row+rowStep, col-colStep:col+colStep]
+    if np.size(square) == 0:
+        return 0
+        
+    return np.min(square)
 
 
 def getSpecString(args):

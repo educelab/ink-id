@@ -19,28 +19,90 @@ start_time = time.time()
 args = {
     ### Input configuration ###
 
-    "trainingDataPaths" : ["/home/jack/devel/volcart/ReconstructedCarbonSquares/B_blank_0_cropped/", "/home/jack/devel/volcart/ReconstructedCarbonSquares/B_inked_1_cropped/"],
-    "groundTruthFiles": ["/home/jack/devel/volcart/ReconstructedCarbonSquares/black.tif", "/home/jack/devel/volcart/ReconstructedCarbonSquares/white.tif"],
-    "surfaceMaskFiles": ["", ""],
-    "surfaceDataFiles": ["",""],
-    "x_Dimension": 20,
-    "y_Dimension": 20,
-    "z_Dimension": 64,
+    "volumeDataPaths" : ["/home/jack/devel/volcart/ReconstructedCarbonSquares/B_blank_0_cropped/",
+                            "/home/jack/devel/volcart/ReconstructedCarbonSquares/B_inked_1_cropped/",
+                            "/home/jack/devel/volcart/ReconstructedCarbonSquares/C_blank_cropped_rot/",
+                            "/home/jack/devel/volcart/ReconstructedCarbonSquares/C_inked_cropped_rot/",
+                            "/home/jack/devel/volcart/ReconstructedCarbonSquares/D_blank_cropped_rot/",
+                            "/home/jack/devel/volcart/ReconstructedCarbonSquares/D_inked_cropped_rot/",
+                            "/home/jack/devel/volcart/ReconstructedCarbonSquares/E_blank_cropped_rot/",
+                            "/home/jack/devel/volcart/ReconstructedCarbonSquares/E_inked_cropped_rot/",
+                            "/home/jack/devel/volcart/ReconstructedCarbonSquares/F_blank_cropped_rot/",
+                            "/home/jack/devel/volcart/ReconstructedCarbonSquares/F_inked_cropped_rot/",
+                            "/home/jack/devel/volcart/carbon-phantom-data/Reslice/"],
+    "groundTruthFiles": ["/home/jack/devel/volcart/ReconstructedCarbonSquares/black.tif",
+                            "/home/jack/devel/volcart/ReconstructedCarbonSquares/white.tif",
+                            "",
+                            "",
+                            "",
+                            "",
+                            "",
+                            "",
+                            "",
+                            "",
+                            "/home/jack/devel/volcart/carbon-phantom-data/carbon-phantom-2d-truth.tif/"],
+    "surfaceMaskFiles": ["",
+                            "",
+                            "",
+                            "",
+                            "",
+                            "",
+                            "",
+                            "",
+                            "",
+                            "",
+                            ""],
+    "surfaceDataFiles": ["",
+                            "",
+                            "",
+                            "",
+                            "",
+                            "",
+                            "",
+                            "",
+                            "",
+                            "",
+                            ""],
+    "train_bounds": [3,
+                    3,
+                    0,
+                    0,
+                    1,
+                    1,
+                    2,
+                    2,
+                    3,
+                    3,
+                    0], # bounds parameters: 0=TOP || 1=RIGHT || 2=BOTTOM || 3=LEFT
+    "train_portion": [.8,
+                        .8,
+                        .8,
+                        .8,
+                        .8,
+                        .8,
+                        .8,
+                        .8,
+                        .8,
+                        .8,
+                        0.0],
+    "x_Dimension": 32,
+    "y_Dimension": 32,
+    "z_Dimension": 17,
 
 
     ### Back off from the surface point some distance
-    "surface_cushion" : 12,
+    "surface_cushion" : 3,
 
     ### Network configuration ###
     "use_multitask_training": False,
     "shallow_learning_rate":.001,
-    "learning_rate": .001,
-    "batch_size": 40,
+    "learning_rate": .0001,
+    "batch_size": 50,
     "prediction_batch_size": 1000,
     "filter_size" : [3,3,3],
     "dropout": 0.5,
     "neurons": [16,8,4,2],
-    "training_iterations": 10000,
+    "training_iterations": 1000000,
     "training_epochs": 2,
     "n_classes": 2,
     "pos_weight": .5,
@@ -55,14 +117,12 @@ args = {
     "random_step" : 10, # one in every randomStep non-ink samples will be a random brick
     "random_range" : 200,
     "use_jitter" : True,
-    "jitter_range" : [-4, 4],
+    "jitter_range" : [-3, 3],
     "add_augmentation" : True,
-    "train_portion" : .6, # Percent of division between train and predict regions
     "balance_samples" : False,
     "use_grid_training": False,
     "grid_n_squares":10,
     "grid_test_square": -1,
-    "train_bounds" : [3,3], # bounds parameters: 0=TOP || 1=RIGHT || 2=BOTTOM || 3=LEFT
     "surface_threshold": 20400,
     "restrict_surface": False,
 
@@ -79,8 +139,9 @@ args = {
     "notes": ""
 }
 
-if not (len(args["trainingDataPaths"]) == len(args["surfaceDataFiles"]) == len(args["groundTruthFiles"]) == len(args["surfaceMaskFiles"]) == len(args["train_bounds"])):
+if not (len(args["volumeDataPaths"]) == len(args["surfaceDataFiles"]) == len(args["groundTruthFiles"]) == len(args["surfaceMaskFiles"]) == len(args["train_bounds"])):
     print("Please specify an equal number of data paths, surface files, ground truth files, surface masks, and train bounds in the 'args' dictionary")
+    exit()
 
 x = tf.placeholder(tf.float32, [None, args["x_Dimension"], args["y_Dimension"], args["z_Dimension"]])
 y = tf.placeholder(tf.float32, [None, args["n_classes"]])
@@ -105,12 +166,16 @@ false_positives = tf.equal(tf.argmax(y,1) + 1, tf.argmax(pred, 1))
 false_positive_rate = tf.reduce_mean(tf.cast(false_positives, tf.float32))
 tf.summary.scalar('accuracy', accuracy)
 tf.summary.scalar('xentropy-loss', loss)
+tf.summary.histogram('prediction_values', pred[:,1])
 if args["use_multitask_training"]:
     tf.summary.scalar('xentropy-shallow-loss', loss)
 tf.summary.scalar('false_positive_rate', false_positive_rate)
 
 
 merged = tf.summary.merge_all()
+saver = tf.train.Saver()
+best_test_precision = 0.0
+best_precision_iteration = 0
 volumes = multidata.VolumeSet(args)
 
 # create summary writer directory
@@ -145,7 +210,7 @@ with tf.Session() as sess:
     testX, testY = volumes.getTestBatch(args)
 
     try:
-        while epoch < args["training_epochs"]:
+        while iteration < args["training_iterations"]:
         #while iteration < args["training_iterations"]:
 
             predict_flag = False
@@ -155,8 +220,8 @@ with tf.Session() as sess:
                 summary, _, _ = sess.run([merged, optimizer, shallow_optimizer], feed_dict={x: batchX, y: batchY, drop_rate:args["dropout"], train_flag:True})
             else:
                 summary, _ = sess.run([merged, optimizer], feed_dict={x: batchX, y: batchY, drop_rate:args["dropout"], train_flag:True})
-
             train_writer.add_summary(summary, iteration)
+
 
             if iteration % args["display_step"] == 0:
                 train_acc, train_loss, train_preds, train_summary = \
@@ -172,16 +237,21 @@ with tf.Session() as sess:
                 train_losses.append(train_loss)
                 train_precs.append(train_prec)
                 test_precs.append(test_prec)
-
                 test_writer.add_summary(test_summary, iteration)
-
-                if (test_acc > .9): #or (test_prec > .8) and (iterations_since_prediction > 1000) and (predictions_made < 4): # or (test_prec / args["numCubes"] < .05)
-                    # make a full prediction if results are tentatively spectacular
-                    predict_flag = True
 
                 print("Iteration: {}\t\tEpoch: {}".format(iteration, epoch))
                 print("Train Loss: {:.3f}\tTrain Acc: {:.3f}\tInk Precision: {:.3f}".format(train_loss, train_acc, train_precs[-1]))
                 print("Test Loss: {:.3f}\tTest Acc: {:.3f}\t\tInk Precision: {:.3f}".format(test_loss, test_acc, test_precs[-1]))
+
+                if (test_prec > best_test_precision):
+                    print("\tAchieved new peak accuracy! Saving model...")
+                    best_test_precision = test_acc
+                    best_precision_iteration = iteration
+                    save_path = saver.save(sess, args["output_path"] + '/models/model.ckpt', )
+
+                if (test_acc > .9) and (iterations_since_prediction > 100): #or (test_prec > .8)  and (predictions_made < 4): # or (test_prec / args["numCubes"] < .05)
+                    # make a full prediction if results are tentatively spectacular
+                    predict_flag = True
 
 
             if (predict_flag) or (iteration % args["predict_step"] == 0 and iteration > 0):
@@ -205,28 +275,29 @@ with tf.Session() as sess:
             if args["wobble_volume"] and iteration >= args["wobble_step"] and (iteration % args["wobble_step"]) == 0:
                 # ex. wobble at iteration 1000, or after the prediction for the previous wobble
                 volumes.wobbleVolumes(args)
-
             iteration += 1
             iterations_since_prediction += 1
 
+
     except KeyboardInterrupt:
-        # make a prediction if interrupted
+        # still make last prediction if interrupted
         pass
 
-    if iterations_since_prediction > 1:
-        # make one last prediction after everything finishes
-        startingCoordinates = [0,0,0]
-        predictionSamples, coordinates, nextCoordinates = volumes.getPredictionBatch(args, startingCoordinates)
-        count = 1
-        print("Beginning predictions...")
-        while nextCoordinates is not None:
-            #TODO add back the output
-            predictionValues = sess.run(pred, feed_dict={x: predictionSamples, drop_rate: 0.0, train_flag:False})
-            volumes.reconstruct(args, predictionValues, coordinates)
-            predictionSamples, coordinates, nextCoordinates = volumes.getPredictionBatch(args, nextCoordinates)
-        minutes = ( (time.time() - start_time) /60 )
-        volumes.saveAllPredictions(args, iteration)
-        volumes.saveAllPredictionMetrics(args, iteration, minutes)
+    # make one last prediction after everything finishes
+    # use the model that performed best on the test set :)
+    saver.restore(sess, args["output_path"] + '/models/model.ckpt')
+    startingCoordinates = [0,0,0]
+    predictionSamples, coordinates, nextCoordinates = volumes.getPredictionBatch(args, startingCoordinates)
+    count = 1
+    print("Beginning predictions from best model (iteration {})...".format(best_precision_iteration))
+    while nextCoordinates is not None:
+        #TODO add back the output
+        predictionValues = sess.run(pred, feed_dict={x: predictionSamples, drop_rate: 0.0, train_flag:False})
+        volumes.reconstruct(args, predictionValues, coordinates)
+        predictionSamples, coordinates, nextCoordinates = volumes.getPredictionBatch(args, nextCoordinates)
+    minutes = ( (time.time() - start_time) /60 )
+    volumes.saveAllPredictions(args, iteration)
+    volumes.saveAllPredictionMetrics(args, iteration, minutes)
 
 
 

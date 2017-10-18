@@ -28,18 +28,33 @@ class Volume:
         self.wobbled_angle = 0.0
         self.predictionVolume = np.zeros((self.volume.shape[0], self.volume.shape[1], args["predict_depth"]), dtype=np.float32)
 
-        self.groundTruth = tiff.imread(truth_path)
+        if len(truth_path) > 0:
+            self.groundTruth = tiff.imread(truth_path)
+        elif 'inked' in volume_path:
+            self.groundTruth = np.ones((self.volume.shape[0:2]), dtype=np.uint16) * 65535
+        elif 'blank' in volume_path:
+            self.groundTruth = np.zeros((self.volume.shape[0:2]), dtype=np.uint16)
+
         self.max_truth = np.iinfo(self.groundTruth.dtype).max
         self.predictionImageInk = np.zeros((self.volume.shape[0], self.volume.shape[1]), dtype=np.float32)
         self.predictionImageSurf = np.zeros((self.volume.shape[0], self.volume.shape[1]), dtype=np.float32)
         self.predictionPlusSurf = np.zeros((self.volume.shape[0], self.volume.shape[1]), dtype=np.float32)
         self.trainingImage = np.zeros(self.predictionImageInk.shape, dtype=np.uint16)
-        self.surfaceImage = np.zeros((self.volume.shape[0], self.volume.shape[1]), dtype=np.int)
+
         if len(surface_point_path) > 0:
             self.surfaceImage = tiff.imread(surface_point_path)
+        elif self.volume.shape[2] > args["z_Dimension"]:
+            print("\tApproximating surface for volume {}...".format(self.volume_number))
+            surf_start_time = time.time()
+            self.surfaceImage = ops.generateSurfaceApproximation(args, self.volume)
+            print("\tSurface approximation took {:.2f} minutes.".format((time.time()-surf_start_time)/60))
+        else:
+            self.surfaceImage = np.zeros((self.volume.shape[0:2]))
+
         self.surfaceMaskImage = np.ones((self.volume.shape[0], self.volume.shape[1]), dtype=np.int)
         if len(surface_mask_path) > 0:
             self.surfaceMaskImage = tiff.imread(surface_mask_path)
+
         self.surfaceMask = self.surfaceMaskImage / np.iinfo(self.surfaceMaskImage.dtype).max
         self.all_truth, self.all_preds = [], []
         self.test_truth, self.test_preds = [], []
@@ -50,14 +65,15 @@ class Volume:
         self.train_index = 0
         self.epoch = 0
 
-        print("Volume {} shape: {}".format(self.volume_number, self.volume.shape))
+        print("\tVolume {} shape: {}".format(self.volume_number, self.volume.shape))
 
 
 
     def getTrainingBatch(self, args, n_samples):
         if len(self.coordinate_pool) == 0: # initialization
-            rowBounds, colBounds = ops.bounds(args, [self.volume.shape[0], self.volume.shape[1]], args["train_bounds"][self.volume_number])
-            self.coordinate_pool = ops.generateCoordinatePool(args, self.volume, rowBounds, colBounds, self.groundTruth, self.surfaceMask)
+            rowBounds, colBounds = ops.bounds(args, [self.volume.shape[0], self.volume.shape[1]], args["train_bounds"][self.volume_number], args["train_portion"][self.volume_number])
+            print("Generating coordinate pool for volume {}...".format(self.volume_number))
+            self.coordinate_pool = ops.generateCoordinatePool(args, self.volume, rowBounds, colBounds, self.groundTruth, self.surfaceMask, args["train_bounds"][self.volume_number], args["train_portion"][self.volume_number])
             np.random.shuffle(self.coordinate_pool)
         if self.train_index + args["batch_size"] >= len(self.coordinate_pool): # end of epoch
             self.incrementEpoch(args)
@@ -78,7 +94,7 @@ class Volume:
                     self.moveToNextPositiveSample(args)
 
             rowCoord, colCoord, label, augment_seed = self.coordinate_pool[self.train_index]
-            zCoord = self.surfaceImage[rowCoord, colCoord] - args["surface_cushion"]
+            zCoord = np.min(self.surfaceImage[rowCoord-rowStep:rowCoord+rowStep, colCoord-colStep:colCoord+colStep]) - args["surface_cushion"]
 
             if args["use_jitter"]:
                 zCoord = np.maximum(0, zCoord +  np.random.randint(args["jitter_range"][0], args["jitter_range"][1]))
@@ -111,14 +127,14 @@ class Volume:
 
 
     def getTestBatch(self, args, n_samples):
-        print("Generating test set for volume {}...".format(self.volume_number))
+        print("\tGenerating test set for volume {}...".format(self.volume_number))
         # allocate an empty array with appropriate size
         trainingSamples = np.zeros((n_samples, args["x_Dimension"], args["y_Dimension"], args["z_Dimension"]), dtype=np.float32)
         groundTruth = np.zeros((n_samples, args["n_classes"]), dtype=np.float32)
 
         # this gets the "other half" of the data not in the train portion
         # bounds parameters: 0=TOP || 1=RIGHT || 2=BOTTOM || 3=LEFT
-        rowBounds, colBounds = ops.bounds(args, self.volume.shape, (args["train_bounds"][self.volume_number]+2)%4)
+        rowBounds, colBounds = ops.bounds(args, self.volume.shape, (args["train_bounds"][self.volume_number]+2)%4, args["train_portion"][self.volume_number])
 
         for i in range(n_samples):
             rowCoordinate, colCoordinate, zCoordinate, label_avg = ops.findRandomCoordinate(args, colBounds, rowBounds, self.groundTruth, self.surfaceImage, self.surfaceMask, self.volume.shape, testSet=True)
@@ -144,7 +160,7 @@ class Volume:
         # return the prediction sample along side of coordinates
         rowCoordinate = startingCoordinates[0]
         colCoordinate = startingCoordinates[1]
-        zCoordinate = self.surfaceImage[rowCoordinate+int(args["y_Dimension"]/2), colCoordinate+int(args["x_Dimension"]/2)] - args["surface_cushion"]
+        zCoordinate = max(0,  (ops.minimumSurfaceInSample(args, rowCoordinate, colCoordinate, self.surfaceImage) - args["surface_cushion"]))
 
         predictionSamples = np.zeros((args["prediction_batch_size"], args["x_Dimension"], args["y_Dimension"], args["z_Dimension"]), dtype=np.float32)
         coordinates = np.zeros((args["prediction_batch_size"], 2), dtype=np.int)
@@ -161,14 +177,14 @@ class Volume:
                 colCoordinate += args["overlap_step"]
                 continue
 
-            zCoordinate = self.surfaceImage[rowCoordinate+int(args["y_Dimension"]/2), colCoordinate+int(args["x_Dimension"]/2)] - args["surface_cushion"]
+            zCoordinate = max(0,  (ops.minimumSurfaceInSample(args, rowCoordinate, colCoordinate, self.surfaceImage) - args["surface_cushion"]))
             sample = (self.volume[rowCoordinate:rowCoordinate+args["y_Dimension"], \
                     colCoordinate:colCoordinate+args["x_Dimension"], zCoordinate:zCoordinate+args["z_Dimension"]])
             predictionSamples[count, 0:sample.shape[0], 0:sample.shape[1], 0:sample.shape[2]] = sample
 
             # populate the "prediction plus surface" with the initial surface value
             self.predictionPlusSurf[rowCoordinate:rowCoordinate+args["y_Dimension"], \
-                    colCoordinate:colCoordinate+args["x_Dimension"]] = self.volume[rowCoordinate+int(args["y_Dimension"]/2), colCoordinate+int(args["x_Dimension"]/2), zCoordinate]
+                    colCoordinate:colCoordinate+args["x_Dimension"]] = np.max(self.volume[rowCoordinate+int(args["y_Dimension"]/2), colCoordinate+int(args["x_Dimension"]/2)])
             coordinates[count] = [rowCoordinate, colCoordinate]
 
             colCoordinate += args["overlap_step"]
@@ -206,7 +222,8 @@ class Volume:
             # grab the sample and place it in output
             center_row = rowCoordinate+int(args["y_Dimension"]/2)
             center_col = colCoordinate+int(args["x_Dimension"]/2)
-            zCoordinate = self.surfaceImage[center_row, center_col] - args["surface_cushion"]
+            zCoordinate = max(0,  (ops.minimumSurfaceInSample(args, rowCoordinate, colCoordinate, self.surfaceImage) - args["surface_cushion"]))
+
             if args["predict_depth"] > 1:
                 #TODO this z-mapping mapping will eventually be something more intelligent
                 zCoordinate += (depthCoordinate)
@@ -218,7 +235,7 @@ class Volume:
             # populate the "prediction plus surface" with the initial surface value
             olap = args["overlap_step"]
             self.predictionPlusSurf[center_row-olap:center_row+olap, \
-                    center_col-olap:center_col+olap] = self.volume[center_row, center_col, max(0,min(self.volume.shape[2]-1,zCoordinate))]
+                    center_col-olap:center_col+olap] = np.max(self.volume[center_row, center_col]) #, max(0,min(self.volume.shape[2]-1,zCoordinate))]
             coordinates[sample_count] = [rowCoordinate, colCoordinate, depthCoordinate]
 
             # increment variables for next iteration
@@ -229,39 +246,6 @@ class Volume:
 
 
 
-    def reconstruct(self, args, samples, coordinates):
-        center_step = int(round(args["overlap_step"] / 2))
-        inks = 0
-        # reconstruct prediction volume one prediction sample at a time
-        for i in range(coordinates.shape[0]):
-            xpoint = coordinates[i,0] + int(args["x_Dimension"] / 2)
-            ypoint = coordinates[i,1] + int(args["y_Dimension"] / 2)
-
-            # all_truth array for confusion matrix, 1=ink, 0=fragment
-            #pdb.set_trace()
-            if(self.groundTruth[xpoint,ypoint]) > .9*self.max_truth:
-                inks += 1
-                self.all_truth.append(1.0)
-            else:
-                self.all_truth.append(0.0)
-
-            if(center_step > 0):
-                self.predictionImageInk[xpoint-center_step:xpoint+center_step, ypoint-center_step:ypoint+center_step] = samples[i,1]
-                self.predictionImageSurf[xpoint-center_step:xpoint+center_step, ypoint-center_step:ypoint+center_step] = samples[i,0]
-            else:
-                self.predictionImageInk[xpoint,ypoint] = samples[i,1]
-                self.predictionImageSurf[xpoint,ypoint] = samples[i,0]
-
-            self.all_preds.append(np.argmax(samples[i,:]))
-
-            # test batch (right side)
-            #TODO  make this correspond to the specified train side
-            if xpoint > int(self.volume.shape[1]*args["train_portion"]):
-                self.test_preds.append(self.all_preds[-1])
-                self.test_truth.append(self.all_truth[-1])
-
-
-
     def reconstruct3D(self, args, predictionValues, coordinates):
         center_step = int(round(args["overlap_step"] / 2))
         for i in range(coordinates.shape[0]):
@@ -269,7 +253,6 @@ class Volume:
             colpoint = coordinates[i,1] + (int(args["y_Dimension"] / 2))
             zpoint = coordinates[i,2]
             predictionValue = predictionValues[i,1]
-
 
             self.all_preds.append(np.argmax(predictionValues[i,:]))
             if(self.groundTruth[rowpoint,colpoint]) > .9*self.max_truth:
@@ -286,7 +269,7 @@ class Volume:
                 self.predictionPlusSurf[rowpoint, colpoint] *= predictionValue
 
 
-            if ops.isInTestSet(args, rowpoint, colpoint, self.volume.shape):
+            if ops.isInTestSet(args, rowpoint, colpoint, self.volume.shape, args["train_bounds"][self.volume_number], args["train_portion"][self.volume_number]):
                 self.test_preds.append(self.all_preds[-1])
                 self.test_truth.append(self.all_truth[-1])
 
@@ -318,7 +301,7 @@ class Volume:
             self.predictionVolume[(end_row_number*voxels_per_row):, :] = 0
 
         else:
-            rowBounds, colBounds = ops.bounds(args, [self.volume.shape[0], self.volume.shape[1]], args["train_bounds"][self.volume_number])
+            rowBounds, colBounds = ops.bounds(args, [self.volume.shape[0], self.volume.shape[1]], args["train_bounds"][self.volume_number], args["train_portion"][self.volume_number])
             self.predictionVolume[rowBounds[0]:rowBounds[1], colBounds[0]:colBounds[1]] = 0
 
         for d in range(args["predict_depth"]):
@@ -350,7 +333,8 @@ class Volume:
 
         # save the ink and surface predictions
         tiff.imsave(self.output_path + "/{}/prediction-iteration{}-depth{}.tif".format(predictionName, iteration, depth), predictionImage)
-        tiff.imsave(self.output_path + "/{}/predictionPlusSurf-iteration{}-depth{}.tif".format(predictionName, iteration, depth), predictionPlusSurfImage)
+        # this doesn't work yet:
+        # tiff.imsave(self.output_path + "/{}/predictionPlusSurf-iteration{}-depth{}.tif".format(predictionName, iteration, depth), predictionPlusSurfImage)
         tiff.imsave(self.output_path + "/training-{}.tif".format(iteration), self.trainingImage)
 
         # zero them out for the next predictions
@@ -359,12 +343,13 @@ class Volume:
 
 
     def savePredictionMetrics(self, args, iteration, minutes):
+        print("\n\n\tMetrics for volume {}:".format(self.volume_number))
         all_confusion = confusion_matrix(self.all_truth, self.all_preds)
         test_confusion = confusion_matrix(self.test_truth, self.test_preds)
         all_confusion_norm = all_confusion.astype('float') / all_confusion.sum(axis=1)[:, np.newaxis]
         test_confusion_norm = test_confusion.astype('float') / test_confusion.sum(axis=1)[:, np.newaxis]
-        print("Normalized confusion matrix for ALL points: \n{}".format(all_confusion_norm))
-        print("Normalized confusion matrix for TEST points: \n{}".format(test_confusion_norm))
+        print("\tNormalized confusion matrix for ALL points: \n{}".format(all_confusion_norm))
+        print("\tNormalized confusion matrix for TEST points: \n{}".format(test_confusion_norm))
 
         #calculate metrics
         all_precision = precision_score(self.all_truth, self.all_preds)

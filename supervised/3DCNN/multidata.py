@@ -7,14 +7,18 @@ class VolumeSet:
     def __init__(self, args):
         # instantiate other volumes
         self.volume_set = []
-        self.current_prediction_volume = 0
         self.current_prediction_batch = 0
         self.current_prediction_total_batches = 0
-        self.n_volumes = len(args["trainingDataPaths"])
+        self.n_train_volumes = int(np.sum(np.ceil(args["train_portion"])))
+        self.n_total_volumes = len(args["volumeDataPaths"])
+        self.n_test_volumes = self.n_total_volumes - self.n_train_volumes
+        self.current_prediction_volume = self.n_train_volumes
 
-        for i in range(self.n_volumes):
-            print("Initializing volume {} of {}...".format(i+1,self.n_volumes))
-            self.volume_set.append(data.Volume(args, volume_number=i, volume_path=args["trainingDataPaths"][i], \
+        print("Initializing {} total volumes, {} to be used for training...".format(self.n_total_volumes, self.n_train_volumes))
+
+        for i in range(self.n_total_volumes):
+            print("Initializing volume {} of {}...".format(i+1,self.n_total_volumes))
+            self.volume_set.append(data.Volume(args, volume_number=i, volume_path=args["volumeDataPaths"][i], \
                 truth_path=args["groundTruthFiles"][i], surface_mask_path=args["surfaceMaskFiles"][i], surface_point_path=args["surfaceDataFiles"][i]))
 
 
@@ -24,11 +28,11 @@ class VolumeSet:
         # should be as simple as getting batches from each volume and combining them
         trainingSamples = np.zeros((args["batch_size"], args["x_Dimension"], args["y_Dimension"], args["z_Dimension"]), dtype=np.float32)
         groundTruth = np.zeros((args["batch_size"], args["n_classes"]), dtype=np.float32)
-        samples_per_volume = int(args["batch_size"] / self.n_volumes)
-        for i in range(self.n_volumes):
+        samples_per_volume = int(args["batch_size"] / self.n_train_volumes)
+        for i in range(self.n_train_volumes):
             start = i*samples_per_volume
             end = (i+1)*samples_per_volume
-            if i == self.n_volumes-1: # make sure to 'fill up' all the slots
+            if i == self.n_train_volumes-1: # make sure to 'fill up' all the slots
                 end = args["batch_size"]-1
 
             volume_samples, volume_truth, volume_epoch = self.volume_set[i].getTrainingBatch(args, end-start)
@@ -55,16 +59,24 @@ class VolumeSet:
         # gather testing samples from other volumes
         trainingSamples = np.zeros((args["num_test_cubes"], args["x_Dimension"], args["y_Dimension"], args["z_Dimension"]), dtype=np.float32)
         groundTruth = np.zeros((args["num_test_cubes"], args["n_classes"]), dtype=np.float32)
-        samples_per_volume = int(args["num_test_cubes"] / self.n_volumes)
-        for i in range(self.n_volumes):
-            start = i*samples_per_volume
-            end = (i+1)*samples_per_volume
-            if i == self.n_volumes-1: # make sure to 'fill up' all the slots
-                end = args["num_test_cubes"]-1
 
-            volume_samples, volume_truth = self.volume_set[i].getTestBatch(args, end-start)
-            trainingSamples[start:end] = volume_samples
-            groundTruth[start:end] = volume_truth
+        if self.n_test_volumes == 1:
+            # all samples come from the same volume
+            volume_samples, volume_truth = self.volume_set[-1].getTestBatch(args, args["num_test_cubes"])
+            trainingSamples[:] = volume_samples
+            groundTruth[:] = volume_truth
+
+        else: #TODO validate this scheme
+            samples_per_volume = int(args["num_test_cubes"] / self.n_test_volumes)
+            for i in range(self.n_test_volumes):
+                start = i*samples_per_volume
+                end = (i+1)*samples_per_volume
+                if i == self.n_test_volumes-1: # make sure to 'fill up' all the slots
+                    end = args["num_test_cubes"]-1
+
+                volume_samples, volume_truth = self.volume_set[i].getTestBatch(args, end-start)
+                trainingSamples[start:end] = volume_samples
+                groundTruth[start:end] = volume_truth
 
         return trainingSamples, groundTruth
 
@@ -80,20 +92,21 @@ class VolumeSet:
             samples, coordinates, nextCoordinates = self.volume_set[self.current_prediction_volume].getPredictionSample3D(args, starting_coordinates)
             self.current_prediction_batch += 1
             if self.current_prediction_batch % int(self.current_prediction_total_batches / 10) == 0:
-                print("Predicting batch {}/{}...".format(self.current_prediction_batch, self.current_prediction_total_batches))
+                print("\tPredicting batch {}/{}...".format(self.current_prediction_batch, self.current_prediction_total_batches))
 
-        elif self.current_prediction_volume + 1 != self.n_volumes:
+        elif self.current_prediction_volume + 1 < self.n_total_volumes:
             # case 2: finished volume, if there is another volume, go to it
-            print("\nFinished predictions on volume {}...".format(self.current_prediction_volume))
+            print("Finished predictions on volume {}...".format(self.current_prediction_volume))
             self.current_prediction_volume += 1
             self.current_prediction_batch = 0
+            starting_coordinates = [0,0,0]
             samples, coordinates, nextCoordinates = self.volume_set[self.current_prediction_volume].getPredictionSample3D(args, starting_coordinates)
             print("\nBeginning predictions on volume {}...".format(self.current_prediction_volume))
 
         else:
             # case 3: finished volume, no other volume to predict
             samples, coordinates, nextCoordinates = None, None, None
-            self.current_prediction_volume = 0
+            self.current_prediction_volume = self.n_train_volumes
             self.current_prediction_batch = 0
 
         return samples, coordinates, nextCoordinates
@@ -108,18 +121,18 @@ class VolumeSet:
 
     def saveAllPredictions(self, args, iteration):
         # save the prediction images to a file
-        for i in range(self.n_volumes):
+        for i in range(self.n_total_volumes):
             self.volume_set[i].savePrediction3D(args, iteration)
 
 
 
     def saveAllPredictionMetrics(self, args, iteration, minutes):
         # save metrics on performance
-        for i in range(self.n_volumes):
+        for i in range(self.n_total_volumes):
             self.volume_set[i].savePredictionMetrics(args, iteration, minutes)
 
 
 
     def wobbleVolumes(self, args):
-        for i in range(self.n_volumes):
+        for i in range(self.n_train_volumes):
             self.volume_set[i].wobbleVolume(args, iteration)
