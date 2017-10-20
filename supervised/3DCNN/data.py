@@ -27,6 +27,10 @@ class Volume:
         self.wobbled_axes = []
         self.wobbled_angle = 0.0
         self.predictionVolume = np.zeros((self.volume.shape[0], self.volume.shape[1], args["predict_depth"]), dtype=np.float32)
+        self.predictionImageInk = np.zeros((self.volume.shape[0:2]), dtype=np.float32)
+        self.predictionImageSurf = np.zeros((self.volume.shape[0:2]), dtype=np.float32)
+        self.predictionPlusSurf = np.zeros((self.volume.shape[0:2]), dtype=np.float32)
+        self.trainingImage = np.zeros(self.predictionImageInk.shape, dtype=np.uint16)
 
         if len(truth_path) > 0:
             self.groundTruth = tiff.imread(truth_path)
@@ -34,12 +38,8 @@ class Volume:
             self.groundTruth = np.ones((self.volume.shape[0:2]), dtype=np.uint16) * 65535
         elif 'blank' in volume_path:
             self.groundTruth = np.zeros((self.volume.shape[0:2]), dtype=np.uint16)
-
-        self.max_truth = np.iinfo(self.groundTruth.dtype).max
-        self.predictionImageInk = np.zeros((self.volume.shape[0], self.volume.shape[1]), dtype=np.float32)
-        self.predictionImageSurf = np.zeros((self.volume.shape[0], self.volume.shape[1]), dtype=np.float32)
-        self.predictionPlusSurf = np.zeros((self.volume.shape[0], self.volume.shape[1]), dtype=np.float32)
-        self.trainingImage = np.zeros(self.predictionImageInk.shape, dtype=np.uint16)
+        else:
+            self.groundTruth = np.ones((self.volume.shape[0:2]), dtype=np.uint16) * 65535
 
         if len(surface_point_path) > 0:
             self.surfaceImage = tiff.imread(surface_point_path)
@@ -55,6 +55,7 @@ class Volume:
         if len(surface_mask_path) > 0:
             self.surfaceMaskImage = tiff.imread(surface_mask_path)
 
+        self.max_truth = np.iinfo(self.groundTruth.dtype).max
         self.surfaceMask = self.surfaceMaskImage / np.iinfo(self.surfaceMaskImage.dtype).max
         self.all_truth, self.all_preds = [], []
         self.test_truth, self.test_preds = [], []
@@ -94,7 +95,7 @@ class Volume:
                     self.moveToNextPositiveSample(args)
 
             rowCoord, colCoord, label, augment_seed = self.coordinate_pool[self.train_index]
-            zCoord = np.min(self.surfaceImage[rowCoord-rowStep:rowCoord+rowStep, colCoord-colStep:colCoord+colStep]) - args["surface_cushion"]
+            zCoord = np.maximum(0, self.surfaceImage[rowCoord, colCoord]-args["surface_cushion"])
 
             if args["use_jitter"]:
                 zCoord = np.maximum(0, zCoord +  np.random.randint(args["jitter_range"][0], args["jitter_range"][1]))
@@ -156,44 +157,6 @@ class Volume:
 
 
 
-    def getPredictionSample(self, args, startingCoordinates):
-        # return the prediction sample along side of coordinates
-        rowCoordinate = startingCoordinates[0]
-        colCoordinate = startingCoordinates[1]
-        zCoordinate = max(0,  (ops.minimumSurfaceInSample(args, rowCoordinate, colCoordinate, self.surfaceImage) - args["surface_cushion"]))
-
-        predictionSamples = np.zeros((args["prediction_batch_size"], args["x_Dimension"], args["y_Dimension"], args["z_Dimension"]), dtype=np.float32)
-        coordinates = np.zeros((args["prediction_batch_size"], 2), dtype=np.int)
-        count = 0
-        while count < args["prediction_batch_size"]:
-            if (colCoordinate + args["x_Dimension"]) > self.volume.shape[1]:
-                colCoordinate = 0
-                rowCoordinate += args["overlap_step"]
-            if (rowCoordinate + args["y_Dimension"]) > self.volume.shape[0]:
-                break
-
-            # don't predict on it if it's not on the fragment
-            if np.max(self.volume[rowCoordinate, colCoordinate]) < args["surface_threshold"]:
-                colCoordinate += args["overlap_step"]
-                continue
-
-            zCoordinate = max(0,  (ops.minimumSurfaceInSample(args, rowCoordinate, colCoordinate, self.surfaceImage) - args["surface_cushion"]))
-            sample = (self.volume[rowCoordinate:rowCoordinate+args["y_Dimension"], \
-                    colCoordinate:colCoordinate+args["x_Dimension"], zCoordinate:zCoordinate+args["z_Dimension"]])
-            predictionSamples[count, 0:sample.shape[0], 0:sample.shape[1], 0:sample.shape[2]] = sample
-
-            # populate the "prediction plus surface" with the initial surface value
-            self.predictionPlusSurf[rowCoordinate:rowCoordinate+args["y_Dimension"], \
-                    colCoordinate:colCoordinate+args["x_Dimension"]] = np.max(self.volume[rowCoordinate+int(args["y_Dimension"]/2), colCoordinate+int(args["x_Dimension"]/2)])
-            coordinates[count] = [rowCoordinate, colCoordinate]
-
-            colCoordinate += args["overlap_step"]
-            count += 1
-
-        return (predictionSamples), (coordinates), [rowCoordinate, colCoordinate]
-
-
-
     def getPredictionSample3D(self, args, startingCoordinates):
         rowCoordinate = startingCoordinates[0]
         colCoordinate = startingCoordinates[1]
@@ -222,7 +185,7 @@ class Volume:
             # grab the sample and place it in output
             center_row = rowCoordinate+int(args["y_Dimension"]/2)
             center_col = colCoordinate+int(args["x_Dimension"]/2)
-            zCoordinate = max(0,  (ops.minimumSurfaceInSample(args, rowCoordinate, colCoordinate, self.surfaceImage) - args["surface_cushion"]))
+            zCoordinate = max(0,  self.surfaceImage[center_row, center_col] - args["surface_cushion"])
 
             if args["predict_depth"] > 1:
                 #TODO this z-mapping mapping will eventually be something more intelligent

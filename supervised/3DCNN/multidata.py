@@ -11,8 +11,8 @@ class VolumeSet:
         self.current_prediction_total_batches = 0
         self.n_train_volumes = int(np.sum(np.ceil(args["train_portion"])))
         self.n_total_volumes = len(args["volumeDataPaths"])
-        self.n_test_volumes = self.n_total_volumes - self.n_train_volumes
-        self.current_prediction_volume = self.n_train_volumes
+        self.n_test_volumes = args["test_volumes"]
+        self.current_prediction_volume = self.n_total_volumes - self.n_test_volumes
 
         print("Initializing {} total volumes, {} to be used for training...".format(self.n_total_volumes, self.n_train_volumes))
 
@@ -39,6 +39,7 @@ class VolumeSet:
             trainingSamples[start:end] = volume_samples
             groundTruth[start:end] = volume_truth
 
+        '''
         for j in range(args["batch_size"]):
             # randomly swap samples
             # pretty sure this is statistically invalid because certain items are more likely to get swapped
@@ -48,7 +49,7 @@ class VolumeSet:
             trainingSamples[index_a] = trainingSamples[index_b]
             trainingSamples[index_b] = tmpSample
             groundTruth[index_a] = groundTruth[index_b]
-            groundTruth[index_b] = tmpTruth
+            groundTruth[index_b] = tmpTruth'''
 
         #TODO return actual epoch instead of 0
         return trainingSamples, groundTruth, 0
@@ -106,7 +107,7 @@ class VolumeSet:
         else:
             # case 3: finished volume, no other volume to predict
             samples, coordinates, nextCoordinates = None, None, None
-            self.current_prediction_volume = self.n_train_volumes
+            self.current_prediction_volume = self.n_total_volumes - self.n_test_volumes
             self.current_prediction_batch = 0
 
         return samples, coordinates, nextCoordinates

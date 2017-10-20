@@ -19,90 +19,31 @@ start_time = time.time()
 args = {
     ### Input configuration ###
 
-    "volumeDataPaths" : ["/home/jack/devel/volcart/ReconstructedCarbonSquares/B_blank_0_cropped/",
-                            "/home/jack/devel/volcart/ReconstructedCarbonSquares/B_inked_1_cropped/",
-                            "/home/jack/devel/volcart/ReconstructedCarbonSquares/C_blank_cropped_rot/",
-                            "/home/jack/devel/volcart/ReconstructedCarbonSquares/C_inked_cropped_rot/",
-                            "/home/jack/devel/volcart/ReconstructedCarbonSquares/D_blank_cropped_rot/",
-                            "/home/jack/devel/volcart/ReconstructedCarbonSquares/D_inked_cropped_rot/",
-                            "/home/jack/devel/volcart/ReconstructedCarbonSquares/E_blank_cropped_rot/",
-                            "/home/jack/devel/volcart/ReconstructedCarbonSquares/E_inked_cropped_rot/",
-                            "/home/jack/devel/volcart/ReconstructedCarbonSquares/F_blank_cropped_rot/",
-                            "/home/jack/devel/volcart/ReconstructedCarbonSquares/F_inked_cropped_rot/",
-                            "/home/jack/devel/volcart/carbon-phantom-data/Reslice/"],
-    "groundTruthFiles": ["/home/jack/devel/volcart/ReconstructedCarbonSquares/black.tif",
-                            "/home/jack/devel/volcart/ReconstructedCarbonSquares/white.tif",
-                            "",
-                            "",
-                            "",
-                            "",
-                            "",
-                            "",
-                            "",
-                            "",
-                            "/home/jack/devel/volcart/carbon-phantom-data/carbon-phantom-2d-truth.tif/"],
-    "surfaceMaskFiles": ["",
-                            "",
-                            "",
-                            "",
-                            "",
-                            "",
-                            "",
-                            "",
-                            "",
-                            "",
-                            ""],
-    "surfaceDataFiles": ["",
-                            "",
-                            "",
-                            "",
-                            "",
-                            "",
-                            "",
-                            "",
-                            "",
-                            "",
-                            ""],
-    "train_bounds": [3,
-                    3,
-                    0,
-                    0,
-                    1,
-                    1,
-                    2,
-                    2,
-                    3,
-                    3,
-                    0], # bounds parameters: 0=TOP || 1=RIGHT || 2=BOTTOM || 3=LEFT
-    "train_portion": [.8,
-                        .8,
-                        .8,
-                        .8,
-                        .8,
-                        .8,
-                        .8,
-                        .8,
-                        .8,
-                        .8,
-                        0.0],
-    "x_Dimension": 32,
-    "y_Dimension": 32,
-    "z_Dimension": 17,
+    "volumeDataPaths" : ["/home/jack/devel/volcart/small-fragment-data/flatfielded-slices/"],
+    "groundTruthFiles": ["/home/jack/devel/volcart/small-fragment-gt.tif"],
+    "surfaceMaskFiles": ["/home/jack/devel/volcart/small-fragment-outline.tif"],
+    "surfaceDataFiles": ["/home/jack/devel/volcart/small-fragment-surface.tif"],
+    "train_bounds": [3], # bounds parameters: 0=TOP || 1=RIGHT || 2=BOTTOM || 3=LEFT
+    "train_portion": [.6],
+    "test_volumes":1,
+    "x_Dimension": 80,
+    "y_Dimension": 80,
+    "z_Dimension": 48,
 
 
     ### Back off from the surface point some distance
-    "surface_cushion" : 3,
+    "surface_cushion" : 8,
 
     ### Network configuration ###
     "use_multitask_training": False,
     "shallow_learning_rate":.001,
-    "learning_rate": .0001,
-    "batch_size": 50,
-    "prediction_batch_size": 1000,
+    "learning_rate": .001,
+    "batch_size": 30,
+    "prediction_batch_size": 300,
     "filter_size" : [3,3,3],
     "dropout": 0.5,
     "neurons": [16,8,4,2],
-    "training_iterations": 1000000,
+    "training_iterations": 100000,
     "training_epochs": 2,
     "n_classes": 2,
     "pos_weight": .5,
@@ -112,19 +53,19 @@ args = {
     "wobble_volume" : False,
     "wobble_step" : 1000,
     "wobble_max_degrees" : 3,
-    "num_test_cubes" : 1000,
+    "num_test_cubes" : 300,
     "add_random" : False,
     "random_step" : 10, # one in every randomStep non-ink samples will be a random brick
     "random_range" : 200,
     "use_jitter" : True,
-    "jitter_range" : [-3, 3],
+    "jitter_range" : [-5, 5],
     "add_augmentation" : True,
-    "balance_samples" : False,
-    "use_grid_training": False,
+    "balance_samples" : True,
+    "use_grid_training": True,
     "grid_n_squares":10,
-    "grid_test_square": -1,
+    "grid_test_square": int(sys.argv[1]),
     "surface_threshold": 20400,
-    "restrict_surface": False,
+    "restrict_surface": True,
 
     ### Output configuration ###
     "predict_step": 5000, # make a prediction every x steps
@@ -244,12 +185,12 @@ with tf.Session() as sess:
                 print("Test Loss: {:.3f}\tTest Acc: {:.3f}\t\tInk Precision: {:.3f}".format(test_loss, test_acc, test_precs[-1]))
 
                 if (test_prec > best_test_precision):
-                    print("\tAchieved new peak accuracy! Saving model...")
-                    best_test_precision = test_acc
+                    print("\tAchieved new peak precision! Saving model...")
+                    best_test_precision = test_prec
                     best_precision_iteration = iteration
                     save_path = saver.save(sess, args["output_path"] + '/models/model.ckpt', )
 
-                if (test_acc > .9) and (iterations_since_prediction > 100): #or (test_prec > .8)  and (predictions_made < 4): # or (test_prec / args["numCubes"] < .05)
+                if (test_acc > .9) and (test_prec > .7) and (iterations_since_prediction > 100): #or (test_prec > .8)  and (predictions_made < 4): # or (test_prec / args["numCubes"] < .05)
                     # make a full prediction if results are tentatively spectacular
                     predict_flag = True
 

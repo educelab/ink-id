@@ -67,16 +67,21 @@ def bounds(args, volume_shape, identifier, train_portion):
 
 def findRandomCoordinate(args, colBounds, rowBounds, groundTruth, surfaceImage, surfaceMask, volume_shape, testSet=False):
     max_truth = np.iinfo(groundTruth.dtype).max
-    if testSet:
-        rowCoordinate, colCoordinate = getTestCoordinate(args, colBounds, rowBounds, volume_shape)
-    else:
-        rowCoordinate, colCoordinate = getTrainCoordinate(args, colBounds, rowBounds, volume_shape)
+    on_fragment = 0
 
     rowStep = int(args["y_Dimension"]/2)
     colStep = int(args["x_Dimension"]/2)
 
-    zCoordinate = 0
+    while on_fragment == 0:
+        if testSet:
+            rowCoordinate, colCoordinate = getTestCoordinate(args, colBounds, rowBounds, volume_shape)
+        else:
+            rowCoordinate, colCoordinate = getTrainCoordinate(args, colBounds, rowBounds, volume_shape)
+        on_fragment = np.min(surfaceMask[rowCoordinate-rowStep:rowCoordinate+rowStep, colCoordinate-colStep:colCoordinate+colStep])
+
     label_avg = np.mean(groundTruth[rowCoordinate-rowStep:rowCoordinate+rowStep, colCoordinate-colStep:colCoordinate+colStep])
+    zCoordinate = max(0, surfaceImage[rowCoordinate, colCoordinate] - args["surface_cushion"])
+    return rowCoordinate, colCoordinate, zCoordinate, label_avg
 
     '''
     # each coordinate should have equal chance of being ink or not ink
@@ -100,9 +105,6 @@ def findRandomCoordinate(args, colBounds, rowBounds, groundTruth, surfaceImage, 
                 rowCoordinate, colCoordinate = getTrainCoordinate(args, colBounds, rowBounds, volume.shape)
             label_avg = np.mean(groundTruth[rowCoordinate-rowStep:rowCoordinate+rowStep, colCoordinate-colStep:colCoordinate+colStep])
     '''
-    putative_z = minimumSurfaceInSample(args, rowCoordinate, colCoordinate, surfaceImage)
-    zCoordinate = max(0, putative_z - args["surface_cushion"])
-    return rowCoordinate, colCoordinate, zCoordinate, label_avg
 
 
 
@@ -294,7 +296,7 @@ def minimumSurfaceInSample(args, row, col, surfaceImage):
     square = surfaceImage[row-rowStep:row+rowStep, col-colStep:col+colStep]
     if np.size(square) == 0:
         return 0
-        
+
     return np.min(square)
 
 
