@@ -119,12 +119,14 @@ class Volume:
         # bounds parameters: 0=TOP || 1=RIGHT || 2=BOTTOM || 3=LEFT
         if testSet:
             rowBounds, colBounds = ops.bounds(args, [self.volume.shape[0], self.volume.shape[1]], (args["train_bounds"]+2)%4)
+            print("testSet rowBounds: {}".format(rowBounds))
+            print("testSet colBounds: {}".format(colBounds))
         else:
             rowBounds, colBounds = ops.bounds(args, [self.volume.shape[0], self.volume.shape[1]], args["train_bounds"])
 
 
         for i in range(args["num_test_cubes"]):
-            rowCoordinate, colCoordinate, zCoordinate, label_avg = ops.findRandomCoordinate(args, colBounds, rowBounds, self.groundTruth, self.surfaceImage, self.surfaceMask, self.volume, testSet)
+            rowCoordinate, colCoordinate, zCoordinate, label_avg = ops.findRandomCoordinate(args, colBounds, rowBounds, self.groundTruth, self.surfaceImage, self.surfaceMask, self.volume, testSet=testSet)
 
             if args["add_random"] and not testSet and label_avg < .1 and np.random.randint(args["random_step"]) == 0:
                 # make this non-ink sample random data labeled as non-ink
@@ -194,7 +196,7 @@ class Volume:
 
 
 
-    def getPredictionSample3D(self, args, startingCoordinates):
+    def getPredictionSample3D(self, args, startingCoordinates, overlap_step=-1):
         rowCoordinate = startingCoordinates[0]
         colCoordinate = startingCoordinates[1]
         depthCoordinate = startingCoordinates[2]
@@ -305,7 +307,7 @@ class Volume:
 
 
 
-    def savePrediction3D(self, args, iteration):
+    def savePrediction3D(self, args, iteration, final_flag=False):
         # save individual pictures
         for d in range(args["predict_depth"]):
             self.savePredictionImage(args, iteration, predictValues=self.predictionVolume[:,:,d], predictionName='ink', depth=d)
@@ -344,7 +346,7 @@ class Volume:
 
 
 
-    def savePredictionImage(self, args, iteration, predictValues=None, predictionName='ink', depth=0):
+    def savePredictionImage(self, args, iteration, predictValues=None, predictionName='ink', depth=0, final_flag=False):
         if predictValues is None:
             #predictionImageInk = 65535 * ( (self.predictionImageInk.copy() - np.min(self.predictionImageInk)) / (np.amax(self.predictionImageInk) - np.min(self.predictionImageInk)) )
             predictionImage = (65535 * self.predictionImage).astype(np.uint16)
@@ -371,7 +373,7 @@ class Volume:
         self.predictionImageSurf = np.zeros((self.volume.shape[0], self.volume.shape[1]), dtype=np.float32)
 
 
-    def savePredictionMetrics(self, args, iteration, minutes):
+    def savePredictionMetrics(self, args, iteration, minutes, final_flag=False):
         output_path = args["output_path"] + '/'
         all_confusion = confusion_matrix(self.all_truth, self.all_preds)
         test_confusion = confusion_matrix(self.test_truth, self.test_preds)
@@ -422,7 +424,7 @@ class Volume:
 
     def moveToNextPositiveSample(self, args):
         while self.coordinate_pool[self.train_index][2] == 0:
-            if self.train_index + 1 >= len(self.coordinate_pool):
+            if self.train_index + 1 == len(self.coordinate_pool):
                 self.incrementEpoch(args)
             else:
                 self.train_index += 1
@@ -430,7 +432,7 @@ class Volume:
 
     def moveToNextNegativeSample(self, args):
         while self.coordinate_pool[self.train_index][2] == 1:
-            if self.train_index + 1 >= len(self.coordinate_pool):
+            if self.train_index + 1 == len(self.coordinate_pool):
                 self.incrementEpoch(args)
             else:
                 self.train_index += 1

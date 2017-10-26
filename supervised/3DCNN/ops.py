@@ -85,8 +85,8 @@ def bounds(args, shape, identifier):
     xStep = int(args["x_Dimension"]/2)
 
     if args["use_grid_training"]:
-        colBounds = [xStep, shape[1]-xStep]
         rowBounds = [yStep, shape[0]-yStep]
+        colBounds = [xStep, shape[1]-xStep]
 
     else:
         if identifier == 0: # TOP
@@ -111,37 +111,46 @@ def bounds(args, shape, identifier):
 
 def findRandomCoordinate(args, colBounds, rowBounds, groundTruth, surfaceImage, surfaceMask, volume, testSet=False):
     max_truth = np.iinfo(groundTruth.dtype).max
+    rowStep = int(args["y_Dimension"]/2)
+    colStep = int(args["x_Dimension"]/2)
+
     if testSet:
         rowCoordinate, colCoordinate = getTestCoordinate(args, colBounds, rowBounds, volume.shape)
     else:
         rowCoordinate, colCoordinate = getTrainCoordinate(args, colBounds, rowBounds, volume.shape)
 
-    rowStep = int(args["y_Dimension"]/2)
-    colStep = int(args["x_Dimension"]/2)
+    if args['restrict_surface']:
+        # make sure the coordinates are on the fragment
+        while (np.min(surfaceMask[rowCoordinate-rowStep:rowCoordinate+rowStep, colCoordinate-colStep:colCoordinate+colStep]) == 0):
+            if testSet:
+                rowCoordinate, colCoordinate = getTestCoordinate(args, colBounds, rowBounds, volume.shape)
+            else:
+                rowCoordinate, colCoordinate = getTrainCoordinate(args, colBounds, rowBounds, volume.shape)
 
     zCoordinate = 0
     label_avg = np.mean(groundTruth[rowCoordinate-rowStep:rowCoordinate+rowStep, colCoordinate-colStep:colCoordinate+colStep])
 
-    # each coordinate should have equal chance of being ink or not ink
-    if np.random.randint(2) == 1: # make it INK
-        # make sure 90% of the ground truth in this block is ink
-        while label_avg < (.9*max_truth):
-                #np.min(np.max(volume[yCoordinate-yStep:yCoordinate:yStep, xCoordinate-xStep:xCoordinate+xStep, :], axis=2)) < args["surface_threshold"]:
-            if testSet:
-                rowCoordinate, colCoordinate = getTestCoordinate(args, colBounds, rowBounds, volume.shape)
-            else:
-                rowCoordinate, colCoordinate = getTrainCoordinate(args, colBounds, rowBounds, volume.shape)
-            label_avg = np.mean(groundTruth[rowCoordinate-rowStep:rowCoordinate+rowStep, colCoordinate-colStep:colCoordinate+colStep])
+    if not testSet:
+        # each coordinate should have equal chance of being ink or not ink
+        if np.random.randint(2) == 1: # make it INK
+            # make sure 90% of the ground truth in this block is ink
+            while label_avg < (.9*max_truth):
+                    #np.min(np.max(volume[yCoordinate-yStep:yCoordinate:yStep, xCoordinate-xStep:xCoordinate+xStep, :], axis=2)) < args["surface_threshold"]:
+                if testSet:
+                    rowCoordinate, colCoordinate = getTestCoordinate(args, colBounds, rowBounds, volume.shape)
+                else:
+                    rowCoordinate, colCoordinate = getTrainCoordinate(args, colBounds, rowBounds, volume.shape)
+                label_avg = np.mean(groundTruth[rowCoordinate-rowStep:rowCoordinate+rowStep, colCoordinate-colStep:colCoordinate+colStep])
 
-    else: # make it NON-INK
-        # make sure 90% of the ground truth in this block is NON-ink
-        while label_avg > (.1*max_truth) or \
-                (args["restrict_surface"] and np.min(surfaceMask[rowCoordinate-rowStep:rowCoordinate+rowStep, colCoordinate-colStep:colCoordinate+colStep]) == 0):
-            if testSet:
-                rowCoordinate, colCoordinate = getTestCoordinate(args, colBounds, rowBounds, volume.shape)
-            else:
-                rowCoordinate, colCoordinate = getTrainCoordinate(args, colBounds, rowBounds, volume.shape)
-            label_avg = np.mean(groundTruth[rowCoordinate-rowStep:rowCoordinate+rowStep, colCoordinate-colStep:colCoordinate+colStep])
+        else: # make it NON-INK
+            # make sure 90% of the ground truth in this block is NON-ink
+            while label_avg > (.1*max_truth) or \
+                    (args["restrict_surface"] and np.min(surfaceMask[rowCoordinate-rowStep:rowCoordinate+rowStep, colCoordinate-colStep:colCoordinate+colStep]) == 0):
+                if testSet:
+                    rowCoordinate, colCoordinate = getTestCoordinate(args, colBounds, rowBounds, volume.shape)
+                else:
+                    rowCoordinate, colCoordinate = getTrainCoordinate(args, colBounds, rowBounds, volume.shape)
+                label_avg = np.mean(groundTruth[rowCoordinate-rowStep:rowCoordinate+rowStep, colCoordinate-colStep:colCoordinate+colStep])
 
 
     zCoordinate = max(0,surfaceImage[rowCoordinate+rowStep, colCoordinate+colStep] - args["surface_cushion"])
@@ -229,8 +238,10 @@ def getGridTestCoordinate(args, colBounds, rowBounds, volume_shape):
     n_rows = int(args["grid_n_squares"] / 2)
     voxels_per_row = int(volume_shape[0] / n_rows)
     row_number = int(args["grid_test_square"] / 2)
+    row = -1
+    col = -1
 
-    row = np.random.randint(int(args["y_Dimension"]/2)+(voxels_per_row*row_number), (voxels_per_row*(row_number+1)))
+    row = np.random.randint(int(args["y_Dimension"]/2)+(voxels_per_row*row_number), (voxels_per_row*(row_number+1)) - (int(args["y_Dimension"]/2)))
 
     if args["grid_test_square"] % 2 == 0:
         # testing on the left side
