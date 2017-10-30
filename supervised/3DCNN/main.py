@@ -9,7 +9,7 @@ import model
 import time
 import ops
 import os
-from sklearn.metrics import precision_score, f1_score
+from sklearn.metrics import precision_score, f1_score, fbeta_score
 
 
 print("Initializing...")
@@ -39,11 +39,12 @@ args = {
     "filter_size" : [3,3,3],
     "dropout": 0.5,
     "neurons": [16, 8, 4, 2],
-    "training_iterations": 30000,
-    "training_epochs": 2,
+    "training_iterations": 40000,
+    "training_epochs": 3,
     "n_classes": 2,
     "pos_weight": .5,
     "batch_norm_momentum": .9,
+    "fbeta_weight": 0.2,
 
     ### Data configuration ###
     "wobble_volume" : False,
@@ -146,8 +147,8 @@ with tf.Session() as sess:
     testX, testY = volume.getTrainingSample(args, testSet=True)
 
     try:
-        #while epoch < args["training_epochs"]:
-        while iteration < args["training_iterations"]:
+        while epoch < args["training_epochs"]:
+        #while iteration < args["training_iterations"]:
 
             predict_flag = False
 
@@ -166,7 +167,7 @@ with tf.Session() as sess:
                     sess.run([accuracy, loss, pred, merged], feed_dict={x: testX, y: testY, drop_rate:0.0, training_flag:False})
                 train_prec = precision_score(np.argmax(batchY, 1), np.argmax(train_preds, 1))
                 test_prec = precision_score(np.argmax(testY, 1), np.argmax(test_preds, 1))
-                test_f1 = f1_score(np.argmax(testY, 1), np.argmax(test_preds, 1))
+                test_f1 = fbeta_score(np.argmax(testY, 1), np.argmax(test_preds, 1), beta=args["fbeta_weight"])
 
                 train_accs.append(train_acc)
                 test_accs.append(test_acc)
@@ -177,19 +178,19 @@ with tf.Session() as sess:
 
                 test_writer.add_summary(test_summary, iteration)
 
-                '''
+
                 if (test_acc > best_test_acc):
                     print("\tAchieved new peak accuracy score! Saving model...")
                     best_test_acc = test_acc
                     best_acc_iteration = iteration
-                    save_path = saver.save(sess, args["output_path"] + '/models/model.ckpt', )'''
-
+                    save_path = saver.save(sess, args["output_path"] + '/models/model.ckpt', )
+                    '''
                 if (test_f1 > best_test_f1):
                     print("\tAchieved new peak accuracy score! Saving model...")
                     best_test_f1 = test_f1
                     best_f1_iteration = iteration
                     save_path = saver.save(sess, args["output_path"] + '/models/model.ckpt', )
-
+                    '''
 
                 if (test_acc > .9) and (test_prec > .8) and (iterations_since_prediction > 500): # and (predictions_made < 4): # or (test_prec / args["numCubes"] < .05)
                     # make a full prediction if results are tentatively spectacular
@@ -238,7 +239,7 @@ with tf.Session() as sess:
     # make one last prediction after everything finishes
     # use the model that performed best on the test set :)
     saver.restore(sess, args["output_path"] + '/models/model.ckpt')
-    print("Beginning predictions from best model (iteration {})...".format(best_f1_iteration))
+    print("Beginning predictions from best model (iteration {})...".format(best_acc_iteration))
     startingCoordinates = [0,0,0]
     predictionSamples, coordinates, nextCoordinates = volume.getPredictionSample3D(args, startingCoordinates)
     count = 1
@@ -254,8 +255,8 @@ with tf.Session() as sess:
         predictionSamples, coordinates, nextCoordinates = volume.getPredictionSample3D(args, nextCoordinates)
         count += 1
     minutes = ( (time.time() - start_time) /60 )
-    volume.savePrediction3D(args, best_f1_iteration, final_flag=True)
-    volume.savePredictionMetrics(args, best_f1_iteration, minutes, final_flag=True)
+    volume.savePrediction3D(args, best_acc_iteration, final_flag=True)
+    volume.savePredictionMetrics(args, best_acc_iteration, minutes, final_flag=True)
 
 
 

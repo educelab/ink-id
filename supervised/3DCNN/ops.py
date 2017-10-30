@@ -342,6 +342,7 @@ def generateCoordinatePool(args, volume, rowBounds, colBounds, groundTruth, surf
 
             label_avg = np.mean(groundTruth[row-rowStep:row+rowStep, col-colStep:col+colStep])
             if .1*truth_label_value < label_avg < .9*truth_label_value:
+                # don't use ambiguous samples
                 continue
 
             label = int(groundTruth[row,col] / truth_label_value)
