@@ -37,8 +37,8 @@ def adjustDepthForWobble(args, rowCoord, colCoord, zCoordinate, angle, axes, vol
 
 
 def bounds(args, volume_shape, identifier, train_portion):
-    yStep = int(args["y_Dimension"]/2)
-    xStep = int(args["x_Dimension"]/2)
+    yStep = int(args["y_dimension"]/2)
+    xStep = int(args["x_dimension"]/2)
 
     if args["use_grid_training"]:
         colBounds = [xStep, volume_shape[1]-xStep]
@@ -67,17 +67,20 @@ def bounds(args, volume_shape, identifier, train_portion):
 
 def findRandomCoordinate(args, colBounds, rowBounds, groundTruth, surfaceImage, surfaceMask, volume_shape, testSet=False):
     max_truth = np.iinfo(groundTruth.dtype).max
-    on_fragment = 0
 
-    rowStep = int(args["y_Dimension"]/2)
-    colStep = int(args["x_Dimension"]/2)
+    rowStep = int(args["y_dimension"]/2)
+    colStep = int(args["x_dimension"]/2)
+    if testSet:
+        rowCoordinate, colCoordinate = getTestCoordinate(args, colBounds, rowBounds, volume_shape)
+    else:
+        rowCoordinate, colCoordinate = getTrainCoordinate(args, colBounds, rowBounds, volum_shape)
 
-    while on_fragment == 0:
-        if testSet:
-            rowCoordinate, colCoordinate = getTestCoordinate(args, colBounds, rowBounds, volume_shape)
-        else:
-            rowCoordinate, colCoordinate = getTrainCoordinate(args, colBounds, rowBounds, volume_shape)
-        on_fragment = np.min(surfaceMask[rowCoordinate-rowStep:rowCoordinate+rowStep, colCoordinate-colStep:colCoordinate+colStep])
+    if args['restrict_surface']:
+        while np.min(surfaceMask[rowCoordinate-rowStep:rowCoordinate+rowStep, colCoordinate-colStep:colCoordinate+colStep]) == 0:
+            if testSet:
+                rowCoordinate, colCoordinate = getTestCoordinate(args, colBounds, rowBounds, volume_shape)
+            else:
+                rowCoordinate, colCoordinate = getTrainCoordinate(args, colBounds, rowBounds, volume_shape)
 
     label_avg = np.mean(groundTruth[rowCoordinate-rowStep:rowCoordinate+rowStep, colCoordinate-colStep:colCoordinate+colStep])
     zCoordinate = max(0, surfaceImage[rowCoordinate, colCoordinate] - args["surface_cushion"])
@@ -150,14 +153,14 @@ def getGridTestCoordinate(args, colBounds, rowBounds, volume_shape):
     voxels_per_row = int(volume_shape[0] / n_rows)
     row_number = int(args["grid_test_square"] / 2)
 
-    row = np.random.randint(int(args["y_Dimension"]/2)+(voxels_per_row*row_number), (voxels_per_row*(row_number+1)))
+    row = np.random.randint(int(args["y_dimension"]/2)+(voxels_per_row*row_number), (voxels_per_row*(row_number+1)))
 
     if args["grid_test_square"] % 2 == 0:
         # testing on the left side
-        col = np.random.randint(int(args["x_Dimension"]/2), int(volume_shape[1] / 2))
+        col = np.random.randint(int(args["x_dimension"]/2), int(volume_shape[1] / 2))
     else:
         # testing on the right side
-        col = np.random.randint(int(volume_shape[1] / 2), volume_shape[1]-int(args["x_Dimension"]/2))
+        col = np.random.randint(int(volume_shape[1] / 2), volume_shape[1]-int(args["x_dimension"]/2))
 
     return row,col
 
@@ -191,8 +194,8 @@ def generateCoordinatePool(args, volume, rowBounds, colBounds, groundTruth, surf
     coordinates = []
     ink_count = 0
     truth_label_value = np.iinfo(groundTruth.dtype).max
-    rowStep = int(args["y_Dimension"]/2)
-    colStep = int(args["x_Dimension"]/2)
+    rowStep = int(args["y_dimension"]/2)
+    colStep = int(args["x_dimension"]/2)
 
     print(" rowbounds: {}".format(rowBounds))
     print(" colbounds: {}".format(colBounds))
@@ -231,7 +234,7 @@ def getRandomBrick(args, volume, xCoordinate, yCoordinate):
     v_median = np.median(volume[yCoordinate, xCoordinate])
     low = v_median - args["random_range"]
     high = v_median + args["random_range"]
-    sample = np.random.random([args["x_Dimension"], args["y_Dimension"], args["z_Dimension"]])
+    sample = np.random.random([args["x_dimension"], args["y_dimension"], args["z_dimension"]])
     return ((high - low) * sample) + low
 
 
@@ -276,28 +279,30 @@ def generateSurfaceApproximation(args, volume):
             # | | | |
 
             # fill in every blank around the + with the value at +
-
     return surface_points
+
 
 
 def isOnSurface(args, rowCoordinate, colCoordinate, surfaceMask):
     # alternatively, check if the maximum value in the vector crosses a threshold
     # for now, just check our mask
-    rowStep = int(args["y_Dimension"] / 2)
-    colStep = int(args["x_Dimension"] / 2)
+    rowStep = int(args["y_dimension"] / 2)
+    colStep = int(args["x_dimension"] / 2)
     square = surfaceMask[rowCoordinate-rowStep:rowCoordinate+rowStep, colCoordinate-colStep:colCoordinate+colStep]
     return np.size(square) > 0 and np.min(square) != 0
 
 
+
 def minimumSurfaceInSample(args, row, col, surfaceImage):
-    rowStep = int(args["y_Dimension"] / 2)
-    colStep = int(args["x_Dimension"] / 2)
+    rowStep = int(args["y_dimension"] / 2)
+    colStep = int(args["x_dimension"] / 2)
 
     square = surfaceImage[row-rowStep:row+rowStep, col-colStep:col+colStep]
     if np.size(square) == 0:
         return 0
 
     return np.min(square)
+
 
 
 def getSpecString(args):
@@ -309,7 +314,7 @@ def getSpecString(args):
     tmstring += str(tm[3])
     tmstring += "h"
 
-    specstring = "{}x{}x{}-".format(args["x_Dimension"], args["y_Dimension"], args["z_Dimension"])
+    specstring = "{}x{}x{}-".format(args["x_dimension"], args["y_dimension"], args["z_dimension"])
     specstring = specstring + tmstring
 
     return specstring

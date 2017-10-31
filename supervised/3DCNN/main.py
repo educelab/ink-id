@@ -10,7 +10,7 @@ import model
 import time
 import ops
 import os
-from sklearn.metrics import precision_score
+from sklearn.metrics import precision_score, fbeta_score
 
 
 print("Initializing...")
@@ -18,28 +18,33 @@ start_time = time.time()
 
 args = {
     ### Input configuration ###
+    "volumes": [
+        {
+            "name": "lunate-sigma",
+            "data_path": "/home/jack/devel/volcart/small-fragment-data/flatfielded-slices/",
+            "ground_truth":"/home/jack/devel/volcart/small-fragment-gt.tif",
+            "surface_mask":"/home/jack/devel/volcart/small-fragment-outline.tif",
+            "surface_data":"/home/jack/devel/volcart/small-fragment-smooth-surface.tif",
+            "train_portion":.6,
+            "train_bounds":3,# bounds parameters: 0=TOP || 1=RIGHT || 2=BOTTOM || 3=LEFT
+            "use_in_training":True,
+            "make_prediction":True
+        }
+    ],
 
-    "volumeDataPaths" : ["/home/jack/devel/volcart/small-fragment-data/flatfielded-slices/"],
-    "groundTruthFiles": ["/home/jack/devel/volcart/small-fragment-gt.tif"],
-    "surfaceMaskFiles": ["/home/jack/devel/volcart/small-fragment-outline.tif"],
-    "surfaceDataFiles": ["/home/jack/devel/volcart/small-fragment-surface.tif"],
-    "train_bounds": [3], # bounds parameters: 0=TOP || 1=RIGHT || 2=BOTTOM || 3=LEFT
-    "train_portion": [.6],
-    "test_volumes":1,
-    "x_Dimension": 80,
-    "y_Dimension": 80,
-    "z_Dimension": 48,
-
+    "x_dimension": 96,
+    "y_dimension": 96,
+    "z_dimension": 48,
 
     ### Back off from the surface point some distance
-    "surface_cushion" : 8,
+    "surface_cushion" : 12,
 
     ### Network configuration ###
     "use_multitask_training": False,
     "shallow_learning_rate":.001,
-    "learning_rate": .001,
-    "batch_size": 30,
-    "prediction_batch_size": 300,
+    "learning_rate": .0001,
+    "batch_size": 50,
+    "prediction_batch_size": 500,
     "filter_size" : [3,3,3],
     "dropout": 0.5,
     "neurons": [16,8,4,2],
@@ -48,12 +53,13 @@ args = {
     "n_classes": 2,
     "pos_weight": .5,
     "batch_norm_momentum": .9,
+    "fbeta_weight": 0.3,
 
     ### Data configuration ###
     "wobble_volume" : False,
     "wobble_step" : 1000,
     "wobble_max_degrees" : 3,
-    "num_test_cubes" : 300,
+    "num_test_cubes" : 500,
     "add_random" : False,
     "random_step" : 10, # one in every randomStep non-ink samples will be a random brick
     "random_range" : 200,
@@ -61,16 +67,16 @@ args = {
     "jitter_range" : [-5, 5],
     "add_augmentation" : True,
     "balance_samples" : True,
-    "use_grid_training": True,
+    "use_grid_training": False,
     "grid_n_squares":10,
-    "grid_test_square": int(sys.argv[1]),
+    "grid_test_square": -1,
     "surface_threshold": 20400,
     "restrict_surface": True,
 
     ### Output configuration ###
     "predict_step": 5000, # make a prediction every x steps
     "overlap_step": 4, # during prediction, predict on one sample for each _ by _ voxel square
-    "display_step": 50, # output stats every x steps
+    "display_step": 20, # output stats every x steps
     "predict_depth" : 1,
     "output_path": "/home/jack/devel/fall17/predictions/3dcnn/{}-{}-{}h".format(
         datetime.datetime.today().timetuple()[1],
@@ -80,21 +86,18 @@ args = {
     "notes": ""
 }
 
-if not (len(args["volumeDataPaths"]) == len(args["surfaceDataFiles"]) == len(args["groundTruthFiles"]) == len(args["surfaceMaskFiles"]) == len(args["train_bounds"])):
-    print("Please specify an equal number of data paths, surface files, ground truth files, surface masks, and train bounds in the 'args' dictionary")
-    exit()
 
-x = tf.placeholder(tf.float32, [None, args["x_Dimension"], args["y_Dimension"], args["z_Dimension"]])
+x = tf.placeholder(tf.float32, [None, args["x_dimension"], args["y_dimension"], args["z_dimension"]])
 y = tf.placeholder(tf.float32, [None, args["n_classes"]])
 drop_rate = tf.placeholder(tf.float32)
-train_flag = tf.placeholder(tf.bool)
+training_flag = tf.placeholder(tf.bool)
 
 
 if args["use_multitask_training"]:
-    pred, shallow_loss, loss = model.buildMultitaskModel(x, y, drop_rate, args, train_flag)
+    pred, shallow_loss, loss = model.buildMultitaskModel(x, y, drop_rate, args, training_flag)
     shallow_optimizer = tf.train.AdamOptimizer(learning_rate=args["shallow_learning_rate"]).minimize(shallow_loss)
 else:
-    pred, loss = model.buildModel(x, y, drop_rate, args, train_flag)
+    pred, loss = model.buildModel(x, y, drop_rate, args, training_flag)
 
 
 update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
@@ -115,6 +118,8 @@ tf.summary.scalar('false_positive_rate', false_positive_rate)
 
 merged = tf.summary.merge_all()
 saver = tf.train.Saver()
+best_test_f1 = 0.0
+best_f1_iteration = 0
 best_test_precision = 0.0
 best_precision_iteration = 0
 volumes = multidata.VolumeSet(args)
@@ -158,19 +163,20 @@ with tf.Session() as sess:
 
             batchX, batchY, epoch = volumes.getTrainingBatch(args)
             if args["use_multitask_training"]:
-                summary, _, _ = sess.run([merged, optimizer, shallow_optimizer], feed_dict={x: batchX, y: batchY, drop_rate:args["dropout"], train_flag:True})
+                summary, _, _ = sess.run([merged, optimizer, shallow_optimizer], feed_dict={x: batchX, y: batchY, drop_rate:args["dropout"], training_flag:True})
             else:
-                summary, _ = sess.run([merged, optimizer], feed_dict={x: batchX, y: batchY, drop_rate:args["dropout"], train_flag:True})
+                summary, _ = sess.run([merged, optimizer], feed_dict={x: batchX, y: batchY, drop_rate:args["dropout"], training_flag:True})
             train_writer.add_summary(summary, iteration)
 
 
             if iteration % args["display_step"] == 0:
                 train_acc, train_loss, train_preds, train_summary = \
-                    sess.run([accuracy, loss, pred, merged], feed_dict={x: batchX, y: batchY, drop_rate: 0.0, train_flag:False})
+                    sess.run([accuracy, loss, pred, merged], feed_dict={x: batchX, y: batchY, drop_rate: 0.0, training_flag:False})
                 test_acc, test_loss, test_preds, test_summary = \
-                    sess.run([accuracy, loss, pred, merged], feed_dict={x: testX, y: testY, drop_rate:0.0, train_flag:False})
+                    sess.run([accuracy, loss, pred, merged], feed_dict={x: testX, y: testY, drop_rate:0.0, training_flag:False})
                 train_prec = precision_score(np.argmax(batchY, 1), np.argmax(train_preds, 1))
                 test_prec = precision_score(np.argmax(testY, 1), np.argmax(test_preds, 1))
+                test_f1 = fbeta_score(np.argmax(testY, 1), np.argmax(test_preds, 1), beta=args["fbeta_weight"])
 
                 train_accs.append(train_acc)
                 test_accs.append(test_acc)
@@ -178,17 +184,19 @@ with tf.Session() as sess:
                 train_losses.append(train_loss)
                 train_precs.append(train_prec)
                 test_precs.append(test_prec)
+
                 test_writer.add_summary(test_summary, iteration)
 
                 print("Iteration: {}\t\tEpoch: {}".format(iteration, epoch))
                 print("Train Loss: {:.3f}\tTrain Acc: {:.3f}\tInk Precision: {:.3f}".format(train_loss, train_acc, train_precs[-1]))
                 print("Test Loss: {:.3f}\tTest Acc: {:.3f}\t\tInk Precision: {:.3f}".format(test_loss, test_acc, test_precs[-1]))
 
-                if (test_prec > best_test_precision):
-                    print("\tAchieved new peak precision! Saving model...")
-                    best_test_precision = test_prec
-                    best_precision_iteration = iteration
+                if (test_f1 > best_test_f1):
+                    print("\tAchieved new peak f1 score! Saving model...")
+                    best_test_f1 = test_f1
+                    best_f1_iteration = iteration
                     save_path = saver.save(sess, args["output_path"] + '/models/model.ckpt', )
+
 
                 if (test_acc > .9) and (test_prec > .7) and (iterations_since_prediction > 100): #or (test_prec > .8)  and (predictions_made < 4): # or (test_prec / args["numCubes"] < .05)
                     # make a full prediction if results are tentatively spectacular
@@ -206,7 +214,7 @@ with tf.Session() as sess:
                 print("Beginning predictions on volumes...")
                 while nextCoordinates is not None:
                     #TODO add back the output
-                    predictionValues = sess.run(pred, feed_dict={x: predictionSamples, drop_rate: 0.0, train_flag:False})
+                    predictionValues = sess.run(pred, feed_dict={x: predictionSamples, drop_rate: 0.0, training_flag:False})
                     volumes.reconstruct(args, predictionValues, coordinates)
                     predictionSamples, coordinates, nextCoordinates = volumes.getPredictionBatch(args, nextCoordinates)
                 minutes = ( (time.time() - start_time) /60 )
@@ -230,15 +238,15 @@ with tf.Session() as sess:
     startingCoordinates = [0,0,0]
     predictionSamples, coordinates, nextCoordinates = volumes.getPredictionBatch(args, startingCoordinates)
     count = 1
-    print("Beginning predictions from best model (iteration {})...".format(best_precision_iteration))
+    print("Beginning predictions from best model (iteration {})...".format(best_f1_iteration))
     while nextCoordinates is not None:
         #TODO add back the output
-        predictionValues = sess.run(pred, feed_dict={x: predictionSamples, drop_rate: 0.0, train_flag:False})
+        predictionValues = sess.run(pred, feed_dict={x: predictionSamples, drop_rate: 0.0, training_flag:False})
         volumes.reconstruct(args, predictionValues, coordinates)
         predictionSamples, coordinates, nextCoordinates = volumes.getPredictionBatch(args, nextCoordinates)
     minutes = ( (time.time() - start_time) /60 )
-    volumes.saveAllPredictions(args, iteration)
-    volumes.saveAllPredictionMetrics(args, iteration, minutes)
+    volumes.saveAllPredictions(args, best_f1_iteration)
+    volumes.saveAllPredictionMetrics(args, best_f1_iteration, minutes)
 
 
 

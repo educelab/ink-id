@@ -5,37 +5,41 @@ import data
 
 class VolumeSet:
     def __init__(self, args):
-        # instantiate other volumes
+        # instantiate all volumes
+        self.n_total_volumes = len(args["volumes"])
         self.volume_set = []
         self.current_prediction_batch = 0
         self.current_prediction_total_batches = 0
-        self.n_train_volumes = int(np.sum(np.ceil(args["train_portion"])))
-        self.n_total_volumes = len(args["volumeDataPaths"])
-        self.n_test_volumes = args["test_volumes"]
-        self.current_prediction_volume = self.n_total_volumes - self.n_test_volumes
-
-        print("Initializing {} total volumes, {} to be used for training...".format(self.n_total_volumes, self.n_train_volumes))
+        self.n_train_volumes = 0
+        self.n_predict_volumes = 0
+        self.current_prediction_volume = 0
 
         for i in range(self.n_total_volumes):
-            print("Initializing volume {} of {}...".format(i+1,self.n_total_volumes))
-            self.volume_set.append(data.Volume(args, volume_number=i, volume_path=args["volumeDataPaths"][i], \
-                truth_path=args["groundTruthFiles"][i], surface_mask_path=args["surfaceMaskFiles"][i], surface_point_path=args["surfaceDataFiles"][i]))
+            print("Initializing volume {}...".format(i))
+            current_vol_args = args['volumes'][i]
+            self.volume_set.append(data.Volume(args, volume_number=i))
+            if current_vol_args['use_in_training']:
+                self.n_train_volumes += 1
+            if current_vol_args['make_prediction']:
+                self.n_predict_volumes += 1
+
+        print("Initialized {} total volumes, {} to be used for training...".format(self.n_total_volumes, self.n_train_volumes))
 
 
 
     def getTrainingBatch(self, args):
         # gather training samples from other volumes
         # should be as simple as getting batches from each volume and combining them
-        trainingSamples = np.zeros((args["batch_size"], args["x_Dimension"], args["y_Dimension"], args["z_Dimension"]), dtype=np.float32)
+        trainingSamples = np.zeros((args["batch_size"], args["x_dimension"], args["y_dimension"], args["z_dimension"]), dtype=np.float32)
         groundTruth = np.zeros((args["batch_size"], args["n_classes"]), dtype=np.float32)
         samples_per_volume = int(args["batch_size"] / self.n_train_volumes)
         for i in range(self.n_train_volumes):
             start = i*samples_per_volume
             end = (i+1)*samples_per_volume
             if i == self.n_train_volumes-1: # make sure to 'fill up' all the slots
-                end = args["batch_size"]-1
+                end = args["batch_size"]
 
-            volume_samples, volume_truth, volume_epoch = self.volume_set[i].getTrainingBatch(args, end-start)
+            volume_samples, volume_truth, volume_epoch = self.volume_set[i].getTrainingBatch(args, n_samples=(end-start))
             trainingSamples[start:end] = volume_samples
             groundTruth[start:end] = volume_truth
 
@@ -58,21 +62,21 @@ class VolumeSet:
 
     def getTestBatch(self, args):
         # gather testing samples from other volumes
-        trainingSamples = np.zeros((args["num_test_cubes"], args["x_Dimension"], args["y_Dimension"], args["z_Dimension"]), dtype=np.float32)
+        trainingSamples = np.zeros((args["num_test_cubes"], args["x_dimension"], args["y_dimension"], args["z_dimension"]), dtype=np.float32)
         groundTruth = np.zeros((args["num_test_cubes"], args["n_classes"]), dtype=np.float32)
 
-        if self.n_test_volumes == 1:
+        if self.n_predict_volumes == 1:
             # all samples come from the same volume
             volume_samples, volume_truth = self.volume_set[-1].getTestBatch(args, args["num_test_cubes"])
             trainingSamples[:] = volume_samples
             groundTruth[:] = volume_truth
 
         else: #TODO validate this scheme
-            samples_per_volume = int(args["num_test_cubes"] / self.n_test_volumes)
-            for i in range(self.n_test_volumes):
+            samples_per_volume = int(args["num_test_cubes"] / self.n_predict_volumes)
+            for i in range(self.n_predict_volumes):
                 start = i*samples_per_volume
                 end = (i+1)*samples_per_volume
-                if i == self.n_test_volumes-1: # make sure to 'fill up' all the slots
+                if i == self.n_predict_volumes-1: # make sure to 'fill up' all the slots
                     end = args["num_test_cubes"]-1
 
                 volume_samples, volume_truth = self.volume_set[i].getTestBatch(args, end-start)
@@ -107,7 +111,7 @@ class VolumeSet:
         else:
             # case 3: finished volume, no other volume to predict
             samples, coordinates, nextCoordinates = None, None, None
-            self.current_prediction_volume = self.n_total_volumes - self.n_test_volumes
+            self.current_prediction_volume = self.n_total_volumes - self.n_predict_volumes
             self.current_prediction_batch = 0
 
         return samples, coordinates, nextCoordinates
