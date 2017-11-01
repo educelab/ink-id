@@ -20,24 +20,159 @@ args = {
     ### Input configuration ###
     "volumes": [
         {
-            "name": "lunate-sigma",
-            "data_path": "/home/jack/devel/volcart/small-fragment-data/flatfielded-slices/",
-            "ground_truth":"/home/jack/devel/volcart/small-fragment-gt.tif",
-            "surface_mask":"/home/jack/devel/volcart/small-fragment-outline.tif",
-            "surface_data":"/home/jack/devel/volcart/small-fragment-smooth-surface.tif",
-            "train_portion":.6,
+            "name": "B_blank",
+            "microns_per_voxel":26.8,
+            "data_path": "/home/jack/devel/volcart/carbon-squares/B_blank_cropped_rot/",
+            "ground_truth":"",
+            "surface_mask":"",
+            "surface_data":"",
+            "train_portion":.8,
             "train_bounds":3,# bounds parameters: 0=TOP || 1=RIGHT || 2=BOTTOM || 3=LEFT
             "use_in_training":True,
-            "make_prediction":True
-        }
+            "use_in_test_set":False,
+            "make_prediction":True,
+            "prediction_overlap_step":4
+        },
+        {
+            "name": "B_inked",
+            "microns_per_voxel":26.8,
+            "data_path": "/home/jack/devel/volcart/carbon-squares/B_inked_cropped_rot/",
+            "ground_truth":"",
+            "surface_mask":"",
+            "surface_data":"",
+            "train_portion":.8,
+            "train_bounds":3,# bounds parameters: 0=TOP || 1=RIGHT || 2=BOTTOM || 3=LEFT
+            "use_in_training":True,
+            "use_in_test_set":False,
+            "make_prediction":True,
+            "prediction_overlap_step":4
+        },
+        {
+            "name": "C_blank",
+            "microns_per_voxel":26.8,
+            "data_path": "/home/jack/devel/volcart/carbon-squares/C_blank_cropped_rot/",
+            "ground_truth":"",
+            "surface_mask":"",
+            "surface_data":"",
+            "train_portion":.9,
+            "train_bounds":0,# bounds parameters: 0=TOP || 1=RIGHT || 2=BOTTOM || 3=LEFT
+            "use_in_training":True,
+            "use_in_test_set":False,
+            "make_prediction":False
+        },
+        {
+            "name": "C_inked",
+            "microns_per_voxel":26.8,
+            "data_path": "/home/jack/devel/volcart/carbon-squares/C_inked_cropped_rot/",
+            "ground_truth":"",
+            "surface_mask":"",
+            "surface_data":"",
+            "train_portion":.9,
+            "train_bounds":0,# bounds parameters: 0=TOP || 1=RIGHT || 2=BOTTOM || 3=LEFT
+            "use_in_training":True,
+            "use_in_test_set":False,
+            "make_prediction":False
+        },
+        {
+            "name": "D_blank",
+            "microns_per_voxel":26.8,
+            "data_path": "/home/jack/devel/volcart/carbon-squares/D_blank_cropped_rot/",
+            "ground_truth":"",
+            "surface_mask":"",
+            "surface_data":"",
+            "train_portion":.9,
+            "train_bounds":1,# bounds parameters: 0=TOP || 1=RIGHT || 2=BOTTOM || 3=LEFT
+            "use_in_training":True,
+            "use_in_test_set":False,
+            "make_prediction":False
+        },
+        {
+            "name": "D_inked",
+            "microns_per_voxel":26.8,
+            "data_path": "/home/jack/devel/volcart/carbon-squares/D_inked_cropped_rot/",
+            "ground_truth":"",
+            "surface_mask":"",
+            "surface_data":"",
+            "train_portion":.9,
+            "train_bounds":1,# bounds parameters: 0=TOP || 1=RIGHT || 2=BOTTOM || 3=LEFT
+            "use_in_training":True,
+            "use_in_test_set":False,
+            "make_prediction":False
+        },
+        {
+            "name": "E_blank",
+            "microns_per_voxel":26.8,
+            "data_path": "/home/jack/devel/volcart/carbon-squares/E_blank_cropped_rot/",
+            "ground_truth":"",
+            "surface_mask":"",
+            "surface_data":"",
+            "train_portion":.9,
+            "train_bounds":2,# bounds parameters: 0=TOP || 1=RIGHT || 2=BOTTOM || 3=LEFT
+            "use_in_training":True,
+            "use_in_test_set":False,
+            "make_prediction":False
+        },
+        {
+            "name": "E_inked",
+            "microns_per_voxel":26.8,
+            "data_path": "/home/jack/devel/volcart/carbon-squares/E_inked_cropped_rot/",
+            "ground_truth":"",
+            "surface_mask":"",
+            "surface_data":"",
+            "train_portion":.9,
+            "train_bounds":2,# bounds parameters: 0=TOP || 1=RIGHT || 2=BOTTOM || 3=LEFT
+            "use_in_training":True,
+            "use_in_test_set":False,
+            "make_prediction":False,
+        },
+        {
+            "name": "F_blank",
+            "microns_per_voxel":26.8,
+            "data_path": "/home/jack/devel/volcart/carbon-squares/F_blank_cropped_rot/",
+            "ground_truth":"",
+            "surface_mask":"",
+            "surface_data":"",
+            "train_portion":.9,
+            "train_bounds":3,# bounds parameters: 0=TOP || 1=RIGHT || 2=BOTTOM || 3=LEFT
+            "use_in_training":True,
+            "use_in_test_set":False,
+            "make_prediction":False
+        },
+        {
+            "name": "F_inked",
+            "microns_per_voxel":26.8,
+            "data_path": "/home/jack/devel/volcart/carbon-squares/F_inked_cropped_rot/",
+            "ground_truth":"",
+            "surface_mask":"",
+            "surface_data":"",
+            "train_portion":.1,
+            "train_bounds":3,# bounds parameters: 0=TOP || 1=RIGHT || 2=BOTTOM || 3=LEFT
+            "use_in_training":True,
+            "use_in_test_set":False,
+            "make_prediction":False
+        },
+        {
+            "name": "I_lambda",
+            "microns_per_voxel":26.8,
+            "data_path": "/home/jack/devel/volcart/carbon-squares/I_lambda_4_crop_rot/",
+            "ground_truth":"/home/jack/devel/volcart/carbon-squares/I_lambda_gt.tif",
+            "surface_mask":"",
+            "surface_data":"",
+            "train_portion":.9,
+            "train_bounds":0,# bounds parameters: 0=TOP || 1=RIGHT || 2=BOTTOM || 3=LEFT
+            "use_in_training":False,
+            "use_in_test_set":True,
+            "make_prediction":True,
+            "prediction_overlap_step":2
+        },
     ],
 
-    "x_dimension": 96,
-    "y_dimension": 96,
-    "z_dimension": 48,
+    "x_dimension": 48,
+    "y_dimension": 48,
+    "z_dimension": 20,
 
     ### Back off from the surface point some distance
-    "surface_cushion" : 12,
+    "surface_cushion" : 8,
 
     ### Network configuration ###
     "use_multitask_training": False,
@@ -48,7 +183,7 @@ args = {
     "filter_size" : [3,3,3],
     "dropout": 0.5,
     "neurons": [16,8,4,2],
-    "training_iterations": 100000,
+    "training_iterations": 1000000,
     "training_epochs": 2,
     "n_classes": 2,
     "pos_weight": .5,
@@ -64,9 +199,9 @@ args = {
     "random_step" : 10, # one in every randomStep non-ink samples will be a random brick
     "random_range" : 200,
     "use_jitter" : True,
-    "jitter_range" : [-5, 5],
+    "jitter_range" : [-3, 3],
     "add_augmentation" : True,
-    "balance_samples" : True,
+    "balance_samples" : False,
     "use_grid_training": False,
     "grid_n_squares":10,
     "grid_test_square": -1,
@@ -75,7 +210,7 @@ args = {
 
     ### Output configuration ###
     "predict_step": 5000, # make a prediction every x steps
-    "overlap_step": 4, # during prediction, predict on one sample for each _ by _ voxel square
+    "overlap_step": 2, # during prediction, predict on one sample for each _ by _ voxel square
     "display_step": 20, # output stats every x steps
     "predict_depth" : 1,
     "output_path": "/home/jack/devel/fall17/predictions/3dcnn/{}-{}-{}h".format(
@@ -192,7 +327,7 @@ with tf.Session() as sess:
                 print("Test Loss: {:.3f}\tTest Acc: {:.3f}\t\tInk Precision: {:.3f}".format(test_loss, test_acc, test_precs[-1]))
 
                 if (test_f1 > best_test_f1):
-                    print("\tAchieved new peak f1 score! Saving model...")
+                    print("\tAchieved new peak f1 score! Saving model...\n")
                     best_test_f1 = test_f1
                     best_f1_iteration = iteration
                     save_path = saver.save(sess, args["output_path"] + '/models/model.ckpt', )

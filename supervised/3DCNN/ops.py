@@ -70,17 +70,24 @@ def findRandomCoordinate(args, colBounds, rowBounds, groundTruth, surfaceImage, 
 
     rowStep = int(args["y_dimension"]/2)
     colStep = int(args["x_dimension"]/2)
-    if testSet:
-        rowCoordinate, colCoordinate = getTestCoordinate(args, colBounds, rowBounds, volume_shape)
+    if args["use_grid_training"]:
+        if testSet:
+            rowCoordinate, colCoordinate = getGridTestCoordinate(args, colBounds, rowBounds, volume_shape)
+        else:
+            rowCoordinate, colCoordinate = getGridTrainCoordinate(args, colBounds, rowBounds, volume_shape)
     else:
-        rowCoordinate, colCoordinate = getTrainCoordinate(args, colBounds, rowBounds, volum_shape)
+        rowCoordinate, colCoordinate = np.random.randint(rowBounds[0], rowBounds[1]), np.random.randint(colBounds[0], colBounds[1])
+
 
     if args['restrict_surface']:
         while np.min(surfaceMask[rowCoordinate-rowStep:rowCoordinate+rowStep, colCoordinate-colStep:colCoordinate+colStep]) == 0:
-            if testSet:
-                rowCoordinate, colCoordinate = getTestCoordinate(args, colBounds, rowBounds, volume_shape)
+            if args["use_grid_training"]:
+                if testSet:
+                    rowCoordinate, colCoordinate = getGridTestCoordinate(args, colBounds, rowBounds, volume_shape)
+                else:
+                    rowCoordinate, colCoordinate = getGridTrainCoordinate(args, colBounds, rowBounds, volume_shape)
             else:
-                rowCoordinate, colCoordinate = getTrainCoordinate(args, colBounds, rowBounds, volume_shape)
+                rowCoordinate, colCoordinate = np.random.randint(rowBounds[0], rowBounds[1]), np.random.randint(colBounds[0], colBounds[1])
 
     label_avg = np.mean(groundTruth[rowCoordinate-rowStep:rowCoordinate+rowStep, colCoordinate-colStep:colCoordinate+colStep])
     zCoordinate = max(0, surfaceImage[rowCoordinate, colCoordinate] - args["surface_cushion"])
@@ -261,19 +268,18 @@ def augmentSample(args, sample, seed=None):
     return augmentedSample
 
 
-def generateSurfaceApproximation(args, volume):
+def generateSurfaceApproximation(args, volume, area=3, search_increment=1):
     surface_points = np.zeros((volume.shape[0:2]), dtype=np.int)
-
-    for row in range(1, volume.shape[0], 3):
-        for col in range(1, volume.shape[1], 3):
+    for row in range(1, volume.shape[0], area):
+        for col in range(1, volume.shape[1], area):
             max_sum_index = 0
             max_sum = 0
-            for i in range(0, volume.shape[2]-10, 2):
+            for i in range(0, volume.shape[2]-10, search_increment):
                 sum_from_i = np.sum(volume[row,col,i:i+10])
                 if sum_from_i > max_sum:
                     max_sum_index = i
                     max_sum = sum_from_i
-            surface_points[row-1:row+2, col-1:col+2] = max_sum_index
+            surface_points[row-int(area/2):row+round(area/2), col-int(area/2):col+round(area/2)] = max_sum_index
             # | | | |
             # | |+| |
             # | | | |

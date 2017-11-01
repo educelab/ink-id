@@ -14,19 +14,18 @@ import time
 class Volume:
     def __init__(self, args, volume_number):
         # Part 1: volume metadataf
-        volume_args = args['volumes'][volume_number]
-        self.volume_name = volume_args['name']
+        self.volume_args = args['volumes'][volume_number]
         self.volume_number = volume_number
-        self.train_bounds = volume_args['train_bounds']
-        self.train_portion = volume_args['train_portion']
+        self.train_bounds = self.volume_args['train_bounds']
+        self.train_portion = self.volume_args['train_portion']
 
 
         # Part 2: volume data
-        data_files = os.listdir(volume_args['data_path'])
+        data_files = os.listdir(self.volume_args['data_path'])
         data_files.sort()
         volume = []
         for f in data_files:
-            slice_data = np.array(Image.open(volume_args['data_path']+f))
+            slice_data = np.array(Image.open(self.volume_args['data_path']+f))
             volume.append(slice_data)
         self.volume = np.array(volume)
         if args["wobble_volume"]:
@@ -35,17 +34,17 @@ class Volume:
             self.wobbled_volume = np.array(volume)
         print("  Volume {} shape: {}".format(self.volume_number, self.volume.shape))
 
-        if len(volume_args['ground_truth']) > 0:
-            self.ground_truth = tiff.imread(volume_args['ground_truth'])
-        elif 'inked' in volume_args['data_path']:
+        if len(self.volume_args['ground_truth']) > 0:
+            self.ground_truth = tiff.imread(self.volume_args['ground_truth'])
+        elif 'inked' in self.volume_args['data_path']:
             self.ground_truth = np.ones((self.volume.shape[0:2]), dtype=np.uint16) * 65535
-        elif 'blank' in volume_args['data_path']:
+        elif 'blank' in self.volume_args['data_path']:
             self.ground_truth = np.zeros((self.volume.shape[0:2]), dtype=np.uint16)
         else:
             self.ground_truth = np.ones((self.volume.shape[0:2]), dtype=np.uint16) * 65535
 
-        if len(volume_args['surface_data']) > 0:
-            self.surface_image = tiff.imread(volume_args['surface_data'])
+        if len(self.volume_args['surface_data']) > 0:
+            self.surface_image = tiff.imread(self.volume_args['surface_data'])
         elif self.volume.shape[2] > args["z_dimension"]:
             print("  Approximating surface for volume {}...".format(self.volume_number))
             surf_start_time = time.time()
@@ -55,8 +54,8 @@ class Volume:
             self.surface_image = np.zeros((self.volume.shape[0:2]))
 
         self.surface_mask_image = np.ones((self.volume.shape[0], self.volume.shape[1]), dtype=np.int)
-        if len(volume_args['surface_mask']) > 0:
-            self.surface_mask_image = tiff.imread(volume_args['surface_mask'])
+        if len(self.volume_args['surface_mask']) > 0:
+            self.surface_mask_image = tiff.imread(self.volume_args['surface_mask'])
 
 
         # Part 3: prediction data
@@ -65,6 +64,10 @@ class Volume:
         self.prediction_image_surf = np.zeros((self.volume.shape[0:2]), dtype=np.float32)
         self.prediction_plus_surf = np.zeros((self.volume.shape[0:2]), dtype=np.float32)
         self.training_image = np.zeros(self.prediction_image_ink.shape, dtype=np.uint16)
+        try:
+            self.prediction_overlap_step = self.volume_args["prediction_overlap_step"]
+        except:
+            print("no prediction_overlap_step for {}".format(self.volume_args['name']))
 
 
         # Part 4: prediction metadata and more
@@ -74,7 +77,7 @@ class Volume:
         self.test_truth, self.test_preds = [], []
         self.test_results, self.test_results_norm = [], []
         self.all_results, self.all_results_norm = [], []
-        self.output_path = args["output_path"]+"/volume{}/".format(self.volume_number)
+        self.output_path = args["output_path"]+"/{}/".format(self.volume_args['name'])
         self.coordinate_pool = []
         self.train_index = 0
         self.epoch = 0
@@ -169,7 +172,7 @@ class Volume:
 
 
 
-    def getPredictionSample3D(self, args, startingCoordinates):
+    def getPredictionSample3D(self, args, startingCoordinates, overlap_step):
         rowCoordinate = startingCoordinates[0]
         colCoordinate = startingCoordinates[1]
         depthCoordinate = startingCoordinates[2]
@@ -181,7 +184,7 @@ class Volume:
         while sample_count < args["prediction_batch_size"]:
             if (colCoordinate + args["x_dimension"]) > self.volume.shape[1]:
                 colCoordinate = 0
-                rowCoordinate += args["overlap_step"]
+                rowCoordinate += overlap_step
             if (rowCoordinate + args["y_dimension"]) > self.volume.shape[0]:
                 colCoordinate = 0
                 rowCoordinate = 0
@@ -191,7 +194,7 @@ class Volume:
 
             # don't predict on it if it's not on the fragment
             if not ops.isOnSurface(args, rowCoordinate, colCoordinate, self.surface_mask):
-                colCoordinate += args["overlap_step"]
+                colCoordinate += overlap_step
                 continue
 
             # grab the sample and place it in output
@@ -208,13 +211,13 @@ class Volume:
                     colCoordinate:colCoordinate+args["x_dimension"], zCoordinate:zCoordinate+args["z_dimension"]])
             predictionSamples[sample_count, 0:sample.shape[0], 0:sample.shape[1], 0:sample.shape[2]] = sample
             # populate the "prediction plus surface" with the initial surface value
-            olap = args["overlap_step"]
+            olap = overlap_step
             self.prediction_plus_surf[center_row-olap:center_row+olap, \
                     center_col-olap:center_col+olap] = np.max(self.volume[center_row, center_col]) #, max(0,min(self.volume.shape[2]-1,zCoordinate))]
             coordinates[sample_count] = [rowCoordinate, colCoordinate, depthCoordinate]
 
             # increment variables for next iteration
-            colCoordinate += args["overlap_step"]
+            colCoordinate += overlap_step
             sample_count += 1
 
         return (predictionSamples), (coordinates), [rowCoordinate, colCoordinate, depthCoordinate]
@@ -222,7 +225,7 @@ class Volume:
 
 
     def reconstruct3D(self, args, predictionValues, coordinates):
-        center_step = int(round(args["overlap_step"] / 2))
+        center_step = int(round(self.prediction_overlap_step / 2))
         for i in range(coordinates.shape[0]):
             rowpoint = coordinates[i,0] + (int(args["x_dimension"] / 2))
             colpoint = coordinates[i,1] + (int(args["y_dimension"] / 2))
@@ -388,7 +391,7 @@ class Volume:
     def moveToNextNegativeSample(self, args):
         if self.train_index >= len(self.coordinate_pool):
             self.incrementEpoch(args)
-                    
+
         while self.coordinate_pool[self.train_index][2] == 1:
             if self.train_index + 1 == len(self.coordinate_pool):
                 self.incrementEpoch(args)
@@ -406,9 +409,8 @@ class Volume:
 
 
 
-    def totalPredictions(self, args):
+    def totalPredictions(self, args, overlap_step):
         #TODO don't predict off the fragment
-
-        xSlides = (self.volume.shape[0] - args["x_dimension"]) / args["overlap_step"]
-        ySlides = (self.volume.shape[1] - args["y_dimension"]) / args["overlap_step"]
+        xSlides = (self.volume.shape[0] - args["x_dimension"]) / overlap_step
+        ySlides = (self.volume.shape[1] - args["y_dimension"]) / overlap_step
         return int(xSlides * ySlides) * args["predict_depth"]
