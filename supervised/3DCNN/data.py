@@ -67,7 +67,7 @@ class Volume:
         try:
             self.prediction_overlap_step = self.volume_args["prediction_overlap_step"]
         except:
-            print("no prediction_overlap_step for {}".format(self.volume_args['name']))
+            print("  No prediction_overlap_step for {}".format(self.volume_args['name']))
 
 
         # Part 4: prediction metadata and more

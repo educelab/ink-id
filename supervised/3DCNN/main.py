@@ -30,7 +30,7 @@ args = {
             "train_bounds":3,# bounds parameters: 0=TOP || 1=RIGHT || 2=BOTTOM || 3=LEFT
             "use_in_training":True,
             "use_in_test_set":False,
-            "make_prediction":True,
+            "make_prediction":False,
             "prediction_overlap_step":4
         },
         {
@@ -44,7 +44,7 @@ args = {
             "train_bounds":3,# bounds parameters: 0=TOP || 1=RIGHT || 2=BOTTOM || 3=LEFT
             "use_in_training":True,
             "use_in_test_set":False,
-            "make_prediction":True,
+            "make_prediction":False,
             "prediction_overlap_step":4
         },
         {
@@ -58,7 +58,8 @@ args = {
             "train_bounds":0,# bounds parameters: 0=TOP || 1=RIGHT || 2=BOTTOM || 3=LEFT
             "use_in_training":True,
             "use_in_test_set":False,
-            "make_prediction":False
+            "make_prediction":True,
+            "prediction_overlap_step":4
         },
         {
             "name": "C_inked",
@@ -71,7 +72,8 @@ args = {
             "train_bounds":0,# bounds parameters: 0=TOP || 1=RIGHT || 2=BOTTOM || 3=LEFT
             "use_in_training":True,
             "use_in_test_set":False,
-            "make_prediction":False
+            "make_prediction":True,
+            "prediction_overlap_step":4
         },
         {
             "name": "D_blank",
@@ -158,21 +160,22 @@ args = {
             "ground_truth":"/home/jack/devel/volcart/carbon-squares/I_lambda_gt.tif",
             "surface_mask":"",
             "surface_data":"",
-            "train_portion":.9,
-            "train_bounds":0,# bounds parameters: 0=TOP || 1=RIGHT || 2=BOTTOM || 3=LEFT
-            "use_in_training":False,
+            "train_portion":.5,
+            "train_bounds":3,# bounds parameters: 0=TOP || 1=RIGHT || 2=BOTTOM || 3=LEFT
+            "use_in_training":True,
             "use_in_test_set":True,
             "make_prediction":True,
             "prediction_overlap_step":2
-        },
+        }
+
     ],
 
     "x_dimension": 48,
     "y_dimension": 48,
-    "z_dimension": 20,
+    "z_dimension": 16,
 
     ### Back off from the surface point some distance
-    "surface_cushion" : 8,
+    "surface_cushion" : 4,
 
     ### Network configuration ###
     "use_multitask_training": False,
@@ -199,7 +202,7 @@ args = {
     "random_step" : 10, # one in every randomStep non-ink samples will be a random brick
     "random_range" : 200,
     "use_jitter" : True,
-    "jitter_range" : [-3, 3],
+    "jitter_range" : [-2, 2],
     "add_augmentation" : True,
     "balance_samples" : False,
     "use_grid_training": False,
@@ -246,6 +249,13 @@ false_positive_rate = tf.reduce_mean(tf.cast(false_positives, tf.float32))
 tf.summary.scalar('accuracy', accuracy)
 tf.summary.scalar('xentropy-loss', loss)
 tf.summary.histogram('prediction_values', pred[:,1])
+sample_cube = x[0]
+sample_view_z = tf.reshape(tf.reduce_mean(sample_cube, axis=2), [1, args["x_dimension"], args["y_dimension"], 1])
+sample_view_y = tf.reshape(tf.reduce_mean(sample_cube, axis=0), [1, args["x_dimension"], args["z_dimension"], 1])
+sample_view_x = tf.reshape(tf.reduce_mean(sample_cube, axis=1), [1, args["y_dimension"], args["z_dimension"], 1])
+tf.summary.image('z-project', sample_view_z, max_outputs=1)
+tf.summary.image('y-project', sample_view_y, max_outputs=1)
+tf.summary.image('x-project', sample_view_x, max_outputs=1)
 if args["use_multitask_training"]:
     tf.summary.scalar('xentropy-shallow-loss', loss)
 tf.summary.scalar('false_positive_rate', false_positive_rate)
