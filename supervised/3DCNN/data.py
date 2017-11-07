@@ -7,7 +7,7 @@ import datetime
 import tifffile as tiff
 import ops
 from sklearn.metrics import confusion_matrix, recall_score, precision_score, f1_score
-from scipy.ndimage.interpolation import rotate
+from scipy.ndimage.interpolation import rotate, zoom
 import shutil
 import time
 
@@ -82,6 +82,13 @@ class Volume:
         self.train_index = 0
         self.epoch = 0
 
+
+        # Part 5: scaling!
+        print("  Scaling volume data...")
+        self.volume = zoom(self.volume, self.volume_args["scale_factor"])
+        self.ground_truth = zoom(self.ground_truth, self.volume_args["scale_factor"])
+        self.surface_image = zoom(self.surface_image, self.volume_args["scale_factor"])
+        self.surface_mask = zoom(self.surface_mask, self.volume_args["scale_factor"])
 
 
     def getTrainingBatch(self, args, n_samples):
@@ -253,7 +260,7 @@ class Volume:
 
 
 
-    def savePrediction3D(self, args, iteration, final_flag=False):
+    def savePrediction3D(self, args, iteration):
         # save individual pictures
         for d in range(args["predict_depth"]):
             self.savePredictionImage(args, iteration, predictValues=self.prediction_volume[:,:,d], predictionName='ink', depth=d)
@@ -292,7 +299,7 @@ class Volume:
 
 
 
-    def savePredictionImage(self, args, iteration, predictValues=None, predictionName='ink', depth=0, final_flag=False):
+    def savePredictionImage(self, args, iteration, predictValues=None, predictionName='ink', depth=0):
         if predictValues is None:
             #predictionImageInk = 65535 * ( (self.prediction_image_ink.copy() - np.min(self.prediction_image_ink)) / (np.amax(self.prediction_image_ink) - np.min(self.prediction_image_ink)) )
             predictionImage = (65535 * self.predictionImage).astype(np.uint16)

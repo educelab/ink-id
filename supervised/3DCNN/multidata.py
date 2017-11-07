@@ -67,7 +67,7 @@ class VolumeSet:
             groundTruth[index_b] = tmpTruth'''
 
         #TODO return actual epoch instead of 0
-        return trainingSamples, groundTruth, 0
+        return trainingSamples, groundTruth, volume_epoch
 
 
 

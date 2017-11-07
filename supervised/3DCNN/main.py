@@ -31,14 +31,15 @@ args = {
             "use_in_training":True,
             "use_in_test_set":True,
             "make_prediction":True,
-            "prediction_overlap_step":4
+            "prediction_overlap_step":4,
+            "scale_factor":float(sys.argv[1])
         },
 
     ],
 
-    "x_dimension": 96,
-    "y_dimension": 96,
-    "z_dimension": 48,
+    "x_dimension": int(96 * float(sys.argv[1])),
+    "y_dimension": int(96 * float(sys.argv[1])),
+    "z_dimension": int(48 * float(sys.argv[1])),
 
     ### Back off from the surface point some distance
     "surface_cushion" : 10,
@@ -53,7 +54,7 @@ args = {
     "dropout": 0.5,
     "neurons": [16,8,4,2],
     "training_iterations": 1000000,
-    "training_epochs": 2,
+    "training_epochs": 3,
     "n_classes": 2,
     "pos_weight": .5,
     "batch_norm_momentum": .9,
@@ -68,9 +69,9 @@ args = {
     "random_step" : 10, # one in every randomStep non-ink samples will be a random brick
     "random_range" : 200,
     "use_jitter" : True,
-    "jitter_range" : [-4, 4],
+    "jitter_range" : [-6, 6],
     "add_augmentation" : True,
-    "balance_samples" : False,
+    "balance_samples" : True,
     "use_grid_training": False,
     "grid_n_squares":10,
     "grid_test_square": -1,
@@ -169,8 +170,8 @@ with tf.Session() as sess:
     testX, testY = volumes.getTestBatch(args)
 
     try:
-        while iteration < args["training_iterations"]:
         #while iteration < args["training_iterations"]:
+        while epoch < args["training_epochs"]:
 
             predict_flag = False
 
