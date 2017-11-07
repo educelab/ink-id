@@ -253,7 +253,7 @@ class Volume:
 
 
 
-    def savePrediction3D(self, args, iteration):
+    def savePrediction3D(self, args, iteration, final_flag=False):
         # save individual pictures
         for d in range(args["predict_depth"]):
             self.savePredictionImage(args, iteration, predictValues=self.prediction_volume[:,:,d], predictionName='ink', depth=d)
@@ -292,7 +292,7 @@ class Volume:
 
 
 
-    def savePredictionImage(self, args, iteration, predictValues=None, predictionName='ink', depth=0):
+    def savePredictionImage(self, args, iteration, predictValues=None, predictionName='ink', depth=0, final_flag=False):
         if predictValues is None:
             #predictionImageInk = 65535 * ( (self.prediction_image_ink.copy() - np.min(self.prediction_image_ink)) / (np.amax(self.prediction_image_ink) - np.min(self.prediction_image_ink)) )
             predictionImage = (65535 * self.predictionImage).astype(np.uint16)

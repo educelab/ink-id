@@ -60,7 +60,7 @@ args = {
     "fbeta_weight": 0.3,
 
     ### Data configuration ###
-    "wobble_volume" : True,
+    "wobble_volume" : False,
     "wobble_step" : 1000,
     "wobble_max_degrees" : 2,
     "num_test_cubes" : 400,
@@ -113,6 +113,7 @@ accuracy = tf.reduce_mean(tf.cast(correct_pred, tf.float32))
 false_positives = tf.equal(tf.argmax(y,1) + 1, tf.argmax(pred, 1))
 false_positive_rate = tf.reduce_mean(tf.cast(false_positives, tf.float32))
 tf.summary.scalar('accuracy', accuracy)
+tf.summary.histogram('prediction_values', pred[:,1])
 tf.summary.scalar('xentropy-loss', loss)
 tf.summary.histogram('prediction_values', pred[:,1])
 '''Summary images need revision, running them on every iteration really slows it down

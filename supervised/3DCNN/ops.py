@@ -103,7 +103,6 @@ def findRandomCoordinate(args, colBounds, rowBounds, groundTruth, surfaceImage, 
                 rowCoordinate, colCoordinate = getTestCoordinate(args, colBounds, rowBounds, volume.shape)
             else:
                 rowCoordinate, colCoordinate = getTrainCoordinate(args, colBounds, rowBounds, volume.shape)
-            label_avg = np.mean(groundTruth[rowCoordinate-rowStep:rowCoordinate+rowStep, colCoordinate-colStep:colCoordinate+colStep])
 
     else: # make it NON-INK
         # make sure 90% of the ground truth in this block is NON-ink
@@ -159,6 +158,8 @@ def getGridTestCoordinate(args, colBounds, rowBounds, volume_shape):
     n_rows = int(args["grid_n_squares"] / 2)
     voxels_per_row = int(volume_shape[0] / n_rows)
     row_number = int(args["grid_test_square"] / 2)
+    row = -1
+    col = -1
 
     row = np.random.randint(int(args["y_dimension"]/2)+(voxels_per_row*row_number), (voxels_per_row*(row_number+1)))
 
@@ -221,6 +222,7 @@ def generateCoordinatePool(args, volume, rowBounds, colBounds, groundTruth, surf
 
             # use to exclude ambiguous samples
             if .1*truth_label_value < label_avg < .9*truth_label_value:
+                # don't use ambiguous samples
                 continue
 
 
