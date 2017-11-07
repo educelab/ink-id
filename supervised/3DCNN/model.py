@@ -22,8 +22,9 @@ def buildModel(x, y, drop_rate, args, training_flag):
     return tf.nn.softmax(net), loss
 
 
+
 def buildMultitaskModel(x, y, drop_rate, args):
-    x = tf.reshape(x, [-1, args["x_Dimension"], args["y_Dimension"], args["z_Dimension"], 1])
+    x = tf.reshape(x, [-1, args["x_dimension"], args["y_dimension"], args["z_dimension"], 1])
     conv1 = slim.batch_norm(slim.convolution(x, args["neurons"][0], [3, 3, 3], stride=[2,2,2], padding='valid'))
     conv2 = slim.batch_norm(slim.convolution(conv1, args["neurons"][1], [3, 3, 3], stride=[2,2,2], padding='valid'))
     conv3 = slim.batch_norm(slim.convolution(conv2, args["neurons"][2], [3, 3, 3], stride=[2,2,2], padding='valid'))
