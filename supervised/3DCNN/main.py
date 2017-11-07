@@ -47,8 +47,8 @@ args = {
     "use_multitask_training": False,
     "shallow_learning_rate":.001,
     "learning_rate": .0001,
-    "batch_size": 50,
-    "prediction_batch_size": 500,
+    "batch_size": 30,
+    "prediction_batch_size": 400,
     "filter_size" : [3,3,3],
     "dropout": 0.5,
     "neurons": [16,8,4,2],
@@ -63,12 +63,12 @@ args = {
     "wobble_volume" : True,
     "wobble_step" : 1000,
     "wobble_max_degrees" : 2,
-    "num_test_cubes" : 500,
+    "num_test_cubes" : 400,
     "add_random" : False,
     "random_step" : 10, # one in every randomStep non-ink samples will be a random brick
     "random_range" : 200,
     "use_jitter" : True,
-    "jitter_range" : [-6, 6],
+    "jitter_range" : [-4, 4],
     "add_augmentation" : True,
     "balance_samples" : False,
     "use_grid_training": False,
@@ -115,13 +115,14 @@ false_positive_rate = tf.reduce_mean(tf.cast(false_positives, tf.float32))
 tf.summary.scalar('accuracy', accuracy)
 tf.summary.scalar('xentropy-loss', loss)
 tf.summary.histogram('prediction_values', pred[:,1])
-sample_cube = x[0]
-sample_view_z = tf.reshape(tf.reduce_mean(sample_cube, axis=2), [1, args["x_dimension"], args["y_dimension"], 1])
-sample_view_y = tf.reshape(tf.reduce_mean(sample_cube, axis=0), [1, args["x_dimension"], args["z_dimension"], 1])
-sample_view_x = tf.reshape(tf.reduce_mean(sample_cube, axis=1), [1, args["y_dimension"], args["z_dimension"], 1])
-tf.summary.image('z-project', sample_view_z, max_outputs=1)
-tf.summary.image('y-project', sample_view_y, max_outputs=1)
-tf.summary.image('x-project', sample_view_x, max_outputs=1)
+'''Summary images need revision, running them on every iteration really slows it down
+#sample_view_z = tf.reshape(tf.reduce_mean(sample_cube, axis=2), [1, args["x_dimension"], args["y_dimension"], 1])
+sample_view_y = tf.reshape(tf.reduce_mean(x[0], axis=0), [1, args["x_dimension"], args["z_dimension"], 1])
+sample_view_x = tf.reshape(tf.reduce_mean(x[0], axis=1), [1, args["y_dimension"], args["z_dimension"], 1])
+#tf.summary.image('z-project', sample_view_z, max_outputs=1)
+#sample_view_y_image = tf.summary.image('y-project', sample_view_y, max_outputs=1)
+#sample_view_x_image = tf.summary.image('x-project', sample_view_x, max_outputs=1)'''
+
 if args["use_multitask_training"]:
     tf.summary.scalar('xentropy-shallow-loss', loss)
 tf.summary.scalar('false_positive_rate', false_positive_rate)
@@ -181,9 +182,9 @@ with tf.Session() as sess:
 
 
             if iteration % args["display_step"] == 0:
-                train_acc, train_loss, train_preds, train_summary = \
-                    sess.run([accuracy, loss, pred, merged], feed_dict={x: batchX, y: batchY, drop_rate: 0.0, training_flag:False})
-                test_acc, test_loss, test_preds, test_summary = \
+                train_acc, train_loss, train_preds = \
+                    sess.run([accuracy, loss, pred], feed_dict={x: batchX, y: batchY, drop_rate: 0.0, training_flag:False})
+                test_acc, test_loss, test_preds, test_summary, = \
                     sess.run([accuracy, loss, pred, merged], feed_dict={x: testX, y: testY, drop_rate:0.0, training_flag:False})
                 train_prec = precision_score(np.argmax(batchY, 1), np.argmax(train_preds, 1))
                 test_prec = precision_score(np.argmax(testY, 1), np.argmax(test_preds, 1))
@@ -198,6 +199,7 @@ with tf.Session() as sess:
 
                 test_writer.add_summary(test_summary, iteration)
 
+
                 print("Iteration: {}\t\tEpoch: {}".format(iteration, epoch))
                 print("Train Loss: {:.3f}\tTrain Acc: {:.3f}\tInk Precision: {:.3f}".format(train_loss, train_acc, train_precs[-1]))
                 print("Test Loss: {:.3f}\tTest Acc: {:.3f}\t\tInk Precision: {:.3f}".format(test_loss, test_acc, test_precs[-1]))
@@ -207,7 +209,6 @@ with tf.Session() as sess:
                     best_test_f1 = test_f1
                     best_f1_iteration = iteration
                     save_path = saver.save(sess, args["output_path"] + '/models/model.ckpt', )
-
 
                 if (test_acc > .9) and (test_prec > .7) and (iterations_since_prediction > 100): #or (test_prec > .8)  and (predictions_made < 4): # or (test_prec / args["numCubes"] < .05)
                     # make a full prediction if results are tentatively spectacular
