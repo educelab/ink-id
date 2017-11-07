@@ -274,8 +274,8 @@ def generateSurfaceApproximation(args, volume, area=3, search_increment=1):
         for col in range(1, volume.shape[1], area):
             max_sum_index = 0
             max_sum = 0
-            for i in range(0, volume.shape[2]-10, search_increment):
-                sum_from_i = np.sum(volume[row,col,i:i+10])
+            for i in range(0, volume.shape[2]-50, search_increment):
+                sum_from_i = np.sum(volume[row,col,i:i+50])
                 if sum_from_i > max_sum:
                     max_sum_index = i
                     max_sum = sum_from_i

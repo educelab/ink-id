@@ -20,162 +20,28 @@ args = {
     ### Input configuration ###
     "volumes": [
         {
-            "name": "B_blank",
-            "microns_per_voxel":26.8,
-            "data_path": "/home/jack/devel/volcart/carbon-squares/B_blank_cropped_rot/",
-            "ground_truth":"",
-            "surface_mask":"",
-            "surface_data":"",
-            "train_portion":.8,
-            "train_bounds":3,# bounds parameters: 0=TOP || 1=RIGHT || 2=BOTTOM || 3=LEFT
-            "use_in_training":True,
-            "use_in_test_set":False,
-            "make_prediction":False,
-            "prediction_overlap_step":4
-        },
-        {
-            "name": "B_inked",
-            "microns_per_voxel":26.8,
-            "data_path": "/home/jack/devel/volcart/carbon-squares/B_inked_cropped_rot/",
-            "ground_truth":"",
-            "surface_mask":"",
-            "surface_data":"",
-            "train_portion":.8,
-            "train_bounds":3,# bounds parameters: 0=TOP || 1=RIGHT || 2=BOTTOM || 3=LEFT
-            "use_in_training":True,
-            "use_in_test_set":False,
-            "make_prediction":False,
-            "prediction_overlap_step":4
-        },
-        {
-            "name": "C_blank",
-            "microns_per_voxel":26.8,
-            "data_path": "/home/jack/devel/volcart/carbon-squares/C_blank_cropped_rot/",
-            "ground_truth":"",
-            "surface_mask":"",
-            "surface_data":"",
-            "train_portion":.9,
-            "train_bounds":0,# bounds parameters: 0=TOP || 1=RIGHT || 2=BOTTOM || 3=LEFT
-            "use_in_training":True,
-            "use_in_test_set":False,
-            "make_prediction":True,
-            "prediction_overlap_step":4
-        },
-        {
-            "name": "C_inked",
-            "microns_per_voxel":26.8,
-            "data_path": "/home/jack/devel/volcart/carbon-squares/C_inked_cropped_rot/",
-            "ground_truth":"",
-            "surface_mask":"",
-            "surface_data":"",
-            "train_portion":.9,
-            "train_bounds":0,# bounds parameters: 0=TOP || 1=RIGHT || 2=BOTTOM || 3=LEFT
-            "use_in_training":True,
-            "use_in_test_set":False,
-            "make_prediction":True,
-            "prediction_overlap_step":4
-        },
-        {
-            "name": "D_blank",
-            "microns_per_voxel":26.8,
-            "data_path": "/home/jack/devel/volcart/carbon-squares/D_blank_cropped_rot/",
-            "ground_truth":"",
-            "surface_mask":"",
-            "surface_data":"",
-            "train_portion":.9,
-            "train_bounds":1,# bounds parameters: 0=TOP || 1=RIGHT || 2=BOTTOM || 3=LEFT
-            "use_in_training":True,
-            "use_in_test_set":False,
-            "make_prediction":False
-        },
-        {
-            "name": "D_inked",
-            "microns_per_voxel":26.8,
-            "data_path": "/home/jack/devel/volcart/carbon-squares/D_inked_cropped_rot/",
-            "ground_truth":"",
-            "surface_mask":"",
-            "surface_data":"",
-            "train_portion":.9,
-            "train_bounds":1,# bounds parameters: 0=TOP || 1=RIGHT || 2=BOTTOM || 3=LEFT
-            "use_in_training":True,
-            "use_in_test_set":False,
-            "make_prediction":False
-        },
-        {
-            "name": "E_blank",
-            "microns_per_voxel":26.8,
-            "data_path": "/home/jack/devel/volcart/carbon-squares/E_blank_cropped_rot/",
-            "ground_truth":"",
-            "surface_mask":"",
-            "surface_data":"",
-            "train_portion":.9,
-            "train_bounds":2,# bounds parameters: 0=TOP || 1=RIGHT || 2=BOTTOM || 3=LEFT
-            "use_in_training":True,
-            "use_in_test_set":False,
-            "make_prediction":False
-        },
-        {
-            "name": "E_inked",
-            "microns_per_voxel":26.8,
-            "data_path": "/home/jack/devel/volcart/carbon-squares/E_inked_cropped_rot/",
-            "ground_truth":"",
-            "surface_mask":"",
-            "surface_data":"",
-            "train_portion":.9,
-            "train_bounds":2,# bounds parameters: 0=TOP || 1=RIGHT || 2=BOTTOM || 3=LEFT
-            "use_in_training":True,
-            "use_in_test_set":False,
-            "make_prediction":False,
-        },
-        {
-            "name": "F_blank",
-            "microns_per_voxel":26.8,
-            "data_path": "/home/jack/devel/volcart/carbon-squares/F_blank_cropped_rot/",
-            "ground_truth":"",
-            "surface_mask":"",
-            "surface_data":"",
-            "train_portion":.9,
-            "train_bounds":3,# bounds parameters: 0=TOP || 1=RIGHT || 2=BOTTOM || 3=LEFT
-            "use_in_training":True,
-            "use_in_test_set":False,
-            "make_prediction":False
-        },
-        {
-            "name": "F_inked",
-            "microns_per_voxel":26.8,
-            "data_path": "/home/jack/devel/volcart/carbon-squares/F_inked_cropped_rot/",
-            "ground_truth":"",
-            "surface_mask":"",
-            "surface_data":"",
-            "train_portion":.1,
-            "train_bounds":3,# bounds parameters: 0=TOP || 1=RIGHT || 2=BOTTOM || 3=LEFT
-            "use_in_training":True,
-            "use_in_test_set":False,
-            "make_prediction":False
-        },
-        {
-            "name": "I_lambda",
-            "microns_per_voxel":26.8,
-            "data_path": "/home/jack/devel/volcart/carbon-squares/I_lambda_4_crop_rot/",
-            "ground_truth":"/home/jack/devel/volcart/carbon-squares/I_lambda_gt.tif",
-            "surface_mask":"",
-            "surface_data":"",
-            "train_portion":.5,
+            "name": "lunate-sigma",
+            "microns_per_voxel":5,
+            "data_path": "/home/jack/devel/volcart/small-fragment-data/flatfielded-slices/",
+            "ground_truth":"/home/jack/devel/volcart/small-fragment-gt.tif",
+            "surface_mask":"/home/jack/devel/volcart/small-fragment-outline.tif",
+            "surface_data":"/home/jack/devel/volcart/small-fragment-smooth-surface.tif",
+            "train_portion":.6,
             "train_bounds":3,# bounds parameters: 0=TOP || 1=RIGHT || 2=BOTTOM || 3=LEFT
             "use_in_training":True,
             "use_in_test_set":True,
             "make_prediction":True,
-            "prediction_overlap_step":2
-        }
+            "prediction_overlap_step":4
+        },
 
     ],
 
-    "x_dimension": 48,
-    "y_dimension": 48,
-    "z_dimension": 16,
+    "x_dimension": 96,
+    "y_dimension": 96,
+    "z_dimension": 48,
 
     ### Back off from the surface point some distance
-    "surface_cushion" : 4,
+    "surface_cushion" : 10,
 
     ### Network configuration ###
     "use_multitask_training": False,
@@ -194,15 +60,15 @@ args = {
     "fbeta_weight": 0.3,
 
     ### Data configuration ###
-    "wobble_volume" : False,
+    "wobble_volume" : True,
     "wobble_step" : 1000,
-    "wobble_max_degrees" : 3,
+    "wobble_max_degrees" : 2,
     "num_test_cubes" : 500,
     "add_random" : False,
     "random_step" : 10, # one in every randomStep non-ink samples will be a random brick
     "random_range" : 200,
     "use_jitter" : True,
-    "jitter_range" : [-2, 2],
+    "jitter_range" : [-6, 6],
     "add_augmentation" : True,
     "balance_samples" : False,
     "use_grid_training": False,
