@@ -31,15 +31,16 @@ args = {
             "use_in_training":True,
             "use_in_test_set":True,
             "make_prediction":True,
-            "prediction_overlap_step":4,
+            "prediction_overlap_step":2,
             "scale_factor":float(sys.argv[1])
         },
 
     ],
 
-    "x_dimension": int(96 * float(sys.argv[1])),
-    "y_dimension": int(96 * float(sys.argv[1])),
-    "z_dimension": int(48 * float(sys.argv[1])),
+    # hackish way to make dimensions even
+    "x_dimension": int(96 * float(sys.argv[1]) / 2) * 2,
+    "y_dimension": int(96 * float(sys.argv[1]) / 2) * 2,
+    "z_dimension": int(48 * float(sys.argv[1]) / 2) * 2,
 
     ### Back off from the surface point some distance
     "surface_cushion" : 10,
@@ -53,8 +54,8 @@ args = {
     "filter_size" : [3,3,3],
     "dropout": 0.5,
     "neurons": [16,8,4,2],
-    "training_iterations": 1000000,
-    "training_epochs": 3,
+    "training_iterations": 100000,
+    "training_epochs": int(3 / pow(float(sys.argv[1]), 2)),
     "n_classes": 2,
     "pos_weight": .5,
     "batch_norm_momentum": .9,
@@ -80,13 +81,13 @@ args = {
 
     ### Output configuration ###
     "predict_step": 5000, # make a prediction every x steps
-    "overlap_step": 2, # during prediction, predict on one sample for each _ by _ voxel square
     "display_step": 20, # output stats every x steps
     "predict_depth" : 1,
-    "output_path": "/home/jack/devel/fall17/predictions/3dcnn/{}-{}-{}h".format(
+    "output_path": "/home/jack/devel/fall17/predictions/3dcnn/{}-{}-{}h-scale-{:.2f}".format(
         datetime.datetime.today().timetuple()[1],
         datetime.datetime.today().timetuple()[2],
-        datetime.datetime.today().timetuple()[3]),
+        datetime.datetime.today().timetuple()[3],
+        float(sys.argv[1])),
 
     "notes": ""
 }

@@ -85,10 +85,16 @@ class Volume:
 
         # Part 5: scaling!
         print("  Scaling volume data...")
+        self.surface_image = zoom(self.surface_image, self.volume_args["scale_factor"])
+        self.surface_image = np.round(self.surface_image *self.volume_args["scale_factor"]).astype(np.uint16)
         self.volume = zoom(self.volume, self.volume_args["scale_factor"])
         self.ground_truth = zoom(self.ground_truth, self.volume_args["scale_factor"])
-        self.surface_image = zoom(self.surface_image, self.volume_args["scale_factor"])
-        self.surface_mask = zoom(self.surface_mask, self.volume_args["scale_factor"])
+        self.surface_mask_image = zoom(self.surface_mask_image, self.volume_args["scale_factor"])
+        self.prediction_volume = np.zeros((self.volume.shape[0], self.volume.shape[1], args["predict_depth"]), dtype=np.float32)
+        self.prediction_image_ink = zoom(self.prediction_image_ink, self.volume_args["scale_factor"])
+        self.prediction_image_surf = zoom(self.prediction_image_surf, self.volume_args["scale_factor"], order=0)
+        self.prediction_plus_surf = zoom(self.prediction_plus_surf, self.volume_args["scale_factor"])
+        self.training_image = zoom(self.training_image, self.volume_args["scale_factor"])
 
 
     def getTrainingBatch(self, args, n_samples):
