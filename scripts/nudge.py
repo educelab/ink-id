@@ -13,15 +13,29 @@ import matplotlib.pyplot as plt
 from scipy.signal import argrelmax
 from scipy.stats import norm
 
-truth_mask = tiff.imread('/home/jack/devel/volcart/predictions/3dcnn/Quadrant Experiment/new.tif')
+print("Initializing...")
+truth_mask = tiff.imread('/home/jack/devel/fall17/predictions/3dcnn/10-28-5h-square5/ink/prediction-iteration70000-depth0.tif')
+surface_mask = tiff.imread('/home/jack/devel/volcart/small-fragment-outline.tif')
 vol = np.load('/home/jack/devel/volcart/small-fragment-data/volume.npy')
-output_dir = '/home/jack/devel/volcart/small-fragment-data/nudge-'
+volume_directory = ('/home/jack/devel/volcart/small-fragment-data/flatfielded-slices/')
+data_files = os.listdir(volume_directory)
+data_files.sort()
+volume = []
+print("Loading slices...")
+for f in data_files:
+    slice_data = np.array(tiff.imread(volume_directory+f))
+    volume.append(slice_data)
+vol = np.array(volume)
+print("Done loading slices...")
+
+output_dir = '/home/jack/Desktop/nudge-'
 output = np.zeros(vol.shape, dtype=np.uint16)
 before = np.zeros(truth_mask.shape, dtype=np.uint16)
 after = np.zeros(truth_mask.shape, dtype=np.uint16)
 cap = np.iinfo(vol.dtype).max
 vol_min = np.min(np.where(vol > 0, vol, cap))
 vol_max = np.max(vol)
+print("min: {}, max: {}".format(vol_min, vol_max))
 vol_range = (vol_max - vol_min)
 truth_value = np.max(truth_mask)
 
@@ -29,16 +43,15 @@ truth_value = np.max(truth_mask)
 # parameters
 loc = 0
 scale = 4 # how much to stretch the curve, lower = taller curve, higher = shorter/wider
-increase_percentages = np.array([ 8,])
+increase_percentages = np.array([10, 20, 30])
 increase_decimals = increase_percentages / 100
-neigh = 4
+neigh = 2
 thresh = 20500
 reach_in = 10
 reach_back = 4
 span = max(reach_in, reach_back)
 show_demo = False
 shown_demo = True # set to False to display a sample graph
-
 
 # create the distribution array
 distribute = [0.0] * (span+1)
@@ -47,10 +60,15 @@ for i in range(len(distribute)):
     distribute[i] = norm.pdf(i, loc, scale)
 
 
-
+print("Beginning loop...")
 for increase in increase_decimals:
+    print("Bumping with increase {:.2f}".format(increase))
     # re-initialize everything
-    vol = np.load('/home/jack/devel/volcart/small-fragment-data/volume.npy')
+    volume = []
+    for f in data_files:
+        slice_data = np.array(tiff.imread(volume_directory+f))
+        volume.append(slice_data)
+    vol = np.array(volume)
     outvol = np.copy(vol)
     before = np.zeros(truth_mask.shape, dtype=np.uint16)
     after = np.zeros(truth_mask.shape, dtype=np.uint16)
@@ -63,8 +81,14 @@ for increase in increase_decimals:
 
 
     # main loop
-    for i in range(neigh, vol.shape[0] - neigh):
-        for j in range(neigh, vol.shape[1] - neigh):
+    print("row range:{}".format(vol.shape[0] - neigh))
+    print("col range:{}".format(vol.shape[1] - neigh))
+    for i in range(48+neigh, vol.shape[0] - neigh - 48):
+        for j in range(48+neigh, vol.shape[1] - neigh - 48):
+            # don't bump any points off the surface
+            if surface_mask[i,j] == 0:
+                continue
+
             vector = vol[i,j]
             truth_weight = np.mean(truth_mask[i-neigh:i+neigh, j-neigh:j+neigh]) / truth_value
 
@@ -102,7 +126,7 @@ for increase in increase_decimals:
 
         #progress update
         if (i % int((vol.shape[0] - neigh) / 10) == 0):
-            print("finished rows 0 to {} out of {} for increase {}".format(
+            print("finished rows 0 to {} out of {} for increase {:.2f}".format(
                 i, vol.shape[0] - neigh, increase))
 
     # output
