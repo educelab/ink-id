@@ -1,7 +1,8 @@
 import os
 
 
-scale_factors = [.5, .33, .19]
+down_then_up = [.5, .33333, .25, .2, .19]
+squares = [4,1]
 
-for factor in scale_factors:
-    os.system("python3 main.py {}".format(factor))
+for square in squares:
+    os.system("python3 main.py {} {} {}".format(1.0, 1.0, square))
