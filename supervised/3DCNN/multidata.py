@@ -100,10 +100,13 @@ class VolumeSet:
 
 
 
-    def getPredictionBatch(self, args, starting_coordinates):
+    def getPredictionBatch(self, args, starting_coordinates, v_olap=None):
         # predict on one volume at a time
         # batches should be from one volume at a time
-        v_olap = args["volumes"][self.current_prediction_volume]["prediction_overlap_step"]
+        if(starting_coordinates == [0,0,0]):
+            self.current_prediction_batch = 0
+        if v_olap is None:
+            v_olap = args["volumes"][self.current_prediction_volume]["prediction_overlap_step"]
         self.current_prediction_total_batches = int(self.volume_set[self.current_prediction_volume].totalPredictions(args, v_olap) / args["prediction_batch_size"])
 
         if self.current_prediction_batch < self.current_prediction_total_batches:

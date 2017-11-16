@@ -221,7 +221,7 @@ def generateCoordinatePool(args, volume, rowBounds, colBounds, groundTruth, surf
             label_avg = np.mean(groundTruth[row-rowStep:row+rowStep, col-colStep:col+colStep])
 
             # use to exclude ambiguous samples
-            if .1*truth_label_value < label_avg < .9*truth_label_value:
+            if args["truth_cutoff_low"]*truth_label_value < label_avg < args["truth_cutoff_high"]*truth_label_value:
                 # don't use ambiguous samples
                 continue
 

@@ -45,13 +45,15 @@ class Volume:
 
         if len(self.volume_args['surface_data']) > 0:
             self.surface_image = tiff.imread(self.volume_args['surface_data'])
+            '''
         elif self.volume.shape[2] > args["z_dimension"]:
             print("  Approximating surface for volume {}...".format(self.volume_number))
             surf_start_time = time.time()
             self.surface_image = ops.generateSurfaceApproximation(args, self.volume)
             print("  Surface approximation took {:.2f} minutes.".format((time.time()-surf_start_time)/60))
+        '''
         else:
-            self.surface_image = np.zeros((self.volume.shape[0:2]))
+            self.surface_image = np.zeros((self.volume.shape[0:2])) + 50
 
         self.surface_mask_image = np.ones((self.volume.shape[0], self.volume.shape[1]), dtype=np.int)
         if len(self.volume_args['surface_mask']) > 0:
@@ -84,17 +86,25 @@ class Volume:
 
 
         # Part 5: scaling!
-        print("  Scaling volume data...")
-        self.surface_image = zoom(self.surface_image, self.volume_args["scale_factor"])
-        self.surface_image = np.round(self.surface_image *self.volume_args["scale_factor"]).astype(np.uint16)
-        self.volume = zoom(self.volume, self.volume_args["scale_factor"])
-        self.ground_truth = zoom(self.ground_truth, self.volume_args["scale_factor"])
-        self.surface_mask_image = zoom(self.surface_mask_image, self.volume_args["scale_factor"])
-        self.prediction_volume = np.zeros((self.volume.shape[0], self.volume.shape[1], args["predict_depth"]), dtype=np.float32)
-        self.prediction_image_ink = zoom(self.prediction_image_ink, self.volume_args["scale_factor"])
-        self.prediction_image_surf = zoom(self.prediction_image_surf, self.volume_args["scale_factor"], order=0)
-        self.prediction_plus_surf = zoom(self.prediction_plus_surf, self.volume_args["scale_factor"])
-        self.training_image = zoom(self.training_image, self.volume_args["scale_factor"])
+        self.subvol_scale_factor = 1
+        #self.subvol_scale_factor =  self.volume_args["microns_per_voxel"] / args["simulated_voxels_per_micron"]
+        self.my_xy_dimension = int(args["x_dimension"] / self.subvol_scale_factor)
+        self.my_z_dimension = int(args["z_dimension"] / self.subvol_scale_factor)
+
+        if self.volume_args["scale_factor"] != 1:
+            print("  Scaling {}...".format(self.volume_args["name"]))
+            self.surface_image = zoom(self.surface_image, self.volume_args["scale_factor"])
+            self.surface_image = np.round(self.surface_image *self.volume_args["scale_factor"]).astype(np.uint16)
+            self.volume = zoom(self.volume, self.volume_args["scale_factor"])
+            self.ground_truth = zoom(self.ground_truth, self.volume_args["scale_factor"])
+            self.surface_mask_image = zoom(self.surface_mask_image, self.volume_args["scale_factor"], order=0)
+            self.surface_mask = self.surface_mask_image / np.iinfo(self.surface_mask_image.dtype).max
+            self.prediction_volume = np.zeros((self.volume.shape[0], self.volume.shape[1], args["predict_depth"]), dtype=np.float32)
+            self.prediction_image_ink = zoom(self.prediction_image_ink, self.volume_args["scale_factor"])
+            self.prediction_image_surf = zoom(self.prediction_image_surf, self.volume_args["scale_factor"], order=0)
+            self.prediction_plus_surf = zoom(self.prediction_plus_surf, self.volume_args["scale_factor"])
+            self.training_image = zoom(self.training_image, self.volume_args["scale_factor"])
+
 
 
     def getTrainingBatch(self, args, n_samples):
@@ -109,8 +119,8 @@ class Volume:
 
         trainingSamples = np.zeros((n_samples, args["x_dimension"], args["y_dimension"], args["z_dimension"]), dtype=np.float32)
         groundTruth = np.zeros((n_samples, args["n_classes"]), dtype=np.float32)
-        rowStep = int(args["y_dimension"]/2)
-        colStep = int(args["x_dimension"]/2)
+        rowStep = int(self.my_xy_dimension/2)
+        colStep = int(self.my_xy_dimension/2)
 
         # populate the samples and labels
         for i in range(n_samples):
@@ -128,7 +138,7 @@ class Volume:
             if args["use_jitter"]:
                 zCoord = np.maximum(0, zCoord +  np.random.randint(args["jitter_range"][0], args["jitter_range"][1]))
 
-            if args["add_random"] and label < .1 and np.random.randint(args["random_step"]) == 0:
+            if args["add_random"] and label < args["truth_cutoff_low"] and np.random.randint(args["random_step"]) == 0:
                 # make this non-ink sample random data labeled as non-ink
                 sample = ops.getRandomBrick(args, self.volume, colCoord, rowCoord)
                 groundTruth[i] = [1.0,0.0]
@@ -136,9 +146,13 @@ class Volume:
 
             if args["wobble_volume"]:
                 zCoord = ops.adjustDepthForWobble(args, rowCoord, colCoord, zCoord, self.wobbled_angle, self.wobbled_axes, self.volume.shape)
-                sample = self.wobbled_volume[rowCoord-rowStep:rowCoord+rowStep, colCoord-colStep:colCoord+colStep, zCoord:zCoord+args["z_dimension"]]
+                sample = self.wobbled_volume[rowCoord-rowStep:rowCoord+rowStep, colCoord-colStep:colCoord+colStep, zCoord:zCoord+self.my_z_dimension]
             else:
-                sample = self.volume[rowCoord-rowStep:rowCoord+rowStep, colCoord-colStep:colCoord+colStep, zCoord:zCoord+args["z_dimension"]]
+                sample = self.volume[rowCoord-rowStep:rowCoord+rowStep, colCoord-colStep:colCoord+colStep, zCoord:zCoord+self.my_z_dimension]
+
+            # zoom the sample if needed
+            if self.subvol_scale_factor != 1:
+                sample = zoom(sample, self.subvol_scale_factor)
 
             if args["add_augmentation"]:
                 sample = ops.augmentSample(args, sample, augment_seed)
@@ -168,10 +182,13 @@ class Volume:
         for i in range(n_samples):
             rowCoordinate, colCoordinate, zCoordinate, label_avg = ops.findRandomCoordinate(args, colBounds, rowBounds, self.ground_truth, self.surface_image, self.surface_mask, self.volume.shape, testSet=True)
 
-            sample = (self.volume[rowCoordinate:rowCoordinate+args["y_dimension"], \
-                        colCoordinate:colCoordinate+args["x_dimension"], zCoordinate:zCoordinate+args["z_dimension"]])
+            sample = (self.volume[rowCoordinate:rowCoordinate+self.my_xy_dimension, \
+                        colCoordinate:colCoordinate+self.my_xy_dimension, zCoordinate:zCoordinate+self.my_z_dimension])
+            # zoom the sample if needed
+            if self.subvol_scale_factor != 1:
+                sample = zoom(sample, self.subvol_scale_factor)
 
-            if label_avg > (.9 * self.max_truth):
+            if label_avg > (args["truth_cutoff_high"] * self.max_truth):
                 gt = [0.0,1.0]
                 self.training_image[rowCoordinate,colCoordinate] = int(65534)
             else:
@@ -211,17 +228,21 @@ class Volume:
                 continue
 
             # grab the sample and place it in output
-            center_row = rowCoordinate+int(args["y_dimension"]/2)
-            center_col = colCoordinate+int(args["x_dimension"]/2)
-            zCoordinate = max(0,  self.surface_image[center_row, center_col] - args["surface_cushion"])
+            center_row = rowCoordinate+int(self.my_xy_dimension/2)
+            center_col = colCoordinate+int(self.my_xy_dimension/2)
+            zCoordinate = int(max(0,  self.surface_image[center_row, center_col] - args["surface_cushion"]))
 
             if args["predict_depth"] > 1:
                 #TODO this z-mapping mapping will eventually be something more intelligent
                 zCoordinate += (depthCoordinate)
                 #zCoordinate = depthCoordinate * int((self.volume.shape[2] - args["z_dimension"]) / args["predict_depth"])
 
-            sample = (self.volume[rowCoordinate:rowCoordinate+args["y_dimension"], \
-                    colCoordinate:colCoordinate+args["x_dimension"], zCoordinate:zCoordinate+args["z_dimension"]])
+            sample = (self.volume[rowCoordinate:rowCoordinate+self.my_xy_dimension, \
+                    colCoordinate:colCoordinate+self.my_xy_dimension, zCoordinate:zCoordinate+self.my_z_dimension])
+
+            if self.subvol_scale_factor != 1:
+                sample = zoom(sample, self.subvol_scale_factor)
+
             predictionSamples[sample_count, 0:sample.shape[0], 0:sample.shape[1], 0:sample.shape[2]] = sample
             # populate the "prediction plus surface" with the initial surface value
             olap = overlap_step
@@ -326,6 +347,7 @@ class Volume:
         # this doesn't work yet:
         # tiff.imsave(self.output_path + "/{}/predictionPlusSurf-iteration{}-depth{}.tif".format(predictionName, iteration, depth), predictionPlusSurfImage)
         tiff.imsave(self.output_path + "/training-{}.tif".format(iteration), self.training_image)
+        tiff.imsave(self.output_path + "/mask.tif", self.surface_mask_image)
 
         # zero them out for the next predictions
         self.prediction_image_ink = np.zeros((self.volume.shape[0], self.volume.shape[1]), dtype=np.float32)
