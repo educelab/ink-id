@@ -14,7 +14,8 @@ from scipy.signal import argrelmax
 from scipy.stats import norm
 
 print("Initializing...")
-truth_mask = tiff.imread('/home/jack/devel/fall17/predictions/3dcnn/10-28-5h-square5/ink/prediction-iteration70000-depth0.tif')
+#truth_mask = tiff.imread('/home/jack/devel/fall17/predictions/3dcnn/10-28-5h-square5/ink/prediction-iteration70000-depth0.tif')
+truth_mask = tiff.imread('/home/jack/Desktop/10fold-results/spliced.tif')
 surface_mask = tiff.imread('/home/jack/devel/volcart/small-fragment-outline.tif')
 vol = np.load('/home/jack/devel/volcart/small-fragment-data/volume.npy')
 volume_directory = ('/home/jack/devel/volcart/small-fragment-data/flatfielded-slices/')
@@ -43,7 +44,7 @@ truth_value = np.max(truth_mask)
 # parameters
 loc = 0
 scale = 4 # how much to stretch the curve, lower = taller curve, higher = shorter/wider
-increase_percentages = np.array([10, 20, 30])
+increase_percentages = np.array([20,])
 increase_decimals = increase_percentages / 100
 neigh = 2
 thresh = 20500
@@ -153,7 +154,7 @@ for increase in increase_decimals:
 
     for sl in range(outvol.shape[0]):
         zeros = len(str(sl))
-        tiff.imsave(slice_dir+"slice" + "0000"[:4-zeros] + str(sl), outvol[sl])
+        tiff.imsave(slice_dir+"slice" + "0000"[:4-zeros] + str(sl) + ".tif", outvol[sl])
 
     # 3: save the planet
     #TODO

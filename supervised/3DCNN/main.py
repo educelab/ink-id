@@ -25,47 +25,49 @@ args = {
             "data_path": "/home/jack/devel/volcart/small-fragment-data/flatfielded-slices/",
             "ground_truth":"/home/jack/devel/volcart/small-fragment-gt.tif",
             "surface_mask":"/home/jack/devel/volcart/small-fragment-outline.tif",
-            "surface_data":"/home/jack/devel/volcart/small-fragment-smooth-surface.tif",
+            "surface_data":"/home/jack/devel/volcart/small-fragment-smooth-surface-alt.tif",
             "train_portion":.6,
             "train_bounds":3,# bounds parameters: 0=TOP || 1=RIGHT || 2=BOTTOM || 3=LEFT
             "use_in_training":True,
             "use_in_test_set":True,
             "make_prediction":True,
-            "prediction_overlap_step":2,
-            "scale_factor":float(sys.argv[1])
+            "prediction_overlap_step":4,
+            "scale_factor":1
         },
 
     ],
 
+    "simulated_voxels_per_micron": 10,
+
     # hackish way to make dimensions even
-    "x_dimension": int(96 * float(sys.argv[1]) / 2) * 2,
-    "y_dimension": int(96 * float(sys.argv[1]) / 2) * 2,
-    "z_dimension": int(48 * float(sys.argv[1]) / 2) * 2,
+    "x_dimension": 96,#int(96 * float(sys.argv[1]) / 2) * 2,
+    "y_dimension": 96,#int(96 * float(sys.argv[1]) / 2) * 2,
+    "z_dimension": 48,#int(48 * float(sys.argv[1]) / 2) * 2,
 
     ### Back off from the surface point some distance
-    "surface_cushion" : 10,
+    "surface_cushion" : 8, #int(8 * float(sys.argv[1])),
 
     ### Network configuration ###
     "use_multitask_training": False,
     "shallow_learning_rate":.001,
     "learning_rate": .0001,
     "batch_size": 30,
-    "prediction_batch_size": 400,
+    "prediction_batch_size": 500,
     "filter_size" : [3,3,3],
     "dropout": 0.5,
     "neurons": [16,8,4,2],
     "training_iterations": 100000,
-    "training_epochs": int(3 / pow(float(sys.argv[1]), 2)),
+    "training_epochs": 3, #int(3 / pow(float(sys.argv[1]), 2)),
     "n_classes": 2,
     "pos_weight": .5,
     "batch_norm_momentum": .9,
-    "fbeta_weight": 0.3,
+    "fbeta_weight": 0.2,
 
     ### Data configuration ###
     "wobble_volume" : False,
     "wobble_step" : 1000,
     "wobble_max_degrees" : 2,
-    "num_test_cubes" : 400,
+    "num_test_cubes" : 500,
     "add_random" : False,
     "random_step" : 10, # one in every randomStep non-ink samples will be a random brick
     "random_range" : 200,
@@ -78,17 +80,17 @@ args = {
     "grid_test_square": -1,
     "surface_threshold": 20400,
     "restrict_surface": True,
+    "truth_cutoff_low": .2,
+    "truth_cutoff_high": .8,
 
     ### Output configuration ###
-    "predict_step": 5000, # make a prediction every x steps
+    "predict_step": 10000, # make a prediction every x steps
     "display_step": 20, # output stats every x steps
     "predict_depth" : 1,
-    "output_path": "/home/jack/devel/fall17/predictions/3dcnn/{}-{}-{}h-scale-{:.2f}".format(
+    "output_path": "/home/jack/devel/fall17/predictions/3dcnn/{}-{}-{}h".format(
         datetime.datetime.today().timetuple()[1],
         datetime.datetime.today().timetuple()[2],
-        datetime.datetime.today().timetuple()[3],
-        float(sys.argv[1])),
-
+        datetime.datetime.today().timetuple()[3]),
     "notes": ""
 }
 
@@ -118,14 +120,15 @@ tf.summary.scalar('accuracy', accuracy)
 tf.summary.histogram('prediction_values', pred[:,1])
 tf.summary.scalar('xentropy-loss', loss)
 tf.summary.histogram('prediction_values', pred[:,1])
+
 '''Summary images need revision, running them on every iteration really slows it down
-#sample_view_z = tf.reshape(tf.reduce_mean(sample_cube, axis=2), [1, args["x_dimension"], args["y_dimension"], 1])
+sample_view_z = tf.reshape(tf.reduce_mean(x[0], axis=2), [1, args["x_dimension"], args["y_dimension"], 1])
 sample_view_y = tf.reshape(tf.reduce_mean(x[0], axis=0), [1, args["x_dimension"], args["z_dimension"], 1])
 sample_view_x = tf.reshape(tf.reduce_mean(x[0], axis=1), [1, args["y_dimension"], args["z_dimension"], 1])
-#tf.summary.image('z-project', sample_view_z, max_outputs=1)
-#sample_view_y_image = tf.summary.image('y-project', sample_view_y, max_outputs=1)
-#sample_view_x_image = tf.summary.image('x-project', sample_view_x, max_outputs=1)'''
-
+tf.summary.image('z-project', sample_view_z, max_outputs=1)
+tf.summary.image('y-project', sample_view_y, max_outputs=1)
+tf.summary.image('x-project', sample_view_x, max_outputs=1)
+'''
 if args["use_multitask_training"]:
     tf.summary.scalar('xentropy-shallow-loss', loss)
 tf.summary.scalar('false_positive_rate', false_positive_rate)
@@ -251,14 +254,14 @@ with tf.Session() as sess:
     # use the model that performed best on the test set :)
     saver.restore(sess, args["output_path"] + '/models/model.ckpt')
     startingCoordinates = [0,0,0]
-    predictionSamples, coordinates, nextCoordinates = volumes.getPredictionBatch(args, startingCoordinates)
+    predictionSamples, coordinates, nextCoordinates = volumes.getPredictionBatch(args, startingCoordinates, v_olap=1)
     count = 1
     print("Beginning predictions from best model (iteration {})...".format(best_f1_iteration))
     while nextCoordinates is not None:
         #TODO add back the output
         predictionValues = sess.run(pred, feed_dict={x: predictionSamples, drop_rate: 0.0, training_flag:False})
         volumes.reconstruct(args, predictionValues, coordinates)
-        predictionSamples, coordinates, nextCoordinates = volumes.getPredictionBatch(args, nextCoordinates)
+        predictionSamples, coordinates, nextCoordinates = volumes.getPredictionBatch(args, nextCoordinates, v_olap=1)
     minutes = ( (time.time() - start_time) /60 )
     volumes.saveAllPredictions(args, best_f1_iteration)
     volumes.saveAllPredictionMetrics(args, best_f1_iteration, minutes)
