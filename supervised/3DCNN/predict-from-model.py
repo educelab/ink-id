@@ -19,7 +19,7 @@ start_time = time.time()
 warnings.filterwarnings('ignore')
 
 args = {
-"model_path" : "/home/jack/devel/fall17/predictions/3dcnn/11-12-23h-60-40/models/model.ckpt",
+"model_path" : "/home/jack/devel/fall17/predictions/3dcnn/Down-then-up/11-10-2h-scale-0.33/models/model.ckpt",
     ### Input configuration ###
     "volumes": [
         {
@@ -48,7 +48,7 @@ args = {
     "z_dimension": 48,#int(48 * float(sys.argv[1]) / 2) * 2,
 
     ### Back off from the surface point some distance
-    "surface_cushion" : 8, #int(8 * float(sys.argv[1])),
+    "surface_cushion" : 0, #int(8 * float(sys.argv[1])),
 
     ### Network configuration ###
     "use_multitask_training": False,
@@ -89,7 +89,7 @@ args = {
     ### Output configuration ###
     "predict_step": 10000, # make a prediction every x steps
     "display_step": 20, # output stats every x steps
-    "predict_depth" : 400,
+    "predict_depth" : 600,
     "output_path": "/home/jack/devel/fall17/predictions/3dcnn/P{}-{}-{}h".format(
         datetime.datetime.today().timetuple()[1],
         datetime.datetime.today().timetuple()[2],
