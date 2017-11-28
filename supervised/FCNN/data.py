@@ -14,7 +14,7 @@ class Volume:
     def __init__(self, args):
         # Part 1: volume metadataf
         self.volume_args = args['volumes'][0]
-        self.volume_number = volume_number
+        self.volume_number = 0
         self.train_bounds = self.volume_args['train_bounds']
         self.train_portion = self.volume_args['train_portion']
 
@@ -97,14 +97,14 @@ class Volume:
             self.training_image = zoom(self.training_image, self.volume_args["scale_factor"])
 
         # start at a random place on the volume
-        self.row_index, self.col_index = ops.getTrainCoordinate(self.row_bounds, self.col_bounds, self.volume.shape)
         self.row_bounds, self.col_bounds = ops.bounds(args, [self.volume.shape[0], self.volume.shape[1]], self.train_bounds, self.train_portion)
+        self.row_index, self.col_index = ops.getTrainCoordinate(args, self.col_bounds, self.row_bounds, self.volume.shape)
 
 
 
-    def getMiniBatch(args, x_dimension, y_dimension):
+    def getMiniBatch(self, args, x_dimension, y_dimension):
         # lay out the data array
-        batch_x = np.zeros((args["minibatch_size"], y_dimension, x_dimension, args["z_dimension"]))
+        batch_x = np.zeros((args["minibatch_size"], y_dimension, x_dimension, args["z_dimension"], 1))
         # lay out the label array
         batch_y = np.zeros((args["minibatch_size"], y_dimension, x_dimension))
 
@@ -117,7 +117,7 @@ class Volume:
                 self.row_index = 0
                 self.col_index = 0
                 self.epoch += 1
-            if not (self.col_bounds[0] < (self.col_index + x_dimension) < self.col_bounds[1])
+            if not (self.col_bounds[0] < (self.col_index + x_dimension) < self.col_bounds[1]):
                 # reached right edge, go back to left edge
                 #TODO add noise to avoid starting at the edge every time
                 self.col_index = 0
@@ -125,14 +125,19 @@ class Volume:
             z_coordinate = self.surface_image[self.row_index+int(y_dimension / 2), self.col_index+int(x_dimension / 2)]
             sample = self.volume[self.row_index:self.row_index+y_dimension,
                                     self.col_index:self.col_index+x_dimension,
-                                    self.surface_image[z_coordinate:z_coordinate+args["z_dimension"]]
+                                    z_coordinate:min(285, (z_coordinate+args["z_dimension"]))]
             label = self.ground_truth[self.row_index:self.row_index+y_dimension,
                                     self.col_index:self.col_index+x_dimension]
             # fill in the data
-            batch_x[batch_count, 0:sample.shape[0], 0:sample.shape[1], 0:sample.shape[2]] = sample
+            batch_x[batch_count, 0:sample.shape[0], 0:sample.shape[1], 0:sample.shape[2], 0] = sample
             batch_y[batch_count] = label
             # move to the next sample
             batch_count += 1
             self.col_index += x_dimension
 
         return batch_x, batch_y, self.epoch
+
+
+    def getPredictionBatch(self, args, starting_coordinates, x_dimension, y_dimension):
+        # lay out the data array
+        batch_x = np.zeros((args["predict_batch_size"], y_dimension, x_dimension, args["z_dimension"], 1))

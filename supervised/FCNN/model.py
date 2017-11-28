@@ -5,7 +5,8 @@ import pdb
 
 
 def buildModel(x, y, drop_rate, args, training_flag):
-    x = (tf.reshape(x, [-1, args["y_dimension"], args["x_dimension"], args["z_dimension"], 1]))
+    #batch_shape = x.get_shape().as_list()
+    #x = (tf.reshape(x, [-1, batch_shape[1], batch_shape[2], args["z_dimension"], 1]))
     neurons = [4,4,4,4,4,  2,2,2,2,2,  1,1,1,1,1]
     conv1 = layers.batch_normalization(slim.convolution(x, neurons[0], [3, 3, 3], stride=[1,1,1], padding='same'), training=training_flag, scale=False, axis=4, momentum=args["batch_norm_momentum"])
     conv2 = layers.batch_normalization(slim.convolution(conv1, neurons[1], [3, 3, 3], stride=[1,1,1], padding='same'), training=training_flag, scale=False, axis=4, momentum=args["batch_norm_momentum"])
@@ -28,8 +29,9 @@ def buildModel(x, y, drop_rate, args, training_flag):
     conv15 = layers.batch_normalization(slim.convolution(conv14, neurons[14], [3, 3, 1], stride=[1,1,2], padding='same'), training=training_flag, scale=False, axis=4, momentum=args["batch_norm_momentum"])
     # receptive field after conv10: 31x31x48 (volume: X x Y x 1)
 
-    pred = tf.reshape(conv15, [-1, args["y_dimension"], args["x_dimension"]])
-
+    print("Conv15 shape: {}".format(conv15.get_shape().as_list()))
+    pred = tf.squeeze(conv15, axis=[3,4])
+    print("Pred shape: {}".format(pred.get_shape().as_list()))
 
     x_entropy = tf.nn.sigmoid_cross_entropy_with_logits(logits=pred, labels=y)
     mean_x_entropy = tf.reduce_mean(x_entropy)
