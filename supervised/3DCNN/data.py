@@ -87,7 +87,6 @@ class Volume:
 
         # Part 5: scaling!
         self.subvol_scale_factor = 1
-        #self.subvol_scale_factor =  self.volume_args["microns_per_voxel"] / args["simulated_voxels_per_micron"]
         self.my_xy_dimension = int(args["x_dimension"] / self.subvol_scale_factor)
         self.my_z_dimension = int(args["z_dimension"] / self.subvol_scale_factor)
 
@@ -234,7 +233,7 @@ class Volume:
 
             if args["predict_depth"] > 1:
                 #TODO this z-mapping mapping will eventually be something more intelligent
-                zCoordinate += (depthCoordinate)
+                zCoordinate += (depthCoordinate*4)
                 #zCoordinate = depthCoordinate * int((self.volume.shape[2] - args["z_dimension"]) / args["predict_depth"])
 
             sample = (self.volume[rowCoordinate:rowCoordinate+self.my_xy_dimension, \

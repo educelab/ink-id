@@ -20,32 +20,60 @@ args = {
     ### Input configuration ###
     "volumes": [
         {
+            "name": "pherc2",
+            "microns_per_voxel":10,
+            "data_path": "/home/jack/devel/volcart/pherc2/oriented-scaled-cropped-slices/",
+            "ground_truth":"/home/jack/devel/volcart/pherc2/pherc2-cropped-gt-2.tif",
+            "surface_mask":"/home/jack/devel/volcart/pherc2/pherc2-cropped-surface-mask.tif",
+            "surface_data":"/home/jack/devel/volcart/pherc2/pherc2-cropped-surface-points.tif",
+            "train_portion":.39,
+            "train_bounds":3,# bounds parameters: 0=TOP || 1=RIGHT || 2=BOTTOM || 3=LEFT
+            "use_in_training":True,
+            "use_in_test_set":True,
+            "make_prediction":True,
+            "prediction_overlap_step":2,
+            "scale_factor":1
+        },
+        {
+            "name": "pherc2-full",
+            "microns_per_voxel":10,
+            "data_path": "/home/jack/devel/volcart/pherc2/oriented-scaled-slices/",
+            "ground_truth":"/home/jack/devel/volcart/pherc2/pherc2-gt.tif",
+            "surface_mask":"/home/jack/devel/volcart/pherc2/pherc2-surface-mask-scaled.tif",
+            "surface_data":"/home/jack/devel/volcart/pherc2/pherc2-surface-points.tif",
+            "train_portion":.5,
+            "train_bounds":3,# bounds parameters: 0=TOP || 1=RIGHT || 2=BOTTOM || 3=LEFT
+            "use_in_training":False,
+            "use_in_test_set":False,
+            "make_prediction":True,
+            "prediction_overlap_step":4,
+            "scale_factor":1
+        },
+        {
             "name": "lunate-sigma",
             "microns_per_voxel":5,
-            "data_path": "/home/jack/devel/volcart/small-fragment-data/flatfielded-slices/",
+            "data_path": "/home/jack/devel/volcart/small-fragment-brightened-slices/",
             "ground_truth":"/home/jack/devel/volcart/small-fragment-gt.tif",
             "surface_mask":"/home/jack/devel/volcart/small-fragment-outline.tif",
-            "surface_data":"/home/jack/devel/volcart/small-fragment-smooth-surface-alt.tif",
-            "train_portion":.6,
+            "surface_data":"/home/jack/devel/volcart/small-fragment-surface.tif",
+            "train_portion":.7,
             "train_bounds":3,# bounds parameters: 0=TOP || 1=RIGHT || 2=BOTTOM || 3=LEFT
             "use_in_training":True,
             "use_in_test_set":True,
             "make_prediction":True,
             "prediction_overlap_step":4,
-            "scale_factor":1
+            "scale_factor":.5
         },
 
     ],
 
-    "simulated_voxels_per_micron": 10,
-
     # hackish way to make dimensions even
-    "x_dimension": 96,#int(96 * float(sys.argv[1]) / 2) * 2,
-    "y_dimension": 96,#int(96 * float(sys.argv[1]) / 2) * 2,
-    "z_dimension": 48,#int(48 * float(sys.argv[1]) / 2) * 2,
+    "x_dimension": 48,
+    "y_dimension": 48,
+    "z_dimension": 24,
 
     ### Back off from the surface point some distance
-    "surface_cushion" : 8, #int(8 * float(sys.argv[1])),
+    "surface_cushion" : 4,
 
     ### Network configuration ###
     "use_multitask_training": False,
@@ -57,34 +85,34 @@ args = {
     "dropout": 0.5,
     "neurons": [16,8,4,2],
     "training_iterations": 100000,
-    "training_epochs": 3, #int(3 / pow(float(sys.argv[1]), 2)),
+    "training_epochs": 50, #int(3 / pow(float(sys.argv[1]), 2)),
     "n_classes": 2,
     "pos_weight": .5,
     "batch_norm_momentum": .9,
     "fbeta_weight": 0.2,
 
     ### Data configuration ###
-    "wobble_volume" : False,
+    "wobble_volume" : True,
     "wobble_step" : 1000,
     "wobble_max_degrees" : 2,
-    "num_test_cubes" : 500,
+    "num_test_cubes" : 100,
     "add_random" : False,
     "random_step" : 10, # one in every randomStep non-ink samples will be a random brick
     "random_range" : 200,
     "use_jitter" : True,
-    "jitter_range" : [-6, 6],
+    "jitter_range" : [-3, 3],
     "add_augmentation" : True,
     "balance_samples" : True,
     "use_grid_training": False,
-    "grid_n_squares":10,
-    "grid_test_square": -1,
+    "grid_n_squares":4,
+    "grid_test_square": 3,
     "surface_threshold": 20400,
     "restrict_surface": True,
     "truth_cutoff_low": .2,
     "truth_cutoff_high": .8,
 
     ### Output configuration ###
-    "predict_step": 10000, # make a prediction every x steps
+    "predict_step": 1000, # make a prediction every x steps
     "display_step": 20, # output stats every x steps
     "predict_depth" : 1,
     "output_path": "/home/jack/devel/fall17/predictions/3dcnn/{}-{}-{}h".format(
@@ -214,7 +242,7 @@ with tf.Session() as sess:
                     print("\tAchieved new peak f1 score! Saving model...\n")
                     best_test_f1 = test_f1
                     best_f1_iteration = iteration
-                    save_path = saver.save(sess, args["output_path"] + '/models/model.ckpt', )
+                    save_path = saver.save(sess, args["output_path"] + '/models/model-{}.ckpt'.format(best_f1_iteration), )
 
                 if (test_acc > .9) and (test_prec > .7) and (iterations_since_prediction > 100): #or (test_prec > .8)  and (predictions_made < 4): # or (test_prec / args["numCubes"] < .05)
                     # make a full prediction if results are tentatively spectacular
@@ -222,6 +250,7 @@ with tf.Session() as sess:
 
 
             if (predict_flag) or (iteration % args["predict_step"] == 0 and iteration > 0):
+                save_path = saver.save(sess, args["output_path"] + '/models/model-{}.ckpt'.format(iteration), )
                 iterations_since_prediction = 0
                 predictions_made += 1
                 print("{} training iterations took {:.2f} minutes".format( \
@@ -252,16 +281,16 @@ with tf.Session() as sess:
 
     # make one last prediction after everything finishes
     # use the model that performed best on the test set :)
-    saver.restore(sess, args["output_path"] + '/models/model.ckpt')
+    saver.restore(sess, args["output_path"] + '/models/model-{}.ckpt'.format(best_f1_iteration))
     startingCoordinates = [0,0,0]
-    predictionSamples, coordinates, nextCoordinates = volumes.getPredictionBatch(args, startingCoordinates, v_olap=1)
+    predictionSamples, coordinates, nextCoordinates = volumes.getPredictionBatch(args, startingCoordinates, v_olap=2)
     count = 1
     print("Beginning predictions from best model (iteration {})...".format(best_f1_iteration))
     while nextCoordinates is not None:
         #TODO add back the output
         predictionValues = sess.run(pred, feed_dict={x: predictionSamples, drop_rate: 0.0, training_flag:False})
         volumes.reconstruct(args, predictionValues, coordinates)
-        predictionSamples, coordinates, nextCoordinates = volumes.getPredictionBatch(args, nextCoordinates, v_olap=1)
+        predictionSamples, coordinates, nextCoordinates = volumes.getPredictionBatch(args, nextCoordinates, v_olap=2)
     minutes = ( (time.time() - start_time) /60 )
     volumes.saveAllPredictions(args, best_f1_iteration)
     volumes.saveAllPredictionMetrics(args, best_f1_iteration, minutes)

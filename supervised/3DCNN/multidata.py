@@ -113,7 +113,7 @@ class VolumeSet:
             # case 1: stay in the current volume
             samples, coordinates, nextCoordinates = self.volume_set[self.current_prediction_volume].getPredictionSample3D(args, starting_coordinates, overlap_step=v_olap)
             self.current_prediction_batch += 1
-            if self.current_prediction_batch % int(self.current_prediction_total_batches / 100) == 0:
+            if self.current_prediction_batch % int(self.current_prediction_total_batches / 10) == 0:
                 print("\tPredicting batch {}/{}...".format(self.current_prediction_batch, self.current_prediction_total_batches))
 
         elif self.current_prediction_volume is not self.predict_volume_indeces[-1]:

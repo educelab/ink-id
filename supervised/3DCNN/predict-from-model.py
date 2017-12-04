@@ -19,16 +19,16 @@ start_time = time.time()
 warnings.filterwarnings('ignore')
 
 args = {
-"model_path" : "/home/jack/devel/fall17/predictions/3dcnn/Down-then-up/11-10-2h-scale-0.33/models/model.ckpt",
+"model_path" : "/home/jack/devel/fall17/predictions/3dcnn/11-28-11h/models/model-90000.ckpt",
     ### Input configuration ###
     "volumes": [
         {
-            "name": "pherc3-sample",
-            "microns_per_voxel":5,
-            "data_path": "/home/jack/devel/volcart/pherc3-sample/",
+            "name": "pherc2",
+            "microns_per_voxel":10,
+            "data_path": "/home/jack/devel/volcart/pherc2/oriented-scaled-brightened-slices/",
             "ground_truth":"",
-            "surface_mask":"",
-            "surface_data":"",
+            "surface_mask":"/home/jack/devel/volcart/pherc2/pherc2-surface-mask-scaled.tif",
+            "surface_data":"/home/jack/devel/volcart/pherc2/pherc2-surface-points.tif",
             "train_portion":.6,
             "train_bounds":3,# bounds parameters: 0=TOP || 1=RIGHT || 2=BOTTOM || 3=LEFT
             "use_in_training":True,
@@ -40,12 +40,11 @@ args = {
 
     ],
 
-    "simulated_voxels_per_micron": 5,
 
     # hackish way to make dimensions even
-    "x_dimension": 96,#int(96 * float(sys.argv[1]) / 2) * 2,
-    "y_dimension": 96,#int(96 * float(sys.argv[1]) / 2) * 2,
-    "z_dimension": 48,#int(48 * float(sys.argv[1]) / 2) * 2,
+    "x_dimension": 48,#int(96 * float(sys.argv[1]) / 2) * 2,
+    "y_dimension": 48,#int(96 * float(sys.argv[1]) / 2) * 2,
+    "z_dimension": 24,#int(48 * float(sys.argv[1]) / 2) * 2,
 
     ### Back off from the surface point some distance
     "surface_cushion" : 0, #int(8 * float(sys.argv[1])),
@@ -89,7 +88,7 @@ args = {
     ### Output configuration ###
     "predict_step": 10000, # make a prediction every x steps
     "display_step": 20, # output stats every x steps
-    "predict_depth" : 600,
+    "predict_depth" : 2,
     "output_path": "/home/jack/devel/fall17/predictions/3dcnn/P{}-{}-{}h".format(
         datetime.datetime.today().timetuple()[1],
         datetime.datetime.today().timetuple()[2],
