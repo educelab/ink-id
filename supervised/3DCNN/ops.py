@@ -80,7 +80,8 @@ def findRandomCoordinate(args, colBounds, rowBounds, groundTruth, surfaceImage, 
 
 
     if args['restrict_surface']:
-        while np.min(surfaceMask[rowCoordinate-rowStep:rowCoordinate+rowStep, colCoordinate-colStep:colCoordinate+colStep]) == 0:
+        while surfaceMask[rowCoordinate, colCoordinate] == 0:
+        #while np.min(surfaceMask[rowCoordinate-rowStep:rowCoordinate+rowStep, colCoordinate-colStep:colCoordinate+colStep]) == 0:
             if args["use_grid_training"]:
                 if testSet:
                     rowCoordinate, colCoordinate = getGridTestCoordinate(args, colBounds, rowBounds, volume_shape)
@@ -255,6 +256,7 @@ def augmentSample(args, sample, seed=None):
 
     # ensure equal probability for each augmentation, including no augmentation
     # for flip: original, flip left-right, flip up-down, both, or none
+
     if seed == 0:
         augmentedSample = np.flip(augmentedSample, axis=0)
     elif seed == 1:
@@ -262,7 +264,7 @@ def augmentSample(args, sample, seed=None):
     elif seed == 2:
         augmentedSample = np.flip(augmentedSample, axis=0)
         augmentedSample = np.flip(augmentedSample, axis=1)
-    #implicit: no flip if seed == 2
+    #implicit: no flip if seed == 3
 
     # for rotate: original, rotate 90, rotate 180, or rotate 270
     augmentedSample = np.rot90(augmentedSample, k=seed, axes=(0,1))
@@ -276,8 +278,8 @@ def generateSurfaceApproximation(args, volume, area=3, search_increment=1):
         for col in range(1, volume.shape[1], area):
             max_sum_index = 0
             max_sum = 0
-            for i in range(0, volume.shape[2]-50, search_increment):
-                sum_from_i = np.sum(volume[row,col,i:i+50])
+            for i in range(0, volume.shape[2]-10, search_increment):
+                sum_from_i = np.sum(volume[row,col,i:i+10])
                 if sum_from_i > max_sum:
                     max_sum_index = i
                     max_sum = sum_from_i

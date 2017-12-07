@@ -1,7 +1,7 @@
 import os
 
 
-down_then_up = [.5]
+widths = [4,6,8,10,12,14,16]
 
-for scale in down_then_up:
-    os.system("python3 main.py {}".format(scale))
+for width in widths:
+    os.system("python3 main.py {}".format(width))

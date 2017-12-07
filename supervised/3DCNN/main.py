@@ -19,57 +19,31 @@ start_time = time.time()
 args = {
     ### Input configuration ###
     "volumes": [
+
         {
-            "name": "pherc2",
-            "microns_per_voxel":10,
-            "data_path": "/home/jack/devel/volcart/pherc2/oriented-scaled-cropped-slices/",
-            "ground_truth":"/home/jack/devel/volcart/pherc2/pherc2-cropped-gt-2.tif",
-            "surface_mask":"/home/jack/devel/volcart/pherc2/pherc2-cropped-surface-mask.tif",
-            "surface_data":"/home/jack/devel/volcart/pherc2/pherc2-cropped-surface-points.tif",
-            "train_portion":.39,
+            "name": "I-lambda",
+            "microns_per_voxel":26,
+            "data_path": "/home/jack/devel/volcart/carbon-squares/I_lambda_4_crop_rot/",
+            "ground_truth":"/home/jack/devel/volcart/carbon-squares/I_lambda_gt.tif",
+            "surface_mask":"",
+            "surface_data":"/home/jack/devel/volcart/carbon-squares/I-lambda-surface-points.tif",
+            "train_portion":.5,
             "train_bounds":3,# bounds parameters: 0=TOP || 1=RIGHT || 2=BOTTOM || 3=LEFT
             "use_in_training":True,
             "use_in_test_set":True,
             "make_prediction":True,
             "prediction_overlap_step":2,
-            "scale_factor":1
+            "predict_depth":1,
+            "scale_factor":2,
+
         },
-        {
-            "name": "pherc2-full",
-            "microns_per_voxel":10,
-            "data_path": "/home/jack/devel/volcart/pherc2/oriented-scaled-slices/",
-            "ground_truth":"/home/jack/devel/volcart/pherc2/pherc2-gt.tif",
-            "surface_mask":"/home/jack/devel/volcart/pherc2/pherc2-surface-mask-scaled.tif",
-            "surface_data":"/home/jack/devel/volcart/pherc2/pherc2-surface-points.tif",
-            "train_portion":.5,
-            "train_bounds":3,# bounds parameters: 0=TOP || 1=RIGHT || 2=BOTTOM || 3=LEFT
-            "use_in_training":False,
-            "use_in_test_set":False,
-            "make_prediction":True,
-            "prediction_overlap_step":4,
-            "scale_factor":1
-        },
-        {
-            "name": "lunate-sigma",
-            "microns_per_voxel":5,
-            "data_path": "/home/jack/devel/volcart/small-fragment-brightened-slices/",
-            "ground_truth":"/home/jack/devel/volcart/small-fragment-gt.tif",
-            "surface_mask":"/home/jack/devel/volcart/small-fragment-outline.tif",
-            "surface_data":"/home/jack/devel/volcart/small-fragment-surface.tif",
-            "train_portion":.7,
-            "train_bounds":3,# bounds parameters: 0=TOP || 1=RIGHT || 2=BOTTOM || 3=LEFT
-            "use_in_training":True,
-            "use_in_test_set":True,
-            "make_prediction":True,
-            "prediction_overlap_step":4,
-            "scale_factor":.5
-        },
+
 
     ],
 
     # hackish way to make dimensions even
-    "x_dimension": 48,
-    "y_dimension": 48,
+    "x_dimension": 32,
+    "y_dimension": 32,
     "z_dimension": 24,
 
     ### Back off from the surface point some distance
@@ -83,19 +57,20 @@ args = {
     "prediction_batch_size": 500,
     "filter_size" : [3,3,3],
     "dropout": 0.5,
-    "neurons": [16,8,4,2],
+    "neurons": [16, 8, 4, 2],
+    #"neurons": [int(sys.argv[1]), int(sys.argv[1]), int(sys.argv[1]), int(sys.argv[1])],
     "training_iterations": 100000,
-    "training_epochs": 50, #int(3 / pow(float(sys.argv[1]), 2)),
+    "training_epochs": 10, #int(3 / pow(float(sys.argv[1]), 2)),
     "n_classes": 2,
     "pos_weight": .5,
     "batch_norm_momentum": .9,
     "fbeta_weight": 0.2,
 
     ### Data configuration ###
-    "wobble_volume" : True,
+    "wobble_volume" : False,
     "wobble_step" : 1000,
     "wobble_max_degrees" : 2,
-    "num_test_cubes" : 100,
+    "num_test_cubes" : 200,
     "add_random" : False,
     "random_step" : 10, # one in every randomStep non-ink samples will be a random brick
     "random_range" : 200,
@@ -108,17 +83,17 @@ args = {
     "grid_test_square": 3,
     "surface_threshold": 20400,
     "restrict_surface": True,
-    "truth_cutoff_low": .2,
-    "truth_cutoff_high": .8,
+    "truth_cutoff_low": .15,
+    "truth_cutoff_high": .85,
 
     ### Output configuration ###
-    "predict_step": 1000, # make a prediction every x steps
+    "predict_step": 5000, # make a prediction every x steps
     "display_step": 20, # output stats every x steps
-    "predict_depth" : 1,
-    "output_path": "/home/jack/devel/fall17/predictions/3dcnn/{}-{}-{}h".format(
+    "predict_depth" : 2,
+    "output_path": "/home/jack/devel/fall17/predictions/3dcnn/{}-{}-{}h-lambda".format(
         datetime.datetime.today().timetuple()[1],
         datetime.datetime.today().timetuple()[2],
-        datetime.datetime.today().timetuple()[3]),
+        datetime.datetime.today().timetuple()[3],),
     "notes": ""
 }
 
@@ -168,6 +143,9 @@ best_test_f1 = 0.0
 best_f1_iteration = 0
 best_test_precision = 0.0
 best_precision_iteration = 0
+best_test_acc = 0.0
+best_acc_iteration = 0
+best_model_path = ''
 volumes = multidata.VolumeSet(args)
 
 # create summary writer directory
@@ -242,7 +220,7 @@ with tf.Session() as sess:
                     print("\tAchieved new peak f1 score! Saving model...\n")
                     best_test_f1 = test_f1
                     best_f1_iteration = iteration
-                    save_path = saver.save(sess, args["output_path"] + '/models/model-{}.ckpt'.format(best_f1_iteration), )
+                    best_model_path = saver.save(sess, args["output_path"] + '/models/model', global_step=iteration)
 
                 if (test_acc > .9) and (test_prec > .7) and (iterations_since_prediction > 100): #or (test_prec > .8)  and (predictions_made < 4): # or (test_prec / args["numCubes"] < .05)
                     # make a full prediction if results are tentatively spectacular
@@ -250,7 +228,7 @@ with tf.Session() as sess:
 
 
             if (predict_flag) or (iteration % args["predict_step"] == 0 and iteration > 0):
-                save_path = saver.save(sess, args["output_path"] + '/models/model-{}.ckpt'.format(iteration), )
+                save_path = saver.save(sess, args["output_path"] + '/models/model', global_step=iteration)
                 iterations_since_prediction = 0
                 predictions_made += 1
                 print("{} training iterations took {:.2f} minutes".format( \
@@ -281,7 +259,7 @@ with tf.Session() as sess:
 
     # make one last prediction after everything finishes
     # use the model that performed best on the test set :)
-    saver.restore(sess, args["output_path"] + '/models/model-{}.ckpt'.format(best_f1_iteration))
+    saver.restore(sess, "{}".format(best_model_path))
     startingCoordinates = [0,0,0]
     predictionSamples, coordinates, nextCoordinates = volumes.getPredictionBatch(args, startingCoordinates, v_olap=2)
     count = 1

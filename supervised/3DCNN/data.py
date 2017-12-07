@@ -61,7 +61,7 @@ class Volume:
 
 
         # Part 3: prediction data
-        self.prediction_volume = np.zeros((self.volume.shape[0], self.volume.shape[1], args["predict_depth"]), dtype=np.float32)
+        self.prediction_volume = np.zeros((self.volume.shape[0], self.volume.shape[1], self.volume_args["predict_depth"]), dtype=np.float32)
         self.prediction_image_ink = np.zeros((self.volume.shape[0:2]), dtype=np.float32)
         self.prediction_image_surf = np.zeros((self.volume.shape[0:2]), dtype=np.float32)
         self.prediction_plus_surf = np.zeros((self.volume.shape[0:2]), dtype=np.float32)
@@ -90,6 +90,10 @@ class Volume:
         self.my_xy_dimension = int(args["x_dimension"] / self.subvol_scale_factor)
         self.my_z_dimension = int(args["z_dimension"] / self.subvol_scale_factor)
 
+        # hardcoded to simulate pherc2 resolution
+        #self.volume = zoom(self.volume, .1087)
+        #self.volume = zoom(self.volume, 4.6)
+
         if self.volume_args["scale_factor"] != 1:
             print("  Scaling {}...".format(self.volume_args["name"]))
             self.surface_image = zoom(self.surface_image, self.volume_args["scale_factor"])
@@ -98,7 +102,7 @@ class Volume:
             self.ground_truth = zoom(self.ground_truth, self.volume_args["scale_factor"])
             self.surface_mask_image = zoom(self.surface_mask_image, self.volume_args["scale_factor"], order=0)
             self.surface_mask = self.surface_mask_image / np.iinfo(self.surface_mask_image.dtype).max
-            self.prediction_volume = np.zeros((self.volume.shape[0], self.volume.shape[1], args["predict_depth"]), dtype=np.float32)
+            self.prediction_volume = np.zeros((self.volume.shape[0], self.volume.shape[1], self.volume_args["predict_depth"]), dtype=np.float32)
             self.prediction_image_ink = zoom(self.prediction_image_ink, self.volume_args["scale_factor"])
             self.prediction_image_surf = zoom(self.prediction_image_surf, self.volume_args["scale_factor"], order=0)
             self.prediction_plus_surf = zoom(self.prediction_plus_surf, self.volume_args["scale_factor"])
@@ -218,7 +222,7 @@ class Volume:
                 colCoordinate = 0
                 rowCoordinate = 0
                 depthCoordinate += 1
-            if depthCoordinate >= args["predict_depth"]:
+            if depthCoordinate >= self.volume_args["predict_depth"]:
                 break
 
             # don't predict on it if it's not on the fragment
@@ -231,10 +235,10 @@ class Volume:
             center_col = colCoordinate+int(self.my_xy_dimension/2)
             zCoordinate = int(max(0,  self.surface_image[center_row, center_col] - args["surface_cushion"]))
 
-            if args["predict_depth"] > 1:
+            if self.volume_args["predict_depth"] > 1:
                 #TODO this z-mapping mapping will eventually be something more intelligent
-                zCoordinate += (depthCoordinate*4)
-                #zCoordinate = depthCoordinate * int((self.volume.shape[2] - args["z_dimension"]) / args["predict_depth"])
+                zCoordinate += (depthCoordinate*2)
+                #zCoordinate = depthCoordinate * int((self.volume.shape[2] - args["z_dimension"]) / self.volume_args["predict_depth"])
 
             sample = (self.volume[rowCoordinate:rowCoordinate+self.my_xy_dimension, \
                     colCoordinate:colCoordinate+self.my_xy_dimension, zCoordinate:zCoordinate+self.my_z_dimension])
@@ -288,10 +292,10 @@ class Volume:
 
     def savePrediction3D(self, args, iteration):
         # save individual pictures
-        for d in range(args["predict_depth"]):
+        for d in range(self.volume_args["predict_depth"]):
             self.savePredictionImage(args, iteration, predictValues=self.prediction_volume[:,:,d], predictionName='ink', depth=d)
         # save the average prediction across depths if depth is more than one
-        if args["predict_depth"] > 1:
+        if self.volume_args["predict_depth"] > 1:
             self.savePredictionImage(args, iteration, predictValues = np.mean(self.prediction_volume, axis=2), predictionName='ink-average')
 
         # save the output for samples not trained on
@@ -315,13 +319,13 @@ class Volume:
             rowBounds, colBounds = ops.bounds(args, [self.volume.shape[0], self.volume.shape[1]], self.train_bounds, self.train_portion)
             self.prediction_volume[rowBounds[0]:rowBounds[1], colBounds[0]:colBounds[1]] = 0
 
-        for d in range(args["predict_depth"]):
+        for d in range(self.volume_args["predict_depth"]):
             self.savePredictionImage(args, iteration, predictValues=self.prediction_volume[:,:,d], predictionName='ink-no-train', depth=d)
-        if args["predict_depth"] > 1:
+        if self.volume_args["predict_depth"] > 1:
             self.savePredictionImage(args, iteration, predictValues = np.mean(self.prediction_volume, axis=2), predictionName='ink-average-no-train')
 
         # zero out the volume
-        self.prediction_volume = np.zeros((self.volume.shape[0], self.volume.shape[1], args["predict_depth"]), dtype=np.float32)
+        self.prediction_volume = np.zeros((self.volume.shape[0], self.volume.shape[1], self.volume_args["predict_depth"]), dtype=np.float32)
 
 
 
@@ -447,4 +451,4 @@ class Volume:
         #TODO don't predict off the fragment
         xSlides = (self.volume.shape[0] - args["x_dimension"]) / overlap_step
         ySlides = (self.volume.shape[1] - args["y_dimension"]) / overlap_step
-        return int(xSlides * ySlides) * args["predict_depth"]
+        return int(xSlides * ySlides) * self.volume_args["predict_depth"]

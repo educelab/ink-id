@@ -10,9 +10,9 @@ import tifffile as tiff
 from PIL import Image
 from scipy.signal import argrelmin
 
-pth = '/home/jack/devel/volcart/pherc2/oriented-scaled-cropped-slices/'
-outpath = '/home/jack/devel/volcart/pherc2/'
-THRESH = 21000
+pth = '/home/jack/devel/volcart/carbon-squares/I_lambda_4_crop_rot/'
+outpath = '/home/jack/devel/volcart/carbon-squares/'
+THRESH = 8000
 data_files = os.listdir(pth)
 data_files.sort()
 sample_im = np.array(Image.open(pth+data_files[0]))
@@ -34,6 +34,6 @@ for i in range(len(data_files)):
             continue
 
 print("Saving surface images...")
-tiff.imsave(outpath+'cropped-surface-points.tif',surface_points)
-tiff.imsave(outpath+'cropped-surface-valleys.tif',surface_valleys)
+tiff.imsave(outpath+'I-lambda-surface-points.tif',surface_points)
+tiff.imsave(outpath+'I-lambda-surface-valleys.tif',surface_valleys)
 print("Done!")
