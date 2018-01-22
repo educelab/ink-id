@@ -22,16 +22,16 @@ args = {
         {
             "name": "lunate-sigma",
             "microns_per_voxel":5,
-            "data_path": "/home/jack/devel/volcart/small-fragment-data/flatfielded-slices/",
-            "ground_truth":"/home/jack/devel/volcart/small-fragment-gt.tif",
-            "surface_mask":"/home/jack/devel/volcart/small-fragment-outline.tif",
-            "surface_data":"/home/jack/devel/volcart/small-fragment-smooth-surface.tif",
+            "data_path": "/home/jack/devel/volcart/lunate-sigma/small-fragment-training-slices/",
+            "ground_truth":"/home/jack/devel/volcart/lunate-sigma/small-fragment-gt.tif",
+            "surface_mask":"/home/jack/devel/volcart/lunate-sigma/small-fragment-outline.tif",
+            "surface_data":"/home/jack/devel/volcart/lunate-sigma/small-fragment-smooth-surface-alt.tif",
             "train_portion":.6,
             "train_bounds":3,# bounds parameters: 0=TOP || 1=RIGHT || 2=BOTTOM || 3=LEFT
             "use_in_training":True,
             "use_in_test_set":True,
             "make_prediction":True,
-            "prediction_overlap_step":4
+            "prediction_overlap_step":1
         },
 
     ],
@@ -80,9 +80,9 @@ args = {
     ### Output configuration ###
     "predict_step": 5000, # make a prediction every x steps
     "overlap_step": 2, # during prediction, predict on one sample for each _ by _ voxel square
-    "display_step": 20, # output stats every x steps
+    "display_step": 100, # output stats every x steps
     "predict_depth" : 1,
-    "output_path": "/home/jack/devel/fall17/predictions/3dcnn/{}-{}-{}h".format(
+    "output_path": "/home/jack/devel/spring18/3dcnn-predictions/{}-{}-{}h".format(
         datetime.datetime.today().timetuple()[1],
         datetime.datetime.today().timetuple()[2],
         datetime.datetime.today().timetuple()[3]),
@@ -166,6 +166,7 @@ with tf.Session() as sess:
     test_accs = []
     test_losses = []
     test_precs = []
+    train_minutes = []
     testX, testY = volumes.getTestBatch(args)
 
     try:
@@ -197,6 +198,7 @@ with tf.Session() as sess:
                 train_losses.append(train_loss)
                 train_precs.append(train_prec)
                 test_precs.append(test_prec)
+                train_minutes.append([iteration, ((time.time() - start_time)/60 )])
 
                 test_writer.add_summary(test_summary, iteration)
 
@@ -217,6 +219,8 @@ with tf.Session() as sess:
 
 
             if (predict_flag) or (iteration % args["predict_step"] == 0 and iteration > 0):
+                np.savetxt(args["output_path"]+'/times.csv', np.array(train_minutes), fmt='%.3f', delimiter=',', header='iteration,minutes')
+                prediction_start_time = time.time()
                 iterations_since_prediction = 0
                 predictions_made += 1
                 print("{} training iterations took {:.2f} minutes".format( \
@@ -230,7 +234,7 @@ with tf.Session() as sess:
                     predictionValues = sess.run(pred, feed_dict={x: predictionSamples, drop_rate: 0.0, training_flag:False})
                     volumes.reconstruct(args, predictionValues, coordinates)
                     predictionSamples, coordinates, nextCoordinates = volumes.getPredictionBatch(args, nextCoordinates)
-                minutes = ( (time.time() - start_time) /60 )
+                minutes = ( (time.time() - prediction_start_time) /60 )
                 volumes.saveAllPredictions(args, iteration)
                 volumes.saveAllPredictionMetrics(args, iteration, minutes)
 

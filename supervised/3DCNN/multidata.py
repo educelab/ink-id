@@ -157,4 +157,4 @@ class VolumeSet:
 
     def wobbleVolumes(self, args):
         for i in self.train_volume_indeces:
-            self.volume_set[i].wobbleVolume(args, iteration)
+            self.volume_set[i].wobbleVolume(args)
