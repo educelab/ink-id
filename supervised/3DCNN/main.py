@@ -21,20 +21,20 @@ args = {
     "volumes": [
 
         {
-            "name": "I-lambda",
-            "microns_per_voxel":26,
-            "data_path": "/home/jack/devel/volcart/carbon-squares/I_lambda_4_crop_rot/",
-            "ground_truth":"/home/jack/devel/volcart/carbon-squares/I_lambda_gt.tif",
-            "surface_mask":"",
-            "surface_data":"/home/jack/devel/volcart/carbon-squares/I-lambda-surface-points.tif",
+            "name": "lunate-sigma",
+            "microns_per_voxel":5,
+            "data_path":'/home/jack/devel/volcart/lunate-sigma/training-slices/',
+            "ground_truth":'/home/jack/devel/volcart/lunate-sigma/small-fragment-random-truth-33p.tif',
+            "surface_mask":'/home/jack/devel/volcart/lunate-sigma/small-fragment-surface.tif',
+            "surface_data":'/home/jack/devel/volcart/lunate-sigma/small-fragment-outline.tif',
             "train_portion":.5,
             "train_bounds":3,# bounds parameters: 0=TOP || 1=RIGHT || 2=BOTTOM || 3=LEFT
             "use_in_training":True,
             "use_in_test_set":True,
             "make_prediction":True,
-            "prediction_overlap_step":2,
+            "prediction_overlap_step":4,
             "predict_depth":1,
-            "scale_factor":2,
+            "scale_factor":1,
 
         },
 
@@ -42,12 +42,12 @@ args = {
     ],
 
     # hackish way to make dimensions even
-    "x_dimension": 32,
-    "y_dimension": 32,
-    "z_dimension": 24,
+    "x_dimension": 96,
+    "y_dimension": 96,
+    "z_dimension": 48,
 
     ### Back off from the surface point some distance
-    "surface_cushion" : 4,
+    "surface_cushion" : 8,
 
     ### Network configuration ###
     "use_multitask_training": False,
@@ -83,14 +83,14 @@ args = {
     "grid_test_square": 3,
     "surface_threshold": 20400,
     "restrict_surface": True,
-    "truth_cutoff_low": .15,
-    "truth_cutoff_high": .85,
+    "truth_cutoff_low": .2,
+    "truth_cutoff_high": .8,
 
     ### Output configuration ###
     "predict_step": 5000, # make a prediction every x steps
     "display_step": 20, # output stats every x steps
     "predict_depth" : 2,
-    "output_path": "/home/jack/devel/fall17/predictions/3dcnn/{}-{}-{}h-lambda".format(
+    "output_path": "/home/jack/devel/spring18/3dcnn-predictions/{}-{}-{}h".format(
         datetime.datetime.today().timetuple()[1],
         datetime.datetime.today().timetuple()[2],
         datetime.datetime.today().timetuple()[3],),
