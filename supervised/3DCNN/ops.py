@@ -198,7 +198,35 @@ def isInTestSet(args, rowPoint, colPoint, volume_shape, train_bounds, train_port
 
 
 
+def generateCoordinatePoolVC(args, row_bounds, col_bounds):
+    """List out all valid coordinates for training, for use with vcdata
+
+    Returns:
+        A list of valid coordinates in between row_bounds and col_bounds
+    """
+
+    if args["use_grid_training"]:
+        print("Grid training not yet supported for volcart volumes")
+        return
+    if args["restrict_surface"]:
+        print("Surface restriction not yet supported for volcart volumes")
+
+    coordinates=[]
+    for row in range(row_bounds[0], row_bounds[1]):
+        for col in range(col_bounds[0], col_bounds[1]):
+            coordinates.append([row, col])
+
+    return coordinates
+
+
+
+
 def generateCoordinatePool(args, volume, rowBounds, colBounds, groundTruth, surfaceMask, train_bounds, train_portion):
+    """List out all valid coordinates for training
+
+    Returns:
+        A list of valid coordinates in between row_bounds and col_bounds
+    """
     coordinates = []
     ink_count = 0
     truth_label_value = np.iinfo(groundTruth.dtype).max
