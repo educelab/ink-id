@@ -43,7 +43,8 @@ def main():
     shown_demo = False 
 
     for p in preds:
-        name = p[84:]
+        name = p[-40:]
+        print("Nudging with prediction {}".format(name))
         truth_mask = imageio.imread(p)
         #truth_mask = imageio.imread('/home/jack/devel/volcart/simulated-accuracy/layer-mask-gt.png')
         print("Creating nudge distribution...")
