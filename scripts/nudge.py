@@ -17,6 +17,8 @@ import imageio
 
 def main():
     slices_dir = '/home/jack/devel/volcart/simulated-accuracy/blank-papyrus-layers/layers-top-down/'
+    surf_mask_path = '/home/jack/devel/volcart/simulated-accuracy/blank-papyrus-layers/layers_mask.png'
+    surf_mask = np.where(imageio.imread(surf_mask_path) > 0, 1, 0)
 
     slices_list = os.listdir(slices_dir)
     slices_list.sort()
@@ -45,7 +47,7 @@ def main():
     for p in preds:
         name = p[-40:]
         print("Nudging with prediction {}".format(name))
-        truth_mask = imageio.imread(p)
+        truth_mask = imageio.imread(p) * surf_mask
         #truth_mask = imageio.imread('/home/jack/devel/volcart/simulated-accuracy/layer-mask-gt.png')
         print("Creating nudge distribution...")
         # create the distribution array
@@ -140,7 +142,7 @@ def main():
                 increase*100), after)
 
             # 2: save the slices
-            '''
+            
             slice_dir = current_output_dir + "/slices/"
             try:
                 os.mkdir(slice_dir)
@@ -150,7 +152,7 @@ def main():
             for sl in range(outvol.shape[0]):
                 zeros = len(str(sl))
                 tiff.imsave(slice_dir+"slice" + "0000"[:4-zeros] + str(sl), outvol[sl])
-            '''
+            
             # 3: save the planet
             #TODO
 
