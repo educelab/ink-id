@@ -73,15 +73,15 @@ args = {
     "balance_samples" : False,
     "use_grid_training": True,
     "grid_n_squares":10,
-    "grid_test_square": 2,
+    "grid_test_square": int(sys.argv[1]),
     "surface_threshold": 20400,
     "restrict_surface": True,
     "truth_cutoff_low": .15,
     "truth_cutoff_high": .85,
 
     ### Output configuration ###
-    "predict_step": 1000, # make a prediction every x steps
-    "overlap_step": 2, # during prediction, predict on one sample for each _ by _ voxel square
+    "predict_step": 10000, # make a prediction every x steps
+    "overlap_step": 4, # during prediction, predict on one sample for each _ by _ voxel square
     "display_step": 100, # output stats every x steps
     "predict_depth" : 1,
     "output_path": "/home/jack/devel/spring18/3dcnn-predictions/{}-{}-{}h".format(
