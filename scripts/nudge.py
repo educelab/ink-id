@@ -47,7 +47,7 @@ def main():
     for p in preds:
         name = p[-40:]
         print("Nudging with prediction {}".format(name))
-        truth_mask = imageio.imread(p) * surf_mask
+        truth_mask = (imageio.imread(p) * surf_mask)
         #truth_mask = imageio.imread('/home/jack/devel/volcart/simulated-accuracy/layer-mask-gt.png')
         print("Creating nudge distribution...")
         # create the distribution array
@@ -83,44 +83,49 @@ def main():
             # main loop
             for i in range(neigh, vol.shape[0] - neigh):
                 for j in range(neigh, vol.shape[1] - neigh):
+                    if surf_mask[i,j] == 0:
+                        continue
                     vector = vol[i,j]
+                    if np.sum(vector) == 0:
+                        continue
+
                     truth_weight = np.mean(truth_mask[i-neigh:i+neigh, j-neigh:j+neigh]) / truth_value
 
                     # set everything below threshold to 0
                     thresh_vect = np.where(vector > thresh, vector, 0)
-                    try:
-                        #peak = argrelmax(thresh_vect)[0][0]
-                        peak = 10
-                        before[i,j] = vector[peak]
+                    #if truth_weight > 0:
+                    #peak = argrelmax(thresh_vect)[0][0]
+                    peak = 10
+                    before[i,j] = vector[peak]
 
-                        # nudge each point around the peak
-                        for x in range(peak - reach_back, peak):
-                            diff = abs(peak - x)
-                            proportion = float(diff) / float(reach_back)
-                            aligned_index = int(proportion * span)
-                            dist_weight = distribute[aligned_index]
-                            increase_amt = int(increase_parameter * truth_weight * dist_weight)
-                            vector[x] = min(vector[x]+increase_amt, out_ceiling)
-                        for x in range(peak, peak + reach_in):
-                            diff = abs(peak - x)
-                            dist_weight = distribute[diff]
-                            increase_amt = int(increase_parameter * truth_weight * dist_weight)
-                            vector[x] = min(vector[x]+increase_amt, out_ceiling)
+                    # nudge each point around the peak
+                    for x in range(peak - reach_back, peak):
+                        diff = abs(peak - x)
+                        proportion = float(diff) / float(reach_back)
+                        aligned_index = int(proportion * span)
+                        dist_weight = distribute[aligned_index]
+                        increase_amt = int(increase_parameter * truth_weight * dist_weight)
+                        vector[x] = min(vector[x]+increase_amt, out_ceiling)
+                    for x in range(peak, peak + reach_in):
+                        diff = abs(peak - x)
+                        dist_weight = distribute[diff]
+                        increase_amt = int(increase_parameter * truth_weight * dist_weight)
+                        vector[x] = min(vector[x]+increase_amt, out_ceiling)
 
 
-                        outvol[i,j] = vector
-                        after[i,j] = vector[peak]
-                        if show_demo and not shown_demo and truth_weight > .9:
-                            xs = np.arange(vol.shape[2])
-                            plt.plot(thresh_vect, color='b')
-                            plt.plot(vector, color='g')
-                            plt.show()
-                            shown_demo = True
-
+                    outvol[i,j] = vector
+                    after[i,j] = vector[peak]
+                    if show_demo and not shown_demo and truth_weight > .9:
+                        xs = np.arange(vol.shape[2])
+                        plt.plot(thresh_vect, color='b')
+                        plt.plot(vector, color='g')
+                        plt.show()
+                        shown_demo = True
+                    '''
                     except IndexError:
                         # for when no argrelmax exists
                         pass
-
+                    '''
                 #progress update
                 if (i % int((vol.shape[0] - neigh) / 10) == 0):
                     print("finished rows 0 to {} out of {} for increase {}".format(
