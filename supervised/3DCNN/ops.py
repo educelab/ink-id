@@ -37,105 +37,57 @@ def adjustDepthForWobble(args, rowCoord, colCoord, zCoordinate, angle, axes, vol
 
 
 def bounds(args, volume_shape, identifier, train_portion):
-    yStep = int(args["y_dimension"]/2)
-    xStep = int(args["x_dimension"]/2)
+    y_step = int(args["y_dimension"]/2)
+    x_step = int(args["x_dimension"]/2)
 
     if args["use_grid_training"]:
-        colBounds = [xStep, volume_shape[1]-xStep]
-        rowBounds = [yStep, volume_shape[0]-yStep]
+        col_bounds = [x_step, volume_shape[1]-x_step]
+        row_bounds = [y_step, volume_shape[0]-y_step]
 
     else:
         if identifier == 0: # TOP
-            colBounds = [xStep, volume_shape[1]-xStep]
-            rowBounds = [yStep, int(volume_shape[0] * train_portion)-yStep]
+            col_bounds = [x_step, volume_shape[1]-x_step]
+            row_bounds = [y_step, int(volume_shape[0] * train_portion)-y_step]
         elif identifier == 1: # RIGHT
-            colBounds = [int(volume_shape[1] * train_portion), volume_shape[1]-xStep]
-            rowBounds = [yStep, volume_shape[0]-yStep]
+            col_bounds = [int(volume_shape[1] * (1-train_portion))+x_step, volume_shape[1]-x_step]
+            row_bounds = [y_step, volume_shape[0]-y_step]
         elif identifier == 2: # BOTTOM
-            colBounds = [xStep, volume_shape[1]-xStep]
-            rowBounds = [int(volume_shape[0] * train_portion), volume_shape[0]-yStep]
+            col_bounds = [x_step, volume_shape[1]-x_step]
+            row_bounds = [int(volume_shape[0] * (1-train_portion))+y_step, volume_shape[0]-y_step]
         elif identifier == 3: # LEFT
-            colBounds = [xStep, int(volume_shape[1] * train_portion)-xStep]
-            rowBounds = [yStep, volume_shape[0]-yStep]
+            col_bounds = [x_step, int(volume_shape[1] * train_portion)-x_step]
+            row_bounds = [y_step, volume_shape[0]-y_step]
         else:
             print("Bound identifier not recognized")
             sys.exit(0)
 
-    return rowBounds, colBounds
+    return row_bounds, col_bounds
 
 
 
-def findRandomCoordinate(args, colBounds, rowBounds, groundTruth, surfaceImage, surfaceMask, volume_shape, testSet=False):
-    max_truth = np.iinfo(groundTruth.dtype).max
 
-    rowStep = int(args["y_dimension"]/2)
-    colStep = int(args["x_dimension"]/2)
+def getRandomTestCoordinate(args, volume_shape, bounds_identifier, train_portion):
     if args["use_grid_training"]:
-        if testSet:
-            rowCoordinate, colCoordinate = getGridTestCoordinate(args, colBounds, rowBounds, volume_shape)
-        else:
-            rowCoordinate, colCoordinate = getGridTrainCoordinate(args, colBounds, rowBounds, volume_shape)
+        return getGridTestCoordinate(args, volume_shape)
     else:
-        rowCoordinate, colCoordinate = np.random.randint(rowBounds[0], rowBounds[1]), np.random.randint(colBounds[0], colBounds[1])
-
-
-    if args['restrict_surface']:
-        while np.min(surfaceMask[rowCoordinate-rowStep:rowCoordinate+rowStep, colCoordinate-colStep:colCoordinate+colStep]) == 0:
-            if args["use_grid_training"]:
-                if testSet:
-                    rowCoordinate, colCoordinate = getGridTestCoordinate(args, colBounds, rowBounds, volume_shape)
-                else:
-                    rowCoordinate, colCoordinate = getGridTrainCoordinate(args, colBounds, rowBounds, volume_shape)
-            else:
-                rowCoordinate, colCoordinate = np.random.randint(rowBounds[0], rowBounds[1]), np.random.randint(colBounds[0], colBounds[1])
-
-    label_avg = np.mean(groundTruth[rowCoordinate-rowStep:rowCoordinate+rowStep, colCoordinate-colStep:colCoordinate+colStep])
-    zCoordinate = max(0, surfaceImage[rowCoordinate, colCoordinate] - args["surface_cushion"])
-    return rowCoordinate, colCoordinate, zCoordinate, label_avg
-
-    '''
-    # each coordinate should have equal chance of being ink or not ink
-    if np.random.randint(2) == 1: # make it INK
-        # make sure 90% of the ground truth in this block is ink
-        while label_avg < (.9*max_truth):
-                #np.min(np.max(volume[yCoordinate-yStep:yCoordinate:yStep, xCoordinate-xStep:xCoordinate+xStep, :], axis=2)) < args["surface_threshold"]:
-            if testSet:
-                rowCoordinate, colCoordinate = getTestCoordinate(args, colBounds, rowBounds, volume.shape)
-            else:
-                rowCoordinate, colCoordinate = getTrainCoordinate(args, colBounds, rowBounds, volume.shape)
-
-    else: # make it NON-INK
-        # make sure 90% of the ground truth in this block is NON-ink
-        while label_avg > (.1*max_truth) or \
-                (args["restrict_surface"] and np.min(surfaceMask[rowCoordinate-rowStep:rowCoordinate+rowStep, colCoordinate-colStep:colCoordinate+colStep]) == 0):
-            if testSet:
-                rowCoordinate, colCoordinate = getTestCoordinate(args, colBounds, rowBounds, volume.shape)
-            else:
-                rowCoordinate, colCoordinate = getTrainCoordinate(args, colBounds, rowBounds, volume.shape)
-            label_avg = np.mean(groundTruth[rowCoordinate-rowStep:rowCoordinate+rowStep, colCoordinate-colStep:colCoordinate+colStep])
-    '''
-
-
-
-def getTestCoordinate(args, colBounds, rowBounds, volume_shape):
-    if args["use_grid_training"]:
-        return getGridTestCoordinate(args, colBounds, rowBounds, volume_shape)
-    else:
-        return np.random.randint(rowBounds[0], rowBounds[1]), np.random.randint(colBounds[0], colBounds[1])
+        return np.random.randint(row_bounds[0], row_bounds[1]), np.random.randint(col_bounds[0], col_bounds[1])
 
 
 
 def getTrainCoordinate(args, colBounds, rowBounds, volume_shape):
     if args["use_grid_training"]:
-        return getGridTrainCoordinate(args, colBounds, rowBounds, volume_shape)
+        return getGridTrainCoordinate(args, volume_shape)
     else:
         return np.random.randint(rowBounds[0], rowBounds[1]), np.random.randint(colBounds[0], colBounds[1])
 
 
 
 
-def getGridTrainCoordinate(args, colBounds, rowBounds, volume_shape):
-    row, col = np.random.randint(rowBounds[0], rowBounds[1]), np.random.randint(colBounds[0], colBounds[1])
+def getGridTrainCoordinate(args, volume_shape):
+    row_step = int(args["y_dimension"]/2)
+    col_step = int(args["x_dimension"]/2)
+    row, col = np.random.randint(row_step, volume_shape[0]-row_step), np.random.randint(col_step, volume_shape[1]-col_step)
+
     found = False
     n_rows = int(args["grid_n_squares"] / 2)
     voxels_per_row = int(volume_shape[0] / n_rows)
@@ -148,20 +100,20 @@ def getGridTrainCoordinate(args, colBounds, rowBounds, volume_shape):
         if row not in range(row_number*voxels_per_row, (row_number+1)*voxels_per_row) and col in range(col_number*voxels_per_col, (col_number+1)*voxels_per_col):
             found = True
         else:
-            row, col = np.random.randint(rowBounds[0], rowBounds[1]), np.random.randint(colBounds[0], colBounds[1])
+            row, col = np.random.randint(row_step, volume_shape[0]-row_step), np.random.randint(col_step, volume_shape[1]-col_step)
 
     return row, col
 
 
-def getGridTestCoordinate(args, colBounds, rowBounds, volume_shape):
-    #TODO check validity of test square
+
+def getGridTestCoordinate(args, volume_shape):
+    row_step = int(args["y_dimension"]/2)
+    col_step = int(args["x_dimension"]/2)
+
     n_rows = int(args["grid_n_squares"] / 2)
     voxels_per_row = int(volume_shape[0] / n_rows)
     row_number = int(args["grid_test_square"] / 2)
-    row = -1
-    col = -1
-
-    row = np.random.randint(int(args["y_dimension"]/2)+(voxels_per_row*row_number), (voxels_per_row*(row_number+1)))
+    row = np.random.randint(row_step+(voxels_per_row*row_number), (voxels_per_row*(row_number+1))-col_step)
 
     if args["grid_test_square"] % 2 == 0:
         # testing on the left side
@@ -175,58 +127,72 @@ def getGridTestCoordinate(args, colBounds, rowBounds, volume_shape):
 
 
 
-def isInTestSet(args, rowPoint, colPoint, volume_shape, train_bounds, train_portion):
+def isInTestSet(args, row_point, col_point, volume_shape, bounds_identifier, train_portion):
     if args["use_grid_training"]:
         n_rows = int(args["grid_n_squares"] / 2)
         voxels_per_row = int(volume_shape[0] / n_rows)
         row_number = int(args["grid_test_square"] / 2)
 
         if args["grid_test_square"] % 2 == 0:
-            return rowPoint in range(voxels_per_row*row_number, voxels_per_row*(row_number+1)) and colPoint < (volume_shape[1]/2)
+            return row_point in range(voxels_per_row*row_number, voxels_per_row*(row_number+1)) and col_point < (volume_shape[1]/2)
         else:
-            return rowPoint in range(voxels_per_row*row_number, voxels_per_row*(row_number+1)) and colPoint > (volume_shape[1]/2)
+            return row_point in range(voxels_per_row*row_number, voxels_per_row*(row_number+1)) and col_point > (volume_shape[1]/2)
 
     else:
-        if train_bounds == 0: # train top / test bottom
-            return rowPoint > (volume_shape[0] * train_portion)
-        elif train_bounds == 1: # train right / test left
-            return colPoint < (volume_shape[1] * (1 - train_portion))
-        elif train_bounds == 2: # train bottom / test top
-            return rowPoint < (volume_shape[0] * (1 - train_portion))
-        elif train_bounds == 3: # train left / test right
-            return colPoint > (volume_shape[1] * train_portion)
+        if bounds_identifier == 0: # train top / test bottom
+            return row_point > (volume_shape[0] * train_portion)
+        elif bounds_identifier == 1: # train right / test left
+            return col_point < (volume_shape[1] * (1 - train_portion))
+        elif bounds_identifier == 2: # train bottom / test top
+            return row_point < (volume_shape[0] * (1 - train_portion))
+        elif bounds_identifier == 3: # train left / test right
+            return col_point > (volume_shape[1] * train_portion)
 
 
 
-def generateCoordinatePool(args, volume, rowBounds, colBounds, groundTruth, surfaceMask, train_bounds, train_portion):
+def averageTruthInSubvolume(args, row_coordinate, col_coordinate, ground_truth):
+    # assume coordinate is at the center
+    row_step = int(args["y_dimension"]/2)
+    col_step = int(args["x_dimension"]/2)
+    row_top = row_coordinate - row_step
+    col_left = col_coordinate - col_step
+
+    avg_truth = np.mean(ground_truth[row_top:row_top+args["y_dimension"], col_left:col_left+args["x_dimension"]])
+
+    return avg_truth 
+
+
+
+def generateCoordinatePool(args, volume_shape, ground_truth, surface_mask, train_bounds_identifier, train_portion):
     coordinates = []
     ink_count = 0
-    truth_label_value = np.iinfo(groundTruth.dtype).max
+    truth_label_value = np.iinfo(ground_truth.dtype).max
     rowStep = int(args["y_dimension"]/2)
     colStep = int(args["x_dimension"]/2)
 
-    print(" rowbounds: {}".format(rowBounds))
-    print(" colbounds: {}".format(colBounds))
+    row_bounds, col_bounds = bounds(args, volume_shape, train_bounds_identifier, train_portion)
+    print(" rowbounds: {}".format(row_bounds))
+    print(" colbounds: {}".format(col_bounds))
 
-    for row in range(rowBounds[0], rowBounds[1]):
-        for col in range(colBounds[0], colBounds[1]):
+    for row in range(row_bounds[0], row_bounds[1]):
+        for col in range(col_bounds[0], col_bounds[1]):
             # Dang this if chain is embarassingly large
             if args["use_grid_training"]:
-                if isInTestSet(args,row,col, volume.shape, train_bounds, train_portion):
+                if isInTestSet(args, row, col, volume_shape, train_bounds_identifier, train_portion):
                     continue
 
-            if args["restrict_surface"] and not isOnSurface(args, row, col, surfaceMask):
+            if args["restrict_surface"] and not isOnSurface(args, row, col, surface_mask):
                 continue
 
-            label_avg = np.mean(groundTruth[row-rowStep:row+rowStep, col-colStep:col+colStep])
+            label_avg = np.mean(ground_truth[row-rowStep:row+rowStep, col-colStep:col+colStep])
 
             # use to exclude ambiguous samples
-            if .1*truth_label_value < label_avg < .9*truth_label_value:
+            if args['truth_cutoff_low']*truth_label_value < label_avg < args['truth_cutoff_high']*truth_label_value:
                 # don't use ambiguous samples
                 continue
 
 
-            label = round(groundTruth[row,col] / truth_label_value)
+            label = round(ground_truth[row,col] / truth_label_value)
             augment_seed = np.random.randint(4)
             ink_count += label # 0 if less than .9
             coordinates.append([row, col, label, augment_seed])
