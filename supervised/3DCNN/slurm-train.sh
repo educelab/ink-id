@@ -9,4 +9,4 @@
 
 echo "My SLURM_ARRAY_TASK_ID: " $SLURM_ARRAY_TASK_ID
 
-python ~/devel/ink-id/supervised/3DCNN/main.py #SLURM_ARRAY_TASK_ID
+python ~/devel/ink-id/supervised/3DCNN/main.py $SLURM_ARRAY_TASK_ID
