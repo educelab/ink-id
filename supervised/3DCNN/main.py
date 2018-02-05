@@ -22,10 +22,10 @@ args = {
         {
             "name": "lunate-sigma",
             "microns_per_voxel":5,
-            "data_path": "/home/jack/devel/volcart/lunate-sigma/training-slices/",
-            "ground_truth":"/home/jack/devel/volcart/lunate-sigma/small-fragment-gt.tif",
-            "surface_mask":"/home/jack/devel/volcart/lunate-sigma/small-fragment-outline.tif",
-            "surface_data":"/home/jack/devel/volcart/lunate-sigma/small-fragment-smooth-surface-alt.tif",
+            "data_path": "/home/jgba225/data/lunate-sigma/training-slices/",
+            "ground_truth":"/home/jgba225/data/lunate-sigma/small-fragment-gt.tif",
+            "surface_mask":"/home/jgba225/data/lunate-sigma/small-fragment-outline.tif",
+            "surface_data":"/home/jgba225/data/lunate-sigma/small-fragment-smooth-surface-alt.tif",
             "train_portion":.6,
             "train_bounds":3,# bounds parameters: 0=TOP || 1=RIGHT || 2=BOTTOM || 3=LEFT
             "use_in_training":True,
@@ -84,7 +84,7 @@ args = {
     "overlap_step": 4, # during prediction, predict on one sample for each _ by _ voxel square
     "display_step": 100, # output stats every x steps
     "predict_depth" : 1,
-    "output_path": "/home/jack/devel/spring18/3dcnn-predictions/{}-{}-{}h".format(
+    "output_path": "/home/jgba225/spring18/3dcnn-predictions/{}-{}-{}h".format(
         datetime.datetime.today().timetuple()[1],
         datetime.datetime.today().timetuple()[2],
         datetime.datetime.today().timetuple()[3]),
@@ -172,7 +172,7 @@ with tf.Session() as sess:
     testX, testY = volumes.getTestBatch(args)
 
     try:
-        while iteration < args["training_iterations"]:
+        while epoch < args["training_epochs"]:
         #while iteration < args["training_iterations"]:
 
             predict_flag = False
