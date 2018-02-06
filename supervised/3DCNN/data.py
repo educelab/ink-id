@@ -415,7 +415,7 @@ class Volume:
 
 
     def incrementEpoch(self, args):
-        print("Finished epoch for {}".format(volume_args['name']))
+        print("Finished epoch for {}".format(self.volume_args['name']))
         self.train_index = 0
         self.training_image = np.zeros(self.prediction_image_ink.shape, dtype=np.uint16)
         self.epoch += 1
