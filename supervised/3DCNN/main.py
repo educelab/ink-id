@@ -22,16 +22,16 @@ args = {
         {
             "name": "lunate-sigma",
             "microns_per_voxel":5,
-            "data_path": "/home/jack/devel/volcart/lunate-sigma/small-fragment-training-slices/",
-            "ground_truth":"/home/jack/devel/volcart/lunate-sigma/small-fragment-gt.tif",
-            "surface_mask":"/home/jack/devel/volcart/lunate-sigma/small-fragment-outline.tif",
-            "surface_data":"/home/jack/devel/volcart/lunate-sigma/small-fragment-smooth-surface-alt.tif",
+            "data_path": "/home/jgba225/data/lunate-sigma/training-slices/",
+            "ground_truth":"/home/jgba225/data/lunate-sigma/small-fragment-gt.tif",
+            "surface_mask":"/home/jgba225/data/lunate-sigma/small-fragment-outline.tif",
+            "surface_data":"/home/jgba225/data/lunate-sigma/small-fragment-smooth-surface-alt.tif",
             "train_portion":.6,
             "train_bounds":3,# bounds parameters: 0=TOP || 1=RIGHT || 2=BOTTOM || 3=LEFT
             "use_in_training":True,
             "use_in_test_set":True,
             "make_prediction":True,
-            "prediction_overlap_step":1
+            "prediction_overlap_step":4
         },
 
     ],
@@ -46,7 +46,7 @@ args = {
     ### Network configuration ###
     "use_multitask_training": False,
     "shallow_learning_rate":.001,
-    "learning_rate": .0001,
+    "learning_rate": .001,
     "batch_size": 30,
     "prediction_batch_size": 400,
     "filter_size" : [3,3,3],
@@ -71,18 +71,20 @@ args = {
     "jitter_range" : [-4, 4],
     "add_augmentation" : True,
     "balance_samples" : False,
-    "use_grid_training": False,
+    "use_grid_training": True,
     "grid_n_squares":10,
-    "grid_test_square": -1,
+    "grid_test_square": int(sys.argv[1]),
     "surface_threshold": 20400,
     "restrict_surface": True,
+    "truth_cutoff_low": .15,
+    "truth_cutoff_high": .85,
 
     ### Output configuration ###
-    "predict_step": 5000, # make a prediction every x steps
-    "overlap_step": 2, # during prediction, predict on one sample for each _ by _ voxel square
+    "predict_step": 10000, # make a prediction every x steps
+    "overlap_step": 4, # during prediction, predict on one sample for each _ by _ voxel square
     "display_step": 100, # output stats every x steps
     "predict_depth" : 1,
-    "output_path": "/home/jack/devel/spring18/3dcnn-predictions/{}-{}-{}h".format(
+    "output_path": "/home/jgba225/spring18/3dcnn-predictions/{}-{}-{}h".format(
         datetime.datetime.today().timetuple()[1],
         datetime.datetime.today().timetuple()[2],
         datetime.datetime.today().timetuple()[3]),
@@ -130,7 +132,7 @@ tf.summary.scalar('false_positive_rate', false_positive_rate)
 
 
 merged = tf.summary.merge_all()
-saver = tf.train.Saver()
+saver = tf.train.Saver(max_to_keep=None)
 best_test_f1 = 0.0
 best_f1_iteration = 0
 best_test_precision = 0.0
@@ -170,7 +172,7 @@ with tf.Session() as sess:
     testX, testY = volumes.getTestBatch(args)
 
     try:
-        while iteration < args["training_iterations"]:
+        while epoch < args["training_epochs"]:
         #while iteration < args["training_iterations"]:
 
             predict_flag = False
@@ -211,7 +213,7 @@ with tf.Session() as sess:
                     print("\tAchieved new peak f1 score! Saving model...\n")
                     best_test_f1 = test_f1
                     best_f1_iteration = iteration
-                    save_path = saver.save(sess, args["output_path"] + '/models/model.ckpt', )
+                    save_path = saver.save(sess, args["output_path"] + '/models/best-model.ckpt') 
 
                 if (test_acc > .9) and (test_prec > .7) and (iterations_since_prediction > 100): #or (test_prec > .8)  and (predictions_made < 4): # or (test_prec / args["numCubes"] < .05)
                     # make a full prediction if results are tentatively spectacular
@@ -225,18 +227,19 @@ with tf.Session() as sess:
                 predictions_made += 1
                 print("{} training iterations took {:.2f} minutes".format( \
                     iteration, (time.time() - start_time)/60))
-                startingCoordinates = [0,0,0]
-                predictionSamples, coordinates, nextCoordinates = volumes.getPredictionBatch(args, startingCoordinates)
+                starting_coordinates = [0,0,0]
+                prediction_samples, coordinates, next_coordinates = volumes.getPredictionBatch(args, starting_coordinates)
 
                 print("Beginning predictions on volumes...")
-                while nextCoordinates is not None:
+                while next_coordinates is not None:
                     #TODO add back the output
-                    predictionValues = sess.run(pred, feed_dict={x: predictionSamples, drop_rate: 0.0, training_flag:False})
-                    volumes.reconstruct(args, predictionValues, coordinates)
-                    predictionSamples, coordinates, nextCoordinates = volumes.getPredictionBatch(args, nextCoordinates)
+                    prediction_values = sess.run(pred, feed_dict={x: prediction_samples, drop_rate: 0.0, training_flag:False})
+                    volumes.reconstruct(args, prediction_values, coordinates)
+                    prediction_samples, coordinates, next_coordinates = volumes.getPredictionBatch(args, next_coordinates)
                 minutes = ( (time.time() - prediction_start_time) /60 )
                 volumes.saveAllPredictions(args, iteration)
                 volumes.saveAllPredictionMetrics(args, iteration, minutes)
+                saver.save(sess, args["output_path"] + '/models/model.ckpt', global_step=iteration)
 
             if args["wobble_volume"] and iteration >= args["wobble_step"] and (iteration % args["wobble_step"]) == 0:
                 # ex. wobble at iteration 1000, or after the prediction for the previous wobble
@@ -251,16 +254,15 @@ with tf.Session() as sess:
 
     # make one last prediction after everything finishes
     # use the model that performed best on the test set :)
-    saver.restore(sess, args["output_path"] + '/models/model.ckpt')
-    startingCoordinates = [0,0,0]
-    predictionSamples, coordinates, nextCoordinates = volumes.getPredictionBatch(args, startingCoordinates)
-    count = 1
+    saver.restore(sess, args["output_path"] + '/models/best-model.ckpt')
+    starting_coordinates = [0,0,0]
+    prediction_samples, coordinates, next_coordinates = volumes.getPredictionBatch(args, starting_coordinates)
     print("Beginning predictions from best model (iteration {})...".format(best_f1_iteration))
-    while nextCoordinates is not None:
+    while next_coordinates is not None:
         #TODO add back the output
-        predictionValues = sess.run(pred, feed_dict={x: predictionSamples, drop_rate: 0.0, training_flag:False})
-        volumes.reconstruct(args, predictionValues, coordinates)
-        predictionSamples, coordinates, nextCoordinates = volumes.getPredictionBatch(args, nextCoordinates)
+        prediction_values = sess.run(pred, feed_dict={x: prediction_samples, drop_rate: 0.0, training_flag:False})
+        volumes.reconstruct(args, prediction_values, coordinates)
+        prediction_samples, coordinates, next_coordinates = volumes.getPredictionBatch(args, next_coordinates)
     minutes = ( (time.time() - start_time) /60 )
     volumes.saveAllPredictions(args, best_f1_iteration)
     volumes.saveAllPredictionMetrics(args, best_f1_iteration, minutes)
