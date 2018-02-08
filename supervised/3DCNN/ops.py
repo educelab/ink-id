@@ -65,63 +65,13 @@ def bounds(args, volume_shape, identifier, train_portion):
 
 
 
-def findRandomCoordinate(args, colBounds, rowBounds, groundTruth, surfaceImage, surfaceMask, volume_shape, testSet=False):
-    max_truth = np.iinfo(groundTruth.dtype).max
 
-    rowStep = int(args["y_dimension"]/2)
-    colStep = int(args["x_dimension"]/2)
+def getRandomTestCoordinate(args, volume_shape, bounds_identifier, train_portion):
+    row_bounds, col_bounds = bounds(args, volume_shape, bounds_identifier, train_portion)
     if args["use_grid_training"]:
-        if testSet:
-            rowCoordinate, colCoordinate = getGridTestCoordinate(args, colBounds, rowBounds, volume_shape)
-        else:
-            rowCoordinate, colCoordinate = getGridTrainCoordinate(args, colBounds, rowBounds, volume_shape)
+        return getGridTestCoordinate(args, col_bounds, row_bounds, volume_shape)
     else:
-        rowCoordinate, colCoordinate = np.random.randint(rowBounds[0], rowBounds[1]), np.random.randint(colBounds[0], colBounds[1])
-
-
-    if args['restrict_surface']:
-        while np.min(surfaceMask[rowCoordinate-rowStep:rowCoordinate+rowStep, colCoordinate-colStep:colCoordinate+colStep]) == 0:
-            if args["use_grid_training"]:
-                if testSet:
-                    rowCoordinate, colCoordinate = getGridTestCoordinate(args, colBounds, rowBounds, volume_shape)
-                else:
-                    rowCoordinate, colCoordinate = getGridTrainCoordinate(args, colBounds, rowBounds, volume_shape)
-            else:
-                rowCoordinate, colCoordinate = np.random.randint(rowBounds[0], rowBounds[1]), np.random.randint(colBounds[0], colBounds[1])
-
-    label_avg = np.mean(groundTruth[rowCoordinate-rowStep:rowCoordinate+rowStep, colCoordinate-colStep:colCoordinate+colStep])
-    zCoordinate = max(0, surfaceImage[rowCoordinate, colCoordinate] - args["surface_cushion"])
-    return rowCoordinate, colCoordinate, zCoordinate, label_avg
-
-    '''
-    # each coordinate should have equal chance of being ink or not ink
-    if np.random.randint(2) == 1: # make it INK
-        # make sure 90% of the ground truth in this block is ink
-        while label_avg < (.9*max_truth):
-                #np.min(np.max(volume[yCoordinate-yStep:yCoordinate:yStep, xCoordinate-xStep:xCoordinate+xStep, :], axis=2)) < args["surface_threshold"]:
-            if testSet:
-                rowCoordinate, colCoordinate = getTestCoordinate(args, colBounds, rowBounds, volume.shape)
-            else:
-                rowCoordinate, colCoordinate = getTrainCoordinate(args, colBounds, rowBounds, volume.shape)
-
-    else: # make it NON-INK
-        # make sure 90% of the ground truth in this block is NON-ink
-        while label_avg > (.1*max_truth) or \
-                (args["restrict_surface"] and np.min(surfaceMask[rowCoordinate-rowStep:rowCoordinate+rowStep, colCoordinate-colStep:colCoordinate+colStep]) == 0):
-            if testSet:
-                rowCoordinate, colCoordinate = getTestCoordinate(args, colBounds, rowBounds, volume.shape)
-            else:
-                rowCoordinate, colCoordinate = getTrainCoordinate(args, colBounds, rowBounds, volume.shape)
-            label_avg = np.mean(groundTruth[rowCoordinate-rowStep:rowCoordinate+rowStep, colCoordinate-colStep:colCoordinate+colStep])
-    '''
-
-
-
-def getTestCoordinate(args, colBounds, rowBounds, volume_shape):
-    if args["use_grid_training"]:
-        return getGridTestCoordinate(args, colBounds, rowBounds, volume_shape)
-    else:
-        return np.random.randint(rowBounds[0], rowBounds[1]), np.random.randint(colBounds[0], colBounds[1])
+        return np.random.randint(row_bounds[0], row_bounds[1]), np.random.randint(col_bounds[0], col_bounds[1])
 
 
 
@@ -198,13 +148,14 @@ def isInTestSet(args, rowPoint, colPoint, volume_shape, train_bounds, train_port
 
 
 
-def generateCoordinatePoolVC(args, row_bounds, col_bounds):
+def generateCoordinatePoolVC(args, volume_shape, train_bounds_identifier, train_portion):
     """List out all valid coordinates for training, for use with vcdata
 
     Returns:
         A list of valid coordinates in between row_bounds and col_bounds
     """
 
+    row_bounds, col_bounds = bounds(args, volume_shape, train_bounds_identifier, train_portion)
     if args["use_grid_training"]:
         print("Grid training not yet supported for volcart volumes")
         return
@@ -218,6 +169,16 @@ def generateCoordinatePoolVC(args, row_bounds, col_bounds):
 
     return coordinates
 
+
+
+def averageTruthInSubvolume(args, row_coordinate, col_coordinate, ground_truth):
+    # assume coordinate is at the center
+    row_step = int(args["y_dimension"]/2)
+    col_step = int(args["x_dimension"]/2)
+    row_top = row_coordinate - row_step
+    col_left = col_coordinate - col_step
+    avg_truth = np.mean(ground_truth[row_top:row_top+args["y_dimension"], col_left:col_left+args["x_dimension"]])
+    return avg_truth 
 
 
 

@@ -22,10 +22,10 @@ args = {
         {
             "name": "lunate-sigma",
             "microns_per_voxel":5,
-            "data_path": "/home/jack/devel/volcart/lunate-sigma/small-fragment-training-slices/",
-            "ground_truth":"/home/jack/devel/volcart/lunate-sigma/small-fragment-gt.tif",
-            "surface_mask":"/home/jack/devel/volcart/lunate-sigma/small-fragment-outline.tif",
-            "surface_data":"/home/jack/devel/volcart/lunate-sigma/small-fragment-smooth-surface-alt.tif",
+            "data_path": "/home/jack/devel/volcart-data/lunateface.volpkg",
+            "ground_truth":"/home/jack/devel/volcart-data/lunate-sigma/small-fragment-gt.tif",
+            "surface_mask":"/home/jack/devel/volcart-data/lunate-sigma/small-fragment-outline.tif",
+            "surface_data":"/home/jack/devel/volcart-data/lunate-sigma/small-fragment-smooth-surface-alt.tif",
             "train_portion":.6,
             "train_bounds":3,# bounds parameters: 0=TOP || 1=RIGHT || 2=BOTTOM || 3=LEFT
             "use_in_training":True,
@@ -36,9 +36,9 @@ args = {
 
     ],
 
-    "x_dimension": 96,
-    "y_dimension": 96,
-    "z_dimension": 48,
+    "x_dimension": 97,
+    "y_dimension": 97,
+    "z_dimension": 49,
 
     ### Back off from the surface point some distance
     "surface_cushion" : 10,

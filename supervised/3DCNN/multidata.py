@@ -1,6 +1,7 @@
 import numpy as np
 import tensorflow as tf
 import data
+import vcdata
 
 
 class VolumeSet:
@@ -20,7 +21,13 @@ class VolumeSet:
         for i in range(self.n_total_volumes):
             print("Initializing volume {}...".format(i))
             current_vol_args = args['volumes'][i]
-            self.volume_set.append(data.Volume(args, volume_number=i))
+
+            # a hackish way to differentiate between simple slice volumes and volpkgs
+            if current_vol_args['data_path'][-7:] == '.volpkg':
+                self.volume_set.append(vcdata.Volume(args, volume_number=i))
+            else:
+                self.volume_set.append(data.Volume(args, volume_number=i))
+
             if current_vol_args['use_in_training']:
                 self.n_train_volumes += 1
                 self.train_volume_indeces.append(i)

@@ -6,27 +6,33 @@ Designed to use volcart for underlying data
 #TODO don't pass args in every method, just keep it stored in the instance
 
 
+import numpy as np
+from imageio import imread, imwrite
 from volcart import Core
 import ops
 
 
 class Volume:
-    def __init__(self, args, volume_number, volume_path):
-        # Part 1: volume metadataf
+    def __init__(self, args, volume_number):
+        # Part 1: volume metadata
         self.volume_args = args['volumes'][volume_number]
         self.volume_number = volume_number
+        self.volume_path = self.volume_args['data_path']
         self.train_bounds = self.volume_args['train_bounds']
         self.train_portion = self.volume_args['train_portion']
 
         # Part 2 the volume
-        self.vc_volpkg = Core.VolumePkg(volume_path)
+        self.vc_volpkg = Core.VolumePkg(self.volume_path)
         self.vc_vol = self.vc_volpkg.volume()
-        self.volume_shape = [vc_vol.height(), vc_vol.width(), vc_vol.slices()]
-        # shape of the output data needs to be the shape of the "flattened" volume
-        # how to do that?
-
+        self.volume_shape = [self.vc_vol.height(), self.vc_vol.width(), self.vc_vol.slices()]
+        print("Shape of {}: {}".format(self.volume_args['name'], self.volume_shape))
+        # eventually, shape of the output data needs to be the shape of the "flattened" volume
+        if len(self.volume_args['surface_data']) > 0:
+            self.surface_image = imread(self.volume_args['surface_data'])
+        if len(self.volume_args['ground_truth']) > 0:
+            self.ground_truth = imread(self.volume_args['ground_truth'])
         # Part 3: prediction data
-        self.prediction_volume = np.zeros((self.volume_shape[0], self_volume.shape[1], args["predict_depth"]), dtype=np.float32)
+        self.prediction_volume = np.zeros((self.volume_shape[0], self.volume_shape[1], args["predict_depth"]), dtype=np.float32)
 
         # Part 4: prediction metadata, etc
         self.coordinate_pool = []
@@ -41,22 +47,22 @@ class Volume:
         Returns:
             An array of length n_samples
             A corresponding array of ground truth
+            The current epoch
         """
 
         if len(self.coordinate_pool) == 0: #initialize training coordinates
-            row_bounds, col_bounds = ops.bounds(args, [self.volume_shape[0], self.volume_shape[1]],\
-                identifier=self.train_bounds, train_portion=self.train_portion)
-            self.coordinate_pool = ops.generateCoordinatePoolVC(args, row_bounds, col_bounds)
+            self.coordinate_pool = ops.generateCoordinatePoolVC(
+                    args, self.volume_shape, self.volume_args["train_bounds"], self.volume_args["train_portion"])
 
         coordinates_to_use = self.coordinate_pool[self.train_index:self.train_index+n_samples]
-        training_samples, ground_truth = self.getSamplesAtCoordinates(args, n_samples)
+        training_samples, ground_truth = self.getSamplesAtCoordinates(args, coordinates_to_use)
         self.train_index += n_samples
 
-        return training_samples, ground_truth
+        return training_samples, ground_truth, self.epoch
 
 
 
-    def getTestingBatch(self, args, n_samples):
+    def getTestBatch(self, args, n_samples):
         """Retrieve samples on the NON-training side of the volume
 
         Returns:
@@ -64,7 +70,15 @@ class Volume:
             A corresponding array of ground truth
 
         """
-        pass
+        coordinates = []
+        for i in range(n_samples):
+            row_coordinate, col_coordinate = ops.getRandomTestCoordinate(
+                args, self.volume_shape, self.volume_args["train_bounds"], self.volume_args["train_portion"])
+            coordinates.append([row_coordinate, col_coordinate])
+
+        test_samples, ground_truth = self.getSamplesAtCoordinates(args, coordinates)
+
+        return test_samples, ground_truth
 
 
 
@@ -92,7 +106,7 @@ class Volume:
 
         """
 
-        n = len(coordinates)
+        n_samples = len(coordinates)
         xr = int(args["x_dimension"] / 2)
         yr = int(args["y_dimension"] / 2)
         zr = int(args["z_dimension"] / 2)
@@ -100,13 +114,15 @@ class Volume:
         samples = np.zeros((n_samples, args["x_dimension"], args["y_dimension"], args["z_dimension"]), dtype=np.float32)
         ground_truth = np.zeros((n_samples, args["n_classes"]), dtype=np.float32)
 
-        for i in range(n):
+        for i in range(n_samples):
             row_coord, col_coord = coordinates[i]
-            z_coord = None # should be from surface image
-            ctr_pt = (row_coord, col_coord, z_coord)
+            z_coord = max(24, min(self.volume_shape[2]-24, self.surface_image[row_coord, col_coord] + 24))
+            ctr_pt = (col_coord, row_coord, z_coord)
+            print("Ctr: {}".format(ctr_pt), end='\r')
             sample = self.vc_vol.subvolume(center=ctr_pt, x_rad=xr, y_rad = yr, z_rad = zr)
-            samples[i] = sample
-            ground_truth[i] = None
+            oriented_sample = np.swapaxes(sample, 0, 2)
+            samples[i] = oriented_sample 
+            ground_truth[i] = ops.averageTruthInSubvolume(args, row_coord, col_coord, self.ground_truth)
 
         return samples, ground_truth
 
