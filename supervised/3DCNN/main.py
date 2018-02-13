@@ -28,10 +28,12 @@ args = {
             "surface_data":"/home/jack/devel/volcart-data/lunate-sigma/small-fragment-smooth-surface-alt.tif",
             "train_portion":.6,
             "train_bounds":3,# bounds parameters: 0=TOP || 1=RIGHT || 2=BOTTOM || 3=LEFT
+            "prediction_overlap_step":2,
+            "cache_bytes":3000000000, # in bytes
             "use_in_training":True,
             "use_in_test_set":True,
             "make_prediction":True,
-            "prediction_overlap_step":1
+            
         },
 
     ],
@@ -80,7 +82,7 @@ args = {
     ### Output configuration ###
     "predict_step": 5000, # make a prediction every x steps
     "overlap_step": 2, # during prediction, predict on one sample for each _ by _ voxel square
-    "display_step": 100, # output stats every x steps
+    "display_step": 10, # output stats every x steps
     "predict_depth" : 1,
     "output_path": "/home/jack/devel/spring18/3dcnn-predictions/{}-{}-{}h".format(
         datetime.datetime.today().timetuple()[1],
@@ -207,6 +209,9 @@ with tf.Session() as sess:
                 print("Train Loss: {:.3f}\tTrain Acc: {:.3f}\tInk Precision: {:.3f}".format(train_loss, train_acc, train_precs[-1]))
                 print("Test Loss: {:.3f}\tTest Acc: {:.3f}\t\tInk Precision: {:.3f}".format(test_loss, test_acc, test_precs[-1]))
 
+                np.savetxt(args["output_path"]+'/times.csv',
+                        np.array(train_minutes), fmt='%.3f', delimiter=',', header='iteration,minutes')
+
                 if (test_f1 > best_test_f1):
                     print("\tAchieved new peak f1 score! Saving model...\n")
                     best_test_f1 = test_f1
@@ -219,7 +224,8 @@ with tf.Session() as sess:
 
 
             if (predict_flag) or (iteration % args["predict_step"] == 0 and iteration > 0):
-                np.savetxt(args["output_path"]+'/times.csv', np.array(train_minutes), fmt='%.3f', delimiter=',', header='iteration,minutes')
+                np.savetxt(args["output_path"]+'/times.csv',
+                        np.array(train_minutes), fmt='%.3f', delimiter=',', header='iteration,minutes')
                 prediction_start_time = time.time()
                 iterations_since_prediction = 0
                 predictions_made += 1

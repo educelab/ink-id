@@ -167,6 +167,7 @@ def generateCoordinatePoolVC(args, volume_shape, train_bounds_identifier, train_
         for col in range(col_bounds[0], col_bounds[1]):
             coordinates.append([row, col])
 
+    np.random.shuffle(coordinates)
     return coordinates
 
 

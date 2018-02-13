@@ -24,6 +24,7 @@ class Volume:
         # Part 2 the volume
         self.vc_volpkg = Core.VolumePkg(self.volume_path)
         self.vc_vol = self.vc_volpkg.volume()
+        self.vc_vol.setCacheMemory(self.volume_args['cache_bytes'])
         self.volume_shape = [self.vc_vol.height(), self.vc_vol.width(), self.vc_vol.slices()]
         print("Shape of {}: {}".format(self.volume_args['name'], self.volume_shape))
         # eventually, shape of the output data needs to be the shape of the "flattened" volume
@@ -113,17 +114,14 @@ class Volume:
 
         samples = np.zeros((n_samples, args["x_dimension"], args["y_dimension"], args["z_dimension"]), dtype=np.float32)
         ground_truth = np.zeros((n_samples, args["n_classes"]), dtype=np.float32)
-
         for i in range(n_samples):
             row_coord, col_coord = coordinates[i]
             z_coord = max(24, min(self.volume_shape[2]-24, self.surface_image[row_coord, col_coord] + 24))
             ctr_pt = (col_coord, row_coord, z_coord)
-            print("Ctr: {}".format(ctr_pt), end='\r')
             sample = self.vc_vol.subvolume(center=ctr_pt, x_rad=xr, y_rad = yr, z_rad = zr)
             oriented_sample = np.swapaxes(sample, 0, 2)
             samples[i] = oriented_sample 
             ground_truth[i] = ops.averageTruthInSubvolume(args, row_coord, col_coord, self.ground_truth)
-
         return samples, ground_truth
 
 
