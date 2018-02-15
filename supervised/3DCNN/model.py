@@ -14,7 +14,7 @@ def buildModel(x, y, drop_rate, args, training_flag):
 
     net = layers.dropout(slim.fully_connected(slim.flatten(conv4), args["n_classes"], activation_fn=None), rate=drop_rate)#, training=training_flag)
 
-    loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=y, logits=net))
+    loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(labels=y, logits=net))
     #targets_1d = y[:,1]
     #logits_1d = net[:,1]
     #loss = tf.reduce_mean(tf.nn.weighted_cross_entropy_with_logits(logits=logits_1d, targets=targets_1d, pos_weight=args["pos_weight"]))
@@ -34,7 +34,7 @@ def buildMultitaskModel(x, y, drop_rate, args):
     shallow_net = layers.dropout(slim.fully_connected(slim.flatten(conv4), args["n_classes"], activation_fn=None), rate=drop_rate)
     net = layers.dropout(slim.fully_connected(slim.flatten(conv5), args["n_classes"], activation_fn=None), rate=drop_rate)
 
-    shallow_loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=y, logits=shallow_net))
-    loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=y, logits=net))
+    shallow_loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(labels=y, logits=shallow_net))
+    loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(labels=y, logits=net))
 
     return tf.nn.softmax(net), shallow_loss, loss
