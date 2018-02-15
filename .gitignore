@@ -8,4 +8,6 @@ CarbonSampleNov2016/
 old_output/
 *.npy
 *.pyc
+
 ink-id-env/
+data/
