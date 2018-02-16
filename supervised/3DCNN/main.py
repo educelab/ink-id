@@ -194,10 +194,10 @@ def main():
                 train_writer.add_summary(summary, iteration)
 
                 if iteration % params['display_step'] == 0:
-                    train_acc, train_loss, train_preds = \
-                        sess.run([accuracy, loss, pred], feed_dict={x: batch_x, y: batch_y, drop_rate: 0.0, training_flag:False})
-                    test_acc, test_loss, test_preds, test_summary, = \
-                        sess.run([accuracy, loss, pred, merged], feed_dict={x: test_x, y: test_y, drop_rate:0.0, training_flag:False})
+                    train_acc, train_loss, train_preds = sess.run([accuracy, loss, pred],
+                                                                  feed_dict={x: batch_x, y: batch_y, drop_rate: 0.0, training_flag:False})
+                    test_acc, test_loss, test_preds, test_summary = sess.run([accuracy, loss, pred, merged],
+                                                                             feed_dict={x: test_x, y: test_y, drop_rate:0.0, training_flag:False})
                     train_prec = precision_score(np.argmax(batch_y, 1), np.argmax(train_preds, 1))
                     test_prec = precision_score(np.argmax(test_y, 1), np.argmax(test_preds, 1))
                     test_f1 = fbeta_score(np.argmax(test_y, 1), np.argmax(test_preds, 1), beta=params['fbeta_weight'])
