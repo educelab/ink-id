@@ -45,8 +45,7 @@ def main():
                 'surface_mask': args.surfacemask,
                 'surface_data': args.surfacedata,
                 'train_portion': .6,
-                # train_bounds parameters: 0=TOP || 1=RIGHT || 2=BOTTOM || 3=LEFT
-                'train_bounds': 3,
+                'train_bounds': 3,  # 0=TOP || 1=RIGHT || 2=BOTTOM || 3=LEFT
                 'use_in_training': True,
                 'use_in_test_set': True,
                 'make_prediction': True,
@@ -99,10 +98,10 @@ def main():
         'truth_cutoff_high': .85,
 
         # Output configuration
-        'predict_step': 10000, # make a prediction every x steps
-        'overlap_step': 4, # during prediction, predict on one sample for each _ by _ voxel square
-        'display_step': 100, # output stats every x steps
-        'predict_depth' : 1,
+        'predict_step': 10000,  # make a prediction every x steps
+        'overlap_step': 4,  # during prediction, predict on one sample for each _ by _ voxel square
+        'display_step': 100,  # output stats every x steps
+        'predict_depth': 1,
         'output_path': os.path.join(args.outputdir, '3dcnn-predictions/{}-{}-{}h'.format(
             datetime.datetime.today().timetuple()[1],
             datetime.datetime.today().timetuple()[2],
@@ -175,8 +174,8 @@ def main():
         test_x, test_y = volumes.getTestBatch(params)
 
         try:
-            while epoch < params['training_epochs']:
             # while iteration < params['training_iterations']:
+            while epoch < params['training_epochs']:
 
                 predict_flag = False
 
@@ -195,9 +194,9 @@ def main():
 
                 if iteration % params['display_step'] == 0:
                     train_acc, train_loss, train_preds = sess.run([accuracy, loss, pred],
-                                                                  feed_dict={x: batch_x, y: batch_y, drop_rate: 0.0, training_flag:False})
+                                                                  feed_dict={x: batch_x, y: batch_y, drop_rate: 0.0, training_flag: False})
                     test_acc, test_loss, test_preds, test_summary = sess.run([accuracy, loss, pred, merged],
-                                                                             feed_dict={x: test_x, y: test_y, drop_rate:0.0, training_flag:False})
+                                                                             feed_dict={x: test_x, y: test_y, drop_rate: 0.0, training_flag: False})
                     train_prec = precision_score(np.argmax(batch_y, 1), np.argmax(train_preds, 1))
                     test_prec = precision_score(np.argmax(test_y, 1), np.argmax(test_preds, 1))
                     test_f1 = fbeta_score(np.argmax(test_y, 1), np.argmax(test_preds, 1), beta=params['fbeta_weight'])
@@ -211,7 +210,6 @@ def main():
                     train_minutes.append([iteration, ((time.time() - start_time)/60 )])
 
                     test_writer.add_summary(test_summary, iteration)
-
 
                     print('Iteration: {}\t\tEpoch: {}'.format(iteration, epoch))
                     print('Train Loss: {:.3f}\tTrain Acc: {:.3f}\tInk Precision: {:.3f}'.format(train_loss, train_acc, train_precs[-1]))
@@ -227,24 +225,23 @@ def main():
                         # make a full prediction if results are tentatively spectacular
                         predict_flag = True
 
-
                 if (predict_flag) or (iteration % params['predict_step'] == 0 and iteration > 0):
                     np.savetxt(params['output_path']+'/times.csv', np.array(train_minutes), fmt='%.3f', delimiter=',', header='iteration,minutes')
                     prediction_start_time = time.time()
                     iterations_since_prediction = 0
                     predictions_made += 1
-                    print('{} training iterations took {:.2f} minutes'.format( \
+                    print('{} training iterations took {:.2f} minutes'.format(
                         iteration, (time.time() - start_time)/60))
-                    starting_coordinates = [0,0,0]
+                    starting_coordinates = [0, 0, 0]
                     prediction_samples, coordinates, next_coordinates = volumes.getPredictionBatch(params, starting_coordinates)
 
                     print('Beginning predictions on volumes...')
                     while next_coordinates is not None:
-                        #TODO add back the output
-                        prediction_values = sess.run(pred, feed_dict={x: prediction_samples, drop_rate: 0.0, training_flag:False})
+                        # TODO add back the output
+                        prediction_values = sess.run(pred, feed_dict={x: prediction_samples, drop_rate: 0.0, training_flag: False})
                         volumes.reconstruct(params, prediction_values, coordinates)
                         prediction_samples, coordinates, next_coordinates = volumes.getPredictionBatch(params, next_coordinates)
-                    minutes = ( (time.time() - prediction_start_time) /60 )
+                    minutes = ((time.time() - prediction_start_time) / 60)
                     volumes.saveAllPredictions(params, iteration)
                     volumes.saveAllPredictionMetrics(params, iteration, minutes)
                     saver.save(sess, params['output_path'] + '/models/model.ckpt', global_step=iteration)
@@ -255,7 +252,6 @@ def main():
                 iteration += 1
                 iterations_since_prediction += 1
 
-
         except KeyboardInterrupt:
             # still make last prediction if interrupted
             pass
@@ -263,19 +259,19 @@ def main():
         # make one last prediction after everything finishes
         # use the model that performed best on the test set
         saver.restore(sess, params['output_path'] + '/models/best-model.ckpt')
-        starting_coordinates = [0,0,0]
+        starting_coordinates = [0, 0, 0]
         prediction_samples, coordinates, next_coordinates = volumes.getPredictionBatch(params, starting_coordinates)
         print('Beginning predictions from best model (iteration {})...'.format(best_f1_iteration))
         while next_coordinates is not None:
-            #TODO add back the output
-            prediction_values = sess.run(pred, feed_dict={x: prediction_samples, drop_rate: 0.0, training_flag:False})
+            # TODO add back the output
+            prediction_values = sess.run(pred, feed_dict={x: prediction_samples, drop_rate: 0.0, training_flag: False})
             volumes.reconstruct(params, prediction_values, coordinates)
             prediction_samples, coordinates, next_coordinates = volumes.getPredictionBatch(params, next_coordinates)
-        minutes = ( (time.time() - start_time) /60 )
+        minutes = ((time.time() - start_time) / 60)
         volumes.saveAllPredictions(params, best_f1_iteration)
         volumes.saveAllPredictionMetrics(params, best_f1_iteration, minutes)
 
-    print('full script took {:.2f} minutes'.format((time.time() - start_time)/60))
+    print('full script took {:.2f} minutes'.format((time.time() - start_time) / 60))
 
 
 if __name__ == '__main__':
