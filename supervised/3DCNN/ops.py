@@ -1,18 +1,12 @@
-'''
+"""
 ops.py
 This file provides miscellaneous operations required by the 3DCNN
 Used mainly by data
-'''
+"""
 
 import numpy as np
 import sys
-import pdb
 import datetime
-import matplotlib
-matplotlib.use('Agg')
-import matplotlib.pyplot as plt
-
-
 
 
 def adjustDepthForWobble(args, rowCoord, colCoord, zCoordinate, angle, axes, volume_shape):
@@ -33,7 +27,6 @@ def adjustDepthForWobble(args, rowCoord, colCoord, zCoordinate, angle, axes, vol
         newZ = zCoordinate
 
     return newZ
-
 
 
 def bounds(args, volume_shape, identifier, train_portion):
@@ -64,8 +57,6 @@ def bounds(args, volume_shape, identifier, train_portion):
     return row_bounds, col_bounds
 
 
-
-
 def getRandomTestCoordinate(args, volume_shape, bounds_identifier, train_portion):
     if args["use_grid_training"]:
         return getGridTestCoordinate(args, volume_shape)
@@ -73,14 +64,11 @@ def getRandomTestCoordinate(args, volume_shape, bounds_identifier, train_portion
         return np.random.randint(row_bounds[0], row_bounds[1]), np.random.randint(col_bounds[0], col_bounds[1])
 
 
-
 def getTrainCoordinate(args, colBounds, rowBounds, volume_shape):
     if args["use_grid_training"]:
         return getGridTrainCoordinate(args, volume_shape)
     else:
         return np.random.randint(rowBounds[0], rowBounds[1]), np.random.randint(colBounds[0], colBounds[1])
-
-
 
 
 def getGridTrainCoordinate(args, volume_shape):
@@ -105,7 +93,6 @@ def getGridTrainCoordinate(args, volume_shape):
     return row, col
 
 
-
 def getGridTestCoordinate(args, volume_shape):
     row_step = int(args["y_dimension"]/2)
     col_step = int(args["x_dimension"]/2)
@@ -123,8 +110,6 @@ def getGridTestCoordinate(args, volume_shape):
         col = np.random.randint(int(volume_shape[1] / 2), volume_shape[1]-int(args["x_dimension"]/2))
 
     return row,col
-
-
 
 
 def isInTestSet(args, row_point, col_point, volume_shape, bounds_identifier, train_portion):
@@ -149,7 +134,6 @@ def isInTestSet(args, row_point, col_point, volume_shape, bounds_identifier, tra
             return col_point > (volume_shape[1] * train_portion)
 
 
-
 def averageTruthInSubvolume(args, row_coordinate, col_coordinate, ground_truth):
     # assume coordinate is at the center
     row_step = int(args["y_dimension"]/2)
@@ -160,7 +144,6 @@ def averageTruthInSubvolume(args, row_coordinate, col_coordinate, ground_truth):
     avg_truth = np.mean(ground_truth[row_top:row_top+args["y_dimension"], col_left:col_left+args["x_dimension"]])
 
     return avg_truth 
-
 
 
 def generateCoordinatePool(args, volume_shape, ground_truth, surface_mask, train_bounds_identifier, train_portion):
@@ -202,7 +185,6 @@ def generateCoordinatePool(args, volume_shape, ground_truth, surface_mask, train
     return coordinates
 
 
-
 def getRandomBrick(args, volume, xCoordinate, yCoordinate):
     v_min = np.min(volume[yCoordinate, xCoordinate])
     v_max = np.max(volume[yCoordinate, xCoordinate])
@@ -211,7 +193,6 @@ def getRandomBrick(args, volume, xCoordinate, yCoordinate):
     high = v_median + args["random_range"]
     sample = np.random.random([args["x_dimension"], args["y_dimension"], args["z_dimension"]])
     return ((high - low) * sample) + low
-
 
 
 def augmentSample(args, sample, seed=None):
@@ -256,7 +237,6 @@ def generateSurfaceApproximation(args, volume, area=3, search_increment=1):
     return surface_points
 
 
-
 def isOnSurface(args, rowCoordinate, colCoordinate, surfaceMask):
     # alternatively, check if the maximum value in the vector crosses a threshold
     # for now, just check our mask
@@ -264,7 +244,6 @@ def isOnSurface(args, rowCoordinate, colCoordinate, surfaceMask):
     colStep = int(args["x_dimension"] / 2)
     square = surfaceMask[rowCoordinate-rowStep:rowCoordinate+rowStep, colCoordinate-colStep:colCoordinate+colStep]
     return np.size(square) > 0 and np.min(square) != 0
-
 
 
 def minimumSurfaceInSample(args, row, col, surfaceImage):
@@ -276,7 +255,6 @@ def minimumSurfaceInSample(args, row, col, surfaceImage):
         return 0
 
     return np.min(square)
-
 
 
 def getSpecString(args):

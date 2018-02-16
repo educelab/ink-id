@@ -11,7 +11,7 @@ from sklearn.metrics import precision_score, fbeta_score
 import tensorflow as tf
 import numpy as np
 
-import multidata
+from volumeset import VolumeSet
 import model
 
 
@@ -109,7 +109,7 @@ def main():
             datetime.datetime.today().timetuple()[3])),
         'notes': '',
     }
-        
+
     x = tf.placeholder(tf.float32, [None, params['x_dimension'], params['y_dimension'], params['z_dimension']])
     y = tf.placeholder(tf.float32, [None, params['n_classes']])
     drop_rate = tf.placeholder(tf.float32)
@@ -142,7 +142,7 @@ def main():
     saver = tf.train.Saver(max_to_keep=None)
     best_test_f1 = 0.0
     best_f1_iteration = 0
-    volumes = multidata.VolumeSet(params)
+    volumes = VolumeSet(params)
 
     # create summary writer directory
     if tf.gfile.Exists(params['output_path']):
@@ -276,6 +276,7 @@ def main():
         volumes.saveAllPredictionMetrics(params, best_f1_iteration, minutes)
 
     print('full script took {:.2f} minutes'.format((time.time() - start_time)/60))
+
 
 if __name__ == '__main__':
     main()
