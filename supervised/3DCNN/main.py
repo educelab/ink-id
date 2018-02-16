@@ -14,6 +14,7 @@ import numpy as np
 import multidata
 import model
 
+
 def main():
     """Run the training and prediction process."""
     start_time = time.time()
@@ -38,17 +39,18 @@ def main():
         'volumes': [
             {
                 'name': 'lunate-sigma',
-                'microns_per_voxel':5,
+                'microns_per_voxel': 5,
                 'data_path': args.data,
                 'ground_truth': args.groundtruth,
                 'surface_mask': args.surfacemask,
                 'surface_data': args.surfacedata,
-                'train_portion':.6,
-                'train_bounds':3, # bounds parameters: 0=TOP || 1=RIGHT || 2=BOTTOM || 3=LEFT
-                'use_in_training':True,
-                'use_in_test_set':True,
-                'make_prediction':True,
-                'prediction_overlap_step':4
+                'train_portion': .6,
+                # train_bounds parameters: 0=TOP || 1=RIGHT || 2=BOTTOM || 3=LEFT
+                'train_bounds': 3,
+                'use_in_training': True,
+                'use_in_test_set': True,
+                'make_prediction': True,
+                'prediction_overlap_step': 4,
             },
 
         ],
@@ -58,11 +60,11 @@ def main():
         'z_dimension': 48,
 
         # Back off from the surface point some distance
-        'surface_cushion' : 10,
+        'surface_cushion': 10,
 
         # Network configuration
         'use_multitask_training': False,
-        'shallow_learning_rate':.001,
+        'shallow_learning_rate': .001,
         'learning_rate': .001,
         'batch_size': 30,
         'prediction_batch_size': 400,
@@ -77,19 +79,19 @@ def main():
         'fbeta_weight': 0.3,
 
         # Data configuration
-        'wobble_volume' : False,
-        'wobble_step' : 1000,
-        'wobble_max_degrees' : 2,
-        'num_test_cubes' : 400,
-        'add_random' : False,
-        'random_step' : 10, # one in every randomStep non-ink samples will be a random brick
-        'random_range' : 200,
-        'use_jitter' : True,
-        'jitter_range' : [-4, 4],
-        'add_augmentation' : True,
-        'balance_samples' : False,
+        'wobble_volume': False,
+        'wobble_step': 1000,
+        'wobble_max_degrees': 2,
+        'num_test_cubes': 400,
+        'add_random': False,
+        'random_step': 10,  # one in every randomStep non-ink samples will be a random brick
+        'random_range': 200,
+        'use_jitter': True,
+        'jitter_range': [-4, 4],
+        'add_augmentation': True,
+        'balance_samples': False,
         'use_grid_training': True,
-        'grid_n_squares':10,
+        'grid_n_squares': 10,
         'grid_test_square': args.gridtestsquare,
         'surface_threshold': 20400,
         'restrict_surface': True,
@@ -174,17 +176,22 @@ def main():
 
         try:
             while epoch < params['training_epochs']:
-            #while iteration < params['training_iterations']:
+            # while iteration < params['training_iterations']:
 
                 predict_flag = False
 
                 batch_x, batch_y, epoch = volumes.getTrainingBatch(params)
                 if params['use_multitask_training']:
-                    summary, _, _ = sess.run([merged, optimizer, shallow_optimizer], feed_dict={x: batch_x, y: batch_y, drop_rate:params['dropout'], training_flag:True})
+                    summary, _, _ = sess.run([merged, optimizer, shallow_optimizer],
+                                             feed_dict={x: batch_x, y: batch_y,
+                                                        drop_rate: params['dropout'],
+                                                        training_flag: True})
                 else:
-                    summary, _ = sess.run([merged, optimizer], feed_dict={x: batch_x, y: batch_y, drop_rate:params['dropout'], training_flag:True})
+                    summary, _ = sess.run([merged, optimizer],
+                                          feed_dict={x: batch_x, y: batch_y,
+                                                     drop_rate: params['dropout'],
+                                                     training_flag: True})
                 train_writer.add_summary(summary, iteration)
-
 
                 if iteration % params['display_step'] == 0:
                     train_acc, train_loss, train_preds = \
