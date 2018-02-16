@@ -44,7 +44,7 @@ def main():
                 'surface_mask': args.surfacemask,
                 'surface_data': args.surfacedata,
                 'train_portion':.6,
-                'train_bounds':3,# bounds parameters: 0=TOP || 1=RIGHT || 2=BOTTOM || 3=LEFT
+                'train_bounds':3, # bounds parameters: 0=TOP || 1=RIGHT || 2=BOTTOM || 3=LEFT
                 'use_in_training':True,
                 'use_in_test_set':True,
                 'make_prediction':True,
@@ -113,13 +113,11 @@ def main():
     drop_rate = tf.placeholder(tf.float32)
     training_flag = tf.placeholder(tf.bool)
 
-
     if params['use_multitask_training']:
         pred, shallow_loss, loss = model.build_multitask_model(x, y, drop_rate, params, training_flag)
         shallow_optimizer = tf.train.AdamOptimizer(learning_rate=params['shallow_learning_rate']).minimize(shallow_loss)
     else:
         pred, loss = model.build_model(x, y, drop_rate, params, training_flag)
-
 
     update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
     with tf.control_dependencies(update_ops):
@@ -127,38 +125,27 @@ def main():
 
     correct_pred = tf.equal(tf.argmax(pred, 1), tf.argmax(y, 1))
     accuracy = tf.reduce_mean(tf.cast(correct_pred, tf.float32))
-    false_positives = tf.equal(tf.argmax(y,1) + 1, tf.argmax(pred, 1))
+    false_positives = tf.equal(tf.argmax(y, 1) + 1, tf.argmax(pred, 1))
     false_positive_rate = tf.reduce_mean(tf.cast(false_positives, tf.float32))
     tf.summary.scalar('accuracy', accuracy)
-    tf.summary.histogram('prediction_values', pred[:,1])
+    tf.summary.histogram('prediction_values', pred[:, 1])
     tf.summary.scalar('xentropy-loss', loss)
-    tf.summary.histogram('prediction_values', pred[:,1])
-    # Summary images need revision, running them on every iteration really slows it down
-    #sample_view_z = tf.reshape(tf.reduce_mean(sample_cube, axis=2), [1, params['x_dimension'], params['y_dimension'], 1])
-    # sample_view_y = tf.reshape(tf.reduce_mean(x[0], axis=0), [1, params['x_dimension'], params['z_dimension'], 1])
-    # sample_view_x = tf.reshape(tf.reduce_mean(x[0], axis=1), [1, params['y_dimension'], params['z_dimension'], 1])
-    #tf.summary.image('z-project', sample_view_z, max_outputs=1)
-    #sample_view_y_image = tf.summary.image('y-project', sample_view_y, max_outputs=1)
-    #sample_view_x_image = tf.summary.image('x-project', sample_view_x, max_outputs=1)
+    tf.summary.histogram('prediction_values', pred[:, 1])
 
     if params['use_multitask_training']:
         tf.summary.scalar('xentropy-shallow-loss', loss)
     tf.summary.scalar('false_positive_rate', false_positive_rate)
 
-
     merged = tf.summary.merge_all()
     saver = tf.train.Saver(max_to_keep=None)
     best_test_f1 = 0.0
     best_f1_iteration = 0
-    best_test_precision = 0.0
-    best_precision_iteration = 0
     volumes = multidata.VolumeSet(params)
 
     # create summary writer directory
     if tf.gfile.Exists(params['output_path']):
         tf.gfile.DeleteRecursively(params['output_path'])
     tf.gfile.MakeDirs(params['output_path'])
-
 
     # automatically dump 'sess' once the full loop finishes
     with tf.Session() as sess:
@@ -176,7 +163,6 @@ def main():
         iterations_since_prediction = 0
         epoch = 0
         predictions_made = 0
-        avgOutputVolume = []
         train_accs = []
         train_losses = []
         train_precs = []
@@ -184,7 +170,7 @@ def main():
         test_losses = []
         test_precs = []
         train_minutes = []
-        testX, testY = volumes.getTestBatch(params)
+        test_x, test_y = volumes.getTestBatch(params)
 
         try:
             while epoch < params['training_epochs']:
@@ -192,22 +178,22 @@ def main():
 
                 predict_flag = False
 
-                batchX, batchY, epoch = volumes.getTrainingBatch(params)
+                batch_x, batch_y, epoch = volumes.getTrainingBatch(params)
                 if params['use_multitask_training']:
-                    summary, _, _ = sess.run([merged, optimizer, shallow_optimizer], feed_dict={x: batchX, y: batchY, drop_rate:params['dropout'], training_flag:True})
+                    summary, _, _ = sess.run([merged, optimizer, shallow_optimizer], feed_dict={x: batch_x, y: batch_y, drop_rate:params['dropout'], training_flag:True})
                 else:
-                    summary, _ = sess.run([merged, optimizer], feed_dict={x: batchX, y: batchY, drop_rate:params['dropout'], training_flag:True})
+                    summary, _ = sess.run([merged, optimizer], feed_dict={x: batch_x, y: batch_y, drop_rate:params['dropout'], training_flag:True})
                 train_writer.add_summary(summary, iteration)
 
 
                 if iteration % params['display_step'] == 0:
                     train_acc, train_loss, train_preds = \
-                        sess.run([accuracy, loss, pred], feed_dict={x: batchX, y: batchY, drop_rate: 0.0, training_flag:False})
+                        sess.run([accuracy, loss, pred], feed_dict={x: batch_x, y: batch_y, drop_rate: 0.0, training_flag:False})
                     test_acc, test_loss, test_preds, test_summary, = \
-                        sess.run([accuracy, loss, pred, merged], feed_dict={x: testX, y: testY, drop_rate:0.0, training_flag:False})
-                    train_prec = precision_score(np.argmax(batchY, 1), np.argmax(train_preds, 1))
-                    test_prec = precision_score(np.argmax(testY, 1), np.argmax(test_preds, 1))
-                    test_f1 = fbeta_score(np.argmax(testY, 1), np.argmax(test_preds, 1), beta=params['fbeta_weight'])
+                        sess.run([accuracy, loss, pred, merged], feed_dict={x: test_x, y: test_y, drop_rate:0.0, training_flag:False})
+                    train_prec = precision_score(np.argmax(batch_y, 1), np.argmax(train_preds, 1))
+                    test_prec = precision_score(np.argmax(test_y, 1), np.argmax(test_preds, 1))
+                    test_f1 = fbeta_score(np.argmax(test_y, 1), np.argmax(test_preds, 1), beta=params['fbeta_weight'])
 
                     train_accs.append(train_acc)
                     test_accs.append(test_acc)
@@ -228,7 +214,7 @@ def main():
                         print('\tAchieved new peak f1 score! Saving model...\n')
                         best_test_f1 = test_f1
                         best_f1_iteration = iteration
-                        save_path = saver.save(sess, params['output_path'] + '/models/best-model.ckpt') 
+                        saver.save(sess, params['output_path'] + '/models/best-model.ckpt') 
 
                     if (test_acc > .9) and (test_prec > .7) and (iterations_since_prediction > 100): #or (test_prec > .8)  and (predictions_made < 4): # or (test_prec / params['numCubes'] < .05)
                         # make a full prediction if results are tentatively spectacular
