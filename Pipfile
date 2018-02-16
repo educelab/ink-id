@@ -1,0 +1,24 @@
+[[source]]
+
+verify_ssl = true
+name = "pypi"
+url = "https://pypi.python.org/simple"
+
+
+[dev-packages]
+
+
+
+[packages]
+
+tensorflow-gpu = "*"
+sklearn = "*"
+scipy = "*"
+pillow = "*"
+tifffile = "*"
+matplotlib = "*"
+
+
+[requires]
+
+python_version = "3.5"
