@@ -115,10 +115,10 @@ def main():
 
 
     if params['use_multitask_training']:
-        pred, shallow_loss, loss = model.buildMultitaskModel(x, y, drop_rate, params, training_flag)
+        pred, shallow_loss, loss = model.build_multitask_model(x, y, drop_rate, params, training_flag)
         shallow_optimizer = tf.train.AdamOptimizer(learning_rate=params['shallow_learning_rate']).minimize(shallow_loss)
     else:
-        pred, loss = model.buildModel(x, y, drop_rate, params, training_flag)
+        pred, loss = model.build_model(x, y, drop_rate, params, training_flag)
 
 
     update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
