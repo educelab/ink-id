@@ -17,6 +17,7 @@ scipy = "*"
 pillow = "*"
 tifffile = "*"
 matplotlib = "*"
+jsmin = "*"
 
 
 [requires]

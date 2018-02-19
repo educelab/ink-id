@@ -1,14 +1,21 @@
 """
-ops.py
-This file provides miscellaneous operations required by the 3DCNN
-Used mainly by data
+Miscellaneous operations required by the 3DCNN.
 """
 
+import datetime
+from jsmin import jsmin
+import json
 import numpy as np
 import sys
-import datetime
 
 
+def load_parameters_from_json(filename):
+    with open(filename, 'r') as f:
+        # minify to remove comments
+        minified = jsmin(str(f.read()))
+        return json.loads(minified)['parameters']
+
+    
 def adjustDepthForWobble(args, rowCoord, colCoord, zCoordinate, angle, axes, volume_shape):
     if set(axes) == {0,2}:
         # plane of rotation = yz

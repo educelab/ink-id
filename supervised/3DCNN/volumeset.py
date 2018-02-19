@@ -1,6 +1,6 @@
 import numpy as np
 import tensorflow as tf
-import data
+import volume
 
 
 class VolumeSet:
@@ -20,7 +20,7 @@ class VolumeSet:
         for i in range(self.n_total_volumes):
             print("Initializing volume {}...".format(i))
             current_vol_args = args['volumes'][i]
-            self.volume_set.append(data.Volume(args, volume_number=i))
+            self.volume_set.append(volume.Volume(args, volume_number=i))
             if current_vol_args['use_in_training']:
                 self.n_train_volumes += 1
                 self.train_volume_indices.append(i)

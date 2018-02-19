@@ -13,6 +13,7 @@ import numpy as np
 
 from volumeset import VolumeSet
 import model
+import ops
 
 
 def main():
@@ -28,86 +29,26 @@ def main():
                         help='path to surface mask image')
     parser.add_argument('--surfacedata', metavar='path', required=True,
                         help='path to surface data')
-    parser.add_argument('--gridtestsquare', metavar='num', default=1, type=int,
+    parser.add_argument('--gridtestsquare', metavar='num', default=0, type=int,
                         help='index of grid test square for this k-fold run')
     parser.add_argument('--outputdir', metavar='path', default='out',
                         help='path to output directory')
 
     args = parser.parse_args()
 
-    params = {
-        'volumes': [
-            {
-                'name': 'lunate-sigma',
-                'microns_per_voxel': 5,
-                'data_path': args.data,
-                'ground_truth': args.groundtruth,
-                'surface_mask': args.surfacemask,
-                'surface_data': args.surfacedata,
-                'train_portion': .6,
-                'train_bounds': 3,  # 0=TOP || 1=RIGHT || 2=BOTTOM || 3=LEFT
-                'use_in_training': True,
-                'use_in_test_set': True,
-                'make_prediction': True,
-                'prediction_overlap_step': 4,
-            },
+    # Load default parameters
+    params = ops.load_parameters_from_json('default_parameters.json')
 
-        ],
-
-        'x_dimension': 96,
-        'y_dimension': 96,
-        'z_dimension': 48,
-
-        # Back off from the surface point some distance
-        'surface_cushion': 10,
-
-        # Network configuration
-        'use_multitask_training': False,
-        'shallow_learning_rate': .001,
-        'learning_rate': .001,
-        'batch_size': 30,
-        'prediction_batch_size': 400,
-        'filter_size': [3, 3, 3],
-        'dropout': 0.5,
-        'neurons': [16, 8, 4, 2],
-        'training_iterations': 1000000,
-        'training_epochs': 2,
-        'n_classes': 2,
-        'pos_weight': .5,
-        'batch_norm_momentum': .9,
-        'fbeta_weight': 0.3,
-
-        # Data configuration
-        'wobble_volume': False,
-        'wobble_step': 1000,
-        'wobble_max_degrees': 2,
-        'num_test_cubes': 400,
-        'add_random': False,
-        'random_step': 10,  # one in every randomStep non-ink samples will be a random brick
-        'random_range': 200,
-        'use_jitter': True,
-        'jitter_range': [-4, 4],
-        'add_augmentation': True,
-        'balance_samples': False,
-        'use_grid_training': True,
-        'grid_n_squares': 10,
-        'grid_test_square': args.gridtestsquare,
-        'surface_threshold': 20400,
-        'restrict_surface': True,
-        'truth_cutoff_low': .15,
-        'truth_cutoff_high': .85,
-
-        # Output configuration
-        'predict_step': 10000,  # make a prediction every x steps
-        'overlap_step': 4,  # during prediction, predict on one sample for each _ by _ voxel square
-        'display_step': 100,  # output stats every x steps
-        'predict_depth': 1,
-        'output_path': os.path.join(args.outputdir, '3dcnn-predictions/{}-{}-{}h'.format(
+    # Adjust some parameters from supplied arguments
+    params['volumes'][0]['data_path'] = args.data
+    params['volumes'][0]['ground_truth'] = args.groundtruth
+    params['volumes'][0]['surface_mask'] = args.surfacemask
+    params['volumes'][0]['surface_data'] = args.surfacedata
+    params['grid_test_square'] = args.gridtestsquare
+    params['output_path'] = os.path.join(args.outputdir, '3dcnn-predictions/{}-{}-{}h'.format(
             datetime.datetime.today().timetuple()[1],
             datetime.datetime.today().timetuple()[2],
-            datetime.datetime.today().timetuple()[3])),
-        'notes': '',
-    }
+            datetime.datetime.today().timetuple()[3]))
 
     x = tf.placeholder(tf.float32, [None, params['x_dimension'], params['y_dimension'], params['z_dimension']])
     y = tf.placeholder(tf.float32, [None, params['n_classes']])
@@ -219,7 +160,9 @@ def main():
                         print('\tAchieved new peak f1 score! Saving model...\n')
                         best_test_f1 = test_f1
                         best_f1_iteration = iteration
-                        saver.save(sess, params['output_path'] + '/models/best-model.ckpt') 
+                        saver.save(sess, params['output_path'] + '/models/best-model.ckpt')
+                        builder = tf.saved_model.builder.SavedModelBuilder(params['output_path'])
+                        builder.add_meta_graph_and_variables(sess, ['SERVING'])
 
                     if (test_acc > .9) and (test_prec > .7) and (iterations_since_prediction > 100): #or (test_prec > .8)  and (predictions_made < 4): # or (test_prec / params['numCubes'] < .05)
                         # make a full prediction if results are tentatively spectacular
