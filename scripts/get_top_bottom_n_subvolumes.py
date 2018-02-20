@@ -11,9 +11,9 @@ import time
 import numpy as np
 import tensorflow as tf
 
-from volumeset import VolumeSet
-import ops
-import model
+from inkid.volumes import VolumeSet
+import inkid.ops
+import inkid.model
 
 
 def main():
@@ -37,7 +37,7 @@ def main():
     args = parser.parse_args()
 
     # Load default parameters
-    params = ops.load_parameters_from_json('default_parameters.json')
+    params = inkid.ops.load_default_parameters()
 
     # Adjust some parameters from supplied arguments
     params['volumes'][0]['data_path'] = args.data
@@ -50,7 +50,7 @@ def main():
     y = tf.placeholder(tf.float32, [None, params["n_classes"]])
     drop_rate = tf.placeholder(tf.float32)
     training_flag = tf.placeholder(tf.bool)
-    pred, loss = model.build_model(x, y, drop_rate, params, training_flag)
+    pred, loss = inkid.model.build_model(x, y, drop_rate, params, training_flag)
     
     volumes = VolumeSet(params)
 
@@ -105,7 +105,7 @@ def main():
             # ops.save_subvolume_to_image_stack(bottom_n_predictions_and_volumes[i][1], os.path.join(params['output_path'], 'bottom-subvolumes', str(i)))
         # ops.save_subvolume_to_image_stack(bottom_volume, os.path.join(params['output_path'], 'bottom-subvolume'))
 
-        ops.save_subvolume_to_image_stack(np.append(top_volume, bottom_volume, axis=1), os.path.join(params['output_path'], 'both-subvolume-sets'))
+        inkid.ops.save_volume_to_image_stack(np.append(top_volume, bottom_volume, axis=1), os.path.join(params['output_path'], 'both-subvolume-sets'))
 
 if __name__ == '__main__':
     main()

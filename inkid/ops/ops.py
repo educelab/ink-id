@@ -3,6 +3,7 @@ Miscellaneous operations required by the 3DCNN.
 """
 
 import datetime
+import inspect
 import json
 import sys
 import os
@@ -10,6 +11,8 @@ import os
 from jsmin import jsmin
 import numpy as np
 import tifffile as tiff
+
+import inkid
 
 
 def save_volume_to_image_stack(volume, dirname):
@@ -19,7 +22,12 @@ def save_volume_to_image_stack(volume, dirname):
         image = volume[:, :, i]
         image = image.astype(np.uint16)
         tiff.imsave(os.path.join(dirname, str(i) + '.tif'), image)        
-    
+
+
+def load_default_parameters():
+    # https://stackoverflow.com/questions/247770/retrieving-python-module-path
+    # Find the directory the inkid package is loaded from, and get default_parameters.json from there
+    return load_parameters_from_json(os.path.join(os.path.dirname(inspect.getfile(inkid)), 'default_parameters.json'))
 
 def load_parameters_from_json(filename):
     """Given a filename to a .json, remove the comments from that file and return a Python dictionary built from the JSON."""
