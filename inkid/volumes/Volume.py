@@ -5,11 +5,12 @@ from PIL import Image
 import math
 import datetime
 import tifffile as tiff
-import ops
 from sklearn.metrics import confusion_matrix, recall_score, precision_score, f1_score
 from scipy.ndimage.interpolation import rotate
 import shutil
 import time
+
+from inkid import ops
 
 class Volume:
     def __init__(self, args, volume_number):
