@@ -3,11 +3,23 @@ Miscellaneous operations required by the 3DCNN.
 """
 
 import datetime
-from jsmin import jsmin
 import json
-import numpy as np
 import sys
+import os
 
+from jsmin import jsmin
+import numpy as np
+import tifffile as tiff
+
+
+def save_subvolume_to_image_stack(subvolume, dirname):
+    os.makedirs(dirname)
+    for i in range(subvolume.shape[2]):
+        image = subvolume[:, :, i]
+        # image = (65535 * image).astype(np.uint16)
+        image = image.astype(np.uint16)
+        tiff.imsave(os.path.join(dirname, str(i) + '.tif'), image)        
+    
 
 def load_parameters_from_json(filename):
     with open(filename, 'r') as f:
