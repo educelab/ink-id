@@ -5,14 +5,16 @@ from PIL import Image
 import math
 import datetime
 import tifffile as tiff
-import ops
 from sklearn.metrics import confusion_matrix, recall_score, precision_score, f1_score
 from scipy.ndimage.interpolation import rotate
 import shutil
 import time
 
+from inkid import ops
+
 class Volume:
     def __init__(self, args, volume_number):
+        """Read volume(s), ground truth (single registered .png), and surface segmentation image."""
         # Part 1: volume metadataf
         self.volume_args = args['volumes'][volume_number]
         self.volume_number = volume_number

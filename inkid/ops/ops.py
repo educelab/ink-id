@@ -3,6 +3,7 @@ Miscellaneous operations required by the 3DCNN.
 """
 
 import datetime
+import inspect
 import json
 import sys
 import os
@@ -11,17 +12,25 @@ from jsmin import jsmin
 import numpy as np
 import tifffile as tiff
 
+import inkid
 
-def save_subvolume_to_image_stack(subvolume, dirname):
+
+def save_volume_to_image_stack(volume, dirname):
+    """Given a volume as a np.array and a directory name, save the volume as a stack of .tif images in that directory."""
     os.makedirs(dirname)
-    for i in range(subvolume.shape[2]):
-        image = subvolume[:, :, i]
-        # image = (65535 * image).astype(np.uint16)
+    for i in range(volume.shape[2]):
+        image = volume[:, :, i]
         image = image.astype(np.uint16)
         tiff.imsave(os.path.join(dirname, str(i) + '.tif'), image)        
-    
+
+
+def load_default_parameters():
+    # https://stackoverflow.com/questions/247770/retrieving-python-module-path
+    # Find the directory the inkid package is loaded from, and get default_parameters.json from there
+    return load_parameters_from_json(os.path.join(os.path.dirname(inspect.getfile(inkid)), 'default_parameters.json'))
 
 def load_parameters_from_json(filename):
+    """Given a filename to a .json, remove the comments from that file and return a Python dictionary built from the JSON."""
     with open(filename, 'r') as f:
         # minify to remove comments
         minified = jsmin(str(f.read()))
@@ -49,6 +58,7 @@ def adjustDepthForWobble(args, rowCoord, colCoord, zCoordinate, angle, axes, vol
 
 
 def bounds(args, volume_shape, identifier, train_portion):
+    """Return the bounds tuples for X and Y dimensions. Used in finding training vs. testing coordinates."""
     y_step = int(args["y_dimension"]/2)
     x_step = int(args["x_dimension"]/2)
 
@@ -205,6 +215,7 @@ def generateCoordinatePool(args, volume_shape, ground_truth, surface_mask, train
 
 
 def getRandomBrick(args, volume, xCoordinate, yCoordinate):
+    """Return a volume filled with random noise. Distribution of values are aligned with the median value of the input volume."""
     v_min = np.min(volume[yCoordinate, xCoordinate])
     v_max = np.max(volume[yCoordinate, xCoordinate])
     v_median = np.median(volume[yCoordinate, xCoordinate])
@@ -277,6 +288,7 @@ def minimumSurfaceInSample(args, row, col, surfaceImage):
 
 
 def getSpecString(args):
+    """Return string with date, time, and subvolume size."""
     tm = datetime.datetime.today().timetuple()
     tmstring = ""
     for t in range(3):
