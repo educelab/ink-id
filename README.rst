@@ -1,2 +1,4 @@
-# ink-id repository
-### to identify ink via machine learning
+ink-id
+======
+
+Identify ink via machine learning
