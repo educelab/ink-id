@@ -4,7 +4,7 @@ import pdb
 import tifffile as tiff
 import sys
 import datetime
-import data
+import volume
 import model
 import time
 import ops
@@ -68,7 +68,7 @@ training_flag = tf.placeholder(tf.bool)
 merged = tf.summary.merge_all()
 pred, loss = model.buildModel(x, y, drop_rate, args, training_flag)
 saver = tf.train.Saver()
-volume = data.Volume(args)
+volume = volume.Volume(args)
 
 
 # automatically dump "sess" once the full loop finishes
