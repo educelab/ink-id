@@ -18,6 +18,7 @@ pillow = "*"
 tifffile = "*"
 matplotlib = "*"
 jsmin = "*"
+"e1839a8" = {editable = true, path = "."}
 
 
 [requires]
