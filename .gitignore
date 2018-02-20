@@ -12,3 +12,4 @@ old_output/
 Pipfile.lock
 data/
 out/
+*.egg-info
