@@ -27,7 +27,7 @@ def save_volume_to_image_stack(volume, dirname):
 def load_default_parameters():
     # https://stackoverflow.com/questions/247770/retrieving-python-module-path
     # Find the directory the inkid package is loaded from, and get default_parameters.json from there
-    return load_parameters_from_json(os.path.join(os.path.dirname(inspect.getfile(inkid)), 'default_parameters.json'))
+    return load_parameters_from_json(os.path.join(os.path.dirname(inspect.getfile(inkid)), 'parameters.json'))
 
 def load_parameters_from_json(filename):
     """Given a filename to a .json, remove the comments from that file and return a Python dictionary built from the JSON."""

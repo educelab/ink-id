@@ -1,3 +1,7 @@
+// Comments are OK in this file because they are removed with a
+// minimizer before the JSON is parsed (JSON does not usually have
+// comments).
+
 {
     "parameters": {
 	"volumes": [
