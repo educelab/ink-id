@@ -8,11 +8,15 @@ setup(name='inkid',
       license='MS-RSL',
       packages=['inkid'],
       install_requires=['tensorflow-gpu',
-                'jsmin',
-                'matplotlib',
-                'Pillow',
-                'scipy',
-                'sklearn',
-                'tifffile',
-      ])
+                        'jsmin',
+                        'matplotlib',
+                        'Pillow',
+                        'scipy',
+                        'sklearn',
+                        'tifffile',
+      ],
+      entry_points = {
+          'console_scripts': [''],
+      },
+)
 
