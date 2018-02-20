@@ -6,5 +6,13 @@ setup(name='inkid',
       url='https://code.vis.uky.edu/seales-research/ink-id',
       author='University of Kentucky',
       license='MS-RSL',
-      packages=[])
+      packages=['inkid'],
+      install_requires=['tensorflow-gpu',
+                'jsmin',
+                'matplotlib',
+                'Pillow',
+                'scipy',
+                'sklearn',
+                'tifffile',
+      ])
 
