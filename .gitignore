@@ -9,6 +9,6 @@ old_output/
 *.npy
 *.pyc
 
-ink-id-env/
+Pipfile.lock
 data/
 out/
