@@ -11,9 +11,9 @@ from sklearn.metrics import precision_score, fbeta_score
 import tensorflow as tf
 import numpy as np
 
-from volumeset import VolumeSet
-import model
-import ops
+from inkid.volumes import VolumeSet
+import inkid.model
+import inkid.ops
 
 
 def main():
@@ -37,7 +37,7 @@ def main():
     args = parser.parse_args()
 
     # Load default parameters
-    params = ops.load_parameters_from_json('default_parameters.json')
+    params = inkid.ops.load_parameters_from_json('default_parameters.json')
 
     # Adjust some parameters from supplied arguments
     params['volumes'][0]['data_path'] = args.data
@@ -56,10 +56,10 @@ def main():
     training_flag = tf.placeholder(tf.bool)
 
     if params['use_multitask_training']:
-        pred, shallow_loss, loss = model.build_multitask_model(x, y, drop_rate, params, training_flag)
+        pred, shallow_loss, loss = inkid.model.build_multitask_model(x, y, drop_rate, params, training_flag)
         shallow_optimizer = tf.train.AdamOptimizer(learning_rate=params['shallow_learning_rate']).minimize(shallow_loss)
     else:
-        pred, loss = model.build_model(x, y, drop_rate, params, training_flag)
+        pred, loss = inkid.model.build_model(x, y, drop_rate, params, training_flag)
 
     update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
     with tf.control_dependencies(update_ops):
