@@ -7,16 +7,20 @@ setup(name='inkid',
       author='University of Kentucky',
       license='MS-RSL',
       packages=['inkid'],
-      install_requires=['tensorflow-gpu',
-                        'jsmin',
-                        'matplotlib',
-                        'Pillow',
-                        'scipy',
-                        'sklearn',
-                        'tifffile',
+      install_requires=[
+          'tensorflow-gpu',
+          'jsmin',
+          'matplotlib',
+          'Pillow',
+          'scipy',
+          'sklearn',
+          'tifffile',
       ],
       entry_points = {
-          'console_scripts': [''],
+          'console_scripts': [
+              'inkid-train-and-predict = scripts.train_and_predict:main',
+              'inkid-top-n = scripts.get_top_bottom_n_subvolumes:main',
+          ],
       },
 )
 
