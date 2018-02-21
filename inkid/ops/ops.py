@@ -10,7 +10,7 @@ import os
 
 from jsmin import jsmin
 import numpy as np
-import tifffile as tiff
+import imageio
 
 import inkid
 
@@ -21,7 +21,7 @@ def save_volume_to_image_stack(volume, dirname):
     for i in range(volume.shape[2]):
         image = volume[:, :, i]
         image = image.astype(np.uint16)
-        tiff.imsave(os.path.join(dirname, str(i) + '.tif'), image)        
+        imageio.imsave(os.path.join(dirname, str(i) + '.tif'), image)        
 
 
 def load_default_parameters():

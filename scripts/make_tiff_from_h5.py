@@ -1,5 +1,5 @@
 '''
-make-tiff-from-h5.py: load the trim_herc.h5 file and save it as tiff slices
+load the trim_herc.h5 file and save it as .tif slices
 '''
 
 __author__ = "Jack Bandy"
@@ -7,7 +7,7 @@ __email__ = "jgba225@g.uky.edu"
 
 import numpy as np
 import h5py
-import tifffile as tiff
+import imageio
 import skimage.io as io
 import pdb
 
@@ -43,9 +43,9 @@ for i in range(0,len(data)):
     #all_slices.append(current)
     zeros = '0000'
     zeros = zeros[:(4-len(str(i)))]
-    tiff.imsave("small_fragment_data/smooth_slices/slice" + zeros + str(i) + '.tif', current)
+    imageio.imsave("small_fragment_data/smooth_slices/slice" + zeros + str(i) + '.tif', current)
 
 #save the 3d tif
 #all_slices = np.asarray(all_slices)
-#tiff.imsave("3d_output.tif", all_slices)
+#imageio.imsave("3d_output.tif", all_slices)
 

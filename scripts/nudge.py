@@ -7,13 +7,13 @@ __author__ = "Jack Bandy"
 __email__ = "jgba225@g.uky.edu"
 
 import numpy as np
-import tifffile as tiff
+import imageio
 import os
 import matplotlib.pyplot as plt
 from scipy.signal import argrelmax
 from scipy.stats import norm
 
-truth_mask = tiff.imread('/home/jack/devel/volcart/predictions/3dcnn/Quadrant Experiment/new.tif')
+truth_mask = imageio.imread('/home/jack/devel/volcart/predictions/3dcnn/Quadrant Experiment/new.tif')
 vol = np.load('/home/jack/devel/volcart/small-fragment-data/volume.npy')
 output_dir = '/home/jack/devel/volcart/small-fragment-data/nudge-'
 output = np.zeros(vol.shape, dtype=np.uint16)
@@ -115,9 +115,9 @@ for increase in increase_decimals:
     # 1: save the volume and surface images
     np.save(current_output_dir+"volume-nudged-{:.2f}%".format(
         increase*100), outvol)
-    tiff.imsave(current_output_dir+"values-before-nudge-{:.2f}%.tif".format(
+    imageio.imsave(current_output_dir+"values-before-nudge-{:.2f}%.tif".format(
         increase*100), before)
-    tiff.imsave(current_output_dir+"values-after-nudged-{:.2f}%.tif".format(
+    imageio.imsave(current_output_dir+"values-after-nudged-{:.2f}%.tif".format(
         increase*100), after)
 
     # 2: save the slices
@@ -129,7 +129,7 @@ for increase in increase_decimals:
 
     for sl in range(outvol.shape[0]):
         zeros = len(str(sl))
-        tiff.imsave(slice_dir+"slice" + "0000"[:4-zeros] + str(sl), outvol[sl])
+        imageio.imsave(slice_dir+"slice" + "0000"[:4-zeros] + str(sl), outvol[sl])
 
     # 3: save the planet
     #TODO

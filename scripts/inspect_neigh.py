@@ -5,7 +5,7 @@ a quickly-written script to invstigate optimal neighborhood sizes
 
 
 import numpy as np
-import tifffile as tiff
+import imageio
 
 
 def main():
@@ -32,7 +32,7 @@ def main():
                     out[i][j] = mean
                 if (i % display_step == 0):
                     print("finished row {}".format(i))
-            tiff.imsave("predictions/mean-rad{}-len{}.tif".format(rad,length), out)
+            imageio.imsave("predictions/mean-rad{}-len{}.tif".format(rad,length), out)
             print("saved picture for radius {} length {}".format(rad, length))
 
 

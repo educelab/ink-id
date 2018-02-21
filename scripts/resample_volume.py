@@ -7,7 +7,7 @@ resample_volume.py
 import pickle
 import numpy as np
 from scipy import signal
-import tifffile as tiff
+import imageio
 from os import mkdir
 
 
@@ -35,7 +35,7 @@ def main():
                 new_slice[v] = signal.resample(vol[i][v],max_length)
 
         slice_name = output_path+"slice"+"0000"[:4-len(str(i))] + str(i) + ".tif"
-        tiff.imsave(slice_name, new_slice)
+        imageio.imsave(slice_name, new_slice)
         new_vol.append(new_slice)
         print("finished slice {} of {}".format(i,num_slices))
     

@@ -1,7 +1,6 @@
 import tensorflow as tf
 import numpy as np
 import pdb
-import tifffile as tiff
 import sys
 import datetime
 import time

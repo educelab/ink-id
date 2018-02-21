@@ -7,7 +7,7 @@ Output:
     output.tif    a 2D picture with the values at all the start points
 '''
 
-import tifffile as tiff
+import imageio
 import numpy as np
 from scipy.signal import argrelmax, argrelmin, resample
 from os import mkdir
@@ -25,7 +25,7 @@ def main():
     data_path = "/home/jack/devel/volcart/small-fragment-data"
     warnings.simplefilter('ignore', np.RankWarning)
 
-    ref_photo = tiff.imread(data_path+"/registered/aligned-photo-contrast.tif")
+    ref_photo = imageio.imread(data_path+"/registered/aligned-photo-contrast.tif")
     global num_slices
     global slice_length
     global output_dims
@@ -124,11 +124,11 @@ class polyfitState(State):
                 slice_num, degree=self.degree, cushion=self.cushion)
         self.surface_points[slice_num] = points
 
-        tiff.imsave(self.output_path+"/slice{}.tif".format(
+        imageio.imsave(self.output_path+"/slice{}.tif".format(
             "0000"[:4-len(str(slice_num))] + str(slice_num)),  image)
 
     def save_output(self):
-        tiff.imsave(self.output_path+"/surface.tif", self.surface_points)
+        imageio.imsave(self.output_path+"/surface.tif", self.surface_points)
 
 
 
@@ -149,7 +149,7 @@ class widthState(State):
 
     def save_output(self):
         self.img_frnt = 65535 * ((self.img_frnt - np.min(self.img_frnt)) / (np.max(self.img_frnt) - np.min(self.img_frnt)))
-        tiff.imsave(self.output_path+"/front-{}.tif".format(THRESH), self.img_frnt)
+        imageio.imsave(self.output_path+"/front-{}.tif".format(THRESH), self.img_frnt)
         #np.savetxt(self.output_path+"/img-front-{}.txt".format(THRESH),
         #           self.img_frnt, fmt="%u", delimiter=",")
 
@@ -175,9 +175,9 @@ class surfState(State):
         new_vect, skel_slice, surf_points = extract_surface_for_slice(slice_num)
         self.surface_points[slice_num] = surf_points
         self.img_frnt[slice_num] = new_vect
-        #tiff.imsave(skel_slice_name,skel_slice)
+        #imageio.imsave(skel_slice_name,skel_slice)
         
-    def save_output(self): tiff.imsave(self.output_path+"/surface-points-{}.tif".format(
+    def save_output(self): imageio.imsave(self.output_path+"/surface-points-{}.tif".format(
         THRESH), self.surface_points)
 
 
@@ -201,7 +201,7 @@ class resampleState(State):
                         + "0000"[:4-len(str(slice_num))] + str(slice_num) + ".tif")
         new_vect,skel_slice = resample_surface_for_slice(slice_num)
         self.new_vol.append(new_vect)
-        tiff.imsave(skel_slice_name,skel_slice)
+        imageio.imsave(skel_slice_name,skel_slice)
 
     def save_output(self):
         # determine maximum length for resizing
@@ -219,7 +219,7 @@ class resampleState(State):
                     new_slice[v] = resample(self.new_vol[i][v],max_length)
 
             slice_name = self.slice_path+"/slice"+"0000"[:4-len(str(i))] + str(i) + ".tif"
-            tiff.imsave(slice_name, new_slice)
+            imageio.imsave(slice_name, new_slice)
 
 
         
@@ -236,7 +236,7 @@ def extract_surface_for_slice(a_slice_number):
     the_slice_name = (data_path+"/vertical_rotated_slices/slice"
                       + "0000"[:4-len(str(i))] + str(i) + ".tif")
 
-    the_slice = tiff.imread(the_slice_name)
+    the_slice = imageio.imread(the_slice_name)
     skel_slice = np.zeros(the_slice.shape)
 
     # filter out everything beneath the threshold
@@ -266,7 +266,7 @@ def resample_surface_for_slice(a_slice_number):
     the_slice_name = (data_path+"/vertical_rotated_slices/slice"
                       + "0000"[:4-len(str(i))] + str(i) + ".tif")
 
-    the_slice = tiff.imread(the_slice_name)
+    the_slice = imageio.imread(the_slice_name)
     skel_slice = np.zeros(the_slice.shape, dtype=np.uint16)
     new_vects = [[]]*len(the_slice)
 
@@ -305,7 +305,7 @@ def polyfit_for_slice(a_slice_number, degree=32, cushion=2):
     i = a_slice_number
     the_slice_name = (data_path+"/flatfielded-slices/slice"
                       + "0000"[:4-len(str(i))] + str(i)+".tif")
-    the_slice = tiff.imread(the_slice_name)
+    the_slice = imageio.imread(the_slice_name)
     thresh_mat = np.where(the_slice > THRESH, the_slice, 0)
 
     # initialize
@@ -362,7 +362,7 @@ def extract_width_for_slice(a_slice_number):
     i = a_slice_number
     the_slice_name = (data_path+"/vertical_rotated_slices/slice"
                       + "0000"[:4-len(str(i))] + str(i)+".tif")
-    the_slice = tiff.imread(the_slice_name)
+    the_slice = imageio.imread(the_slice_name)
     surface = np.zeros(slice_length)
 
     # filter out everything beneath the threshold
@@ -396,7 +396,7 @@ def extract_slope_for_slice(a_slice_number):
     i = a_slice_number
     the_slice_name = (data_path+"/vertical_rotated_slices/slice"
                       + "0000"[:4-len(str(i))] + str(i)+".tif")
-    the_slice = tiff.imread(the_slice_name)
+    the_slice = imageio.imread(the_slice_name)
 
     # filter out everything beneath the threshold
     thresh_mat = np.where(the_slice > THRESH, the_slice, 0)

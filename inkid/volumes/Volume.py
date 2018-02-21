@@ -1,14 +1,14 @@
-import numpy as np
-import pdb
-import os
-from PIL import Image
-import math
 import datetime
-import tifffile as tiff
-from sklearn.metrics import confusion_matrix, recall_score, precision_score, f1_score
-from scipy.ndimage.interpolation import rotate
+import os
+import math
 import shutil
 import time
+
+import imageio
+import numpy as np
+from PIL import Image
+from scipy.ndimage.interpolation import rotate
+from sklearn.metrics import confusion_matrix, recall_score, precision_score, f1_score
 
 from inkid import ops
 
@@ -36,7 +36,7 @@ class Volume:
         print("{} has shape: {}".format(self.volume_args['name'], self.volume.shape))
 
         if len(self.volume_args['ground_truth']) > 0:
-            self.ground_truth = tiff.imread(self.volume_args['ground_truth'])
+            self.ground_truth = imageio.imread(self.volume_args['ground_truth'])
         elif 'inked' in self.volume_args['data_path']:
             self.ground_truth = np.ones((self.volume.shape[0:2]), dtype=np.uint16) * 65535
         elif 'blank' in self.volume_args['data_path']:
@@ -45,7 +45,7 @@ class Volume:
             self.ground_truth = np.ones((self.volume.shape[0:2]), dtype=np.uint16) * 65535
 
         if len(self.volume_args['surface_data']) > 0:
-            self.surface_image = tiff.imread(self.volume_args['surface_data'])
+            self.surface_image = imageio.imread(self.volume_args['surface_data'])
         elif self.volume.shape[2] > args["z_dimension"]:
             print("Approximating surface for {}...".format(self.volume_args['name']))
             surf_start_time = time.time()
@@ -56,7 +56,7 @@ class Volume:
 
         self.surface_mask_image = np.ones((self.volume.shape[0], self.volume.shape[1]), dtype=np.int)
         if len(self.volume_args['surface_mask']) > 0:
-            self.surface_mask_image = tiff.imread(self.volume_args['surface_mask'])
+            self.surface_mask_image = imageio.imread(self.volume_args['surface_mask'])
 
         # Part 3: prediction data
         self.prediction_volume = np.zeros((self.volume.shape[0], self.volume.shape[1], args["predict_depth"]), dtype=np.float32)
@@ -325,10 +325,10 @@ class Volume:
             pass
 
         # save the ink and surface predictions
-        tiff.imsave(self.output_path + "/{}/prediction-iteration{}-depth{}.tif".format(predictionName, iteration, depth), predictionImage)
+        imageio.imsave(self.output_path + "/{}/prediction-iteration{}-depth{}.tif".format(predictionName, iteration, depth), predictionImage)
         #TODO this doesn't work yet:
-        # tiff.imsave(self.output_path + "/{}/predictionPlusSurf-iteration{}-depth{}.tif".format(predictionName, iteration, depth), predictionPlusSurfImage)
-        tiff.imsave(self.output_path + "/training-{}.tif".format(iteration), self.training_image)
+        # imageio.imsave(self.output_path + "/{}/predictionPlusSurf-iteration{}-depth{}.tif".format(predictionName, iteration, depth), predictionPlusSurfImage)
+        imageio.imsave(self.output_path + "/training-{}.tif".format(iteration), self.training_image)
 
         # zero them out for the next predictions
         self.prediction_image_ink = np.zeros((self.volume.shape[0], self.volume.shape[1]), dtype=np.float32)

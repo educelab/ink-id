@@ -14,7 +14,7 @@ setup(name='inkid',
           'Pillow',
           'scipy',
           'sklearn',
-          'tifffile',
+          'imageio',
       ],
       entry_points = {
           'console_scripts': [

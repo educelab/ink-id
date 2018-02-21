@@ -9,7 +9,7 @@ __author__ = "Jack Bandy"
 __email__ = "jgba225@g.uky.edu"
 
 
-import tifffile as tiff
+import imageio
 import numpy as np
 import random
 import sys
@@ -20,9 +20,9 @@ from scipy.stats import norm
 NEIGH_SZ = 20 
 
 data_path = "/home/jack/devel/volcart/small-fragment-data"
-ref_photo = tiff.imread(data_path+"/registered/aligned-photo-contrast.tif")
-ground_truth = tiff.imread(data_path+"/registered/ground-truth-mask.tif")
-the_slice = tiff.imread(data_path+"/flatfielded-slices/slice0000.tif")
+ref_photo = imageio.imread(data_path+"/registered/aligned-photo-contrast.tif")
+ground_truth = imageio.imread(data_path+"/registered/ground-truth-mask.tif")
+the_slice = imageio.imread(data_path+"/flatfielded-slices/slice0000.tif")
 
 
 
@@ -113,7 +113,7 @@ def main():
 
 def plot_slice_pts(slice_name, ink_pt_x, ink_pt_y, no_ink_pt_x, no_ink_pt_y):
 
-    the_slice = tiff.imread(slice_name)
+    the_slice = imageio.imread(slice_name)
 
     #set threshold
     THRESH = 21000

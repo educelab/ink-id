@@ -7,7 +7,7 @@ __author__ = "Jack Bandy"
 __email__ = "jgba225@g.uky.edu"
 
 
-import tifffile as tiff
+import imageio
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.signal import argrelmax, argrelmin
@@ -18,7 +18,7 @@ step_back = 40
 step_through = 90
 
 truth_file = "/home/jack/devel/volcart/small-fragment-data/ink-only-mask.tif"
-ground_truth = tiff.imread(truth_file)
+ground_truth = imageio.imread(truth_file)
 volume = np.load('/home/jack/devel/volcart/small-fragment-data/volume.npy')
 output_pic = np.zeros(ground_truth.shape, dtype=np.uint16)
 
@@ -81,7 +81,7 @@ avg_ink = np.mean(ink_vectors, axis=0)
 print("avg ink shape: {}".format(avg_ink.shape))
 print("avg fragment: {}".format(avg_fragment.shape))
 x_vals = np.arange(0, ink_vectors.shape[1], 1)
-tiff.imsave("output_pic.tif", output_pic)
+imageio.imsave("output_pic.tif", output_pic)
 
 f1 = plt.figure(1)
 g1 = f1.add_subplot(111)

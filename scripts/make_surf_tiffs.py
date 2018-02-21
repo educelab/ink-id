@@ -1,5 +1,5 @@
 '''
-make-surf-tiffs.py: load the volume, extract surface and save its voxels
+make-surf-imageios.py: load the volume, extract surface and save its voxels
 '''
 
 __author__ = "Jack Bandy"
@@ -8,7 +8,7 @@ __email__ = "jgba225@g.uky.edu"
 import numpy as np
 import os
 #from scipy.signal import argrelmax, argrelmin
-import tifffile as tiff
+import imageio
 import matplotlib.pyplot as plt
 
 def extract_surface(vect,length,thresh):
@@ -78,7 +78,7 @@ for thresh in threshes:
 
         # save picture
         print("saving picture for slice {}/{}".format(sl, approx_surfs.shape[0]))
-        tiff.imsave(pic_dir + "/slice"
+        imageio.imsave(pic_dir + "/slice"
                 +"0000"[:(4-len(str(sl)))]+ str(sl), approx_surfs[sl])
 
 
