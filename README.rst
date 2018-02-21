@@ -16,12 +16,14 @@ Installation
 First, clone this repository and navigate to the root directory:
 
 .. code-block:: bash
+
    $ git clone https://code.vis.uky.edu/seales-research/ink-id.git
    $ cd ink-id
 
 To install the package you can use `pip <https://pip.pypa.io/en/stable/>`_:
 
 .. code-block:: bash
+
    $ pip install -e .
 
 This will install the ``inkid`` package from the current directory, based on the contents of ``setup.py``.
@@ -29,12 +31,14 @@ This will install the ``inkid`` package from the current directory, based on the
 You can also (recommended) use `pipenv <https://docs.pipenv.org/>`_ to create a virtual environment and install the package to that environment:
 
 .. code-block:: bash
+
    $ pipenv --three       # Create a new virtual environment with Python 3
    $ pipenv install -e .  # Install the inkid package to the virtual environment, using symlink so that changes to the source are reflected in the installation
 
 Some other useful pipenv commands:
 
 .. code-block:: bash
+
    $ pipenv graph   # View the installed packages to confirm inkid and dependencies are installed
    $ pipenv shell   # Enter the created virtual environment containing the inkid installation
    $ pipenv update  # Uninstall all packages and reinstall. Useful after certain changes, like adding a console script
@@ -50,6 +54,7 @@ Usage
 The package can be imported into Python programs, for example:
 
 .. code-block:: python
+
    import inkid.volumes
    import inkid.ops
 
@@ -59,6 +64,7 @@ The package can be imported into Python programs, for example:
 There are also some command line scripts included, for example:
 
 ::
+
    $ inkid-top-n -h
    usage: inkid-top-n [-h] --data path --surfacemask path --surfacedata path
                       --model path [--number N] [--outputdir path]
