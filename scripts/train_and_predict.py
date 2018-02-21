@@ -37,7 +37,7 @@ def main():
     args = parser.parse_args()
 
     # Load default parameters
-    params = inkid.ops.load_parameters_from_json('default_parameters.json')
+    params = inkid.ops.load_default_parameters()
 
     # Adjust some parameters from supplied arguments
     params['volumes'][0]['data_path'] = args.data
