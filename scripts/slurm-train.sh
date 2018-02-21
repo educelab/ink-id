@@ -9,4 +9,5 @@
 
 echo "My SLURM_ARRAY_TASK_ID: " $SLURM_ARRAY_TASK_ID
 
-python ~/devel/ink-id/supervised/3DCNN/main.py $SLURM_ARRAY_TASK_ID
+# Updated with refactored script format. Will need paths passed to it.
+python ~/devel/ink-id/scripts/train-and-predict.py --data DATAPATH --groundtruth GROUNDTRUTH --surfacemask SURFACEMASK --surfacedata SURFACEDATA --gridtestsquare $SLURM_ARRAY_TASK_ID

@@ -4,13 +4,13 @@ import pdb
 import tifffile as tiff
 import sys
 import datetime
-import volume
-import model
 import time
-import ops
+
 import os
 from sklearn.metrics import precision_score, f1_score
 
+import inkid.volumes
+import inkid.model
 
 print("Initializing...")
 start_time = time.time()
@@ -66,9 +66,9 @@ training_flag = tf.placeholder(tf.bool)
 
 
 merged = tf.summary.merge_all()
-pred, loss = model.buildModel(x, y, drop_rate, args, training_flag)
+pred, loss = inkid.model.buildModel(x, y, drop_rate, args, training_flag)
 saver = tf.train.Saver()
-volume = volume.Volume(args)
+volume = inkid.volumes.Volume(args)
 
 
 # automatically dump "sess" once the full loop finishes
