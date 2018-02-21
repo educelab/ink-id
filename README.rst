@@ -61,7 +61,7 @@ The package can be imported into Python programs, for example:
    params = inkid.ops.load_default_parameters()
    volumes = inkid.volumes.VolumeSet(params)
 
-There are also some command line scripts included, for example:
+There are also some console scripts included, for example:
 
 ::
 
@@ -96,6 +96,11 @@ Documenting
 ~~~~~~~~~~~
 
 Please document code (notably functions and classes) using doc strings according to the `Google Python Style Guide standards <https://google.github.io/styleguide/pyguide.html?showone=Comments#Comments>`_. This will ensure that your notes are automatically picked up and included in the generated documentation.
+
+Console Scripts
+~~~~~~~~~~~~~~~
+
+New console/command line scripts can be added to the package using the ``entry_points['console_scripts']`` array in ``setup.py``.
 
 License
 -------
