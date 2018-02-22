@@ -10,7 +10,7 @@ from tensorflow import layers
 def build_model(subvolume, labels, drop_rate, args, training_flag):
     """Build a model."""
     subvolume = (tf.reshape(subvolume,
-                            [-1, args["x_dimension"], args["y_dimension"], args["z_dimension"], 1]))
+                            [-1, args["subvolume_dimension_x"], args["subvolume_dimension_y"], args["subvolume_dimension_z"], 1]))
     conv1 = layers.batch_normalization(slim.convolution(subvolume, args["neurons"][0], [3, 3, 3],
                                                         stride=[2, 2, 2], padding='valid'),
                                        training=training_flag,
@@ -50,7 +50,7 @@ def build_model(subvolume, labels, drop_rate, args, training_flag):
 def build_multitask_model(subvolume, labels, drop_rate, args):
     """Build a multitask model."""
     subvolume = tf.reshape(subvolume,
-                           [-1, args["x_dimension"], args["y_dimension"], args["z_dimension"], 1])
+                           [-1, args["subvolume_dimension_x"], args["subvolume_dimension_y"], args["subvolume_dimension_z"], 1])
     conv1 = slim.batch_norm(slim.convolution(subvolume, args["neurons"][0], [3, 3, 3],
                                              stride=[2, 2, 2], padding='valid'))
     conv2 = slim.batch_norm(slim.convolution(conv1, args["neurons"][1], [3, 3, 3],

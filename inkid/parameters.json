@@ -21,9 +21,9 @@
             }
 	],
 
-	"x_dimension": 96,
-	"y_dimension": 96,
-	"z_dimension": 48,
+	"subvolume_dimension_x": 96,
+	"subvolume_dimension_y": 96,
+	"subvolume_dimension_z": 48,
 
 	"surface_cushion": 10,
 

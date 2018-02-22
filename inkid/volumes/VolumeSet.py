@@ -41,7 +41,7 @@ class VolumeSet:
     def getTrainingBatch(self, args):
         # gather training samples from other volumes
         # should be as simple as getting batches from each volume and combining them
-        trainingSamples = np.zeros((args["batch_size"], args["x_dimension"], args["y_dimension"], args["z_dimension"]), dtype=np.float32)
+        trainingSamples = np.zeros((args["batch_size"], args["subvolume_dimension_x"], args["subvolume_dimension_y"], args["subvolume_dimension_z"]), dtype=np.float32)
         groundTruth = np.zeros((args["batch_size"], args["n_classes"]), dtype=np.float32)
         samples_per_volume = int(args["batch_size"] / self.n_train_volumes)
         for i in range(self.n_train_volumes):
@@ -74,7 +74,7 @@ class VolumeSet:
 
     def getTestBatch(self, args):
         # gather testing samples from other volumes
-        trainingSamples = np.zeros((args["num_test_cubes"], args["x_dimension"], args["y_dimension"], args["z_dimension"]), dtype=np.float32)
+        trainingSamples = np.zeros((args["num_test_cubes"], args["subvolume_dimension_x"], args["subvolume_dimension_y"], args["subvolume_dimension_z"]), dtype=np.float32)
         groundTruth = np.zeros((args["num_test_cubes"], args["n_classes"]), dtype=np.float32)
 
         if self.n_test_volumes == 1:
