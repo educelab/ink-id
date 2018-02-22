@@ -37,7 +37,7 @@ def load_parameters_from_json(filename):
         return json.loads(minified)['parameters']
 
     
-def adjustDepthForWobble(args, rowCoord, colCoord, zCoordinate, angle, axes, volume_shape):
+def adjustDepthForWobble(rowCoord, colCoord, zCoordinate, angle, axes, volume_shape):
     if set(axes) == {0,2}:
         # plane of rotation = yz
         adjacent_length =  (volume_shape[0] / 2) - rowCoord
@@ -55,6 +55,20 @@ def adjustDepthForWobble(args, rowCoord, colCoord, zCoordinate, angle, axes, vol
         newZ = zCoordinate
 
     return newZ
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 def bounds(args, volume_shape, identifier, train_portion):
@@ -86,7 +100,7 @@ def bounds(args, volume_shape, identifier, train_portion):
     return row_bounds, col_bounds
 
 
-def getRandomTestCoordinate(args, volume_shape, bounds_identifier, train_portion):
+def getRandomTestCoordinate(args, volume_shape):
     if args["use_grid_training"]:
         return getGridTestCoordinate(args, volume_shape)
     else:
@@ -177,7 +191,6 @@ def averageTruthInSubvolume(args, row_coordinate, col_coordinate, ground_truth):
 
 def generateCoordinatePool(args, volume_shape, ground_truth, surface_mask, train_bounds_identifier, train_portion):
     coordinates = []
-    ink_count = 0
     truth_label_value = np.iinfo(ground_truth.dtype).max
     rowStep = int(args["subvolume_dimension_y"]/2)
     colStep = int(args["subvolume_dimension_x"]/2)
@@ -206,18 +219,13 @@ def generateCoordinatePool(args, volume_shape, ground_truth, surface_mask, train
 
             label = round(ground_truth[row,col] / truth_label_value)
             augment_seed = np.random.randint(4)
-            ink_count += label # 0 if less than .9
             coordinates.append([row, col, label, augment_seed])
-
-    ink_portion = ink_count / len(coordinates)
 
     return coordinates
 
 
 def getRandomBrick(args, volume, xCoordinate, yCoordinate):
     """Return a volume filled with random noise. Distribution of values are aligned with the median value of the input volume."""
-    v_min = np.min(volume[yCoordinate, xCoordinate])
-    v_max = np.max(volume[yCoordinate, xCoordinate])
     v_median = np.median(volume[yCoordinate, xCoordinate])
     low = v_median - args["random_range"]
     high = v_median + args["random_range"]
@@ -225,7 +233,7 @@ def getRandomBrick(args, volume, xCoordinate, yCoordinate):
     return ((high - low) * sample) + low
 
 
-def augmentSample(args, sample, seed=None):
+def augmentSample(sample, seed=None):
     augmentedSample = sample
     if seed is None:
         seed = np.random.randint(4)
@@ -239,7 +247,8 @@ def augmentSample(args, sample, seed=None):
     elif seed == 2:
         augmentedSample = np.flip(augmentedSample, axis=0)
         augmentedSample = np.flip(augmentedSample, axis=1)
-    #implicit: no flip if seed == 2
+    elif seed == 3:
+        pass
 
     # for rotate: original, rotate 90, rotate 180, or rotate 270
     augmentedSample = np.rot90(augmentedSample, k=seed, axes=(0,1))
@@ -247,7 +256,7 @@ def augmentSample(args, sample, seed=None):
     return augmentedSample
 
 
-def generateSurfaceApproximation(args, volume, area=3, search_increment=1):
+def generateSurfaceApproximation(volume, area=3, search_increment=1):
     surface_points = np.zeros((volume.shape[0:2]), dtype=np.int)
     for row in range(1, volume.shape[0], area):
         for col in range(1, volume.shape[1], area):

@@ -82,11 +82,23 @@ class Volume:
         self.train_index = 0
         self.epoch = 0
 
-    def coordinate_generator(self, restrict_to_surface=True, bounding_box=None, exclude_box=None):
-        """Walk the 2D space and yield coordinates fitting the criteria."""
-        
-        
-        yield (0, 0)
+    def get_x_y_coordinate_pool(self)
+        """
+        Walk the 2D space and yield all candidate coordinates.
+        They can later be filtered down to make sure they are on the surface,
+        in particular bounding boxes, ground truth not ambiguous, etc.
+        """
+        coordinates = []
+        for x in range(int(args["subvolume_dimension_x"]),
+                         self.volume.shape()[0] - int(args["subvolume_dimension_x"])):
+            for y in range(int(args["subvolume_dimension_y"]),
+                         self.volume.shape()[1] - int(args["subvolume_dimension_y"])):
+                coordinates.append((x, y))
+        return coordinates
+
+    def x_y_coordinate_pool_generator(self):
+        for coordinate in get_x_y_coordinate_pool():
+            yield coordinate
 
     def getTrainingBatch(self, args, n_samples):
         if len(self.coordinate_pool) == 0: # initialization
