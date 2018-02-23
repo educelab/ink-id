@@ -15,6 +15,18 @@ import imageio
 import inkid
 
 
+def generator_from_iterator(iterator):
+    def generator():
+        for item in iterator:
+            yield item
+    return generator
+
+def are_coordinates_within(p1, p2, distance):
+    (x1, y1) = p1
+    (x2, y2) = p2
+    return abs(x1 - x2) < distance and abs(y1 - y2) < distance
+
+
 def save_volume_to_image_stack(volume, dirname):
     """Given a volume as a np.array and a directory name, save the volume as a stack of .tif images in that directory."""
     os.makedirs(dirname)
@@ -55,21 +67,6 @@ def adjustDepthForWobble(rowCoord, colCoord, zCoordinate, angle, axes, volume_sh
         newZ = zCoordinate
 
     return newZ
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 def bounds(args, volume_shape, identifier, train_portion):
     """Return the bounds tuples for X and Y dimensions. Used in finding training vs. testing coordinates."""

@@ -7,11 +7,12 @@ import tensorflow.contrib.slim as slim
 from tensorflow import layers
 
 
-def build_model(subvolume, labels, drop_rate, args, training_flag):
+def build_model(inputs, labels, drop_rate, args, training_flag):
     """Build a model."""
-    subvolume = (tf.reshape(subvolume,
+    (coordinates, subvolumes) = inputs
+    subvolumes_internal = (tf.reshape(subvolumes,
                             [-1, args["subvolume_dimension_x"], args["subvolume_dimension_y"], args["subvolume_dimension_z"], 1]))
-    conv1 = layers.batch_normalization(slim.convolution(subvolume, args["neurons"][0], [3, 3, 3],
+    conv1 = layers.batch_normalization(slim.convolution(subvolumes_internal, args["neurons"][0], [3, 3, 3],
                                                         stride=[2, 2, 2], padding='valid'),
                                        training=training_flag,
                                        scale=False,
@@ -43,7 +44,7 @@ def build_model(subvolume, labels, drop_rate, args, training_flag):
 
     loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(labels=labels, logits=net))
 
-    return tf.nn.softmax(net), loss
+    return tf.nn.softmax(net), loss, subvolumes, coordinates
 
 
 

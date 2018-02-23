@@ -82,23 +82,51 @@ class Volume:
         self.train_index = 0
         self.epoch = 0
 
-    def get_x_y_coordinate_pool(self)
-        """
-        Walk the 2D space and yield all candidate coordinates.
-        They can later be filtered down to make sure they are on the surface,
-        in particular bounding boxes, ground truth not ambiguous, etc.
-        """
-        coordinates = []
-        for x in range(int(args["subvolume_dimension_x"]),
-                         self.volume.shape()[0] - int(args["subvolume_dimension_x"])):
-            for y in range(int(args["subvolume_dimension_y"]),
-                         self.volume.shape()[1] - int(args["subvolume_dimension_y"])):
-                coordinates.append((x, y))
-        return coordinates
+    def get_shape(self):
+        return self.volume.shape
 
-    def x_y_coordinate_pool_generator(self):
-        for coordinate in get_x_y_coordinate_pool():
-            yield coordinate
+    def is_on_surface(self, coordinate):
+        x = coordinate[0]
+        y = coordinate[1]
+        xStep = int(self.args["subvolume_dimension_y"] / 2)
+        yStep = int(self.args["subvolume_dimension_x"] / 2)
+        square = self.surface_mask[(x - xStep):(x + xStep), (y - yStep):(y + yStep)]
+        return np.size(square) > 0 and np.min(square) != 0
+
+
+    def yield_coordinate_pool(self, grid_spacing=1):
+        """
+        Walk the 2D space and yield every points on the grid (all points if grid_spacing == 1).
+        """
+        for x in range(int(self.args["subvolume_dimension_x"]),
+                       self.volume.shape[0] - int(self.args["subvolume_dimension_x"]),
+                       grid_spacing):
+            for y in range(int(self.args["subvolume_dimension_y"]),
+                           self.volume.shape[1] - int(self.args["subvolume_dimension_y"]),
+                           grid_spacing):
+                yield (x, y)
+
+    def filter_on_surface(self, coordinates):
+        return filter(self.is_on_surface, coordinates)
+
+    def coordinates_to_subvolumes(self, coordinates):
+        return filter(lambda x: x is not None, map(self.coordinate_to_subvolume, coordinates))
+
+    def coordinate_to_subvolume(self, coordinate):
+        x = coordinate[0]
+        y = coordinate[1]
+        z = max(0, self.surface_image[x, y] - self.args["surface_cushion"])
+
+        x_step = int(self.args["subvolume_dimension_x"]/2)
+        y_step = int(self.args["subvolume_dimension_y"]/2)
+        z_step = self.args["subvolume_dimension_z"]
+
+        subvolume = self.volume[(x - x_step):(x + x_step), (y - y_step):(y + y_step), (z):(z + z_step)]
+
+        if subvolume.shape == (self.args["subvolume_dimension_x"], self.args["subvolume_dimension_y"], self.args["subvolume_dimension_z"]):
+            return (coordinate, subvolume)
+
+        return None
 
     def getTrainingBatch(self, args, n_samples):
         if len(self.coordinate_pool) == 0: # initialization
