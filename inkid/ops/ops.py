@@ -1,6 +1,4 @@
-"""
-Miscellaneous operations required by the 3DCNN.
-"""
+"""Miscellaneous operations used in ink-id."""
 
 import datetime
 import inspect
@@ -16,19 +14,40 @@ import inkid
 
 
 def generator_from_iterator(iterator):
+    """Take a Python iterator and create a generator function with it.
+
+    E.g. given an iterator of (x, y) points this will create a
+    generator function that can be passed to create a
+    tf.data.Dataset.
+
+    """
     def generator():
         for item in iterator:
             yield item
     return generator
 
+
 def are_coordinates_within(p1, p2, distance):
+    """Return if two points would have overlapping boxes.
+
+    Given two (x, y) points and a distance, imagine creating squares
+    with side lengths equal to that distance and centering them on
+    each point. Return if the squares overlap at all.
+
+    """
     (x1, y1) = p1
     (x2, y2) = p2
     return abs(x1 - x2) < distance and abs(y1 - y2) < distance
 
 
 def save_volume_to_image_stack(volume, dirname):
-    """Given a volume as a np.array and a directory name, save the volume as a stack of .tif images in that directory."""
+    """Save a volume to a stack of .tif images.
+
+    Given a volume as a np.array and a directory name, save the volume
+    as a stack of .tif images in that directory, with filenames
+    starting at 0 and going up to the z height of the volume.
+
+    """
     os.makedirs(dirname)
     for i in range(volume.shape[2]):
         image = volume[:, :, i]
@@ -37,12 +56,24 @@ def save_volume_to_image_stack(volume, dirname):
 
 
 def load_default_parameters():
-    # https://stackoverflow.com/questions/247770/retrieving-python-module-path
-    # Find the directory the inkid package is loaded from, and get default_parameters.json from there
+    """Return the default network parameters for ink-id.
+
+    Find the directory that the inkid package is loaded from, and then
+    return the network parameters in parameters.json.
+
+    https://stackoverflow.com/questions/247770/retrieving-python-module-path
+
+    """
     return load_parameters_from_json(os.path.join(os.path.dirname(inspect.getfile(inkid)), 'parameters.json'))
 
+
 def load_parameters_from_json(filename):
-    """Given a filename to a .json, remove the comments from that file and return a Python dictionary built from the JSON."""
+    """Return a dict of the parameters stored in a JSON file.
+
+    Given a filename to a .json, remove the comments from that file
+    and return a Python dictionary built from the JSON.
+
+    """
     with open(filename, 'r') as f:
         # minify to remove comments
         minified = jsmin(str(f.read()))

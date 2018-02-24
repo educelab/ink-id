@@ -10,6 +10,7 @@ old_output/
 *.pyc
 
 Pipfile.lock
+build/
 data/
 out/
 *.egg-info
