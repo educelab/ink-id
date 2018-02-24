@@ -54,15 +54,22 @@ def main():
     generator = inkid.ops.generator_from_iterator(subvolumes)
 
     dataset = tf.data.Dataset.from_generator(generator, (tf.int64, tf.float32),
-                                             ([2], [params["subvolume_dimension_x"], params["subvolume_dimension_y"], params["subvolume_dimension_z"]]))
-    # dataset = dataset.shuffle(10000)
+                                             ([2],
+                                              [params["subvolume_dimension_x"],
+                                               params["subvolume_dimension_y"],
+                                               params["subvolume_dimension_z"]]))
+
     dataset = dataset.batch(params["prediction_batch_size"])
     next_batch = dataset.make_one_shot_iterator().get_next()
 
     y = tf.placeholder(tf.float32, [None, params["n_classes"]])
     drop_rate = tf.placeholder(tf.float32)
     training_flag = tf.placeholder(tf.bool)
-    pred, _, inputs, coordinates = inkid.model.build_model(next_batch, y, drop_rate, params, training_flag)
+    pred, _, inputs, coordinates = inkid.model.build_model(next_batch,
+                                                           y,
+                                                           drop_rate,
+                                                           params,
+                                                           training_flag)
     
     with tf.Session() as sess:
         saver = tf.train.Saver()
@@ -75,10 +82,11 @@ def main():
             while True:
                 try:
                     print("Running a batch.")
-                    prediction_values, subvolumes, coords = sess.run((pred, inputs, coordinates), feed_dict={
-                        drop_rate: 0.0,
-                        training_flag: False
-                    })
+                    prediction_values, subvolumes, coords = sess.run((pred, inputs, coordinates),
+                                                                     feed_dict={
+                                                                         drop_rate: 0.0,
+                                                                         training_flag: False
+                                                                     })
 
                     samples = [{"prediction": item[0][1], "subvolume": item[1], "coordinates":item[2]} for item in zip(prediction_values, subvolumes, coords)]
                     

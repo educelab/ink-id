@@ -80,27 +80,10 @@ def load_parameters_from_json(filename):
         return json.loads(minified)['parameters']
 
     
-def adjustDepthForWobble(rowCoord, colCoord, zCoordinate, angle, axes, volume_shape):
-    if set(axes) == {0,2}:
-        # plane of rotation = yz
-        adjacent_length =  (volume_shape[0] / 2) - rowCoord
-        offset = adjacent_length * np.tan(np.deg2rad(angle))
-        newZ = int(zCoordinate + offset)
-
-    elif set(axes) == {1,2}:
-        # plane of rotation = xz
-        adjacent_length = colCoord - (volume_shape[1] / 2)
-        offset = adjacent_length * np.tan(np.deg2rad(angle))
-        newZ = int(zCoordinate + offset)
-
-    else:
-        # either no wobble or rotation plane = xy (does not affect depth)
-        newZ = zCoordinate
-
-    return newZ
-
 def bounds(args, volume_shape, identifier, train_portion):
-    """Return the bounds tuples for X and Y dimensions. Used in finding training vs. testing coordinates."""
+    """Return the bounds tuples for X and Y dimensions. Used in finding
+    training vs. testing coordinates.
+    """
     y_step = int(args["subvolume_dimension_y"]/2)
     x_step = int(args["subvolume_dimension_x"]/2)
 
@@ -259,29 +242,6 @@ def getRandomBrick(args, volume, xCoordinate, yCoordinate):
     high = v_median + args["random_range"]
     sample = np.random.random([args["subvolume_dimension_x"], args["subvolume_dimension_y"], args["subvolume_dimension_z"]])
     return ((high - low) * sample) + low
-
-
-def augmentSample(sample, seed=None):
-    augmentedSample = sample
-    if seed is None:
-        seed = np.random.randint(4)
-
-    # ensure equal probability for each augmentation, including no augmentation
-    # for flip: original, flip left-right, flip up-down, both, or none
-    if seed == 0:
-        augmentedSample = np.flip(augmentedSample, axis=0)
-    elif seed == 1:
-        augmentedSample = np.flip(augmentedSample, axis=1)
-    elif seed == 2:
-        augmentedSample = np.flip(augmentedSample, axis=0)
-        augmentedSample = np.flip(augmentedSample, axis=1)
-    elif seed == 3:
-        pass
-
-    # for rotate: original, rotate 90, rotate 180, or rotate 270
-    augmentedSample = np.rot90(augmentedSample, k=seed, axes=(0,1))
-
-    return augmentedSample
 
 
 def generateSurfaceApproximation(volume, area=3, search_increment=1):
