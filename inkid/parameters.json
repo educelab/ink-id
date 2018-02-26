@@ -26,8 +26,6 @@
 
 	"surface_cushion": 10,
 
-	"use_multitask_training": false, // TODO remove
-	"shallow_learning_rate": 0.001, // TODO remove
 	"learning_rate": 0.001,
 	"batch_size": 30,
 	"prediction_batch_size": 400,

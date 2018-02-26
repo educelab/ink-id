@@ -55,11 +55,7 @@ def main():
     drop_rate = tf.placeholder(tf.float32)
     training_flag = tf.placeholder(tf.bool)
 
-    if params['use_multitask_training']:
-        pred, shallow_loss, loss = inkid.model.build_multitask_model(x, y, drop_rate, params, training_flag)
-        shallow_optimizer = tf.train.AdamOptimizer(learning_rate=params['shallow_learning_rate']).minimize(shallow_loss)
-    else:
-        pred, loss = inkid.model.build_model(x, y, drop_rate, params, training_flag)
+    pred, loss = inkid.model.build_model(x, y, drop_rate, params, training_flag)
 
     update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
     with tf.control_dependencies(update_ops):
@@ -74,8 +70,6 @@ def main():
     tf.summary.scalar('xentropy-loss', loss)
     tf.summary.histogram('prediction_values', pred[:, 1])
 
-    if params['use_multitask_training']:
-        tf.summary.scalar('xentropy-shallow-loss', loss)
     tf.summary.scalar('false_positive_rate', false_positive_rate)
 
     merged = tf.summary.merge_all()
@@ -121,16 +115,10 @@ def main():
                 predict_flag = False
 
                 batch_x, batch_y, epoch = volumes.getTrainingBatch(params)
-                if params['use_multitask_training']:
-                    summary, _, _ = sess.run([merged, optimizer, shallow_optimizer],
-                                             feed_dict={x: batch_x, y: batch_y,
-                                                        drop_rate: params['dropout'],
-                                                        training_flag: True})
-                else:
-                    summary, _ = sess.run([merged, optimizer],
-                                          feed_dict={x: batch_x, y: batch_y,
-                                                     drop_rate: params['dropout'],
-                                                     training_flag: True})
+                summary, _ = sess.run([merged, optimizer],
+                                      feed_dict={x: batch_x, y: batch_y,
+                                                 drop_rate: params['dropout'],
+                                                 training_flag: True})
                 train_writer.add_summary(summary, iteration)
 
                 if iteration % params['display_step'] == 0:
