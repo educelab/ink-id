@@ -42,9 +42,6 @@
 	"wobble_step": 1000,
 	"wobble_max_degrees": 2,
 	"num_test_cubes": 400,
-	"add_random": false,  // TODO remove
-	"random_step": 10,  // one in every random_step non-ink samples will be a random brick
-	"random_range": 200,
 	"use_jitter": true, // we use
 	"jitter_range": [-4, 4],
 	"add_augmentation": true,

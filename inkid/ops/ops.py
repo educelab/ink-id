@@ -235,15 +235,6 @@ def generateCoordinatePool(args, volume_shape, ground_truth, surface_mask, train
     return coordinates
 
 
-def getRandomBrick(args, volume, xCoordinate, yCoordinate):
-    """Return a volume filled with random noise. Distribution of values are aligned with the median value of the input volume."""
-    v_median = np.median(volume[yCoordinate, xCoordinate])
-    low = v_median - args["random_range"]
-    high = v_median + args["random_range"]
-    sample = np.random.random([args["subvolume_dimension_x"], args["subvolume_dimension_y"], args["subvolume_dimension_z"]])
-    return ((high - low) * sample) + low
-
-
 def generateSurfaceApproximation(volume, area=3, search_increment=1):
     surface_points = np.zeros((volume.shape[0:2]), dtype=np.int)
     for row in range(1, volume.shape[0], area):
