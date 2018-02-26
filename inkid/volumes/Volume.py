@@ -21,6 +21,7 @@ class Volume:
         self.volume_number = volume_number
         self.train_bounds = self.volume_args['train_bounds']
         self.train_portion = self.volume_args['train_portion']
+        self.add_augmentation = args["add_augmentation"]
 
         # Part 2: volume data
         data_files = os.listdir(self.volume_args['data_path'])
@@ -113,7 +114,7 @@ class Volume:
             for y in range(int(self.args["subvolume_dimension_y"]),
                            self.volume.shape[1] - int(self.args["subvolume_dimension_y"]),
                            grid_spacing):
-                yield (x, y)
+                yield [x, y]
 
     def filter_on_surface(self, coordinates):
         """Filter an iterator of coordinates to those on the surface."""
@@ -123,7 +124,7 @@ class Volume:
         """Map iterator of coordinates to (coordinate, subvolume) tuples."""
         return filter(lambda x: x is not None, map(self.coordinate_to_subvolume, coordinates))
 
-    def coordinate_to_subvolume(self, coordinate, augment_sample=False):
+    def coordinate_to_subvolume(self, coordinate):
         """Map a coordinate to a tuple of (coordinate, subvolume).
 
         Given an (x, y) coordinate, return a tuple (coordinate,
@@ -136,25 +137,22 @@ class Volume:
         randomly.
 
         """
-        x = coordinate[0]
-        y = coordinate[1]
-        z = max(0, self.surface_image[x, y] - self.args["surface_cushion"])
-
         x_step = int(self.args["subvolume_dimension_x"]/2)
         y_step = int(self.args["subvolume_dimension_y"]/2)
         z_step = self.args["subvolume_dimension_z"]
+
+        x = coordinate[0]
+        y = coordinate[1]
+        # Cap the z value in case the surface data has a z height that puts the subvolume outside the volume
+        z = min(max(0, self.surface_image[x, y] - self.args["surface_cushion"]), self.volume.shape[2] - z_step)
 
         subvolume = self.volume[(x - x_step):(x + x_step),
                                 (y - y_step):(y + y_step),
                                 (z):(z + z_step)]
 
-        if subvolume.shape != (self.args["subvolume_dimension_x"],
-                               self.args["subvolume_dimension_y"],
-                               self.args["subvolume_dimension_z"]):
-            return None
-            
+        # TODO this probably does not need to happen on predictions just training
         # Rotate/flip sample randomly if augmenting
-        if augment_sample:
+        if self.add_augmentation:
             flip_direction = np.random.randint(4)
             if flip_direction == 0:
                 subvolume = np.flip(subvolume, axis=0)
@@ -167,7 +165,8 @@ class Volume:
             rotate_direction = np.random.randint(4)
             subvolume = np.rot90(subvolume, k=rotate_direction, axes=(0,1))
 
-        return (coordinate, subvolume)
+        # Return plain np arrays so this will cooperate with tf.py_func
+        return np.asarray(coordinate, np.int64), np.asarray(subvolume, np.float32)
         
     
     def adjust_depth_for_wobble(self, x, y, z):

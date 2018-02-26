@@ -47,18 +47,16 @@ def main():
 
     
     volume = Volume(params, 0)
-    
-    points = volume.yield_coordinate_pool(10)
+
+    points = volume.yield_coordinate_pool(grid_spacing=10)
     points = volume.filter_on_surface(points)
-    subvolumes = volume.coordinates_to_subvolumes(points)
-    generator = inkid.ops.generator_from_iterator(subvolumes)
+    generator = inkid.ops.generator_from_iterator(points)
 
-    dataset = tf.data.Dataset.from_generator(generator, (tf.int64, tf.float32),
-                                             ([2],
-                                              [params["subvolume_dimension_x"],
-                                               params["subvolume_dimension_y"],
-                                               params["subvolume_dimension_z"]]))
-
+    dataset = tf.data.Dataset.from_generator(generator, tf.int64, [2])
+    dataset = dataset.shuffle(10000)
+    dataset = dataset.map(lambda point: tf.py_func(volume.coordinate_to_subvolume,
+                                                   [point],
+                                                   [tf.int64, tf.float32]))
     dataset = dataset.batch(params["prediction_batch_size"])
     next_batch = dataset.make_one_shot_iterator().get_next()
 

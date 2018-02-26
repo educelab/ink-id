@@ -17,7 +17,7 @@
 		"use_in_training": true,
 		"use_in_test_set": true,
 		"make_prediction": true,
-		"prediction_overlap_step": 4
+		"prediction_overlap_step": 4 // TODO this overlaps with same variable below
             }
 	],
 
@@ -27,8 +27,8 @@
 
 	"surface_cushion": 10,
 
-	"use_multitask_training": false,
-	"shallow_learning_rate": 0.001,
+	"use_multitask_training": false, // TODO remove
+	"shallow_learning_rate": 0.001, // TODO remove
 	"learning_rate": 0.001,
 	"batch_size": 30,
 	"prediction_batch_size": 400,
@@ -37,7 +37,7 @@
 	"neurons": [16, 8, 4, 2],
 	"training_iterations": 1000000,
 	"training_epochs": 2,
-	"n_classes": 2,
+	"n_classes": 2, // TODO check for removal
 	"pos_weight": 0.5,
 	"batch_norm_momentum": 0.9,
 	"fbeta_weight": 0.3,
@@ -46,17 +46,17 @@
 	"wobble_step": 1000,
 	"wobble_max_degrees": 2,
 	"num_test_cubes": 400,
-	"add_random": false,
+	"add_random": false,  // TODO remove
 	"random_step": 10,  // one in every random_step non-ink samples will be a random brick
 	"random_range": 200,
-	"use_jitter": true,
+	"use_jitter": true, // we use
 	"jitter_range": [-4, 4],
 	"add_augmentation": true,
 	"balance_samples": false,
 	"use_grid_training": true,
 	"grid_n_squares": 10,
 	"grid_test_square": 0,
-	"surface_threshold": 20400,
+	"surface_threshold": 20400, // TODO check if this is used anywhere and remove if not
 	"restrict_surface": true,
 	"truth_cutoff_low": 0.15,
 	"truth_cutoff_high": 0.85,
