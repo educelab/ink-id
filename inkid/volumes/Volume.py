@@ -9,6 +9,7 @@ import numpy as np
 from PIL import Image
 from scipy.ndimage.interpolation import rotate
 from sklearn.metrics import confusion_matrix, recall_score, precision_score, f1_score
+import tensorflow as tf
 
 from inkid import ops
 
@@ -83,10 +84,27 @@ class Volume:
         self.train_index = 0
         self.epoch = 0
 
-    def get_shape(self):
-        """Return the (x, y, z) shape of the volume."""
-        return self.volume.shape
+    def tf_input_fn(return_labels, perform_shuffle, batch_size, restrict_to_surface=True):
+        """Create a dataset for Tensorflow Estimator usage.
 
+        Create a dataset using the points in this volume, and return
+        the batch iterator that can be used with a
+        tf.estimator.Estimator.
+
+        """
+        dataset = tf.data.Dataset.from_generator(self.coordinate_pool_generator(grid_spacing=10),
+                                                 tf.int64, [2])
+        if restrict_to_surface:
+            dataset = dataset.filter(self.tf_is_on_surface)
+        if perform_shuffle:
+            # Shuffle buffer size equal to number of possible points
+            # so that they all get included in the shuffled set
+            dataset.shuffle(self.volume.shape[0] * self.volume.shape[1])
+        dataset = dataset.map(self.tf_coordinate_to_subvolume)
+        dataset = dataset.batch(batch_size)
+        next_batch = dataset.make_one_shot_iterator().get_next()
+        return next_batch
+                                                       
 
     def is_on_surface(self, coordinate):
         """Return whether a point is on the surface."""
@@ -98,8 +116,13 @@ class Volume:
         return np.size(square) > 0 and np.min(square) != 0
 
 
-    def yield_coordinate_pool(self, grid_spacing=1):
-        """Walk the 2D space and yield points on the grid.
+    def tf_is_on_surface(self, coordinate):
+        """Wrap is_on_surface in a Tensorflow operation."""
+        return tf.py_func(self.is_on_surface, [coordinate], [tf.bool])
+
+
+    def coordinate_pool_generator(self, grid_spacing=1):
+        """Walk the 2D space and generate points on the grid.
 
         Walk the 2D coordinate space and yield the (x, y) points on
         the grid. Skip points in both the x and y directions
@@ -108,21 +131,16 @@ class Volume:
         return every (x, y).
 
         """
-        for x in range(int(self.args["subvolume_dimension_x"]),
-                       self.volume.shape[0] - int(self.args["subvolume_dimension_x"]),
-                       grid_spacing):
-            for y in range(int(self.args["subvolume_dimension_y"]),
-                           self.volume.shape[1] - int(self.args["subvolume_dimension_y"]),
+        def generator():
+            for x in range(int(self.args["subvolume_dimension_x"]),
+                           self.volume.shape[0] - int(self.args["subvolume_dimension_x"]),
                            grid_spacing):
-                yield [x, y]
+                for y in range(int(self.args["subvolume_dimension_y"]),
+                               self.volume.shape[1] - int(self.args["subvolume_dimension_y"]),
+                               grid_spacing):
+                    yield [x, y]
+        return generator
 
-    def filter_on_surface(self, coordinates):
-        """Filter an iterator of coordinates to those on the surface."""
-        return filter(self.is_on_surface, coordinates)
-
-    def coordinates_to_subvolumes(self, coordinates):
-        """Map iterator of coordinates to (coordinate, subvolume) tuples."""
-        return filter(lambda x: x is not None, map(self.coordinate_to_subvolume, coordinates))
 
     def coordinate_to_subvolume(self, coordinate):
         """Map a coordinate to a tuple of (coordinate, subvolume).
@@ -167,6 +185,11 @@ class Volume:
 
         # Return plain np arrays so this will cooperate with tf.py_func
         return np.asarray(coordinate, np.int64), np.asarray(subvolume, np.float32)
+
+
+    def tf_coordinate_to_subvolume(self, coordinate):
+        """Wrap coordinate_to_subvolume in a Tensorflow operation."""
+        return tf.py_func(self.coordinate_to_subvolume, [coordinate], [tf.int64, tf.float32])
         
     
     def adjust_depth_for_wobble(self, x, y, z):

@@ -46,14 +46,12 @@ def main():
     params['output_path'] = os.path.join(args.outputdir, '3dcnn-predictions', datetime.datetime.today().strftime('%Y-%m-%d_%H.%M.%S'))
     
     volume = Volume(params, 0)
-    points = volume.yield_coordinate_pool(grid_spacing=10)
-    points = volume.filter_on_surface(points)
-    generator = inkid.ops.generator_from_iterator(points)
-    dataset = tf.data.Dataset.from_generator(generator, tf.int64, [2])
+    
+    dataset = tf.data.Dataset.from_generator(volume.coordinate_pool_generator(grid_spacing=10),
+                                             tf.int64, [2])
+    dataset = dataset.filter(volume.tf_is_on_surface)
     dataset = dataset.shuffle(100000)
-    dataset = dataset.map(lambda point: tf.py_func(volume.coordinate_to_subvolume,
-                                                   [point],
-                                                   [tf.int64, tf.float32]))
+    dataset = dataset.map(volume.tf_coordinate_to_subvolume)
     dataset = dataset.batch(params["prediction_batch_size"])
     next_batch = dataset.make_one_shot_iterator().get_next()
 
