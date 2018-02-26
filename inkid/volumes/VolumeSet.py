@@ -68,8 +68,7 @@ class VolumeSet:
     def getPredictionBatch(self, args, starting_coordinates):
         # predict on one volume at a time
         # batches should be from one volume at a time
-        v_olap = args["volumes"][self.current_prediction_volume]["prediction_overlap_step"]
-        self.current_prediction_total_batches = int(self.volume_set[self.current_prediction_volume].totalPredictions(args, v_olap) / args["prediction_batch_size"])
+        self.current_prediction_total_batches = int(self.volume_set[self.current_prediction_volume].totalPredictions(args, args["predict_step"]) / args["prediction_batch_size"])
 
         if self.current_prediction_batch < self.current_prediction_total_batches:
             # case 1: stay in the current volume
@@ -84,7 +83,7 @@ class VolumeSet:
             self.current_prediction_volume += 1
             while not args["volumes"][self.current_prediction_volume]['make_prediction']:
                 self.current_prediction_volume += 1
-            v_olap = args["volumes"][self.current_prediction_volume]["prediction_overlap_step"]
+            v_olap = args["predict_step"]
             self.current_prediction_batch = 0
             starting_coordinates = [0,0,0]
             samples, coordinates, nextCoordinates = self.volume_set[self.current_prediction_volume].getPredictionSample3D(args, starting_coordinates, overlap_step=v_olap)

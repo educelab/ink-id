@@ -17,7 +17,6 @@
 		"use_in_training": true,
 		"use_in_test_set": true,
 		"make_prediction": true,
-		"prediction_overlap_step": 4 // TODO this overlaps with same variable below
             }
 	],
 
