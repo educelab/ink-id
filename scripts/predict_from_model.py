@@ -34,7 +34,6 @@ args = {
     "prediction_batch_size": 500,
     "filter_size" : [3,3,3],
     "neurons": [16, 8, 4, 2],
-    "n_classes": 2,
     "batch_norm_momentum": .9,
 
     ### Data configuration ###
@@ -59,7 +58,7 @@ args = {
 
 
 x = tf.placeholder(tf.float32, [None, args["x_Dimension"], args["y_Dimension"], args["z_Dimension"]])
-y = tf.placeholder(tf.float32, [None, args["n_classes"]])
+y = tf.placeholder(tf.float32, [None, 2])
 drop_rate = tf.placeholder(tf.float32)
 training_flag = tf.placeholder(tf.bool)
 

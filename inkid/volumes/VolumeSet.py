@@ -39,7 +39,7 @@ class VolumeSet:
     def getTestBatch(self, args):
         # gather testing samples from other volumes
         trainingSamples = np.zeros((args["num_test_cubes"], args["subvolume_dimension_x"], args["subvolume_dimension_y"], args["subvolume_dimension_z"]), dtype=np.float32)
-        groundTruth = np.zeros((args["num_test_cubes"], args["n_classes"]), dtype=np.float32)
+        groundTruth = np.zeros((args["num_test_cubes"], 2), dtype=np.float32)
 
         if self.n_test_volumes == 1:
             # all samples come from the same volume

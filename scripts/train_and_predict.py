@@ -51,7 +51,7 @@ def main():
             datetime.datetime.today().timetuple()[3]))
 
     x = tf.placeholder(tf.float32, [None, params['x_dimension'], params['y_dimension'], params['z_dimension']])
-    y = tf.placeholder(tf.float32, [None, params['n_classes']])
+    y = tf.placeholder(tf.float32, [None, 2])
     drop_rate = tf.placeholder(tf.float32)
     training_flag = tf.placeholder(tf.bool)
 

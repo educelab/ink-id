@@ -60,7 +60,7 @@ def main():
     dataset = dataset.batch(params["prediction_batch_size"])
     next_batch = dataset.make_one_shot_iterator().get_next()
 
-    y = tf.placeholder(tf.float32, [None, params["n_classes"]])
+    y = tf.placeholder(tf.float32, [None, 2])
     drop_rate = tf.placeholder(tf.float32)
     training_flag = tf.placeholder(tf.bool)
     pred, _, inputs, coordinates = inkid.model.build_model(next_batch,

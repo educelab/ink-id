@@ -200,7 +200,7 @@ class Volume:
         print("Generating test set for {}...".format(self.volume_args['name']))
         # allocate an empty array with appropriate size
         test_samples = np.zeros((n_samples, args["subvolume_dimension_x"], args["subvolume_dimension_y"], args["subvolume_dimension_z"]), dtype=np.float32)
-        ground_truth = np.zeros((n_samples, args["n_classes"]), dtype=np.float32)
+        ground_truth = np.zeros((n_samples, 2), dtype=np.float32)
         row_step = int(args["subvolume_dimension_y"]/2)
         col_step = int(args["subvolume_dimension_x"]/2)
 

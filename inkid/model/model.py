@@ -38,7 +38,7 @@ def build_model(inputs, labels, drop_rate, args, training_flag):
                                        momentum=args["batch_norm_momentum"])
 
     net = layers.dropout(slim.fully_connected(slim.flatten(conv4),
-                                              args["n_classes"],
+                                              2,
                                               activation_fn=None),
                          rate=drop_rate)
 

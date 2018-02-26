@@ -34,7 +34,6 @@
 	"neurons": [16, 8, 4, 2],
 	"training_iterations": 1000000,
 	"training_epochs": 2,
-	"n_classes": 2, // TODO check for removal
 	"pos_weight": 0.5,
 	"batch_norm_momentum": 0.9,
 	"fbeta_weight": 0.3,
