@@ -54,7 +54,7 @@
 	"truth_cutoff_high": 0.85,
 
 	"predict_step": 10000,  // make a prediction every x steps
-	"overlap_step": 4,  // during prediction, predict on one sample for each _ by _ voxel square
+	"prediction_overlap_step": 4,  // during prediction, predict on one sample for each _ by _ voxel square
 	"display_step": 100,  // output stats every x steps
 	"predict_depth": 1,
 	"output_path": "",

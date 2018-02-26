@@ -67,7 +67,7 @@ class Volume:
         self.prediction_plus_surf = np.zeros((self.volume.shape[0:2]), dtype=np.float32)
         self.training_image = np.zeros(self.prediction_image_ink.shape, dtype=np.uint16)
         try:
-            self.prediction_overlap_step = self.args["predict_step"]
+            self.prediction_overlap_step = self.args["prediction_overlap_step"]
         except:
             print("No prediction_overlap_step for {}".format(self.volume_args['name']))
 
