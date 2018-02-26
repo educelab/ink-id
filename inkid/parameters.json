@@ -42,14 +42,13 @@
 	"wobble_step": 1000,
 	"wobble_max_degrees": 2,
 	"num_test_cubes": 400,
-	"use_jitter": true, // we use
+	"use_jitter": true,
 	"jitter_range": [-4, 4],
 	"add_augmentation": true,
 	"balance_samples": false,
 	"use_grid_training": true,
 	"grid_n_squares": 10,
 	"grid_test_square": 0,
-	"surface_threshold": 20400, // TODO check if this is used anywhere and remove if not
 	"restrict_surface": true,
 	"truth_cutoff_low": 0.15,
 	"truth_cutoff_high": 0.85,
