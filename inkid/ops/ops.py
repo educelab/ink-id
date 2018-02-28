@@ -86,6 +86,7 @@ def bounds(args, volume_shape, identifier, train_portion):
     return row_bounds, col_bounds
 
 
+
 def getRandomTestCoordinate(args, volume_shape, bounds_identifier, train_portion):
     if args["use_grid_training"]:
         return getGridTestCoordinate(args, volume_shape)
