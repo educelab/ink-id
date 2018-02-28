@@ -1,4 +1,5 @@
 import numpy as np
+import tensorflow as tf
 
 from inkid.volumes import Volume
 
@@ -20,7 +21,7 @@ class VolumeSet:
         for i in range(self.n_total_volumes):
             print("Initializing volume {}...".format(i))
             current_vol_args = args['volumes'][i]
-            self.volume_set.append(Volume(args, volume_number=i))
+            self.volume_set.append(Volume(args, volume_ID=i))
             if current_vol_args['use_in_training']:
                 self.n_train_volumes += 1
                 self.train_volume_indices.append(i)
@@ -36,6 +37,49 @@ class VolumeSet:
         print("Initialized {} total volumes, {} to be used for training...".format(self.n_total_volumes, self.n_train_volumes))
 
 
+    def tf_input_fn(self, return_labels=True, perform_shuffle=True,
+                    batch_size=32, restrict_to_surface=True):
+        dataset = tf.data.Dataset.from_generator(self.coordinate_pool_generator(grid_spacing=10),
+                                                 (tf.int64, tf.int64))
+
+        if restrict_to_surface:
+            dataset = dataset.filter(self.tf_is_on_surface)
+
+        if perform_shuffle:
+            buffer_size = 10000
+            dataset = dataset.shuffle(buffer_size)
+
+        dataset = dataset.map(self.tf_coordinate_to_network_input)
+        dataset = dataset.batch(batch_size)
+        next_batch = dataset.make_one_shot_iterator().get_next()
+        return next_batch
+
+
+    def tf_coordinate_to_network_input(self, vol_id, xy_coordinate):
+        return tf.py_func(self.coordinate_to_network_input,
+                          [vol_id, xy_coordinate], [tf.int64, tf.int64, tf.float32])
+
+
+    def coordinate_to_network_input(self, vol_id, xy_coordinate):
+        return self.volume_set[vol_id].coordinate_to_network_input(xy_coordinate)
+
+    
+    def coordinate_pool_generator(self, grid_spacing=1):
+        def generator():
+            for volume in self.volume_set:
+                for coordinate in volume.yield_coordinates(grid_spacing):
+                    yield coordinate
+        return generator
+
+
+    def is_on_surface(self, vol_id, xy_coordinate):
+        return self.volume_set[vol_id].is_on_surface(xy_coordinate)
+    
+
+    def tf_is_on_surface(self, vol_id, xy_coordinate):
+        return tf.py_func(self.is_on_surface, [vol_id, xy_coordinate], [tf.bool])
+
+        
     def getTestBatch(self, args):
         # gather testing samples from other volumes
         trainingSamples = np.zeros((args["num_test_cubes"], args["subvolume_dimension_x"], args["subvolume_dimension_y"], args["subvolume_dimension_z"]), dtype=np.float32)

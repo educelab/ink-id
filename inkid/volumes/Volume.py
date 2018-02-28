@@ -13,13 +13,14 @@ import tensorflow as tf
 
 from inkid import ops
 
+
 class Volume:
-    def __init__(self, args, volume_number):
+    def __init__(self, args, volume_ID):
         """Read volume(s), ground truth (single registered .png), and surface segmentation image."""
         # Part 1: volume metadata
         self.args = args
-        self.volume_args = args['volumes'][volume_number]
-        self.volume_number = volume_number
+        self.volume_args = args['volumes'][volume_ID]
+        self.volume_ID = volume_ID
         self.train_bounds = self.volume_args['train_bounds']
         self.train_portion = self.volume_args['train_portion']
         self.add_augmentation = args["add_augmentation"]
@@ -84,65 +85,38 @@ class Volume:
         self.train_index = 0
         self.epoch = 0
 
-    def tf_input_fn(return_labels, perform_shuffle, batch_size, restrict_to_surface=True):
-        """Create a dataset for Tensorflow Estimator usage.
-
-        Create a dataset using the points in this volume, and return
-        the batch iterator that can be used with a
-        tf.estimator.Estimator.
-
-        """
-        dataset = tf.data.Dataset.from_generator(self.coordinate_pool_generator(grid_spacing=10),
-                                                 tf.int64, [2])
-        if restrict_to_surface:
-            dataset = dataset.filter(self.tf_is_on_surface)
-        if perform_shuffle:
-            # Shuffle buffer size equal to number of possible points
-            # so that they all get included in the shuffled set
-            dataset.shuffle(self.volume.shape[0] * self.volume.shape[1])
-        dataset = dataset.map(self.tf_coordinate_to_subvolume)
-        dataset = dataset.batch(batch_size)
-        next_batch = dataset.make_one_shot_iterator().get_next()
-        return next_batch
-                                                       
-
-    def is_on_surface(self, coordinate):
+        
+    def is_on_surface(self, xy_coordinate):
         """Return whether a point is on the surface."""
-        x = coordinate[0]
-        y = coordinate[1]
+        x = xy_coordinate[0]
+        y = xy_coordinate[1]
         xStep = int(self.args["subvolume_dimension_y"] / 2)
         yStep = int(self.args["subvolume_dimension_x"] / 2)
         square = self.surface_mask[(x - xStep):(x + xStep), (y - yStep):(y + yStep)]
         return np.size(square) > 0 and np.min(square) != 0
 
 
-    def tf_is_on_surface(self, coordinate):
-        """Wrap is_on_surface in a Tensorflow operation."""
-        return tf.py_func(self.is_on_surface, [coordinate], [tf.bool])
-
-
-    def coordinate_pool_generator(self, grid_spacing=1):
-        """Walk the 2D space and generate points on the grid.
+    def yield_coordinates(self, grid_spacing=1):
+        """Walk the 2D space and yield points on the grid.
 
         Walk the 2D coordinate space and yield the (x, y) points on
         the grid. Skip points in both the x and y directions
         (effectively creating a grid of points) based on the
         grid_spacing argument. If grid_spacing is 1 it will just
-        return every (x, y).
+        return every (x, y). Return the volume ID along with the
+        coordinate values.
 
         """
-        def generator():
-            for x in range(int(self.args["subvolume_dimension_x"]),
-                           self.volume.shape[0] - int(self.args["subvolume_dimension_x"]),
+        for x in range(int(self.args["subvolume_dimension_x"]),
+                       self.volume.shape[0] - int(self.args["subvolume_dimension_x"]),
+                       grid_spacing):
+            for y in range(int(self.args["subvolume_dimension_y"]),
+                           self.volume.shape[1] - int(self.args["subvolume_dimension_y"]),
                            grid_spacing):
-                for y in range(int(self.args["subvolume_dimension_y"]),
-                               self.volume.shape[1] - int(self.args["subvolume_dimension_y"]),
-                               grid_spacing):
-                    yield [x, y]
-        return generator
+                yield (self.volume_ID, (x, y))
 
 
-    def coordinate_to_subvolume(self, coordinate):
+    def coordinate_to_network_input(self, xy_coordinate):
         """Map a coordinate to a tuple of (coordinate, subvolume).
 
         Given an (x, y) coordinate, return a tuple (coordinate,
@@ -159,10 +133,12 @@ class Volume:
         y_step = int(self.args["subvolume_dimension_y"]/2)
         z_step = self.args["subvolume_dimension_z"]
 
-        x = coordinate[0]
-        y = coordinate[1]
+        x = xy_coordinate[0]
+        y = xy_coordinate[1]
         # Cap the z value in case the surface data has a z height that puts the subvolume outside the volume
         z = min(max(0, self.surface_image[x, y] - self.args["surface_cushion"]), self.volume.shape[2] - z_step)
+
+        xyz_coordinate = (x, y, z)
 
         subvolume = self.volume[(x - x_step):(x + x_step),
                                 (y - y_step):(y + y_step),
@@ -184,14 +160,9 @@ class Volume:
             subvolume = np.rot90(subvolume, k=rotate_direction, axes=(0,1))
 
         # Return plain np arrays so this will cooperate with tf.py_func
-        return np.asarray(coordinate, np.int64), np.asarray(subvolume, np.float32)
+        return self.volume_ID, np.asarray(xyz_coordinate, np.int64), np.asarray(subvolume, np.float32)
 
 
-    def tf_coordinate_to_subvolume(self, coordinate):
-        """Wrap coordinate_to_subvolume in a Tensorflow operation."""
-        return tf.py_func(self.coordinate_to_subvolume, [coordinate], [tf.int64, tf.float32])
-        
-    
     def adjust_depth_for_wobble(self, x, y, z):
         """Adjust the z value of a point based on the volume wobble.
 
