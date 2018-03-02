@@ -49,19 +49,39 @@ class VolumeSet:
             buffer_size = 10000
             dataset = dataset.shuffle(buffer_size)
 
-        dataset = dataset.map(self.tf_coordinate_to_network_input)
+        if return_labels:
+            dataset = dataset.map(self.tf_coordinate_to_labeled_input)
+        else:
+            dataset = dataset.map(self.tf_coordinate_to_unlabeled_input)
+        
         dataset = dataset.batch(batch_size)
-        next_batch = dataset.make_one_shot_iterator().get_next()
-        return next_batch
+
+        if return_labels:
+            batch_features, batch_labels = dataset.make_one_shot_iterator().get_next()
+            return batch_features, batch_labels
+        else:
+            batch_features = dataset.make_one_shot_iterator().get_next()
+            return batch_features, None
 
 
-    def tf_coordinate_to_network_input(self, vol_id, xy_coordinate):
-        return tf.py_func(self.coordinate_to_network_input,
-                          [vol_id, xy_coordinate], [tf.int64, tf.int64, tf.float32])
+    def tf_coordinate_to_unlabeled_input(self, vol_id, xy_coordinate):
+        tensors = tf.py_func(self.coordinate_to_input,
+                             [vol_id, xy_coordinate, False],
+                             [tf.int64, tf.int64, tf.float32])
+        feature_names = ['VolumeID', 'XYZCoordinate', 'Subvolume']
+        return dict(zip(feature_names, tensors))
 
 
-    def coordinate_to_network_input(self, vol_id, xy_coordinate):
-        return self.volume_set[vol_id].coordinate_to_network_input(xy_coordinate)
+    def tf_coordinate_to_labeled_input(self, vol_id, xy_coordinate):
+        tensors = tf.py_func(self.coordinate_to_input,
+                             [vol_id, xy_coordinate, True],
+                             [tf.int64, tf.int64, tf.float32, tf.float32])
+        feature_names = ['VolumeID', 'XYZCoordinate', 'Subvolume']
+        return dict(zip(feature_names, tensors[:3])), tensors[3]
+
+
+    def coordinate_to_input(self, vol_id, xy_coordinate, return_label):
+        return self.volume_set[vol_id].coordinate_to_input(xy_coordinate, return_label)
 
     
     def coordinate_pool_generator(self, grid_spacing=1):

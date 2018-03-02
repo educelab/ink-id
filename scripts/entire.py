@@ -50,14 +50,12 @@ def main():
             datetime.datetime.today().timetuple()[2],
             datetime.datetime.today().timetuple()[3]))
 
-    feature_names = ['X', 'Y', 'Subvolume']
-    
     volumes = VolumeSet(params)
 
-    next_batch = volumes.tf_input_fn()
+    next_batch, next_labels = volumes.tf_input_fn()
 
     with tf.Session() as sess:
-        first_batch = sess.run(next_batch)
+        first_batch = sess.run((next_batch, next_labels))
     print(first_batch)
     
 

@@ -74,6 +74,7 @@ class Volume:
             print("No prediction_overlap_step for {}".format(self.volume_args['name']))
 
         # Part 4: prediction metadata and more
+        self.truth_cutoff_high = self.args["truth_cutoff_high"]
         self.max_truth = np.iinfo(self.ground_truth.dtype).max
         self.surface_mask = self.surface_mask_image / np.iinfo(self.surface_mask_image.dtype).max
         self.all_truth, self.all_preds = [], []
@@ -116,7 +117,7 @@ class Volume:
                 yield (self.volume_ID, (x, y))
 
 
-    def coordinate_to_network_input(self, xy_coordinate):
+    def coordinate_to_input(self, xy_coordinate, return_label):
         """Map a coordinate to a tuple of (coordinate, subvolume).
 
         Given an (x, y) coordinate, return a tuple (coordinate,
@@ -129,13 +130,16 @@ class Volume:
         randomly.
 
         """
+        # Assume coordinate is in center of subvolume in x and y, and
+        # on the top of the subvolume in the z axis.
         x_step = int(self.args["subvolume_dimension_x"]/2)
         y_step = int(self.args["subvolume_dimension_y"]/2)
         z_step = self.args["subvolume_dimension_z"]
 
         x = xy_coordinate[0]
         y = xy_coordinate[1]
-        # Cap the z value in case the surface data has a z height that puts the subvolume outside the volume
+        # Cap the z value in case the surface data has a z height that
+        # puts the subvolume outside the volume
         z = min(max(0, self.surface_image[x, y] - self.args["surface_cushion"]), self.volume.shape[2] - z_step)
 
         xyz_coordinate = (x, y, z)
@@ -159,9 +163,22 @@ class Volume:
             rotate_direction = np.random.randint(4)
             subvolume = np.rot90(subvolume, k=rotate_direction, axes=(0,1))
 
-        # Return plain np arrays so this will cooperate with tf.py_func
-        return self.volume_ID, np.asarray(xyz_coordinate, np.int64), np.asarray(subvolume, np.float32)
+        if not return_label:
+            # Return plain np arrays so this will cooperate with tf.py_func
+            return (self.volume_ID, np.asarray(xyz_coordinate, np.int64),
+                    np.asarray(subvolume, np.float32))
 
+        average_label = np.mean(self.ground_truth[(x - x_step):(x + x_step),
+                                                  (y - y_step):(y + y_step)])
+        
+        if average_label > (self.truth_cutoff_high * self.max_truth):
+            label = [0.0,1.0]
+        else:
+            label = [1.0,0.0]
+
+        return (self.volume_ID, np.asarray(xyz_coordinate, np.int64),
+                np.asarray(subvolume, np.float32), np.asarray(label, np.float32))
+            
 
     def adjust_depth_for_wobble(self, x, y, z):
         """Adjust the z value of a point based on the volume wobble.
