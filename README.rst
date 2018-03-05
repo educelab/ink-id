@@ -1,7 +1,7 @@
 ink-id
 ======
 
-``ink-id`` is a Python package and collection of scripts for identifying ink in a document via machine learning.
+``inkid`` is a Python package and collection of scripts for identifying ink in a document via machine learning.
 
 Requirements
 ------------
@@ -20,20 +20,16 @@ First, clone this repository and navigate to the root directory:
    $ git clone https://code.vis.uky.edu/seales-research/ink-id.git
    $ cd ink-id
 
-To install the package you can use `pip <https://pip.pypa.io/en/stable/>`_:
+To install the package you can use `pipenv <https://docs.pipenv.org/>`_:
 
 .. code-block:: bash
 
-   $ pip install -e .
-
-This will install the ``inkid`` package from the current directory, based on the contents of ``setup.py``.
-
-You can also (recommended) use `pipenv <https://docs.pipenv.org/>`_ to create a virtual environment and install the package to that environment:
-
-.. code-block:: bash
    $ pip install pipenv   # If needed, install pipenv
    $ pipenv --three       # Create a new virtual environment with Python 3
-   $ pipenv install -e .  # Install the inkid package to the virtual environment, using symlink so that changes to the source are reflected in the installation
+   $ pipenv install
+
+This will create a virtual environment, and then check ``Pipfile`` for the packages to install, where it will find ``inkid`` not by name but by path (``.``).
+It will then find ``setup.py`` and install the dependencies for ``inkid``.
 
 Some other useful pipenv commands:
 
@@ -42,6 +38,12 @@ Some other useful pipenv commands:
    $ pipenv graph   # View the installed packages to confirm inkid and dependencies are installed
    $ pipenv shell   # Enter the created virtual environment containing the inkid installation
    $ pipenv update  # Uninstall all packages and reinstall. Useful after certain changes, like adding a console script
+   
+Pipenv is recommended, but you could also just use pip:
+
+.. code-block:: bash
+   
+   $ pip install -e . 
 
 Documentation
 -------------
