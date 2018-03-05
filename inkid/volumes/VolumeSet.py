@@ -1,3 +1,5 @@
+import multiprocessing
+
 import numpy as np
 import tensorflow as tf
 
@@ -37,8 +39,33 @@ class VolumeSet:
         print("Initialized {} total volumes, {} to be used for training...".format(self.n_total_volumes, self.n_train_volumes))
 
 
-    def tf_input_fn(self, return_labels=True, perform_shuffle=True,
-                    batch_size=32, restrict_to_surface=True):
+    def training_input_fn(self, batch_size):
+        return self.tf_input_fn(return_labels=True,
+                                perform_shuffle=True,
+                                batch_size=batch_size,
+                                restrict_to_surface=True,
+                                augment_samples=True)
+
+
+    def prediction_input_fn(self, batch_size):
+        return self.tf_input_fn(return_labels=False,
+                                perform_shuffle=False,
+                                batch_size=batch_size,
+                                retrict_to_surface=True,
+                                augment_samples=False)
+
+
+    def evaluation_input_fn(self, batch_size):
+        return self.tf_input_fn(return_labels=True,
+                                perform_shuffle=False,
+                                batch_size=batch_size,
+                                restrict_to_surface=True,
+                                augment_samples=False)
+
+    def tf_input_fn(self, return_labels=True, perform_shuffle=True, shuffle_buffer_size=10000,
+                    batch_size=32, restrict_to_surface=True, augment_samples=False):
+        self._augment_samples = augment_samples
+        
         dataset = tf.data.Dataset.from_generator(self.coordinate_pool_generator(grid_spacing=10),
                                                  (tf.int64, tf.int64))
 
@@ -46,15 +73,15 @@ class VolumeSet:
             dataset = dataset.filter(self.tf_is_on_surface)
 
         if perform_shuffle:
-            buffer_size = 10000
-            dataset = dataset.shuffle(buffer_size)
+            dataset = dataset.shuffle(shuffle_buffer_size)
 
         if return_labels:
-            dataset = dataset.map(self.tf_coordinate_to_labeled_input)
+            dataset = dataset.map(self.tf_coordinate_to_labeled_input, num_parallel_calls=multiprocessing.cpu_count())
         else:
-            dataset = dataset.map(self.tf_coordinate_to_unlabeled_input)
+            dataset = dataset.map(self.tf_coordinate_to_unlabeled_input, num_parallel_calls=multiprocessing.cpu_count())
         
         dataset = dataset.batch(batch_size)
+        dataset = dataset.prefetch(1)
 
         if return_labels:
             batch_features, batch_labels = dataset.make_one_shot_iterator().get_next()
@@ -66,7 +93,7 @@ class VolumeSet:
 
     def tf_coordinate_to_unlabeled_input(self, vol_id, xy_coordinate):
         tensors = tf.py_func(self.coordinate_to_input,
-                             [vol_id, xy_coordinate, False],
+                             [vol_id, xy_coordinate, False, self._augment_samples],
                              [tf.int64, tf.int64, tf.float32])
         feature_names = ['VolumeID', 'XYZCoordinate', 'Subvolume']
         return dict(zip(feature_names, tensors))
@@ -74,14 +101,16 @@ class VolumeSet:
 
     def tf_coordinate_to_labeled_input(self, vol_id, xy_coordinate):
         tensors = tf.py_func(self.coordinate_to_input,
-                             [vol_id, xy_coordinate, True],
+                             [vol_id, xy_coordinate, True, self._augment_samples],
                              [tf.int64, tf.int64, tf.float32, tf.float32])
         feature_names = ['VolumeID', 'XYZCoordinate', 'Subvolume']
         return dict(zip(feature_names, tensors[:3])), tensors[3]
 
 
-    def coordinate_to_input(self, vol_id, xy_coordinate, return_label):
-        return self.volume_set[vol_id].coordinate_to_input(xy_coordinate, return_label)
+    def coordinate_to_input(self, vol_id, xy_coordinate, return_label, augment_samples):
+        return self.volume_set[vol_id].coordinate_to_input(xy_coordinate,
+                                                           return_label,
+                                                           augment_samples)
 
     
     def coordinate_pool_generator(self, grid_spacing=1):

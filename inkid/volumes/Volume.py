@@ -117,7 +117,7 @@ class Volume:
                 yield (self.volume_ID, (x, y))
 
 
-    def coordinate_to_input(self, xy_coordinate, return_label):
+    def coordinate_to_input(self, xy_coordinate, return_label, augment_samples):
         """Map a coordinate to a tuple of (coordinate, subvolume).
 
         Given an (x, y) coordinate, return a tuple (coordinate,
@@ -148,9 +148,7 @@ class Volume:
                                 (y - y_step):(y + y_step),
                                 (z):(z + z_step)]
 
-        # TODO this probably does not need to happen on predictions just training
-        # Rotate/flip sample randomly if augmenting
-        if self.add_augmentation:
+        if augment_samples:
             flip_direction = np.random.randint(4)
             if flip_direction == 0:
                 subvolume = np.flip(subvolume, axis=0)
@@ -172,9 +170,9 @@ class Volume:
                                                   (y - y_step):(y + y_step)])
         
         if average_label > (self.truth_cutoff_high * self.max_truth):
-            label = [0.0,1.0]
+            label = [0, 1]
         else:
-            label = [1.0,0.0]
+            label = [1, 0]
 
         return (self.volume_ID, np.asarray(xyz_coordinate, np.int64),
                 np.asarray(subvolume, np.float32), np.asarray(label, np.float32))
