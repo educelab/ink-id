@@ -66,7 +66,8 @@ def main():
 
     tensors_to_log = {'train_accuracy': 'train_accuracy'}
     logging_hook = tf.train.LoggingTensorHook(
-        tensors=tensors_to_log, every_n_iter=1)
+        tensors=tensors_to_log, every_n_iter=100)
+    tf.logging.set_verbosity(tf.logging.INFO)
 
     classifier.train(
         input_fn=lambda: volumes.training_input_fn(params['batch_size']), hooks=[logging_hook])
