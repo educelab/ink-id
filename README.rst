@@ -31,7 +31,7 @@ This will install the ``inkid`` package from the current directory, based on the
 You can also (recommended) use `pipenv <https://docs.pipenv.org/>`_ to create a virtual environment and install the package to that environment:
 
 .. code-block:: bash
-
+   $ pip install pipenv   # If needed, install pipenv
    $ pipenv --three       # Create a new virtual environment with Python 3
    $ pipenv install -e .  # Install the inkid package to the virtual environment, using symlink so that changes to the source are reflected in the installation
 
