@@ -1,6 +1,4 @@
-"""
-Miscellaneous operations required by the 3DCNN.
-"""
+"""Miscellaneous operations used in ink-id."""
 
 import datetime
 import inspect
@@ -15,8 +13,41 @@ import imageio
 import inkid
 
 
+def generator_from_iterator(iterator):
+    """Take a Python iterator and create a generator function with it.
+
+    E.g. given an iterator of (x, y) points this will create a
+    generator function that can be passed to create a
+    tf.data.Dataset.
+
+    """
+    def generator():
+        for item in iterator:
+            yield item
+    return generator
+
+
+def are_coordinates_within(p1, p2, distance):
+    """Return if two points would have overlapping boxes.
+
+    Given two (x, y) points and a distance, imagine creating squares
+    with side lengths equal to that distance and centering them on
+    each point. Return if the squares overlap at all.
+
+    """
+    (x1, y1) = p1
+    (x2, y2) = p2
+    return abs(x1 - x2) < distance and abs(y1 - y2) < distance
+
+
 def save_volume_to_image_stack(volume, dirname):
-    """Given a volume as a np.array and a directory name, save the volume as a stack of .tif images in that directory."""
+    """Save a volume to a stack of .tif images.
+
+    Given a volume as a np.array and a directory name, save the volume
+    as a stack of .tif images in that directory, with filenames
+    starting at 0 and going up to the z height of the volume.
+
+    """
     os.makedirs(dirname)
     for i in range(volume.shape[2]):
         image = volume[:, :, i]
@@ -25,42 +56,36 @@ def save_volume_to_image_stack(volume, dirname):
 
 
 def load_default_parameters():
-    # https://stackoverflow.com/questions/247770/retrieving-python-module-path
-    # Find the directory the inkid package is loaded from, and get default_parameters.json from there
+    """Return the default network parameters for ink-id.
+
+    Find the directory that the inkid package is loaded from, and then
+    return the network parameters in parameters.json.
+
+    https://stackoverflow.com/questions/247770/retrieving-python-module-path
+
+    """
     return load_parameters_from_json(os.path.join(os.path.dirname(inspect.getfile(inkid)), 'parameters.json'))
 
+
 def load_parameters_from_json(filename):
-    """Given a filename to a .json, remove the comments from that file and return a Python dictionary built from the JSON."""
+    """Return a dict of the parameters stored in a JSON file.
+
+    Given a filename to a .json, remove the comments from that file
+    and return a Python dictionary built from the JSON.
+
+    """
     with open(filename, 'r') as f:
         # minify to remove comments
         minified = jsmin(str(f.read()))
         return json.loads(minified)['parameters']
 
     
-def adjustDepthForWobble(args, rowCoord, colCoord, zCoordinate, angle, axes, volume_shape):
-    if set(axes) == {0,2}:
-        # plane of rotation = yz
-        adjacent_length =  (volume_shape[0] / 2) - rowCoord
-        offset = adjacent_length * np.tan(np.deg2rad(angle))
-        newZ = int(zCoordinate + offset)
-
-    elif set(axes) == {1,2}:
-        # plane of rotation = xz
-        adjacent_length = colCoord - (volume_shape[1] / 2)
-        offset = adjacent_length * np.tan(np.deg2rad(angle))
-        newZ = int(zCoordinate + offset)
-
-    else:
-        # either no wobble or rotation plane = xy (does not affect depth)
-        newZ = zCoordinate
-
-    return newZ
-
-
 def bounds(args, volume_shape, identifier, train_portion):
-    """Return the bounds tuples for X and Y dimensions. Used in finding training vs. testing coordinates."""
-    y_step = int(args["y_dimension"]/2)
-    x_step = int(args["x_dimension"]/2)
+    """Return the bounds tuples for X and Y dimensions. Used in finding
+    training vs. testing coordinates.
+    """
+    y_step = int(args["subvolume_dimension_y"]/2)
+    x_step = int(args["subvolume_dimension_x"]/2)
 
     if args["use_grid_training"]:
         col_bounds = [x_step, volume_shape[1]-x_step]
@@ -86,8 +111,7 @@ def bounds(args, volume_shape, identifier, train_portion):
     return row_bounds, col_bounds
 
 
-
-def getRandomTestCoordinate(args, volume_shape, bounds_identifier, train_portion):
+def getRandomTestCoordinate(args, volume_shape):
     if args["use_grid_training"]:
         return getGridTestCoordinate(args, volume_shape)
     else:
@@ -102,8 +126,8 @@ def getTrainCoordinate(args, colBounds, rowBounds, volume_shape):
 
 
 def getGridTrainCoordinate(args, volume_shape):
-    row_step = int(args["y_dimension"]/2)
-    col_step = int(args["x_dimension"]/2)
+    row_step = int(args["subvolume_dimension_y"]/2)
+    col_step = int(args["subvolume_dimension_x"]/2)
     row, col = np.random.randint(row_step, volume_shape[0]-row_step), np.random.randint(col_step, volume_shape[1]-col_step)
 
     found = False
@@ -124,8 +148,8 @@ def getGridTrainCoordinate(args, volume_shape):
 
 
 def getGridTestCoordinate(args, volume_shape):
-    row_step = int(args["y_dimension"]/2)
-    col_step = int(args["x_dimension"]/2)
+    row_step = int(args["subvolume_dimension_y"]/2)
+    col_step = int(args["subvolume_dimension_x"]/2)
 
     n_rows = int(args["grid_n_squares"] / 2)
     voxels_per_row = int(volume_shape[0] / n_rows)
@@ -134,10 +158,10 @@ def getGridTestCoordinate(args, volume_shape):
 
     if args["grid_test_square"] % 2 == 0:
         # testing on the left side
-        col = np.random.randint(int(args["x_dimension"]/2), int(volume_shape[1] / 2))
+        col = np.random.randint(int(args["subvolume_dimension_x"]/2), int(volume_shape[1] / 2))
     else:
         # testing on the right side
-        col = np.random.randint(int(volume_shape[1] / 2), volume_shape[1]-int(args["x_dimension"]/2))
+        col = np.random.randint(int(volume_shape[1] / 2), volume_shape[1]-int(args["subvolume_dimension_x"]/2))
 
     return row,col
 
@@ -166,22 +190,21 @@ def isInTestSet(args, row_point, col_point, volume_shape, bounds_identifier, tra
 
 def averageTruthInSubvolume(args, row_coordinate, col_coordinate, ground_truth):
     # assume coordinate is at the center
-    row_step = int(args["y_dimension"]/2)
-    col_step = int(args["x_dimension"]/2)
+    row_step = int(args["subvolume_dimension_y"]/2)
+    col_step = int(args["subvolume_dimension_x"]/2)
     row_top = row_coordinate - row_step
     col_left = col_coordinate - col_step
 
-    avg_truth = np.mean(ground_truth[row_top:row_top+args["y_dimension"], col_left:col_left+args["x_dimension"]])
+    avg_truth = np.mean(ground_truth[row_top:row_top+args["subvolume_dimension_y"], col_left:col_left+args["subvolume_dimension_x"]])
 
     return avg_truth 
 
 
 def generateCoordinatePool(args, volume_shape, ground_truth, surface_mask, train_bounds_identifier, train_portion):
     coordinates = []
-    ink_count = 0
     truth_label_value = np.iinfo(ground_truth.dtype).max
-    rowStep = int(args["y_dimension"]/2)
-    colStep = int(args["x_dimension"]/2)
+    rowStep = int(args["subvolume_dimension_y"]/2)
+    colStep = int(args["subvolume_dimension_x"]/2)
 
     row_bounds, col_bounds = bounds(args, volume_shape, train_bounds_identifier, train_portion)
     print(" rowbounds: {}".format(row_bounds))
@@ -207,48 +230,12 @@ def generateCoordinatePool(args, volume_shape, ground_truth, surface_mask, train
 
             label = round(ground_truth[row,col] / truth_label_value)
             augment_seed = np.random.randint(4)
-            ink_count += label # 0 if less than .9
             coordinates.append([row, col, label, augment_seed])
-
-    ink_portion = ink_count / len(coordinates)
 
     return coordinates
 
 
-def getRandomBrick(args, volume, xCoordinate, yCoordinate):
-    """Return a volume filled with random noise. Distribution of values are aligned with the median value of the input volume."""
-    v_min = np.min(volume[yCoordinate, xCoordinate])
-    v_max = np.max(volume[yCoordinate, xCoordinate])
-    v_median = np.median(volume[yCoordinate, xCoordinate])
-    low = v_median - args["random_range"]
-    high = v_median + args["random_range"]
-    sample = np.random.random([args["x_dimension"], args["y_dimension"], args["z_dimension"]])
-    return ((high - low) * sample) + low
-
-
-def augmentSample(args, sample, seed=None):
-    augmentedSample = sample
-    if seed is None:
-        seed = np.random.randint(4)
-
-    # ensure equal probability for each augmentation, including no augmentation
-    # for flip: original, flip left-right, flip up-down, both, or none
-    if seed == 0:
-        augmentedSample = np.flip(augmentedSample, axis=0)
-    elif seed == 1:
-        augmentedSample = np.flip(augmentedSample, axis=1)
-    elif seed == 2:
-        augmentedSample = np.flip(augmentedSample, axis=0)
-        augmentedSample = np.flip(augmentedSample, axis=1)
-    #implicit: no flip if seed == 2
-
-    # for rotate: original, rotate 90, rotate 180, or rotate 270
-    augmentedSample = np.rot90(augmentedSample, k=seed, axes=(0,1))
-
-    return augmentedSample
-
-
-def generateSurfaceApproximation(args, volume, area=3, search_increment=1):
+def generateSurfaceApproximation(volume, area=3, search_increment=1):
     surface_points = np.zeros((volume.shape[0:2]), dtype=np.int)
     for row in range(1, volume.shape[0], area):
         for col in range(1, volume.shape[1], area):
@@ -271,15 +258,15 @@ def generateSurfaceApproximation(args, volume, area=3, search_increment=1):
 def isOnSurface(args, rowCoordinate, colCoordinate, surfaceMask):
     # alternatively, check if the maximum value in the vector crosses a threshold
     # for now, just check our mask
-    rowStep = int(args["y_dimension"] / 2)
-    colStep = int(args["x_dimension"] / 2)
+    rowStep = int(args["subvolume_dimension_y"] / 2)
+    colStep = int(args["subvolume_dimension_x"] / 2)
     square = surfaceMask[rowCoordinate-rowStep:rowCoordinate+rowStep, colCoordinate-colStep:colCoordinate+colStep]
     return np.size(square) > 0 and np.min(square) != 0
 
 
 def minimumSurfaceInSample(args, row, col, surfaceImage):
-    rowStep = int(args["y_dimension"] / 2)
-    colStep = int(args["x_dimension"] / 2)
+    rowStep = int(args["subvolume_dimension_y"] / 2)
+    colStep = int(args["subvolume_dimension_x"] / 2)
 
     square = surfaceImage[row-rowStep:row+rowStep, col-colStep:col+colStep]
     if np.size(square) == 0:
@@ -298,7 +285,7 @@ def getSpecString(args):
     tmstring += str(tm[3])
     tmstring += "h"
 
-    specstring = "{}x{}x{}-".format(args["x_dimension"], args["y_dimension"], args["z_dimension"])
+    specstring = "{}x{}x{}-".format(args["subvolume_dimension_x"], args["subvolume_dimension_y"], args["subvolume_dimension_z"])
     specstring = specstring + tmstring
 
     return specstring

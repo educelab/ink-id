@@ -21,7 +21,7 @@ class VolumeSet:
         for i in range(self.n_total_volumes):
             print("Initializing volume {}...".format(i))
             current_vol_args = args['volumes'][i]
-            self.volume_set.append(Volume(args, volume_number=i))
+            self.volume_set.append(Volume(args, volume_ID=i))
             if current_vol_args['use_in_training']:
                 self.n_train_volumes += 1
                 self.train_volume_indices.append(i)
@@ -37,45 +37,73 @@ class VolumeSet:
         print("Initialized {} total volumes, {} to be used for training...".format(self.n_total_volumes, self.n_train_volumes))
 
 
+    def tf_input_fn(self, return_labels=True, perform_shuffle=True,
+                    batch_size=32, restrict_to_surface=True):
+        dataset = tf.data.Dataset.from_generator(self.coordinate_pool_generator(grid_spacing=10),
+                                                 (tf.int64, tf.int64))
 
-    def getTrainingBatch(self, args):
-        # gather training samples from other volumes
-        # should be as simple as getting batches from each volume and combining them
-        trainingSamples = np.zeros((args["batch_size"], args["x_dimension"], args["y_dimension"], args["z_dimension"]), dtype=np.float32)
-        groundTruth = np.zeros((args["batch_size"], args["n_classes"]), dtype=np.float32)
-        samples_per_volume = int(args["batch_size"] / self.n_train_volumes)
-        for i in range(self.n_train_volumes):
-            volume_index = self.train_volume_indices[i]
-            start = i*samples_per_volume
-            end = (i+1)*samples_per_volume
-            if i == self.n_train_volumes-1: # make sure to 'fill up' all the slots
-                end = args["batch_size"]
+        if restrict_to_surface:
+            dataset = dataset.filter(self.tf_is_on_surface)
 
-            volume_samples, volume_truth, volume_epoch = self.volume_set[volume_index].getTrainingBatch(args, n_samples=(end-start))
-            trainingSamples[start:end] = volume_samples
-            groundTruth[start:end] = volume_truth
+        if perform_shuffle:
+            buffer_size = 10000
+            dataset = dataset.shuffle(buffer_size)
 
-        '''
-        for j in range(args["batch_size"]):
-            # randomly swap samples
-            # pretty sure this is statistically invalid because certain items are more likely to get swapped
-            index_a, index_b = np.random.choice(args["batch_size"], 2, replace=False)
-            tmpSample = trainingSamples[index_a]
-            tmpTruth = groundTruth[index_a]
-            trainingSamples[index_a] = trainingSamples[index_b]
-            trainingSamples[index_b] = tmpSample
-            groundTruth[index_a] = groundTruth[index_b]
-            groundTruth[index_b] = tmpTruth'''
+        if return_labels:
+            dataset = dataset.map(self.tf_coordinate_to_labeled_input)
+        else:
+            dataset = dataset.map(self.tf_coordinate_to_unlabeled_input)
+        
+        dataset = dataset.batch(batch_size)
 
-        #TODO return actual epoch instead of the last volume's epoch
-        return trainingSamples, groundTruth, volume_epoch
+        if return_labels:
+            batch_features, batch_labels = dataset.make_one_shot_iterator().get_next()
+            return batch_features, batch_labels
+        else:
+            batch_features = dataset.make_one_shot_iterator().get_next()
+            return batch_features, None
 
 
+    def tf_coordinate_to_unlabeled_input(self, vol_id, xy_coordinate):
+        tensors = tf.py_func(self.coordinate_to_input,
+                             [vol_id, xy_coordinate, False],
+                             [tf.int64, tf.int64, tf.float32])
+        feature_names = ['VolumeID', 'XYZCoordinate', 'Subvolume']
+        return dict(zip(feature_names, tensors))
 
+
+    def tf_coordinate_to_labeled_input(self, vol_id, xy_coordinate):
+        tensors = tf.py_func(self.coordinate_to_input,
+                             [vol_id, xy_coordinate, True],
+                             [tf.int64, tf.int64, tf.float32, tf.float32])
+        feature_names = ['VolumeID', 'XYZCoordinate', 'Subvolume']
+        return dict(zip(feature_names, tensors[:3])), tensors[3]
+
+
+    def coordinate_to_input(self, vol_id, xy_coordinate, return_label):
+        return self.volume_set[vol_id].coordinate_to_input(xy_coordinate, return_label)
+
+    
+    def coordinate_pool_generator(self, grid_spacing=1):
+        def generator():
+            for volume in self.volume_set:
+                for coordinate in volume.yield_coordinates(grid_spacing):
+                    yield coordinate
+        return generator
+
+
+    def is_on_surface(self, vol_id, xy_coordinate):
+        return self.volume_set[vol_id].is_on_surface(xy_coordinate)
+    
+
+    def tf_is_on_surface(self, vol_id, xy_coordinate):
+        return tf.py_func(self.is_on_surface, [vol_id, xy_coordinate], [tf.bool])
+
+        
     def getTestBatch(self, args):
         # gather testing samples from other volumes
-        trainingSamples = np.zeros((args["num_test_cubes"], args["x_dimension"], args["y_dimension"], args["z_dimension"]), dtype=np.float32)
-        groundTruth = np.zeros((args["num_test_cubes"], args["n_classes"]), dtype=np.float32)
+        trainingSamples = np.zeros((args["num_test_cubes"], args["subvolume_dimension_x"], args["subvolume_dimension_y"], args["subvolume_dimension_z"]), dtype=np.float32)
+        groundTruth = np.zeros((args["num_test_cubes"], 2), dtype=np.float32)
 
         if self.n_test_volumes == 1:
             # all samples come from the same volume
@@ -104,8 +132,7 @@ class VolumeSet:
     def getPredictionBatch(self, args, starting_coordinates):
         # predict on one volume at a time
         # batches should be from one volume at a time
-        v_olap = args["volumes"][self.current_prediction_volume]["prediction_overlap_step"]
-        self.current_prediction_total_batches = int(self.volume_set[self.current_prediction_volume].totalPredictions(args, v_olap) / args["prediction_batch_size"])
+        self.current_prediction_total_batches = int(self.volume_set[self.current_prediction_volume].totalPredictions(args, args["prediction_overlap_step"]) / args["prediction_batch_size"])
 
         if self.current_prediction_batch < self.current_prediction_total_batches:
             # case 1: stay in the current volume
@@ -120,7 +147,7 @@ class VolumeSet:
             self.current_prediction_volume += 1
             while not args["volumes"][self.current_prediction_volume]['make_prediction']:
                 self.current_prediction_volume += 1
-            v_olap = args["volumes"][self.current_prediction_volume]["prediction_overlap_step"]
+            v_olap = args["prediction_overlap_step"]
             self.current_prediction_batch = 0
             starting_coordinates = [0,0,0]
             samples, coordinates, nextCoordinates = self.volume_set[self.current_prediction_volume].getPredictionSample3D(args, starting_coordinates, overlap_step=v_olap)

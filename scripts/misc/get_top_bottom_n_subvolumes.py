@@ -11,7 +11,7 @@ import time
 import numpy as np
 import tensorflow as tf
 
-from inkid.volumes import VolumeSet
+from inkid.volumes import Volume
 import inkid.ops
 import inkid.model
 
@@ -44,50 +44,70 @@ def main():
     params['volumes'][0]['surface_mask'] = args.surfacemask
     params['volumes'][0]['surface_data'] = args.surfacedata
     params['output_path'] = os.path.join(args.outputdir, '3dcnn-predictions', datetime.datetime.today().strftime('%Y-%m-%d_%H.%M.%S'))
+    
+    volume = Volume(params, 0)
+    
+    dataset = tf.data.Dataset.from_generator(volume.coordinate_pool_generator(grid_spacing=10),
+                                             tf.int64, [2])
+    dataset = dataset.filter(volume.tf_is_on_surface)
+    dataset = dataset.shuffle(100000)
+    dataset = dataset.map(volume.tf_coordinate_to_subvolume)
+    dataset = dataset.batch(params["prediction_batch_size"])
+    next_batch = dataset.make_one_shot_iterator().get_next()
 
-    x = tf.placeholder(tf.float32,
-                       [None, params["x_dimension"], params["y_dimension"], params["z_dimension"]])
-    y = tf.placeholder(tf.float32, [None, params["n_classes"]])
+    y = tf.placeholder(tf.float32, [None, 2])
     drop_rate = tf.placeholder(tf.float32)
     training_flag = tf.placeholder(tf.bool)
-    pred, loss = inkid.model.build_model(x, y, drop_rate, params, training_flag)
+    pred, _, inputs, coordinates = inkid.model.build_model(next_batch,
+                                                           y,
+                                                           drop_rate,
+                                                           params,
+                                                           training_flag)
     
-    volumes = VolumeSet(params)
-
     with tf.Session() as sess:
         saver = tf.train.Saver()
         saver.restore(sess, args.model)
 
-        starting_coordinates = [0, 0, 0]
-        prediction_samples, coordinates, next_coordinates = volumes.getPredictionBatch(
-            params, starting_coordinates)
-
-        top_n_predictions_and_volumes = []
-        bottom_n_predictions_and_volumes = []
+        top_n_samples = []
+        bottom_n_samples = []
 
         try:
-            while next_coordinates is not None:
-                prediction_values = sess.run(pred, feed_dict={
-                    x: prediction_samples,
-                    drop_rate: 0.0,
-                    training_flag: False
-                })
-            
-                indices_and_ink_predictions = [(values[0], values[1][1]) for values in enumerate(prediction_values)]
-                sort = sorted(indices_and_ink_predictions, key=lambda x: x[1])
+            while True:
+                try:
+                    print("Running a batch.")
+                    prediction_values, subvolumes, coords = sess.run((pred, inputs, coordinates),
+                                                                     feed_dict={
+                                                                         drop_rate: 0.0,
+                                                                         training_flag: False
+                                                                     })
 
-                # current_top_n_predictions_and_volumes = [(pair[1], prediction_samples[pair[0]]) for pair in sort[(-1 * args.number):]]
-                # current_bottom_n_predictions_and_volumes = [(pair[1], prediction_samples[pair[0]]) for pair in sort[:args.number]]
-                current_top_prediction_and_volume = [(pair[1], prediction_samples[pair[0]]) for pair in sort[-1:]]
-                current_bottom_prediction_and_volume = [(pair[1], prediction_samples[pair[0]]) for pair in sort[:1]]
+                    samples = [{"prediction": item[0][1], "subvolume": item[1], "coordinates":item[2]} for item in zip(prediction_values, subvolumes, coords)]
+                    
+                    sorted_samples = sorted(samples, key=lambda x: x["prediction"])
+
+                    current_top_sample = sorted_samples[-1:][0]
+                    current_bottom_sample = sorted_samples[:1][0]
+
+                    too_close = False
+                    for sample in top_n_samples:
+                        if inkid.ops.are_coordinates_within(sample["coordinates"], current_top_sample["coordinates"], params["subvolume_dimension_x"]):
+                            too_close = True
+                            break
+                    if not too_close:
+                        top_n_samples.append(current_top_sample)
+                        top_n_samples = sorted(top_n_samples, key = lambda x: x["prediction"])[(-1 * args.number):]
+
+                    too_close = False
+                    for sample in bottom_n_samples:
+                        if inkid.ops.are_coordinates_within(sample["coordinates"], current_bottom_sample["coordinates"], params["subvolume_dimension_x"]):
+                            too_close = True
+                            break
+                    if not too_close:
+                        bottom_n_samples.append(current_bottom_sample)
+                        bottom_n_samples = sorted(bottom_n_samples, key = lambda x: x["prediction"])[:args.number]
                 
-                # top_n_predictions_and_volumes = sorted(top_n_predictions_and_volumes + current_top_n_predictions_and_volumes, key = lambda x: x[0])[(-1 * args.number):]
-                # bottom_n_predictions_and_volumes = sorted(bottom_n_predictions_and_volumes + current_bottom_n_predictions_and_volumes, key = lambda x: x[0])[:args.number]
-                top_n_predictions_and_volumes = sorted(top_n_predictions_and_volumes + current_top_prediction_and_volume, key = lambda x: x[0])[(-1 * args.number):]
-                bottom_n_predictions_and_volumes = sorted(bottom_n_predictions_and_volumes + current_bottom_prediction_and_volume, key = lambda x: x[0])[:args.number]
-                
-                prediction_samples, coordinates, next_coordinates = volumes.getPredictionBatch(
-                    params, next_coordinates)
+                except tf.errors.OutOfRangeError:
+                    break
 
         except KeyboardInterrupt:
             pass
@@ -95,16 +115,12 @@ def main():
         top_volume = np.pad(np.ones((96, 96, 48)) * 65535, 20, 'constant')
         bottom_volume = np.pad(np.zeros((96, 96, 48)), 20, 'constant')
         
-        for i in range(len(top_n_predictions_and_volumes)):
-            top_volume = np.append(top_volume, np.pad(top_n_predictions_and_volumes[i][1], 20, 'constant'), axis=0)
-            # ops.save_subvolume_to_image_stack(top_n_predictions_and_volumes[i][1], os.path.join(params['output_path'], 'top-subvolumes', str(i)))
-        # ops.save_subvolume_to_image_stack(top_volume, os.path.join(params['output_path'], 'top-subvolume'))
+        for i in range(min(len(top_n_samples), len(bottom_n_samples))):
+            top_volume = np.append(top_volume, np.pad(top_n_samples[i]["subvolume"], 20, 'constant'), axis=0)
 
-        for i in range(len(bottom_n_predictions_and_volumes)):
-            bottom_volume = np.append(bottom_volume, np.pad(bottom_n_predictions_and_volumes[i][1], 20, 'constant'), axis=0)
-            # ops.save_subvolume_to_image_stack(bottom_n_predictions_and_volumes[i][1], os.path.join(params['output_path'], 'bottom-subvolumes', str(i)))
-        # ops.save_subvolume_to_image_stack(bottom_volume, os.path.join(params['output_path'], 'bottom-subvolume'))
-
+        for i in range(min(len(top_n_samples), len(bottom_n_samples))):
+            bottom_volume = np.append(bottom_volume, np.pad(bottom_n_samples[i]["subvolume"], 20, 'constant'), axis=0)
+            
         inkid.ops.save_volume_to_image_stack(np.append(top_volume, bottom_volume, axis=1), os.path.join(params['output_path'], 'both-subvolume-sets'))
 
 if __name__ == '__main__':

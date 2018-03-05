@@ -130,6 +130,3 @@ for increase in increase_decimals:
     for sl in range(outvol.shape[0]):
         zeros = len(str(sl))
         imageio.imsave(slice_dir+"slice" + "0000"[:4-zeros] + str(sl), outvol[sl])
-
-    # 3: save the planet
-    #TODO

@@ -16,19 +16,16 @@
 		"train_bounds": 3,  // 0=TOP || 1=RIGHT || 2=BOTTOM || 3=LEFT
 		"use_in_training": true,
 		"use_in_test_set": true,
-		"make_prediction": true,
-		"prediction_overlap_step": 4
+		"make_prediction": true
             }
 	],
 
-	"x_dimension": 96,
-	"y_dimension": 96,
-	"z_dimension": 48,
+	"subvolume_dimension_x": 96,
+	"subvolume_dimension_y": 96,
+	"subvolume_dimension_z": 48,
 
 	"surface_cushion": 10,
 
-	"use_multitask_training": false,
-	"shallow_learning_rate": 0.001,
 	"learning_rate": 0.001,
 	"batch_size": 30,
 	"prediction_batch_size": 400,
@@ -37,7 +34,6 @@
 	"neurons": [16, 8, 4, 2],
 	"training_iterations": 1000000,
 	"training_epochs": 2,
-	"n_classes": 2,
 	"pos_weight": 0.5,
 	"batch_norm_momentum": 0.9,
 	"fbeta_weight": 0.3,
@@ -46,9 +42,6 @@
 	"wobble_step": 1000,
 	"wobble_max_degrees": 2,
 	"num_test_cubes": 400,
-	"add_random": false,
-	"random_step": 10,  // one in every randomStep non-ink samples will be a random brick
-	"random_range": 200,
 	"use_jitter": true,
 	"jitter_range": [-4, 4],
 	"add_augmentation": true,
@@ -56,13 +49,12 @@
 	"use_grid_training": true,
 	"grid_n_squares": 10,
 	"grid_test_square": 0,
-	"surface_threshold": 20400,
 	"restrict_surface": true,
 	"truth_cutoff_low": 0.15,
 	"truth_cutoff_high": 0.85,
 
 	"predict_step": 10000,  // make a prediction every x steps
-	"overlap_step": 4,  // during prediction, predict on one sample for each _ by _ voxel square
+	"prediction_overlap_step": 4,  // during prediction, predict on one sample for each _ by _ voxel square
 	"display_step": 100,  // output stats every x steps
 	"predict_depth": 1,
 	"output_path": "",

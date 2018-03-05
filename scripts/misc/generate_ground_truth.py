@@ -2,9 +2,6 @@ import numpy as np
 import cv2
 import pdb
 
-# TODO
-    # open all ground truths
-
 gtPath = "/home/volcart/volumes/packages/CarbonPhantom-Feb2017.volpkg/paths/20170221130948/layered/registered/ground-truth/column-6/"
 
 gtInk = cv2.imread(gtPath+"GroundTruth-CarbonInk.png")[:,:,0]
