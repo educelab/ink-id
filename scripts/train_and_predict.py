@@ -50,7 +50,7 @@ def main():
             datetime.datetime.today().timetuple()[2],
             datetime.datetime.today().timetuple()[3]))
 
-    x = tf.placeholder(tf.float32, [None, params['x_dimension'], params['y_dimension'], params['z_dimension']])
+    x = tf.placeholder(tf.float32, [None, params['subvolume_dimension_x'], params['subvolume_dimension_y'], params['subvolume_dimension_z']])
     y = tf.placeholder(tf.float32, [None, 2])
     drop_rate = tf.placeholder(tf.float32)
     training_flag = tf.placeholder(tf.bool)
@@ -117,7 +117,7 @@ def main():
                 batch_x, batch_y, epoch = volumes.getTrainingBatch(params)
                 summary, _ = sess.run([merged, optimizer],
                                       feed_dict={x: batch_x, y: batch_y,
-                                                 drop_rate: params['dropout'],
+                                                 drop_rate: params['drop_rate'],
                                                  training_flag: True})
                 train_writer.add_summary(summary, iteration)
 
@@ -143,6 +143,7 @@ def main():
                     print('Iteration: {}\t\tEpoch: {}'.format(iteration, epoch))
                     print('Train Loss: {:.3f}\tTrain Acc: {:.3f}\tInk Precision: {:.3f}'.format(train_loss, train_acc, train_precs[-1]))
                     print('Test Loss: {:.3f}\tTest Acc: {:.3f}\t\tInk Precision: {:.3f}'.format(test_loss, test_acc, test_precs[-1]))
+                    print('F Score:', test_f1)
 
                     if (test_f1 > best_test_f1):
                         print('\tAchieved new peak f1 score! Saving model...\n')

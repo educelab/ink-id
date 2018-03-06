@@ -51,7 +51,7 @@ def main():
     
     volumes = VolumeSet(params)
 
-    classifier = tf.estimator.Estimator(
+    estimator = tf.estimator.Estimator(
         model_fn=model_fn_3dcnn,
         model_dir=params['output_path'],
         params={
@@ -66,11 +66,18 @@ def main():
 
     tensors_to_log = {'train_accuracy': 'train_accuracy'}
     logging_hook = tf.train.LoggingTensorHook(
-        tensors=tensors_to_log, every_n_iter=100)
+        tensors=tensors_to_log, every_n_iter=50)
     tf.logging.set_verbosity(tf.logging.INFO)
 
-    classifier.train(
-        input_fn=lambda: volumes.training_input_fn(params['batch_size']), hooks=[logging_hook])
+    train_spec = tf.estimator.TrainSpec(
+        input_fn=lambda: volumes.training_input_fn(params['batch_size']),
+        max_steps=params['display_step'],
+        hooks=[logging_hook])
+    eval_spec = tf.estimator.EvalSpec(
+        input_fn=lambda: volumes.evaluation_input_fn(params['prediction_batch_size']))
+
+    while True:
+        tf.estimator.train_and_evaluate(estimator, train_spec, eval_spec)
     
 
 if __name__ == '__main__':
