@@ -12,7 +12,7 @@ import tensorflow as tf
 import numpy as np
 
 from inkid.volumes import VolumeSet
-import inkid.model
+from inkid.model import model_fn_3dcnn
 import inkid.ops
 
 
@@ -45,18 +45,39 @@ def main():
     params['volumes'][0]['surface_mask'] = args.surfacemask
     params['volumes'][0]['surface_data'] = args.surfacedata
     params['grid_test_square'] = args.gridtestsquare
-    params['output_path'] = os.path.join(args.outputdir, '3dcnn-predictions/{}-{}-{}h'.format(
-            datetime.datetime.today().timetuple()[1],
-            datetime.datetime.today().timetuple()[2],
-            datetime.datetime.today().timetuple()[3]))
-
+    params['output_path'] = os.path.join(args.outputdir,
+                                         '3dcnn-predictions',
+                                         datetime.datetime.today().strftime('%Y-%m-%d_%H.%M.%S'))
+    
     volumes = VolumeSet(params)
 
-    next_batch, next_labels = volumes.tf_input_fn()
+    estimator = tf.estimator.Estimator(
+        model_fn=model_fn_3dcnn,
+        model_dir=params['output_path'],
+        params={
+            'drop_rate': params['drop_rate'],
+            'subvolume_shape': (params['subvolume_dimension_x'],
+                                params['subvolume_dimension_y'],
+                                params['subvolume_dimension_z']),
+            'batch_norm_momentum': params['batch_norm_momentum'],
+            'filters': params['filters'],
+            'learning_rate': params['learning_rate'],
+        })
 
-    with tf.Session() as sess:
-        first_batch = sess.run((next_batch, next_labels))
-    print(first_batch)
+    tensors_to_log = {'train_accuracy': 'train_accuracy'}
+    logging_hook = tf.train.LoggingTensorHook(
+        tensors=tensors_to_log, every_n_iter=50)
+    tf.logging.set_verbosity(tf.logging.INFO)
+
+    train_spec = tf.estimator.TrainSpec(
+        input_fn=lambda: volumes.training_input_fn(params['batch_size']),
+        max_steps=params['display_step'],
+        hooks=[logging_hook])
+    eval_spec = tf.estimator.EvalSpec(
+        input_fn=lambda: volumes.evaluation_input_fn(params['prediction_batch_size']))
+
+    while True:
+        tf.estimator.train_and_evaluate(estimator, train_spec, eval_spec)
     
 
 if __name__ == '__main__':

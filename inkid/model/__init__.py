@@ -1,1 +1,1 @@
-from .model import build_model
+from .model import model_fn_3dcnn, Model3dcnn, build_model

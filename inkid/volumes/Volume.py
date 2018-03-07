@@ -119,7 +119,7 @@ class Volume:
                 yield (self.volume_ID, (x, y))
 
 
-    def coordinate_to_input(self, xy_coordinate, return_label):
+    def coordinate_to_input(self, xy_coordinate, return_label, augment_samples):
         """Map a coordinate to a tuple of (coordinate, subvolume).
 
         Given an (x, y) coordinate, return a tuple (coordinate,
@@ -150,9 +150,7 @@ class Volume:
                                 (y - y_step):(y + y_step),
                                 (z):(z + z_step)]
 
-        # TODO this probably does not need to happen on predictions just training
-        # Rotate/flip sample randomly if augmenting
-        if self.add_augmentation:
+        if augment_samples:
             flip_direction = np.random.randint(4)
             if flip_direction == 0:
                 subvolume = np.flip(subvolume, axis=0)
@@ -174,9 +172,9 @@ class Volume:
                                                   (y - y_step):(y + y_step)])
         
         if average_label > (self.truth_cutoff_high * self.max_truth):
-            label = [0.0,1.0]
+            label = [0, 1]
         else:
-            label = [1.0,0.0]
+            label = [1, 0]
 
         return (self.volume_ID, np.asarray(xyz_coordinate, np.int64),
                 np.asarray(subvolume, np.float32), np.asarray(label, np.float32))
@@ -209,7 +207,60 @@ class Volume:
         return new_z
 
 
+    def getTrainingBatch(self, args, n_samples):
+        """DEPRECATED"""
+        if len(self.coordinate_pool) == 0: # initialization
+            print("Generating coordinate pool for {}...".format(self.volume_args['name']))
+            self.coordinate_pool = ops.generateCoordinatePool(
+                args, self.volume.shape, self.ground_truth, self.surface_mask, self.train_bounds, self.train_portion)
+            np.random.shuffle(self.coordinate_pool)
+            print("Coordinate pool for {} is ready...".format(self.volume_args['name']))
+        if self.train_index + n_samples >= len(self.coordinate_pool): # end of epoch
+            self.incrementEpoch(args)
+
+        training_samples = np.zeros((n_samples, args["subvolume_dimension_x"], args["subvolume_dimension_y"], args["subvolume_dimension_z"]), dtype=np.float32)
+        ground_truth = np.zeros((n_samples, 2), dtype=np.float32)
+        row_step = int(args["subvolume_dimension_y"]/2)
+        col_step = int(args["subvolume_dimension_x"]/2)
+
+        # populate the samples and labels
+        for i in range(n_samples):
+            if args["balance_samples"] and (i > n_samples / 2):
+                if np.sum(ground_truth[:,1] / i) > .5:
+                    # more than 50% ink samples
+                    self.moveToNextNegativeSample(args)
+                else:
+                    # fewer than 50% ink samples
+                    self.moveToNextPositiveSample(args)
+
+            row_coord, col_coord, label, augment_seed = self.coordinate_pool[self.train_index]
+            z_coord = max(0, self.surface_image[row_coord, col_coord] - args["surface_cushion"])
+
+            if args["use_jitter"]:
+                z_coord = np.maximum(0, z_coord +  np.random.randint(args["jitter_range"][0], args["jitter_range"][1]))
+
+            if args["wobble_volume"]:
+                z_coord = ops.adjustDepthForWobble(args, row_coord, col_coord, z_coord, self.wobbled_angle, self.wobbled_axes, self.volume.shape)
+                sample = self.wobbled_volume[row_coord-row_step:row_coord+row_step, col_coord-col_step:col_coord+col_step, z_coord:z_coord+args["subvolume_dimension_z"]]
+            else:
+                sample = self.volume[row_coord-row_step:row_coord+row_step, col_coord-col_step:col_coord+col_step, z_coord:z_coord+args["subvolume_dimension_z"]]
+
+            if args["add_augmentation"]:
+                sample = ops.augmentSample(args, sample, augment_seed)
+                # change the augment seed for the next time around
+                self.coordinate_pool[self.train_index][3] = (augment_seed+1) % 4
+
+            training_samples[i, 0:sample.shape[0], 0:sample.shape[1], 0:sample.shape[2]] = sample
+            ground_truth[i, int(label)] = 1.0
+            self.training_image[row_coord,col_coord] = int(65534/2) +  int((65534/2)*label)
+            # if label_avg is greater than .9*255, then ground_truth=[0, 1]
+            self.train_index += 1
+
+        return training_samples, ground_truth, self.epoch
+
+
     def getTestBatch(self, args, n_samples):
+        """DEPRECATED"""
         print("Generating test set for {}...".format(self.volume_args['name']))
         # allocate an empty array with appropriate size
         test_samples = np.zeros((n_samples, args["subvolume_dimension_x"], args["subvolume_dimension_y"], args["subvolume_dimension_z"]), dtype=np.float32)
@@ -298,6 +349,7 @@ class Volume:
 
 
     def getPredictionSample3D(self, args, startingCoordinates, overlap_step):
+        """DEPRECATED"""
         # Important: assume all coordinates as the center of the subvolume
         row_step = int(args["subvolume_dimension_y"]/2)
         col_step = int(args["subvolume_dimension_x"]/2)
@@ -513,6 +565,7 @@ class Volume:
 
 
     def moveToNextPositiveSample(self, args):
+        """DEPRECATED"""
         if self.train_index >= len(self.coordinate_pool):
             self.incrementEpoch(args)
 
@@ -525,6 +578,7 @@ class Volume:
 
 
     def moveToNextNegativeSample(self, args):
+        """DEPRECATED"""
         if self.train_index >= len(self.coordinate_pool):
             self.incrementEpoch(args)
 
@@ -537,6 +591,7 @@ class Volume:
 
 
     def incrementEpoch(self, args):
+        """DEPRECATED"""
         print("Finished epoch for {}".format(self.volume_args['name']))
         self.train_index = 0
         self.training_image = np.zeros(self.prediction_image_ink.shape, dtype=np.uint16)

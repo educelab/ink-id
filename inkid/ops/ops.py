@@ -112,6 +112,7 @@ def bounds(args, volume_shape, identifier, train_portion):
 
 
 def getRandomTestCoordinate(args, volume_shape):
+    """DEPRECATED"""
     if args["use_grid_training"]:
         return getGridTestCoordinate(args, volume_shape)
     else:
@@ -142,6 +143,7 @@ def augmentSample(sample, seed=None):
 
 
 def getTrainCoordinate(args, colBounds, rowBounds, volume_shape):
+    """DEPRECATED"""
     if args["use_grid_training"]:
         return getGridTrainCoordinate(args, volume_shape)
     else:
@@ -149,6 +151,7 @@ def getTrainCoordinate(args, colBounds, rowBounds, volume_shape):
 
 
 def getGridTrainCoordinate(args, volume_shape):
+    """DEPRECATED"""
     row_step = int(args["subvolume_dimension_y"]/2)
     col_step = int(args["subvolume_dimension_x"]/2)
     row, col = np.random.randint(row_step, volume_shape[0]-row_step), np.random.randint(col_step, volume_shape[1]-col_step)
@@ -171,6 +174,7 @@ def getGridTrainCoordinate(args, volume_shape):
 
 
 def getGridTestCoordinate(args, volume_shape):
+    """DEPRECATED"""
     row_step = int(args["subvolume_dimension_y"]/2)
     col_step = int(args["subvolume_dimension_x"]/2)
 
@@ -190,6 +194,7 @@ def getGridTestCoordinate(args, volume_shape):
 
 
 def isInTestSet(args, row_point, col_point, volume_shape, bounds_identifier, train_portion):
+    """DEPRECATED"""
     if args["use_grid_training"]:
         n_rows = int(args["grid_n_squares"] / 2)
         voxels_per_row = int(volume_shape[0] / n_rows)
@@ -279,6 +284,7 @@ def generateSurfaceApproximation(volume, area=3, search_increment=1):
 
 
 def isOnSurface(args, rowCoordinate, colCoordinate, surfaceMask):
+    """DEPRECATED"""
     # alternatively, check if the maximum value in the vector crosses a threshold
     # for now, just check our mask
     rowStep = int(args["subvolume_dimension_y"] / 2)
@@ -312,3 +318,25 @@ def getSpecString(args):
     specstring = specstring + tmstring
 
     return specstring
+
+def augmentSample(args, sample, seed=None):
+    augmentedSample = sample
+    if seed is None:
+        seed = np.random.randint(4)
+
+    # ensure equal probability for each augmentation, including no augmentation
+    # for flip: original, flip left-right, flip up-down, both, or none
+    if seed == 0:
+        augmentedSample = np.flip(augmentedSample, axis=0)
+    elif seed == 1:
+        augmentedSample = np.flip(augmentedSample, axis=1)
+    elif seed == 2:
+        augmentedSample = np.flip(augmentedSample, axis=0)
+        augmentedSample = np.flip(augmentedSample, axis=1)
+    #implicit: no flip if seed == 2
+
+    # for rotate: original, rotate 90, rotate 180, or rotate 270
+    augmentedSample = np.rot90(augmentedSample, k=seed, axes=(0,1))
+    
+    return augmentedSample
+                                                                    
