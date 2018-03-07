@@ -150,9 +150,9 @@ def main():
                         best_test_f1 = test_f1
                         best_f1_iteration = iteration
                         saver.save(sess, params['output_path'] + '/models/best-model.ckpt')
-                        builder = tf.saved_model.builder.SavedModelBuilder(params['output_path'])
-                        builder.add_meta_graph_and_variables(sess, ['SERVING'])
-                        builder.save()
+                        # builder = tf.saved_model.builder.SavedModelBuilder(params['output_path'])
+                        # builder.add_meta_graph_and_variables(sess, ['SERVING'])
+                        # builder.save()
 
                     if (test_acc > .9) and (test_prec > .7) and (iterations_since_prediction > 100): #or (test_prec > .8)  and (predictions_made < 4): # or (test_prec / params['numCubes'] < .05)
                         # make a full prediction if results are tentatively spectacular

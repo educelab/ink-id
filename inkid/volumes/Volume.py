@@ -1,4 +1,5 @@
 import datetime
+import inspect
 import os
 import math
 import shutil
@@ -12,6 +13,7 @@ from sklearn.metrics import confusion_matrix, recall_score, precision_score, f1_
 import tensorflow as tf
 
 from inkid import ops
+import inkid.model
 
 
 class Volume:
@@ -24,7 +26,7 @@ class Volume:
         self.train_bounds = self.volume_args['train_bounds']
         self.train_portion = self.volume_args['train_portion']
         self.add_augmentation = args["add_augmentation"]
-
+        
         # Part 2: volume data
         data_files = os.listdir(self.volume_args['data_path'])
         data_files.sort()
@@ -268,7 +270,8 @@ class Volume:
 
 
         for i in range(n_samples):
-            row_coordinate, col_coordinate = ops.getRandomTestCoordinate(args, self.volume.shape)
+            row_coordinate, col_coordinate = ops.getRandomTestCoordinate(
+                    args, self.volume.shape)
             z_coordinate = self.surface_image[row_coordinate, col_coordinate]
             label_avg = ops.averageTruthInSubvolume(args, row_coordinate, col_coordinate, self.ground_truth)
 
@@ -290,6 +293,58 @@ class Volume:
             ground_truth[i] = gt
 
         return test_samples, ground_truth
+
+
+    def getTrainingBatch(self, args, n_samples):
+        if len(self.coordinate_pool) == 0: # initialization
+            print("Generating coordinate pool for {}...".format(self.volume_args['name']))
+            self.coordinate_pool = ops.generateCoordinatePool(
+                args, self.volume.shape, self.ground_truth, self.surface_mask, self.train_bounds, self.train_portion)
+            np.random.shuffle(self.coordinate_pool)
+            print("Coordinate pool for {} is ready...".format(self.volume_args['name']))
+        if self.train_index + n_samples >= len(self.coordinate_pool): # end of epoch
+            self.incrementEpoch(args)
+
+        training_samples = np.zeros((n_samples, args["subvolume_dimension_x"], args["subvolume_dimension_y"], args["subvolume_dimension_z"]), dtype=np.float32)
+        ground_truth = np.zeros((n_samples, 2), dtype=np.float32)
+        row_step = int(args["subvolume_dimension_y"]/2)
+        col_step = int(args["subvolume_dimension_x"]/2)
+        
+        # populate the samples and labels
+        for i in range(n_samples):
+            if args["balance_samples"] and (i > n_samples / 2):
+                if np.sum(ground_truth[:,1] / i) > .5:
+                    # more than 50% ink samples
+                    self.moveToNextNegativeSample(args)
+                else:
+                    # fewer than 50% ink samples
+                    self.moveToNextPositiveSample(args)
+                    
+            row_coord, col_coord, label, augment_seed = self.coordinate_pool[self.train_index]
+            z_coord = max(0, self.surface_image[row_coord, col_coord] - args["surface_cushion"])
+
+            if args["use_jitter"]:
+                z_coord = np.maximum(0, z_coord +  np.random.randint(args["jitter_range"][0], args["jitter_range"][1]))
+            
+            if args["wobble_volume"]:
+                z_coord = ops.adjustDepthForWobble(args, row_coord, col_coord, z_coord, self.wobbled_angle, self.wobbled_axes, self.volume.shape)
+                sample = self.wobbled_volume[row_coord-row_step:row_coord+row_step, col_coord-col_step:col_coord+col_step, z_coord:z_coord+args["subvolume_dimension_z"]]
+            else:
+                sample = self.volume[row_coord-row_step:row_coord+row_step, col_coord-col_step:col_coord+col_step, z_coord:z_coord+args["subvolume_dimension_z"]]
+
+            if args["add_augmentation"]:
+                sample = ops.augmentSample(sample, augment_seed)
+                # change the augment seed for the next time around
+                self.coordinate_pool[self.train_index][3] = (augment_seed+1) % 4
+
+            training_samples[i, 0:sample.shape[0], 0:sample.shape[1], 0:sample.shape[2]] = sample
+            ground_truth[i, int(label)] = 1.0
+            self.training_image[row_coord,col_coord] = int(65534/2) +  int((65534/2)*label)
+            # if label_avg is greater than .9*255, then ground_truth=[0, 1]
+            self.train_index += 1
+
+        return training_samples, ground_truth, self.epoch
+    
 
 
 
@@ -488,7 +543,8 @@ class Volume:
         for arg in sorted(args.keys()):
             description += arg+": " + str(args[arg]) + "\n"
         np.savetxt(self.output_path +'description.txt', [description], delimiter=' ', fmt="%s")
-        shutil.copy('model.py', self.output_path + 'network_model.txt')
+        shutil.copy(os.path.join(os.path.dirname(inspect.getfile(inkid.model)), 'model.py'),
+                    self.output_path + 'network_model.txt')
 
         # zero-out predictions & images so next output is correct
         self.all_truth = []

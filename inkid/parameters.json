@@ -31,7 +31,7 @@
 	"prediction_batch_size": 400,
 	"filter_size": [3, 3, 3],
 	"drop_rate": 0.5,
-	"filters": [16, 8, 4, 2],
+	"neurons": [16, 8, 4, 2],
 	"training_iterations": 1000000,
 	"training_epochs": 2,
 	"pos_weight": 0.5,
