@@ -117,6 +117,29 @@ def getRandomTestCoordinate(args, volume_shape):
     else:
         return np.random.randint(row_bounds[0], row_bounds[1]), np.random.randint(col_bounds[0], col_bounds[1])
 
+def augmentSample(sample, seed=None):
+    augmentedSample = sample
+    if seed is None:
+        seed = np.random.randint(4)
+
+    # ensure equal probability for each augmentation, including no augmentation
+    # for flip: original, flip left-right, flip up-down, both, or none
+    if seed == 0:
+        augmentedSample = np.flip(augmentedSample, axis=0)
+    elif seed == 1:
+        augmentedSample = np.flip(augmentedSample, axis=1)
+    elif seed == 2:
+        augmentedSample = np.flip(augmentedSample, axis=0)
+        augmentedSample = np.flip(augmentedSample, axis=1)
+    elif seed == 3:
+        pass
+    
+    # for rotate: original, rotate 90, rotate 180, or rotate 270
+    augmentedSample = np.rot90(augmentedSample, k=seed, axes=(0,1))
+    
+    return augmentedSample
+
+
 
 def getTrainCoordinate(args, colBounds, rowBounds, volume_shape):
     if args["use_grid_training"]:

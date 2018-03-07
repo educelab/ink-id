@@ -136,7 +136,7 @@ class VolumeSet:
 
         if self.current_prediction_batch < self.current_prediction_total_batches:
             # case 1: stay in the current volume
-            samples, coordinates, nextCoordinates = self.volume_set[self.current_prediction_volume].getPredictionSample3D(args, starting_coordinates, overlap_step=v_olap)
+            samples, coordinates, nextCoordinates = self.volume_set[self.current_prediction_volume].getPredictionSample3D(args, starting_coordinates, overlap_step=args['prediction_overlap_step'])
             self.current_prediction_batch += 1
             if self.current_prediction_batch % int(self.current_prediction_total_batches / 10) == 0:
                 print("\tPredicting batch {}/{}...".format(self.current_prediction_batch, self.current_prediction_total_batches))
@@ -160,6 +160,40 @@ class VolumeSet:
             self.current_prediction_batch = 0
 
         return samples, coordinates, nextCoordinates
+
+
+    def getTrainingBatch(self, args):
+        # gather training samples from other volumes
+        # should be as simple as getting batches from each volume and combining them
+        trainingSamples = np.zeros((args["batch_size"], args["subvolume_dimension_x"], args["subvolume_dimension_y"], args["subvolume_dimension_z"]), dtype=np.float32)
+        groundTruth = np.zeros((args["batch_size"], 2), dtype=np.float32)
+        samples_per_volume = int(args["batch_size"] / self.n_train_volumes)
+        for i in range(self.n_train_volumes):
+            volume_index = self.train_volume_indices[i]
+            start = i*samples_per_volume
+            end = (i+1)*samples_per_volume
+            if i == self.n_train_volumes-1: # make sure to 'fill up' all the slots
+                end = args["batch_size"]
+
+            volume_samples, volume_truth, volume_epoch = self.volume_set[volume_index].getTrainingBatch(args, n_samples=(end-start))
+            trainingSamples[start:end] = volume_samples
+            groundTruth[start:end] = volume_truth
+
+            '''
+            for j in range(args["batch_size"]):
+            # randomly swap samples
+            # pretty sure this is statistically invalid because certain items are more likely to get swapped
+            index_a, index_b = np.random.choice(args["batch_size"], 2, replace=False)
+            tmpSample = trainingSamples[index_a]
+            tmpTruth = groundTruth[index_a]
+            trainingSamples[index_a] = trainingSamples[index_b]
+            trainingSamples[index_b] = tmpSample
+            groundTruth[index_a] = groundTruth[index_b]
+            groundTruth[index_b] = tmpTruth'''
+
+        #TODO return actual epoch instead of the last volume's epoch
+        return trainingSamples, groundTruth, volume_epoch
+    
 
 
 
