@@ -218,6 +218,7 @@ def isInTestSet(args, row_point, col_point, volume_shape, bounds_identifier, tra
 
 
 def averageTruthInSubvolume(args, row_coordinate, col_coordinate, ground_truth):
+    """DEPRECATED"""
     # assume coordinate is at the center
     row_step = int(args["subvolume_dimension_y"]/2)
     col_step = int(args["subvolume_dimension_x"]/2)
@@ -230,6 +231,7 @@ def averageTruthInSubvolume(args, row_coordinate, col_coordinate, ground_truth):
 
 
 def generateCoordinatePool(args, volume_shape, ground_truth, surface_mask, train_bounds_identifier, train_portion):
+    """DEPRECATED"""
     coordinates = []
     truth_label_value = np.iinfo(ground_truth.dtype).max
     rowStep = int(args["subvolume_dimension_y"]/2)

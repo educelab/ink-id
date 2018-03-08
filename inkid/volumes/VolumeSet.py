@@ -39,34 +39,40 @@ class VolumeSet:
         print("Initialized {} total volumes, {} to be used for training...".format(self.n_total_volumes, self.n_train_volumes))
 
 
-    def training_input_fn(self, batch_size):
-        return self.tf_input_fn(return_labels=True,
-                                perform_shuffle=True,
-                                batch_size=batch_size,
-                                restrict_to_surface=True,
-                                augment_samples=True)
+    def get_training_dataset(self, batch_size):
+        return self.make_dataset(
+            return_labels=True,
+            perform_shuffle=True,
+            shuffle_buffer_size=40000,
+            batch_size=batch_size,
+            augment_samples=True,
+            grid_spacing=1)
 
 
-    def prediction_input_fn(self, batch_size):
-        return self.tf_input_fn(return_labels=False,
-                                perform_shuffle=False,
-                                batch_size=batch_size,
-                                retrict_to_surface=True,
-                                augment_samples=False)
+    def get_evaluation_dataset(self, batch_size):
+        return self.make_dataset(
+            return_labels=True,
+            perform_shuffle=True,
+            shuffle_buffer_size=40000,
+            batch_size=batch_size,
+            augment_samples=False,
+            grid_spacing=1).take(1).repeat()
 
 
-    def evaluation_input_fn(self, batch_size):
-        return self.tf_input_fn(return_labels=True,
-                                perform_shuffle=False,
-                                batch_size=batch_size,
-                                restrict_to_surface=True,
-                                augment_samples=False)
+    def get_prediction_dataset(self, batch_size):
+        return self.make_dataset(
+            return_labels=False,
+            perform_shuffle=False,
+            batch_size=batch_size,
+            augment_samples=False,
+            grid_spacing=1)
 
-    def tf_input_fn(self, return_labels=True, perform_shuffle=True, shuffle_buffer_size=10000,
-                    batch_size=32, restrict_to_surface=True, augment_samples=False):
+
+    def make_dataset(self, return_labels=True, perform_shuffle=True, shuffle_buffer_size=10000,
+                     batch_size=32, restrict_to_surface=True, augment_samples=False, grid_spacing=1):
         self._augment_samples = augment_samples
         
-        dataset = tf.data.Dataset.from_generator(self.coordinate_pool_generator(grid_spacing=10),
+        dataset = tf.data.Dataset.from_generator(self.coordinate_pool_generator(grid_spacing=grid_spacing),
                                                  (tf.int64, tf.int64))
 
         if restrict_to_surface:
@@ -82,13 +88,69 @@ class VolumeSet:
         
         dataset = dataset.batch(batch_size)
         dataset = dataset.prefetch(1)
+        
+        return dataset
+
+
+    def get_one_batch(self, return_labels=True, perform_shuffle=True, shuffle_buffer_size=10000,
+                    batch_size=32, restrict_to_surface=True, augment_samples=False):
+        dataset = self.make_dataset(
+            return_labels=return_labels,
+            perform_shuffle=perform_shuffle,
+            shuffle_buffer_size=shuffle_buffer_size,
+            batch_size=batch_size,
+            restrict_to_surface=restrict_to_surface,
+            augment_samples=augment_samples)
+
+        dataset = dataset.take(1)
 
         if return_labels:
-            batch_features, batch_labels = dataset.make_one_shot_iterator().get_next()
+            batch_features, batch_labels = tf.contrib.data.get_single_element(dataset)
             return batch_features, batch_labels
         else:
-            batch_features = dataset.make_one_shot_iterator().get_next()
+            batch_features = tf.contrib.data.get_single_element(dataset)
             return batch_features, None
+    
+    # def tf_input_fn(self, return_labels=True, perform_shuffle=True, shuffle_buffer_size=10000,
+    #                 batch_size=32, restrict_to_surface=True, augment_samples=False):
+    #     dataset = self.make_dataset(
+    #         return_labels=return_labels,
+    #         perform_shuffle=perform_shuffle,
+    #         shuffle_buffer_size=shuffle_buffer_size,
+    #         batch_size=batch_size,
+    #         restrict_to_surface=restrict_to_surface,
+    #         augment_samples=augment_samples)
+        
+    #     if return_labels:
+    #         batch_features, batch_labels = dataset.make_one_shot_iterator().get_next()
+    #         return batch_features, batch_labels
+    #     else:
+    #         batch_features = dataset.make_one_shot_iterator().get_next()
+    #         return batch_features, None
+
+
+    # def training_input_fn(self, batch_size):
+    #     return self.tf_input_fn(return_labels=True,
+    #                             perform_shuffle=True,
+    #                             batch_size=batch_size,
+    #                             restrict_to_surface=True,
+    #                             augment_samples=True)
+
+
+    # def prediction_input_fn(self, batch_size):
+    #     return self.tf_input_fn(return_labels=False,
+    #                             perform_shuffle=False,
+    #                             batch_size=batch_size,
+    #                             retrict_to_surface=True,
+    #                             augment_samples=False)
+
+
+    # def evaluation_input_fn(self, batch_size):
+    #     return self.tf_input_fn(return_labels=True,
+    #                             perform_shuffle=False,
+    #                             batch_size=batch_size,
+    #                             restrict_to_surface=True,
+    #                             augment_samples=False)
 
 
     def tf_coordinate_to_unlabeled_input(self, vol_id, xy_coordinate):
@@ -130,25 +192,26 @@ class VolumeSet:
 
         
     def getTestBatch(self, args):
+        """DEPRECATED"""
         # gather testing samples from other volumes
-        trainingSamples = np.zeros((args["num_test_cubes"], args["subvolume_dimension_x"], args["subvolume_dimension_y"], args["subvolume_dimension_z"]), dtype=np.float32)
-        groundTruth = np.zeros((args["num_test_cubes"], 2), dtype=np.float32)
+        trainingSamples = np.zeros((args["num_test_subvolumes"], args["subvolume_dimension_x"], args["subvolume_dimension_y"], args["subvolume_dimension_z"]), dtype=np.float32)
+        groundTruth = np.zeros((args["num_test_subvolumes"], 2), dtype=np.float32)
 
         if self.n_test_volumes == 1:
             # all samples come from the same volume
-            volume_samples, volume_truth = self.volume_set[self.test_volume_indices[0]].getTestBatch(args, args["num_test_cubes"])
+            volume_samples, volume_truth = self.volume_set[self.test_volume_indices[0]].getTestBatch(args, args["num_test_subvolumes"])
             trainingSamples[:] = volume_samples
             groundTruth[:] = volume_truth
 
         else: #TODO validate this scheme
-            samples_per_volume = int(args["num_test_cubes"] / self.n_test_volumes)
+            samples_per_volume = int(args["num_test_subvolumes"] / self.n_test_volumes)
             for i in range(self.n_test_volumes):
                 volume_index = self.test_volume_indices[i]
 
                 start = i*samples_per_volume
                 end = (i+1)*samples_per_volume
                 if i == self.n_test_volumes-1: # make sure to 'fill up' all the slots
-                    end = args["num_test_cubes"]
+                    end = args["num_test_subvolumes"]
 
                 volume_samples, volume_truth = self.volume_set[volume_index].getTestBatch(args, end-start)
                 trainingSamples[start:end] = volume_samples
@@ -157,6 +220,7 @@ class VolumeSet:
         return trainingSamples, groundTruth
 
     def getTrainingBatch(self, args):
+        """DEPRECATED"""
         # gather training samples from other volumes
         # should be as simple as getting batches from each volume and combining them
         trainingSamples = np.zeros((args["batch_size"], args["subvolume_dimension_x"], args["subvolume_dimension_y"], args["subvolume_dimension_z"]), dtype=np.float32)

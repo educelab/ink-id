@@ -41,7 +41,7 @@
 	"wobble_volume": false,
 	"wobble_step": 1000,
 	"wobble_max_degrees": 2,
-	"num_test_cubes": 400,
+	"num_test_subvolumes": 400,
 	"use_jitter": true,
 	"jitter_range": [-4, 4],
 	"add_augmentation": true,
