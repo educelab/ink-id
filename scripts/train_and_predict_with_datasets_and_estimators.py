@@ -54,7 +54,7 @@ def main():
     volumes = VolumeSet(params)
 
     run_config = tf.estimator.RunConfig(
-        save_summary_steps=100,
+        save_summary_steps=params['display_every_n_steps'],
         save_checkpoints_steps=params['display_every_n_steps'],
         keep_checkpoint_max=None, # save all checkpoints
     )
@@ -74,7 +74,9 @@ def main():
 
     tensors_to_log = {'train_accuracy': 'train_accuracy'}
     logging_hook = tf.train.LoggingTensorHook(
-        tensors=tensors_to_log, every_n_iter=100)
+        tensors=tensors_to_log,
+        every_n_iter=params['display_every_n_steps'],
+    )
     tf.logging.set_verbosity(tf.logging.INFO)
     
     estimator.train(

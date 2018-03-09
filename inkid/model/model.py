@@ -15,6 +15,7 @@ class EvalCheckpointSaverListener(tf.train.CheckpointSaverListener):
 
     def after_save(self, session, global_step):
         eval_results = self.estimator.evaluate(self.input_fn)
+        print(global_step)
         print('Evaluation results:\n\t%s' % eval_results)
 
 class Model3dcnn:
@@ -99,8 +100,9 @@ def model_fn_3dcnn(features, labels, mode, params):
 
 def build_3dcnn(inputs, labels, drop_rate, args, training_flag, fbeta_weight):
     subvolumes = inputs['Subvolume']
-    subvolumes = (tf.reshape(subvolumes,
-                         [-1, args["subvolume_dimension_x"], args["subvolume_dimension_y"], args["subvolume_dimension_z"], 1]))
+    subvolumes = (tf.reshape(
+        subvolumes,
+        [-1, args["subvolume_dimension_x"], args["subvolume_dimension_y"], args["subvolume_dimension_z"], 1]))
     conv1 = layers.batch_normalization(slim.convolution(subvolumes, args["neurons"][0], [3, 3, 3],
                                                         stride=[2, 2, 2], padding='valid'),
                                        training=training_flag,
@@ -140,18 +142,20 @@ def build_3dcnn(inputs, labels, drop_rate, args, training_flag, fbeta_weight):
     # https://stackoverflow.com/a/43960730
     predicted = tf.argmax(pred, 1)
     actual = tf.argmax(labels, 1)
-    TP = tf.count_nonzero(predicted * actual, dtype=tf.float32)
-    TN = tf.count_nonzero((predicted - 1) * (actual - 1), dtype=tf.float32)
-    FP = tf.count_nonzero(predicted * (actual - 1), dtype=tf.float32)
-    FN = tf.count_nonzero((predicted - 1) * actual, dtype=tf.float32)
-    precision = tf.divide(TP, (TP + FP))
-    recall = tf.divide(TP, (TP + FN))
+    true_positives = tf.count_nonzero(predicted * actual, dtype=tf.float32)
+    true_negatives = tf.count_nonzero((predicted - 1) * (actual - 1), dtype=tf.float32)
+    false_positives = tf.count_nonzero(predicted * (actual - 1), dtype=tf.float32)
+    false_negatives = tf.count_nonzero((predicted - 1) * actual, dtype=tf.float32)
+    precision = tf.divide(true_positives, (true_positives + false_positives))
+    recall = tf.divide(true_positives, (true_positives + false_negatives))
     # https://en.wikipedia.org/wiki/F1_score
     fbeta_squared = tf.constant(fbeta_weight ** 2.0)
-    fbeta_score = (1 + fbeta_squared) * tf.divide((precision * recall),
-                                                  (fbeta_squared * precision) + recall)
+    fbeta_score = (1 + fbeta_squared) * tf.divide(
+        (precision * recall),
+        (fbeta_squared * precision) + recall
+    )
 
-    return inputs, labels, pred, loss, accuracy, precision, fbeta_score, FP
+    return inputs, labels, pred, loss, accuracy, precision, fbeta_score, false_positives
     
         
 def build_model(inputs, labels, drop_rate, args, training_flag):

@@ -257,7 +257,7 @@ class Volume:
                 sample = self.volume[row_coord-row_step:row_coord+row_step, col_coord-col_step:col_coord+col_step, z_coord:z_coord+args["subvolume_shape"][2]]
 
             if args["add_augmentation"]:
-                sample = ops.augmentSample(sample, augment_seed)
+                sample = ops.augment_sample(sample, augment_seed)
                 # change the augment seed for the next time around
                 self.coordinate_pool[self.train_index][3] = (augment_seed+1) % 4
 

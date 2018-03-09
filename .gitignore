@@ -14,3 +14,4 @@ build/
 data/
 out/
 *.egg-info
+.vscode

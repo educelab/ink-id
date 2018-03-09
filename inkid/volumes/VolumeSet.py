@@ -40,15 +40,16 @@ class VolumeSet:
 
 
     def make_dataset(self,
-                     return_labels=True,
-                     perform_shuffle=True,
-                     shuffle_buffer_size=10000,
-                     batch_size=32,
-                     restrict_to_surface=True,
-                     augment_samples=False,
-                     grid_spacing=100):
+                     return_labels,
+                     perform_shuffle,
+                     shuffle_buffer_size,
+                     batch_size,
+                     perform_batch_shuffle,
+                     restrict_to_surface,
+                     augment_samples,
+                     grid_spacing):
 
-        # TODO make this not a member variable
+        # TODO make this something cleaner
         self._augment_samples = augment_samples
         
         dataset = tf.data.Dataset.from_generator(
@@ -74,6 +75,10 @@ class VolumeSet:
             )
         
         dataset = dataset.batch(batch_size)
+
+        if perform_batch_shuffle:
+            dataset = dataset.shuffle(batch_shuffle_buffer_size)
+        
         dataset = dataset.prefetch(1)
         
         return dataset
@@ -82,8 +87,10 @@ class VolumeSet:
     def tf_input_fn(self,
                     return_labels=True,
                     perform_shuffle=True,
-                    shuffle_buffer_size=10000,
+                    shuffle_buffer_size=5000,
                     batch_size=32,
+                    perform_batch_shuffle=True,
+                    batch_shuffle_buffer_size=200,
                     restrict_to_surface=True,
                     augment_samples=False):
         """Create a tensorflow input_fn."""

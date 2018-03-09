@@ -6,18 +6,23 @@
     "parameters": {
 	"volumes": [
             {
-		"name": "lunate-sigma",
-		"microns_per_voxel": 5,
-		"data_path": "",
-		"ground_truth": "",
-		"surface_mask": "",
-		"surface_data": "",
-		"train_portion": 0.6,
-		"train_bounds": 3,  // 0=TOP || 1=RIGHT || 2=BOTTOM || 3=LEFT
-		"use_in_training": true,
-		"use_in_test_set": true,
-		"make_prediction": true
-            }
+				"name": "lunate-sigma",
+				"microns_per_voxel": 5,
+				"data_path": "",
+
+				"ppm": "",
+				"ground_truth": "",
+
+				"train_portion": 0.6,
+				"train_bounds": 3,  // 0=TOP || 1=RIGHT || 2=BOTTOM || 3=LEFT
+				"use_in_training": true, // TODO use this
+				"use_in_evaluation": true, // TODO use this
+				"use_in_prediction": true, // TODO use this
+
+				// To be deprecated when PPM works
+				"surface_mask": "",
+				"surface_data": ""
+			}
 	],
 
 	// Geometry
@@ -34,8 +39,8 @@
 
 	// Run configuration
 	"training_batch_size": 30,
-	"training_steps": 1000000, // TODO make use of these
-	"training_epochs": 2, // TODO make use of these
+	"training_steps": 1000000,
+	"training_epochs": 2, // TODO use this
 	"prediction_batch_size": 400,
 	"predict_every_n_steps": 10000,
 	"prediction_overlap_step": 4, // predict on one sample for each _ by _ voxel square
@@ -45,6 +50,7 @@
 	"output_path": "",
 
 	// Data organization/augmentation
+	// (concerning the getting of subvolumes from volumes)
 	"wobble_volume": false,
 	"wobble_every_n_steps": 1000,
 	"wobble_max_degrees": 2,

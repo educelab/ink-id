@@ -115,31 +115,32 @@ def getRandomTestCoordinate(args, volume_shape):
     """DEPRECATED"""
     if args["use_grid_training"]:
         return getGridTestCoordinate(args, volume_shape)
-    else:
-        return np.random.randint(row_bounds[0], row_bounds[1]), np.random.randint(col_bounds[0], col_bounds[1])
+    # else:
+    #     return (np.random.randint(row_bounds[0], row_bounds[1]),
+    #             np.random.randint(col_bounds[0], col_bounds[1]))
 
-def augmentSample(sample, seed=None):
+def augment_sample(sample, seed=None):
     """DEPRECATED"""
-    augmentedSample = sample
+    augmented_sample = sample
     if seed is None:
         seed = np.random.randint(4)
 
     # ensure equal probability for each augmentation, including no augmentation
     # for flip: original, flip left-right, flip up-down, both, or none
     if seed == 0:
-        augmentedSample = np.flip(augmentedSample, axis=0)
+        augmented_sample = np.flip(augmented_sample, axis=0)
     elif seed == 1:
-        augmentedSample = np.flip(augmentedSample, axis=1)
+        augmented_sample = np.flip(augmented_sample, axis=1)
     elif seed == 2:
-        augmentedSample = np.flip(augmentedSample, axis=0)
-        augmentedSample = np.flip(augmentedSample, axis=1)
+        augmented_sample = np.flip(augmented_sample, axis=0)
+        augmented_sample = np.flip(augmented_sample, axis=1)
     elif seed == 3:
         pass
-    
+
     # for rotate: original, rotate 90, rotate 180, or rotate 270
-    augmentedSample = np.rot90(augmentedSample, k=seed, axes=(0,1))
-    
-    return augmentedSample
+    augmented_sample = np.rot90(augmented_sample, k=seed, axes=(0,1))
+
+    return augmented_sample
 
 
 
