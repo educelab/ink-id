@@ -51,6 +51,7 @@ def main():
             datetime.datetime.today().timetuple()[2],
             datetime.datetime.today().timetuple()[3]))
 
+
     # create summary writer directory
     if tf.gfile.Exists(params['output_path']):
         tf.gfile.DeleteRecursively(params['output_path'])
@@ -59,17 +60,6 @@ def main():
     with tf.Session() as sess:
         print('Beginning train session...')
         print('Output directory: {}'.format(params['output_path']))
-
-        train_writer = tf.summary.FileWriter(params['output_path'] + '/train', sess.graph)
-        test_writer = tf.summary.FileWriter(params['output_path'] + '/test')
-
-
-
-        predict_flag = False
-        iteration = 0
-        iterations_since_prediction = 0
-        epoch = 0
-        predictions_made = 0
 
         volumes = VolumeSet(params)
 
@@ -88,30 +78,38 @@ def main():
         
         handle = tf.placeholder(tf.string, shape=[])
         iterator = tf.data.Iterator.from_string_handle(
-                handle, training_dataset.output_types, training_dataset.output_shapes)
+            handle, training_dataset.output_types, training_dataset.output_shapes)
         next_input, next_label = iterator.get_next()
 
         drop_rate = tf.placeholder(tf.float32)
         training_flag = tf.placeholder(tf.bool)
 
-        inputs, labels, pred, loss, accuracy, false_positive_rate = inkid.model.build_model(next_input, next_label, drop_rate, params, training_flag, params['fbeta_weight'])
+        inputs, labels, pred, loss, accuracy, precision, fbeta, false_positive_rate = inkid.model.build_3dcnn(
+            next_input, next_label, drop_rate, params, training_flag, params['fbeta_weight'])
 
         update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
         with tf.control_dependencies(update_ops):
             optimizer = tf.train.AdamOptimizer(learning_rate=params['learning_rate']).minimize(loss)
 
-        tf.summary.scalar('accuracy', accuracy)
-        tf.summary.histogram('prediction_values', pred[:, 1])
         tf.summary.scalar('xentropy-loss', loss)
+        tf.summary.scalar('accuracy', accuracy)
+        tf.summary.scalar('precision', precision)
+        tf.summary.scalar('fbeta', fbeta)
+        tf.summary.scalar('false_positive_rate', false_positive_rate)
         tf.summary.histogram('prediction_values', pred[:, 1])
 
-        tf.summary.scalar('false_positive_rate', false_positive_rate)
-        
         merged = tf.summary.merge_all()
         saver = tf.train.Saver(max_to_keep=None)
-        best_test_f1 = 0.0
-        best_f1_iteration = 0
+    
+        predict_flag = False
+        iteration = 0
+        iterations_since_prediction = 0
 
+        best_test_fbeta = 0.0
+        best_fbeta_iteration = 0
+
+        train_writer = tf.summary.FileWriter(params['output_path'] + '/train', sess.graph)
+        eval_writer = tf.summary.FileWriter(params['output_path'] + '/eval')
 
         sess.run(tf.global_variables_initializer())
         sess.run(tf.local_variables_initializer())
@@ -120,38 +118,35 @@ def main():
             while True:
                 predict_flag = False
 
-                # Run a training step
-                # batch_x, batch_y, epoch = volumes.getTrainingBatch(params)
-                summary, _, train_accuracy, train_loss, train_preds, train_labels = sess.run([merged, optimizer, accuracy, loss, pred, labels],
-                                      feed_dict={drop_rate: params['drop_rate'],
-                                                 training_flag: True,
-                                                 handle: training_handle})
-                train_precision = precision_score(np.argmax(train_labels, 1), np.argmax(train_preds, 1))
-                print(train_precision)
+                summary, _, train_accuracy, train_loss, train_preds, train_labels, train_precision = sess.run([merged, optimizer, accuracy, loss, pred, labels, precision],
+                                                                                                              feed_dict={drop_rate: params['drop_rate'],
+                                                                                                                         training_flag: True,
+                                                                                                                         handle: training_handle})
                 train_writer.add_summary(summary, iteration)
         
                 if iteration % params['display_step'] == 0:
-                    eval_acc, eval_loss, eval_preds, eval_summary = sess.run([precision, accuracy, loss, pred, merged],
+                    print("New display step")
+                    eval_accuracy, eval_loss, eval_preds, eval_summary, eval_precision, eval_fbeta = sess.run([accuracy, loss, pred, merged, precision, fbeta],
                                                                              feed_dict={drop_rate: 0.0,
                                                                                         training_flag: False,
                                                                                         handle: evaluation_handle})
-                    test_writer.add_summary(eval_summary, iteration)
+                    eval_writer.add_summary(eval_summary, iteration)
 
-                    print('Iteration: {}\t\tEpoch: {}'.format(iteration, epoch))
-                    print('Train Loss: {:.3f}\tTrain Acc: {:.3f}\tInk Precision: {:.3f}'.format(train_loss, train_acc, train_precs[-1]))
-                    print('Test Loss: {:.3f}\tTest Acc: {:.3f}\t\tInk Precision: {:.3f}'.format(eval_loss, eval_acc, eval_precs[-1]))
-                    print('F Score:', eval_f1)
+                    print('Iteration: {}'.format(iteration))
+                    print('Train Loss: {:.3f}\tTrain Acc: {:.3f}\tTrain Precision: {:.3f}'.format(train_loss, train_accuracy, train_precision))
+                    print('Eval Loss: {:.3f}\tEval Acc: {:.3f}\t\tEval Precision: {:.3f}'.format(eval_loss, eval_accuracy, eval_precision))
+                    print('Eval FBeta Score:', eval_fbeta)
 
-                    if (eval_f1 > best_test_f1):
+                    if (eval_fbeta > best_test_fbeta):
                         print('\tAchieved new peak f1 score! Saving model...\n')
-                        best_test_f1 = eval_f1
-                        best_f1_iteration = iteration
+                        best_test_fbeta = eval_fbeta
+                        best_fbeta_iteration = iteration
                         saver.save(sess, params['output_path'] + '/models/best-model.ckpt')
                         # builder = tf.saved_model.builder.SavedModelBuilder(params['output_path'])
                         # builder.add_meta_graph_and_variables(sess, ['SERVING'])
                         # builder.save()
 
-                    if (eval_acc > .9) and (eval_prec > .7) and (iterations_since_prediction > 100): #or (test_prec > .8)  and (predictions_made < 4): # or (test_prec / params['numCubes'] < .05)
+                    if (eval_accuracy > .9) and (eval_precision > .7) and (iterations_since_prediction > 100): #or (test_prec > .8)  and (predictions_made < 4): # or (test_prec / params['numCubes'] < .05)
                         # make a full prediction if results are tentatively spectacular
                         predict_flag = True
 
@@ -159,7 +154,6 @@ def main():
                     np.savetxt(params['output_path']+'/times.csv', np.array(train_minutes), fmt='%.3f', delimiter=',', header='iteration,minutes')
                     prediction_start_time = time.time()
                     iterations_since_prediction = 0
-                    predictions_made += 1
                     print('{} training iterations took {:.2f} minutes'.format(
                         iteration, (time.time() - start_time)/60))
                     starting_coordinates = [0, 0, 0]

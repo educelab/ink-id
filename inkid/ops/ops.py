@@ -84,8 +84,8 @@ def bounds(args, volume_shape, identifier, train_portion):
     """Return the bounds tuples for X and Y dimensions. Used in finding
     training vs. testing coordinates.
     """
-    y_step = int(args["subvolume_dimension_y"]/2)
-    x_step = int(args["subvolume_dimension_x"]/2)
+    y_step = int(args["subvolume_shape"][1]/2)
+    x_step = int(args["subvolume_shape"][0]/2)
 
     if args["use_grid_training"]:
         col_bounds = [x_step, volume_shape[1]-x_step]
@@ -153,8 +153,8 @@ def getTrainCoordinate(args, colBounds, rowBounds, volume_shape):
 
 def getGridTrainCoordinate(args, volume_shape):
     """DEPRECATED"""
-    row_step = int(args["subvolume_dimension_y"]/2)
-    col_step = int(args["subvolume_dimension_x"]/2)
+    row_step = int(args["subvolume_shape"][1]/2)
+    col_step = int(args["subvolume_shape"][0]/2)
     row, col = np.random.randint(row_step, volume_shape[0]-row_step), np.random.randint(col_step, volume_shape[1]-col_step)
 
     found = False
@@ -176,8 +176,8 @@ def getGridTrainCoordinate(args, volume_shape):
 
 def getGridTestCoordinate(args, volume_shape):
     """DEPRECATED"""
-    row_step = int(args["subvolume_dimension_y"]/2)
-    col_step = int(args["subvolume_dimension_x"]/2)
+    row_step = int(args["subvolume_shape"][1]/2)
+    col_step = int(args["subvolume_shape"][0]/2)
 
     n_rows = int(args["grid_n_squares"] / 2)
     voxels_per_row = int(volume_shape[0] / n_rows)
@@ -186,10 +186,10 @@ def getGridTestCoordinate(args, volume_shape):
 
     if args["grid_test_square"] % 2 == 0:
         # testing on the left side
-        col = np.random.randint(int(args["subvolume_dimension_x"]/2), int(volume_shape[1] / 2))
+        col = np.random.randint(int(args["subvolume_shape"][0]/2), int(volume_shape[1] / 2))
     else:
         # testing on the right side
-        col = np.random.randint(int(volume_shape[1] / 2), volume_shape[1]-int(args["subvolume_dimension_x"]/2))
+        col = np.random.randint(int(volume_shape[1] / 2), volume_shape[1]-int(args["subvolume_shape"][0]/2))
 
     return row,col
 
@@ -220,12 +220,12 @@ def isInTestSet(args, row_point, col_point, volume_shape, bounds_identifier, tra
 def averageTruthInSubvolume(args, row_coordinate, col_coordinate, ground_truth):
     """DEPRECATED"""
     # assume coordinate is at the center
-    row_step = int(args["subvolume_dimension_y"]/2)
-    col_step = int(args["subvolume_dimension_x"]/2)
+    row_step = int(args["subvolume_shape"][1]/2)
+    col_step = int(args["subvolume_shape"][0]/2)
     row_top = row_coordinate - row_step
     col_left = col_coordinate - col_step
 
-    avg_truth = np.mean(ground_truth[row_top:row_top+args["subvolume_dimension_y"], col_left:col_left+args["subvolume_dimension_x"]])
+    avg_truth = np.mean(ground_truth[row_top:row_top+args["subvolume_shape"][1], col_left:col_left+args["subvolume_shape"][0]])
 
     return avg_truth 
 
@@ -234,8 +234,8 @@ def generateCoordinatePool(args, volume_shape, ground_truth, surface_mask, train
     """DEPRECATED"""
     coordinates = []
     truth_label_value = np.iinfo(ground_truth.dtype).max
-    rowStep = int(args["subvolume_dimension_y"]/2)
-    colStep = int(args["subvolume_dimension_x"]/2)
+    rowStep = int(args["subvolume_shape"][1]/2)
+    colStep = int(args["subvolume_shape"][0]/2)
 
     row_bounds, col_bounds = bounds(args, volume_shape, train_bounds_identifier, train_portion)
     print(" rowbounds: {}".format(row_bounds))
@@ -290,15 +290,15 @@ def isOnSurface(args, rowCoordinate, colCoordinate, surfaceMask):
     """DEPRECATED"""
     # alternatively, check if the maximum value in the vector crosses a threshold
     # for now, just check our mask
-    rowStep = int(args["subvolume_dimension_y"] / 2)
-    colStep = int(args["subvolume_dimension_x"] / 2)
+    rowStep = int(args["subvolume_shape"][1] / 2)
+    colStep = int(args["subvolume_shape"][0] / 2)
     square = surfaceMask[rowCoordinate-rowStep:rowCoordinate+rowStep, colCoordinate-colStep:colCoordinate+colStep]
     return np.size(square) > 0 and np.min(square) != 0
 
 
 def minimumSurfaceInSample(args, row, col, surfaceImage):
-    rowStep = int(args["subvolume_dimension_y"] / 2)
-    colStep = int(args["subvolume_dimension_x"] / 2)
+    rowStep = int(args["subvolume_shape"][1] / 2)
+    colStep = int(args["subvolume_shape"][0] / 2)
 
     square = surfaceImage[row-rowStep:row+rowStep, col-colStep:col+colStep]
     if np.size(square) == 0:
@@ -317,7 +317,7 @@ def getSpecString(args):
     tmstring += str(tm[3])
     tmstring += "h"
 
-    specstring = "{}x{}x{}-".format(args["subvolume_dimension_x"], args["subvolume_dimension_y"], args["subvolume_dimension_z"])
+    specstring = "{}x{}x{}-".format(args["subvolume_shape"][0], args["subvolume_shape"][1], args["subvolume_shape"][2])
     specstring = specstring + tmstring
 
     return specstring

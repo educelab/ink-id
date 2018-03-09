@@ -39,41 +39,22 @@ class VolumeSet:
         print("Initialized {} total volumes, {} to be used for training...".format(self.n_total_volumes, self.n_train_volumes))
 
 
-    def get_training_dataset(self, batch_size):
-        return self.make_dataset(
-            return_labels=True,
-            perform_shuffle=True,
-            shuffle_buffer_size=40000,
-            batch_size=batch_size,
-            augment_samples=True,
-            grid_spacing=1)
+    def make_dataset(self,
+                     return_labels=True,
+                     perform_shuffle=True,
+                     shuffle_buffer_size=10000,
+                     batch_size=32,
+                     restrict_to_surface=True,
+                     augment_samples=False,
+                     grid_spacing=100):
 
-
-    def get_evaluation_dataset(self, batch_size):
-        return self.make_dataset(
-            return_labels=True,
-            perform_shuffle=True,
-            shuffle_buffer_size=40000,
-            batch_size=batch_size,
-            augment_samples=False,
-            grid_spacing=1).take(1).repeat()
-
-
-    def get_prediction_dataset(self, batch_size):
-        return self.make_dataset(
-            return_labels=False,
-            perform_shuffle=False,
-            batch_size=batch_size,
-            augment_samples=False,
-            grid_spacing=1)
-
-
-    def make_dataset(self, return_labels=True, perform_shuffle=True, shuffle_buffer_size=10000,
-                     batch_size=32, restrict_to_surface=True, augment_samples=False, grid_spacing=1):
+        # TODO make this not a member variable
         self._augment_samples = augment_samples
         
-        dataset = tf.data.Dataset.from_generator(self.coordinate_pool_generator(grid_spacing=grid_spacing),
-                                                 (tf.int64, tf.int64))
+        dataset = tf.data.Dataset.from_generator(
+            self.coordinate_pool_generator(grid_spacing=grid_spacing),
+            (tf.int64, tf.int64)
+        )
 
         if restrict_to_surface:
             dataset = dataset.filter(self.tf_is_on_surface)
@@ -82,9 +63,15 @@ class VolumeSet:
             dataset = dataset.shuffle(shuffle_buffer_size)
 
         if return_labels:
-            dataset = dataset.map(self.tf_coordinate_to_labeled_input, num_parallel_calls=multiprocessing.cpu_count())
+            dataset = dataset.map(
+                self.tf_coordinate_to_labeled_input,
+                num_parallel_calls=multiprocessing.cpu_count()
+            )
         else:
-            dataset = dataset.map(self.tf_coordinate_to_unlabeled_input, num_parallel_calls=multiprocessing.cpu_count())
+            dataset = dataset.map(
+                self.tf_coordinate_to_unlabeled_input,
+                num_parallel_calls=multiprocessing.cpu_count()
+            )
         
         dataset = dataset.batch(batch_size)
         dataset = dataset.prefetch(1)
@@ -92,65 +79,53 @@ class VolumeSet:
         return dataset
 
 
-    def get_one_batch(self, return_labels=True, perform_shuffle=True, shuffle_buffer_size=10000,
-                    batch_size=32, restrict_to_surface=True, augment_samples=False):
+    def tf_input_fn(self,
+                    return_labels=True,
+                    perform_shuffle=True,
+                    shuffle_buffer_size=10000,
+                    batch_size=32,
+                    restrict_to_surface=True,
+                    augment_samples=False):
+        """Create a tensorflow input_fn."""
         dataset = self.make_dataset(
             return_labels=return_labels,
             perform_shuffle=perform_shuffle,
             shuffle_buffer_size=shuffle_buffer_size,
             batch_size=batch_size,
             restrict_to_surface=restrict_to_surface,
-            augment_samples=augment_samples)
-
-        dataset = dataset.take(1)
-
+            augment_samples=augment_samples
+        )
+        
         if return_labels:
-            batch_features, batch_labels = tf.contrib.data.get_single_element(dataset)
+            batch_features, batch_labels = dataset.make_one_shot_iterator().get_next()
             return batch_features, batch_labels
         else:
-            batch_features = tf.contrib.data.get_single_element(dataset)
+            batch_features = dataset.make_one_shot_iterator().get_next()
             return batch_features, None
-    
-    # def tf_input_fn(self, return_labels=True, perform_shuffle=True, shuffle_buffer_size=10000,
-    #                 batch_size=32, restrict_to_surface=True, augment_samples=False):
-    #     dataset = self.make_dataset(
-    #         return_labels=return_labels,
-    #         perform_shuffle=perform_shuffle,
-    #         shuffle_buffer_size=shuffle_buffer_size,
-    #         batch_size=batch_size,
-    #         restrict_to_surface=restrict_to_surface,
-    #         augment_samples=augment_samples)
-        
-    #     if return_labels:
-    #         batch_features, batch_labels = dataset.make_one_shot_iterator().get_next()
-    #         return batch_features, batch_labels
-    #     else:
-    #         batch_features = dataset.make_one_shot_iterator().get_next()
-    #         return batch_features, None
 
 
-    # def training_input_fn(self, batch_size):
-    #     return self.tf_input_fn(return_labels=True,
-    #                             perform_shuffle=True,
-    #                             batch_size=batch_size,
-    #                             restrict_to_surface=True,
-    #                             augment_samples=True)
+    def training_input_fn(self, batch_size):
+        return self.tf_input_fn(return_labels=True,
+                                perform_shuffle=True,
+                                batch_size=batch_size,
+                                restrict_to_surface=True,
+                                augment_samples=True)
 
 
-    # def prediction_input_fn(self, batch_size):
-    #     return self.tf_input_fn(return_labels=False,
-    #                             perform_shuffle=False,
-    #                             batch_size=batch_size,
-    #                             retrict_to_surface=True,
-    #                             augment_samples=False)
+    def prediction_input_fn(self, batch_size):
+        return self.tf_input_fn(return_labels=False,
+                                perform_shuffle=False,
+                                batch_size=batch_size,
+                                retrict_to_surface=True,
+                                augment_samples=False)
 
 
-    # def evaluation_input_fn(self, batch_size):
-    #     return self.tf_input_fn(return_labels=True,
-    #                             perform_shuffle=False,
-    #                             batch_size=batch_size,
-    #                             restrict_to_surface=True,
-    #                             augment_samples=False)
+    def evaluation_input_fn(self, batch_size):
+        return self.tf_input_fn(return_labels=True,
+                                perform_shuffle=False,
+                                batch_size=batch_size,
+                                restrict_to_surface=True,
+                                augment_samples=False)
 
 
     def tf_coordinate_to_unlabeled_input(self, vol_id, xy_coordinate):
@@ -194,24 +169,34 @@ class VolumeSet:
     def getTestBatch(self, args):
         """DEPRECATED"""
         # gather testing samples from other volumes
-        trainingSamples = np.zeros((args["num_test_subvolumes"], args["subvolume_dimension_x"], args["subvolume_dimension_y"], args["subvolume_dimension_z"]), dtype=np.float32)
-        groundTruth = np.zeros((args["num_test_subvolumes"], 2), dtype=np.float32)
+        trainingSamples = np.zeros(
+            (args["evaluation_batch_size"],
+             args["subvolume_shape"][0],
+             args["subvolume_shape"][1],
+             args["subvolume_shape"][2]
+            ),
+            dtype=np.float32
+        )
+        groundTruth = np.zeros(
+            (args["evaluation_batch_size"], 2),
+            dtype=np.float32
+        )
 
         if self.n_test_volumes == 1:
             # all samples come from the same volume
-            volume_samples, volume_truth = self.volume_set[self.test_volume_indices[0]].getTestBatch(args, args["num_test_subvolumes"])
+            volume_samples, volume_truth = self.volume_set[self.test_volume_indices[0]].getTestBatch(args, args["evaluation_batch_size"])
             trainingSamples[:] = volume_samples
             groundTruth[:] = volume_truth
 
         else: #TODO validate this scheme
-            samples_per_volume = int(args["num_test_subvolumes"] / self.n_test_volumes)
+            samples_per_volume = int(args["evaluation_batch_size"] / self.n_test_volumes)
             for i in range(self.n_test_volumes):
                 volume_index = self.test_volume_indices[i]
 
                 start = i*samples_per_volume
                 end = (i+1)*samples_per_volume
                 if i == self.n_test_volumes-1: # make sure to 'fill up' all the slots
-                    end = args["num_test_subvolumes"]
+                    end = args["evaluation_batch_size"]
 
                 volume_samples, volume_truth = self.volume_set[volume_index].getTestBatch(args, end-start)
                 trainingSamples[start:end] = volume_samples
@@ -223,31 +208,28 @@ class VolumeSet:
         """DEPRECATED"""
         # gather training samples from other volumes
         # should be as simple as getting batches from each volume and combining them
-        trainingSamples = np.zeros((args["batch_size"], args["subvolume_dimension_x"], args["subvolume_dimension_y"], args["subvolume_dimension_z"]), dtype=np.float32)
-        groundTruth = np.zeros((args["batch_size"], 2), dtype=np.float32)
-        samples_per_volume = int(args["batch_size"] / self.n_train_volumes)
+        trainingSamples = np.zeros(
+            (args["training_batch_size"],
+             args["subvolume_shape"][0],
+             args["subvolume_shape"][1],
+             args["subvolume_shape"][2]
+            ),
+            dtype=np.float32)
+        groundTruth = np.zeros(
+            (args["training_batch_size"], 2),
+            dtype=np.float32
+        )
+        samples_per_volume = int(args["training_batch_size"] / self.n_train_volumes)
         for i in range(self.n_train_volumes):
             volume_index = self.train_volume_indices[i]
             start = i*samples_per_volume
             end = (i+1)*samples_per_volume
             if i == self.n_train_volumes-1: # make sure to 'fill up' all the slots
-                end = args["batch_size"]
+                end = args["training_batch_size"]
 
             volume_samples, volume_truth, volume_epoch = self.volume_set[volume_index].getTrainingBatch(args, n_samples=(end-start))
             trainingSamples[start:end] = volume_samples
             groundTruth[start:end] = volume_truth
-
-            '''
-        for j in range(args["batch_size"]):
-            # randomly swap samples
-            # pretty sure this is statistically invalid because certain items are more likely to get swapped
-            index_a, index_b = np.random.choice(args["batch_size"], 2, replace=False)
-            tmpSample = trainingSamples[index_a]
-            tmpTruth = groundTruth[index_a]
-            trainingSamples[index_a] = trainingSamples[index_b]
-            trainingSamples[index_b] = tmpSample
-            groundTruth[index_a] = groundTruth[index_b]
-            groundTruth[index_b] = tmpTruth'''
 
         #TODO return actual epoch instead of the last volume's epoch
         return trainingSamples, groundTruth, volume_epoch

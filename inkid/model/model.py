@@ -7,8 +7,17 @@ import tensorflow as tf
 import tensorflow.contrib.slim as slim
 from tensorflow import layers
 
+# https://stackoverflow.com/a/47043377
+class EvalCheckpointSaverListener(tf.train.CheckpointSaverListener):
+    def __init__(self, estimator, input_fn):
+        self.estimator = estimator
+        self.input_fn = input_fn
 
-class Model3dcnn(tf.keras.Model):
+    def after_save(self, session, global_step):
+        eval_results = self.estimator.evaluate(self.input_fn)
+        print('Evaluation results:\n\t%s' % eval_results)
+
+class Model3dcnn:
     def __init__(self, drop_rate, subvolume_shape, batch_norm_momentum, filters):
         self._drop_rate = drop_rate
         self._subvolume_shape = subvolume_shape
@@ -87,12 +96,12 @@ def model_fn_3dcnn(features, labels, mode, params):
                     labels=tf.argmax(labels, axis=1),
                     predictions=tf.argmax(logits, axis=1)),
                 })
-        
-def build_model(inputs, labels, drop_rate, args, training_flag):
-    """Build a model."""
-    inputs = (tf.reshape(inputs,
+
+def build_3dcnn(inputs, labels, drop_rate, args, training_flag, fbeta_weight):
+    subvolumes = inputs['Subvolume']
+    subvolumes = (tf.reshape(subvolumes,
                          [-1, args["subvolume_dimension_x"], args["subvolume_dimension_y"], args["subvolume_dimension_z"], 1]))
-    conv1 = layers.batch_normalization(slim.convolution(inputs, args["neurons"][0], [3, 3, 3],
+    conv1 = layers.batch_normalization(slim.convolution(subvolumes, args["neurons"][0], [3, 3, 3],
                                                         stride=[2, 2, 2], padding='valid'),
                                        training=training_flag,
                                        scale=False,
@@ -111,6 +120,70 @@ def build_model(inputs, labels, drop_rate, args, training_flag):
                                        axis=4,
                                        momentum=args["batch_norm_momentum"])
     conv4 = layers.batch_normalization(slim.convolution(conv3, args["neurons"][3], [3, 3, 3],
+                                                        stride=[2, 2, 2], padding='valid'),
+                                       training=training_flag,
+                                       scale=False,
+                                       axis=4,
+                                       momentum=args["batch_norm_momentum"])
+
+    logits = layers.dropout(slim.fully_connected(slim.flatten(conv4),
+                                              2,
+                                              activation_fn=None),
+                         rate=drop_rate)
+
+    pred = tf.nn.softmax(logits)
+    loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(labels=labels, logits=logits))
+
+    correct_pred = tf.equal(tf.argmax(pred, 1), tf.argmax(labels, 1))
+    accuracy = tf.reduce_mean(tf.cast(correct_pred, tf.float32))
+    
+    # https://stackoverflow.com/a/43960730
+    predicted = tf.argmax(pred, 1)
+    actual = tf.argmax(labels, 1)
+    TP = tf.count_nonzero(predicted * actual, dtype=tf.float32)
+    TN = tf.count_nonzero((predicted - 1) * (actual - 1), dtype=tf.float32)
+    FP = tf.count_nonzero(predicted * (actual - 1), dtype=tf.float32)
+    FN = tf.count_nonzero((predicted - 1) * actual, dtype=tf.float32)
+    precision = tf.divide(TP, (TP + FP))
+    recall = tf.divide(TP, (TP + FN))
+    # https://en.wikipedia.org/wiki/F1_score
+    fbeta_squared = tf.constant(fbeta_weight ** 2.0)
+    fbeta_score = (1 + fbeta_squared) * tf.divide((precision * recall),
+                                                  (fbeta_squared * precision) + recall)
+
+    return inputs, labels, pred, loss, accuracy, precision, fbeta_score, FP
+    
+        
+def build_model(inputs, labels, drop_rate, args, training_flag):
+    """Build a model. This is the original implementation."""
+    inputs = (tf.reshape(
+        inputs,
+        [-1,
+         args["subvolume_shape"][0],
+         args["subvolume_shape"][1],
+         args["subvolume_shape"][2],
+         1
+        ]
+    ))
+    conv1 = layers.batch_normalization(slim.convolution(inputs, args["filters"][0], [3, 3, 3],
+                                                        stride=[2, 2, 2], padding='valid'),
+                                       training=training_flag,
+                                       scale=False,
+                                       axis=4,
+                                       momentum=args["batch_norm_momentum"])
+    conv2 = layers.batch_normalization(slim.convolution(conv1, args["filters"][1], [3, 3, 3],
+                                                        stride=[2, 2, 2], padding='valid'),
+                                       training=training_flag,
+                                       scale=False,
+                                       axis=4,
+                                       momentum=args["batch_norm_momentum"])
+    conv3 = layers.batch_normalization(slim.convolution(conv2, args["filters"][2], [3, 3, 3],
+                                                        stride=[2, 2, 2], padding='valid'),
+                                       training=training_flag,
+                                       scale=False,
+                                       axis=4,
+                                       momentum=args["batch_norm_momentum"])
+    conv4 = layers.batch_normalization(slim.convolution(conv3, args["filters"][3], [3, 3, 3],
                                                         stride=[2, 2, 2], padding='valid'),
                                        training=training_flag,
                                        scale=False,

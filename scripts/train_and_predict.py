@@ -50,7 +50,14 @@ def main():
             datetime.datetime.today().timetuple()[2],
             datetime.datetime.today().timetuple()[3]))
 
-    x = tf.placeholder(tf.float32, [None, params['subvolume_dimension_x'], params['subvolume_dimension_y'], params['subvolume_dimension_z']])
+    x = tf.placeholder(
+        tf.float32,
+        [None,
+         params['subvolume_shape'][0],
+         params['subvolume_shape'][1],
+         params['subvolume_shape'][2]
+        ]
+    )
     y = tf.placeholder(tf.float32, [None, 2])
     drop_rate = tf.placeholder(tf.float32)
     training_flag = tf.placeholder(tf.bool)
@@ -121,7 +128,7 @@ def main():
                                                  training_flag: True})
                 train_writer.add_summary(summary, iteration)
 
-                if iteration % params['display_step'] == 0:
+                if iteration % params['display_every_n_steps'] == 0:
                     train_acc, train_loss, train_preds = sess.run([accuracy, loss, pred],
                                                                   feed_dict={x: batch_x, y: batch_y, drop_rate: 0.0, training_flag: False})
                     test_acc, test_loss, test_preds, test_summary = sess.run([accuracy, loss, pred, merged],
@@ -158,7 +165,7 @@ def main():
                         # make a full prediction if results are tentatively spectacular
                         predict_flag = True
 
-                if (predict_flag) or (iteration % params['predict_step'] == 0 and iteration > 0):
+                if (predict_flag) or (iteration % params['predict_every_n_steps'] == 0 and iteration > 0):
                     np.savetxt(params['output_path']+'/times.csv', np.array(train_minutes), fmt='%.3f', delimiter=',', header='iteration,minutes')
                     prediction_start_time = time.time()
                     iterations_since_prediction = 0
