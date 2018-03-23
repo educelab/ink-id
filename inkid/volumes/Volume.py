@@ -99,7 +99,7 @@ class Volume:
         return np.size(square) > 0 and np.min(square) != 0
 
 
-    def yield_coordinates(self, grid_spacing=1):
+    def yield_coordinates(self, grid_spacing=1, perform_shuffle=True):
         """Walk the 2D space and yield points on the grid.
 
         Walk the 2D coordinate space and yield the (x, y) points on
@@ -110,6 +110,7 @@ class Volume:
         coordinate values.
 
         """
+        coordinates = []
         for x in range(
                 self.args["subvolume_shape"][0],
                 self.volume.shape[0] - self.args["subvolume_shape"][0],
@@ -118,7 +119,17 @@ class Volume:
                     self.args["subvolume_shape"][1],
                     self.volume.shape[1] - self.args["subvolume_shape"][1],
                     grid_spacing):
-                yield (self.volume_ID, (x, y))
+                coordinates.append([x, y])
+
+        coordinates = np.array(coordinates)
+
+        if perform_shuffle:
+            np.random.seed(0) # TODO remove when properly creating datasets from regions of interest
+            np.random.shuffle(coordinates)
+            print(coordinates[:10])
+
+        for coordinate in coordinates:
+            yield (self.volume_ID, (coordinate))
 
 
     def coordinate_to_input(self, xy_coordinate, return_label, augment_samples):

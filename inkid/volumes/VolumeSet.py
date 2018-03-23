@@ -27,10 +27,10 @@ class VolumeSet:
             if current_vol_args['use_in_training']:
                 self.n_train_volumes += 1
                 self.train_volume_indices.append(i)
-            if current_vol_args['make_prediction']:
+            if current_vol_args['use_in_prediction']:
                 self.n_predict_volumes += 1
                 self.predict_volume_indices.append(i)
-            if current_vol_args['use_in_test_set']:
+            if current_vol_args['use_in_evaluation']:
                 self.n_test_volumes += 1
                 self.test_volume_indices.append(i)
 
@@ -42,26 +42,22 @@ class VolumeSet:
     def make_dataset(self,
                      return_labels,
                      perform_shuffle,
-                     shuffle_buffer_size,
                      batch_size,
-                     perform_batch_shuffle,
                      restrict_to_surface,
                      augment_samples,
-                     grid_spacing):
+                     grid_spacing,
+                     max_samples):
 
-        # TODO make this something cleaner
+        # TODO make this something cleaner (this might not even work, really)
         self._augment_samples = augment_samples
         
         dataset = tf.data.Dataset.from_generator(
-            self.coordinate_pool_generator(grid_spacing=grid_spacing),
+            self.coordinate_pool_generator(grid_spacing, perform_shuffle),
             (tf.int64, tf.int64)
         )
 
         if restrict_to_surface:
             dataset = dataset.filter(self.tf_is_on_surface)
-
-        if perform_shuffle:
-            dataset = dataset.shuffle(shuffle_buffer_size)
 
         if return_labels:
             dataset = dataset.map(
@@ -73,12 +69,9 @@ class VolumeSet:
                 self.tf_coordinate_to_unlabeled_input,
                 num_parallel_calls=multiprocessing.cpu_count()
             )
-        
-        dataset = dataset.batch(batch_size)
 
-        if perform_batch_shuffle:
-            dataset = dataset.shuffle(batch_shuffle_buffer_size)
-        
+        dataset = dataset.take(max_samples)
+        dataset = dataset.batch(batch_size)
         dataset = dataset.prefetch(1)
         
         return dataset
@@ -87,20 +80,20 @@ class VolumeSet:
     def tf_input_fn(self,
                     return_labels=True,
                     perform_shuffle=True,
-                    shuffle_buffer_size=5000,
-                    batch_size=32,
-                    perform_batch_shuffle=True,
-                    batch_shuffle_buffer_size=200,
+                            batch_size=32,
                     restrict_to_surface=True,
-                    augment_samples=False):
+                    augment_samples=False,
+                    grid_spacing=1,
+                    max_samples=-1):
         """Create a tensorflow input_fn."""
         dataset = self.make_dataset(
             return_labels=return_labels,
             perform_shuffle=perform_shuffle,
-            shuffle_buffer_size=shuffle_buffer_size,
             batch_size=batch_size,
             restrict_to_surface=restrict_to_surface,
-            augment_samples=augment_samples
+            augment_samples=augment_samples,
+            grid_spacing=grid_spacing,
+            max_samples=max_samples,
         )
         
         if return_labels:
@@ -112,27 +105,37 @@ class VolumeSet:
 
 
     def training_input_fn(self, batch_size):
-        return self.tf_input_fn(return_labels=True,
-                                perform_shuffle=True,
-                                batch_size=batch_size,
-                                restrict_to_surface=True,
-                                augment_samples=True)
+        return self.tf_input_fn(
+            return_labels=True,
+            perform_shuffle=True,
+            batch_size=batch_size,
+            restrict_to_surface=True,
+            augment_samples=True,
+            grid_spacing=1,
+        )
 
 
     def prediction_input_fn(self, batch_size):
-        return self.tf_input_fn(return_labels=False,
-                                perform_shuffle=False,
-                                batch_size=batch_size,
-                                retrict_to_surface=True,
-                                augment_samples=False)
+        return self.tf_input_fn(
+            return_labels=False,
+            perform_shuffle=False,
+            batch_size=batch_size,
+            restrict_to_surface=True,
+            augment_samples=False,
+            grid_spacing=60,
+        )
 
 
     def evaluation_input_fn(self, batch_size):
-        return self.tf_input_fn(return_labels=True,
-                                perform_shuffle=False,
-                                batch_size=batch_size,
-                                restrict_to_surface=True,
-                                augment_samples=False)
+        return self.tf_input_fn(
+            return_labels=True,
+            perform_shuffle=True,
+            batch_size=batch_size,
+            restrict_to_surface=True,
+            augment_samples=False,
+            grid_spacing=10,
+            max_samples=5000,
+        )
 
 
     def tf_coordinate_to_unlabeled_input(self, vol_id, xy_coordinate):
@@ -157,10 +160,10 @@ class VolumeSet:
                                                            augment_samples)
 
     
-    def coordinate_pool_generator(self, grid_spacing=1):
+    def coordinate_pool_generator(self, grid_spacing, perform_shuffle):
         def generator():
             for volume in self.volume_set:
-                for coordinate in volume.yield_coordinates(grid_spacing):
+                for coordinate in volume.yield_coordinates(grid_spacing, perform_shuffle):
                     yield coordinate
         return generator
 

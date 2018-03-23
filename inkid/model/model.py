@@ -9,14 +9,19 @@ from tensorflow import layers
 
 # https://stackoverflow.com/a/47043377
 class EvalCheckpointSaverListener(tf.train.CheckpointSaverListener):
-    def __init__(self, estimator, input_fn):
-        self.estimator = estimator
-        self.input_fn = input_fn
+    def __init__(self, estimator, input_fn, predict_every_n_steps):
+        self._estimator = estimator
+        self._input_fn = input_fn
+        self._predict_every_n_steps = predict_every_n_steps
 
     def after_save(self, session, global_step):
-        eval_results = self.estimator.evaluate(self.input_fn)
-        print(global_step)
+        eval_results = self._estimator.evaluate(self._input_fn)
         print('Evaluation results:\n\t%s' % eval_results)
+
+        iteration = global_step - 1
+        if iteration > 0 and iteration % self._predict_every_n_steps == 0:
+            pass # TODO predict
+            
 
 class Model3dcnn:
     def __init__(self, drop_rate, subvolume_shape, batch_norm_momentum, filters):
@@ -75,10 +80,45 @@ def model_fn_3dcnn(features, labels, mode, params):
         logits = model(subvolume, training=True)
         loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(
             labels=labels, logits=logits))
-        accuracy = tf.metrics.accuracy(
-            labels=tf.argmax(labels, axis=1), predictions=tf.argmax(logits, axis=1))
-        tf.identity(accuracy[1], name='train_accuracy')
-        tf.summary.scalar('train_accuracy', accuracy[1])
+
+        epsilon = 1e-5
+        predicted = tf.argmax(logits, 1)
+        actual = tf.argmax(labels, 1)
+        true_positives = tf.count_nonzero(predicted * actual, dtype=tf.float32)
+        true_negatives = tf.count_nonzero((predicted - 1) * (actual - 1), dtype=tf.float32)
+        false_positives = tf.count_nonzero(predicted * (actual - 1), dtype=tf.float32)
+        false_negatives = tf.count_nonzero((predicted - 1) * actual, dtype=tf.float32)
+        accuracy = tf.divide(
+            true_positives + true_negatives,
+            true_positives + true_negatives + false_positives + false_negatives
+        )
+        precision = tf.divide(
+            true_positives,
+            true_positives + false_positives + epsilon
+        )
+        recall = tf.divide(
+            true_positives,
+            true_positives + false_negatives + epsilon
+        )
+        # https://en.wikipedia.org/wiki/F1_score
+        fbeta_weight = 0.3 # TODO use parameter
+        fbeta_squared = tf.constant(fbeta_weight ** 2.0)
+        fbeta_score = (1 + fbeta_squared) * tf.divide(
+            (precision * recall),
+            (fbeta_squared * precision) + recall + epsilon
+        )
+
+        # accuracy = tf.metrics.accuracy(
+        #     labels=tf.argmax(labels, axis=1), predictions=tf.argmax(logits, axis=1))
+
+        tf.identity(accuracy, name='train_accuracy')
+        tf.identity(precision, name='train_precision')
+        tf.identity(recall, name='train_recall')
+        tf.identity(fbeta_score, name='train_fbeta_score')
+        tf.summary.scalar('train_accuracy', accuracy)
+        tf.summary.scalar('train_precision', precision)
+        tf.summary.scalar('train_recall', recall)
+        tf.summary.scalar('train_fbeta_score', fbeta_score)
         return tf.estimator.EstimatorSpec(
             mode=tf.estimator.ModeKeys.TRAIN,
             loss=loss,
@@ -88,15 +128,47 @@ def model_fn_3dcnn(features, labels, mode, params):
         logits = model(subvolume, training=False)
         loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(
             labels=labels, logits=logits))
+
+        # TODO deduplicate
+        epsilon = 1e-5
+        predicted = tf.argmax(logits, 1)
+        actual = tf.argmax(labels, 1)
+        true_positives = tf.count_nonzero(predicted * actual, dtype=tf.float32)
+        true_negatives = tf.count_nonzero((predicted - 1) * (actual - 1), dtype=tf.float32)
+        false_positives = tf.count_nonzero(predicted * (actual - 1), dtype=tf.float32)
+        false_negatives = tf.count_nonzero((predicted - 1) * actual, dtype=tf.float32)
+        accuracy = tf.divide(
+            true_positives + true_negatives,
+            true_positives + true_negatives + false_positives + false_negatives
+        )
+        precision = tf.divide(
+            true_positives,
+            true_positives + false_positives + epsilon
+        )
+        recall = tf.divide(
+            true_positives,
+            true_positives + false_negatives + epsilon
+        )
+        # https://en.wikipedia.org/wiki/F1_score
+        fbeta_weight = 0.3 # TODO use parameter
+        fbeta_squared = tf.constant(fbeta_weight ** 2.0)
+        fbeta_score = (1 + fbeta_squared) * tf.divide(
+            (precision * recall),
+            (fbeta_squared * precision) + recall + epsilon
+        )
+
+        
+
         return tf.estimator.EstimatorSpec(
             mode=tf.estimator.ModeKeys.EVAL,
             loss=loss,
             eval_metric_ops={
                 # TODO add F1 and precision
                 'accuracy': tf.metrics.accuracy(
-                    labels=tf.argmax(labels, axis=1),
-                    predictions=tf.argmax(logits, axis=1)),
-                })
+                    labels=tf.argmax(labels, 1),
+                    predictions=tf.argmax(logits, 1)
+                ),
+            })
 
 def build_3dcnn(inputs, labels, drop_rate, args, training_flag, fbeta_weight):
     subvolumes = inputs['Subvolume']

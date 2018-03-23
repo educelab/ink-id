@@ -18,8 +18,6 @@ import inkid.ops
 
 def main():
     """Run the training and prediction process."""
-    start_time = time.time()
-
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--data', metavar='path', required=True,
                         help='path to volume data (slices directory)')
@@ -53,12 +51,15 @@ def main():
 
     volumes = VolumeSet(params)
 
+    # Save checkpoints every n steps. EvalCheckpointSaverListener
+    # (below) runs an evaluation each time this happens.
     run_config = tf.estimator.RunConfig(
-        save_summary_steps=params['display_every_n_steps'],
-        save_checkpoints_steps=params['display_every_n_steps'],
+        save_checkpoints_steps=params['evaluate_every_n_steps'],
         keep_checkpoint_max=None, # save all checkpoints
     )
-    
+
+    # Create an Estimator with the run configuration, hyperparameters,
+    # and model directory specified.
     estimator = tf.estimator.Estimator(
         model_fn=inkid.model.model_fn_3dcnn,
         model_dir=params['output_path'],
@@ -72,18 +73,25 @@ def main():
         },
     )
 
-    tensors_to_log = {'train_accuracy': 'train_accuracy'}
+    # Define tensors to be shown in a "display" step.
+    tensors_to_log = {
+        'train_accuracy': 'train_accuracy',
+        'train_precision': 'train_precision',
+        'train_recall': 'train_recall',
+        'train_fbeta_score': 'train_fbeta_score',
+    }
     logging_hook = tf.train.LoggingTensorHook(
         tensors=tensors_to_log,
         every_n_iter=params['display_every_n_steps'],
     )
     tf.logging.set_verbosity(tf.logging.INFO)
-    
+
+    # Run the training process.
     estimator.train(
         input_fn=lambda: volumes.training_input_fn(
             params['training_batch_size'],
         ),
-        # steps=params['training_steps'],
+        # steps=params['training_steps'],  # If not defined, will run through entire training dataset.
         hooks=[logging_hook],
         saving_listeners=[
             inkid.model.EvalCheckpointSaverListener(
@@ -91,6 +99,7 @@ def main():
                 input_fn=lambda: volumes.evaluation_input_fn(
                     params['evaluation_batch_size'],
                 ),
+                predict_every_n_steps=params['predict_every_n_steps'],
             ),
         ],
     )
