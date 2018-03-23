@@ -53,10 +53,12 @@ class Model3dcnn:
 
 
 def model_fn_3dcnn(features, labels, mode, params):
-    model = Model3dcnn(params['drop_rate'],
-                       params['subvolume_shape'],
-                       params['batch_norm_momentum'],
-                       params['filters'])
+    model = Model3dcnn(
+        params['drop_rate'],
+        params['subvolume_shape'],
+        params['batch_norm_momentum'],
+        params['filters']
+    )
     
     subvolume = features
     if isinstance(subvolume, dict):
@@ -103,7 +105,7 @@ def model_fn_3dcnn(features, labels, mode, params):
         # https://en.wikipedia.org/wiki/F1_score
         fbeta_weight = 0.3 # TODO use parameter
         fbeta_squared = tf.constant(fbeta_weight ** 2.0)
-        fbeta_score = (1 + fbeta_squared) * tf.divide(
+        fbeta = (1 + fbeta_squared) * tf.divide(
             (precision * recall),
             (fbeta_squared * precision) + recall + epsilon
         )
@@ -114,11 +116,11 @@ def model_fn_3dcnn(features, labels, mode, params):
         tf.identity(accuracy, name='train_accuracy')
         tf.identity(precision, name='train_precision')
         tf.identity(recall, name='train_recall')
-        tf.identity(fbeta_score, name='train_fbeta_score')
+        tf.identity(fbeta, name='train_fbeta_score')
         tf.summary.scalar('train_accuracy', accuracy)
         tf.summary.scalar('train_precision', precision)
         tf.summary.scalar('train_recall', recall)
-        tf.summary.scalar('train_fbeta_score', fbeta_score)
+        tf.summary.scalar('train_fbeta_score', fbeta)
         return tf.estimator.EstimatorSpec(
             mode=tf.estimator.ModeKeys.TRAIN,
             loss=loss,
@@ -129,36 +131,6 @@ def model_fn_3dcnn(features, labels, mode, params):
         loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(
             labels=labels, logits=logits))
 
-        # TODO deduplicate
-        epsilon = 1e-5
-        predicted = tf.argmax(logits, 1)
-        actual = tf.argmax(labels, 1)
-        true_positives = tf.count_nonzero(predicted * actual, dtype=tf.float32)
-        true_negatives = tf.count_nonzero((predicted - 1) * (actual - 1), dtype=tf.float32)
-        false_positives = tf.count_nonzero(predicted * (actual - 1), dtype=tf.float32)
-        false_negatives = tf.count_nonzero((predicted - 1) * actual, dtype=tf.float32)
-        accuracy = tf.divide(
-            true_positives + true_negatives,
-            true_positives + true_negatives + false_positives + false_negatives
-        )
-        precision = tf.divide(
-            true_positives,
-            true_positives + false_positives + epsilon
-        )
-        recall = tf.divide(
-            true_positives,
-            true_positives + false_negatives + epsilon
-        )
-        # https://en.wikipedia.org/wiki/F1_score
-        fbeta_weight = 0.3 # TODO use parameter
-        fbeta_squared = tf.constant(fbeta_weight ** 2.0)
-        fbeta_score = (1 + fbeta_squared) * tf.divide(
-            (precision * recall),
-            (fbeta_squared * precision) + recall + epsilon
-        )
-
-        
-
         return tf.estimator.EstimatorSpec(
             mode=tf.estimator.ModeKeys.EVAL,
             loss=loss,
@@ -168,8 +140,31 @@ def model_fn_3dcnn(features, labels, mode, params):
                     labels=tf.argmax(labels, 1),
                     predictions=tf.argmax(logits, 1)
                 ),
+                'precision': tf.metrics.precision(
+                    labels=tf.argmax(labels, 1),
+                    predictions=tf.argmax(logits, 1)
+                ),
+                'recall': tf.metrics.recall(
+                    labels=tf.argmax(labels, 1),
+                    predictions=tf.argmax(logits, 1)
+                ),
+                'fbeta_score': fbeta_score(
+                    labels=tf.argmax(labels, 1),
+                    predictions=tf.argmax(logits, 1),
+                    beta=params['fbeta_weight']
+                ),
             })
 
+def fbeta_score(labels, predictions, beta=0.5):
+    precision, precision_update_op = tf.metrics.precision(labels, predictions)
+    recall, recall_update_op = tf.metrics.recall(labels, predictions)
+    epsilon = 1e-5
+    score = (1 + beta**2) * tf.divide(
+        (precision * recall),
+        (beta**2 * precision) + recall + epsilon
+    )
+    return (score, tf.group(precision_update_op, recall_update_op))
+    
 def build_3dcnn(inputs, labels, drop_rate, args, training_flag, fbeta_weight):
     subvolumes = inputs['Subvolume']
     subvolumes = (tf.reshape(

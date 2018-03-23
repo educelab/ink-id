@@ -42,7 +42,7 @@
 	"training_steps": 1000000,
 	"training_epochs": 2, // TODO use this
 	"prediction_batch_size": 400,
-	"predict_every_n_steps": 100,
+	"predict_every_n_steps": 10000,
 	"prediction_overlap_step": 4, // predict on one sample for each _ by _ voxel square
 	"predict_depth": 1,
 	"evaluation_batch_size": 400,

@@ -70,6 +70,7 @@ def main():
             'batch_norm_momentum': params['batch_norm_momentum'],
             'filters': params['filters'],
             'learning_rate': params['learning_rate'],
+            'fbeta_weight': params['fbeta_weight'],
         },
     )
 
