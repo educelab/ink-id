@@ -87,6 +87,8 @@ def main():
     )
     tf.logging.set_verbosity(tf.logging.INFO)
 
+    
+    
     # Run the training process.
     estimator.train(
         input_fn=lambda: volumes.training_input_fn(
@@ -97,14 +99,22 @@ def main():
         saving_listeners=[
             inkid.model.EvalCheckpointSaverListener(
                 estimator=estimator,
-                input_fn=lambda: volumes.evaluation_input_fn(
+                eval_input_fn=lambda: volumes.evaluation_input_fn(
                     params['evaluation_batch_size'],
                 ),
+                predict_input_fn=lambda: volumes.prediction_input_fn(
+                    params['prediction_batch_size'],
+                ),
                 predict_every_n_steps=params['predict_every_n_steps'],
+                volume_set=volumes,
+                args=params,
             ),
         ],
     )
 
-
+    estimator.predict(
+        input_fn=lambda: volumes.prediction_input_fn(params['prediction_batch_size'])
+    )
+    
 if __name__ == '__main__':
     main()

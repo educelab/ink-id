@@ -124,9 +124,8 @@ class Volume:
         coordinates = np.array(coordinates)
 
         if perform_shuffle:
-            np.random.seed(0) # TODO remove when properly creating datasets from regions of interest
+            # np.random.seed(0) # TODO remove when properly creating datasets from regions of interest
             np.random.shuffle(coordinates)
-            print(coordinates[:10])
 
         for coordinate in coordinates:
             yield (self.volume_ID, (coordinate))
@@ -155,7 +154,13 @@ class Volume:
         y = xy_coordinate[1]
         # Cap the z value in case the surface data has a z height that
         # puts the subvolume outside the volume
-        z = min(max(0, self.surface_image[x, y] - self.args["surface_cushion"]), self.volume.shape[2] - z_step)
+        z = min(
+            max(
+                0,
+                self.surface_image[x, y] - self.args["surface_cushion"] + np.random.randint(-2, 2) # todo use params
+            ),
+            self.volume.shape[2] - z_step
+        )
 
         xyz_coordinate = (x, y, z)
 
@@ -185,9 +190,9 @@ class Volume:
                                                   (y - y_step):(y + y_step)])
         
         if average_label > (self.truth_cutoff_high * self.max_truth):
-            label = [0, 1]
+            label = [0.0, 1.0]
         else:
-            label = [1, 0]
+            label = [1.0, 0.0]
 
         return (self.volume_ID, np.asarray(xyz_coordinate, np.int64),
                 np.asarray(subvolume, np.float32), np.asarray(label, np.float32))
@@ -388,6 +393,8 @@ class Volume:
 
     def reconstruct3D(self, args, predictionValues, coordinates):
         # Important: assume all coordinates as the center of the subvolume
+        print(coordinates[:10])
+        print(predictionValues[:10])
         center_step = int(round(self.prediction_overlap_step / 2))
         row_step = int(args["subvolume_shape"][1]/2)
         col_step = int(args["subvolume_shape"][0]/2)

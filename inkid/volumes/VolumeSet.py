@@ -104,6 +104,7 @@ class VolumeSet:
             return batch_features, None
 
 
+    # TODO make these use parameters instead of hardcoded values
     def training_input_fn(self, batch_size):
         return self.tf_input_fn(
             return_labels=True,
@@ -122,7 +123,7 @@ class VolumeSet:
             batch_size=batch_size,
             restrict_to_surface=True,
             augment_samples=False,
-            grid_spacing=60,
+            grid_spacing=30,
         )
 
 
@@ -133,7 +134,7 @@ class VolumeSet:
             batch_size=batch_size,
             restrict_to_surface=True,
             augment_samples=False,
-            grid_spacing=10,
+            grid_spacing=5,
             max_samples=5000,
         )
 

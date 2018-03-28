@@ -40,6 +40,14 @@ def main():
 
     volumes = VolumeSet(params)
 
+    # with tf.Session() as sess:
+    #     inputs, labels = volumes.prediction_input_fn(30)
+
+    #     inputs = sess.run((inputs))
+
+    #     for (n, i) in enumerate(inputs['Subvolume']):
+    #         inkid.ops.save_volume_to_image_stack(i, str(n))
+
     estimator = tf.estimator.Estimator(
         model_fn=inkid.model.model_fn_3dcnn,
         model_dir=args.model,
