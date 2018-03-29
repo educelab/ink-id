@@ -87,8 +87,6 @@ def main():
     )
     tf.logging.set_verbosity(tf.logging.INFO)
 
-    
-    
     # Run the training process.
     estimator.train(
         input_fn=lambda: volumes.training_input_fn(

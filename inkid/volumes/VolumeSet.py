@@ -111,7 +111,7 @@ class VolumeSet:
             perform_shuffle=True,
             batch_size=batch_size,
             restrict_to_surface=True,
-            augment_samples=True,
+            augment_samples=False, # TODO fix
             grid_spacing=1,
         )
 
