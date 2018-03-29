@@ -161,14 +161,6 @@ class VolumeSet:
                                                            augment_samples)
 
     
-    def coordinate_pool_generator(self, grid_spacing, perform_shuffle):
-        def generator():
-            for volume in self.volume_set:
-                for coordinate in volume.yield_coordinates(grid_spacing, perform_shuffle):
-                    yield coordinate
-        return generator
-
-
     def is_on_surface(self, vol_id, xy_coordinate):
         return self.volume_set[vol_id].is_on_surface(xy_coordinate)
     
