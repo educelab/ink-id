@@ -26,12 +26,9 @@ class EvalCheckpointSaverListener(tf.train.CheckpointSaverListener):
         print('Evaluation results:\n\t%s' % eval_results)
 
         iteration = global_step - 1
-        # # if iteration > 0 and iteration % self._predict_every_n_steps == 0:
-        # if True:
+        # if iteration > 0 and iteration % self._predict_every_n_steps == 0:
         predictions = self._estimator.predict(self._predict_input_fn)
-        for (n, prediction) in enumerate(predictions):
-            # inkid.ops.save_volume_to_image_stack(prediction['subvolumes'], str(n))
-            # print(n, prediction['XYZcoordinate'], prediction['probabilities'])
+        for prediction in predictions:
             self._volume_set.reconstruct(self._args, np.array([prediction['probabilities']]), np.array([[prediction['XYZcoordinate'][0], prediction['XYZcoordinate'][1], 0]]))
         self._volume_set.saveAllPredictions(self._args, iteration)
 
@@ -53,66 +50,18 @@ class Model3dcnn(object):
         )
         
         self.conv1 = convolution_layer(filters=filters[0])
-        # self.conv1 = tf.layers.Conv3D(
-        #     filters=filters[0],
-        #     kernel_size=[3, 3, 3],
-        #     strides=(2, 2, 2),
-        #     padding='valid',
-        #     data_format='channels_last',
-        #     dilation_rate=(1, 1, 1),
-        #     activation=tf.nn.relu,
-        #     kernel_initializer=tf.contrib.layers.xavier_initializer(),
-        #     bias_initializer=tf.zeros_initializer(),
-        # )
-
         self.batch_norm1 = tf.layers.BatchNormalization(
             scale=False, axis=4, momentum=batch_norm_momentum)
 
         self.conv2 = convolution_layer(filters=filters[1])
-        # self.conv2 = tf.layers.Conv3D(
-        #     filters=filters[1],
-        #     kernel_size=[3, 3, 3],
-        #     strides=(2, 2, 2),
-        #     padding='valid',
-        #     data_format='channels_last',
-        #     dilation_rate=(1, 1, 1),
-        #     activation=tf.nn.relu,
-        #     kernel_initializer=tf.contrib.layers.xavier_initializer(),
-        #     bias_initializer=tf.zeros_initializer(),
-        # )
-
         self.batch_norm2 = tf.layers.BatchNormalization(
             scale=False, axis=4, momentum=batch_norm_momentum)
 
         self.conv3 = convolution_layer(filters=filters[2])
-        # self.conv3 = tf.layers.Conv3D(
-        #     filters=filters[2],
-        #     kernel_size=[3, 3, 3],
-        #     strides=(2, 2, 2),
-        #     padding='valid',
-        #     data_format='channels_last',
-        #     dilation_rate=(1, 1, 1),
-        #     activation=tf.nn.relu,
-        #     kernel_initializer=tf.contrib.layers.xavier_initializer(),
-        #     bias_initializer=tf.zeros_initializer(),
-        # )
-
         self.batch_norm3 = tf.layers.BatchNormalization(
             scale=False, axis=4, momentum=batch_norm_momentum)
 
         self.conv4 = convolution_layer(filters=filters[3])
-        # self.conv4 = tf.layers.Conv3D(
-        #     filters=filters[3],
-        #     kernel_size=[3, 3, 3],
-        #     strides=(2, 2, 2),
-        #     padding='valid',
-        #     data_format='channels_last',
-        #     dilation_rate=(1, 1, 1),
-        #     activation=tf.nn.relu,
-        #     kernel_initializer=tf.contrib.layers.xavier_initializer(),
-        #     bias_initializer=tf.zeros_initializer(),
-        # )
-
         self.batch_norm4 = tf.layers.BatchNormalization(
             scale=False, axis=4, momentum=batch_norm_momentum)
 
@@ -158,9 +107,6 @@ def model_fn_3dcnn(features, labels, mode, params):
         return tf.estimator.EstimatorSpec(
             mode=tf.estimator.ModeKeys.PREDICT,
             predictions=predictions,
-            # export_outputs={
-            #     'classify': tf.estimator.export.PredictOutput(predictions)
-            # }
         )
 
     if mode == tf.estimator.ModeKeys.TRAIN:

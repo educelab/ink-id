@@ -43,7 +43,7 @@ def main():
     params['volumes'][0]['surface_mask'] = args.surfacemask
     params['volumes'][0]['surface_data'] = args.surfacedata
     params['grid_test_square'] = args.gridtestsquare
-    params['output_path'] = os.path.join(
+    params['output_path'] = os.path.join( # TODO make this an optional input argument so we can pick up from previous training
         args.outputdir,
         '3dcnn-predictions',
         datetime.datetime.today().strftime('%Y-%m-%d_%H.%M.%S')

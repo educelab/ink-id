@@ -130,7 +130,7 @@ class VolumeSet:
     def evaluation_input_fn(self, batch_size):
         return self.tf_input_fn(
             return_labels=True,
-            perform_shuffle=False,
+            perform_shuffle=True,
             batch_size=batch_size,
             restrict_to_surface=True,
             augment_samples=False,
