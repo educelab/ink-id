@@ -111,7 +111,7 @@ class VolumeSet:
             perform_shuffle=True,
             batch_size=batch_size,
             restrict_to_surface=True,
-            augment_samples=False, # TODO fix
+            augment_samples=True,
             grid_spacing=1,
         )
 
@@ -119,18 +119,18 @@ class VolumeSet:
     def prediction_input_fn(self, batch_size):
         return self.tf_input_fn(
             return_labels=False,
-            perform_shuffle=False, #TODO
+            perform_shuffle=False,
             batch_size=batch_size,
             restrict_to_surface=True,
             augment_samples=False,
-            grid_spacing=30,
+            grid_spacing=15,
         )
 
 
     def evaluation_input_fn(self, batch_size):
         return self.tf_input_fn(
             return_labels=True,
-            perform_shuffle=True,
+            perform_shuffle=False,
             batch_size=batch_size,
             restrict_to_surface=True,
             augment_samples=False,

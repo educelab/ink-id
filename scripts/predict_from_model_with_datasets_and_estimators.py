@@ -63,6 +63,7 @@ def main():
 
     print(estimator.get_variable_names())
     print(estimator.get_variable_value('global_step'))
+    # print(estimator.get_variable_value('conv3d_3/kernel'))
     
     predictions = estimator.predict(
         input_fn=lambda: volumes.prediction_input_fn(
@@ -71,8 +72,7 @@ def main():
         predict_keys=['classes', 'probabilities'],
     )
 
-    # print(list(predictions))
-    
+    x = list(predictions)
     
 
 if __name__ == '__main__':

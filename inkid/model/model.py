@@ -25,16 +25,15 @@ class EvalCheckpointSaverListener(tf.train.CheckpointSaverListener):
         eval_results = self._estimator.evaluate(self._eval_input_fn)
         print('Evaluation results:\n\t%s' % eval_results)
 
-        # iteration = global_step - 1
+        iteration = global_step - 1
         # # if iteration > 0 and iteration % self._predict_every_n_steps == 0:
         # if True:
-        #     predictions = self._estimator.predict(self._predict_input_fn)
-        #     for (n, prediction) in enumerate(predictions):
-        #         # inkid.ops.save_volume_to_image_stack(prediction['subvolumes'], str(n))
-        #         # print(n, prediction['XYZcoordinate'], prediction['probabilities'])
-        #         self._volume_set.reconstruct(self._args, np.array([prediction['probabilities']]), np.array([[prediction['XYZcoordinate'][0], prediction['XYZcoordinate'][1], 0]]))
-        #     self._volume_set.saveAllPredictions(self._args, iteration)
-        pass
+        predictions = self._estimator.predict(self._predict_input_fn)
+        for (n, prediction) in enumerate(predictions):
+            # inkid.ops.save_volume_to_image_stack(prediction['subvolumes'], str(n))
+            # print(n, prediction['XYZcoordinate'], prediction['probabilities'])
+            self._volume_set.reconstruct(self._args, np.array([prediction['probabilities']]), np.array([[prediction['XYZcoordinate'][0], prediction['XYZcoordinate'][1], 0]]))
+        self._volume_set.saveAllPredictions(self._args, iteration)
 
 class Model3dcnn(object):
     def __init__(self, drop_rate, subvolume_shape, batch_norm_momentum, filters):
@@ -220,11 +219,16 @@ def model_fn_3dcnn(features, labels, mode, params):
         tf.summary.scalar('train_precision', precision)
         tf.summary.scalar('train_recall', recall)
         tf.summary.scalar('train_fbeta_score', fbeta)
+
+        update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
+        with tf.control_dependencies(update_ops):
+            train_op = optimizer.minimize(loss, global_step=tf.train.get_global_step())
         
         return tf.estimator.EstimatorSpec(
             mode=tf.estimator.ModeKeys.TRAIN,
             loss=loss,
-            train_op=optimizer.minimize(loss, tf.train.get_or_create_global_step()))
+            train_op=train_op
+        )
 
     if mode == tf.estimator.ModeKeys.EVAL:
         logits = model(inputs, training=False)
