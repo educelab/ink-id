@@ -52,7 +52,7 @@ class Volume:
 
         if len(self.volume_args['surface_data']) > 0:
             self.surface_image = imageio.imread(self.volume_args['surface_data'])
-        elif self.volume.shape[2] > args["subvolume_dimension_z"]:
+        elif self.volume.shape[2] > args["subvolume_shape"][2]:
             print("Approximating surface for {}...".format(self.volume_args['name']))
             surf_start_time = time.time()
             self.surface_image = ops.generateSurfaceApproximation(args, self.volume)
@@ -93,13 +93,13 @@ class Volume:
         """Return whether a point is on the surface."""
         x = xy_coordinate[0]
         y = xy_coordinate[1]
-        xStep = int(self.args["subvolume_dimension_y"] / 2)
-        yStep = int(self.args["subvolume_dimension_x"] / 2)
+        xStep = int(self.args["subvolume_shape"][0] / 2)
+        yStep = int(self.args["subvolume_shape"][1] / 2)
         square = self.surface_mask[(x - xStep):(x + xStep), (y - yStep):(y + yStep)]
         return np.size(square) > 0 and np.min(square) != 0
 
 
-    def yield_coordinates(self, grid_spacing=1):
+    def yield_coordinates(self, grid_spacing=1, perform_shuffle=True):
         """Walk the 2D space and yield points on the grid.
 
         Walk the 2D coordinate space and yield the (x, y) points on
@@ -110,13 +110,25 @@ class Volume:
         coordinate values.
 
         """
-        for x in range(int(self.args["subvolume_dimension_x"]),
-                       self.volume.shape[0] - int(self.args["subvolume_dimension_x"]),
-                       grid_spacing):
-            for y in range(int(self.args["subvolume_dimension_y"]),
-                           self.volume.shape[1] - int(self.args["subvolume_dimension_y"]),
-                           grid_spacing):
-                yield (self.volume_ID, (x, y))
+        coordinates = []
+        for x in range(
+                self.args["subvolume_shape"][0],
+                self.volume.shape[0] - self.args["subvolume_shape"][0],
+                grid_spacing):
+            for y in range(
+                    self.args["subvolume_shape"][1],
+                    self.volume.shape[1] - self.args["subvolume_shape"][1],
+                    grid_spacing):
+                coordinates.append([x, y])
+
+        coordinates = np.array(coordinates)
+
+        if perform_shuffle:
+            np.random.shuffle(coordinates)
+
+        for coordinate in coordinates:
+            # print(self.volume_ID, (coordinate))
+            yield (self.volume_ID, (coordinate))
 
 
     def coordinate_to_input(self, xy_coordinate, return_label, augment_samples):
@@ -134,15 +146,21 @@ class Volume:
         """
         # Assume coordinate is in center of subvolume in x and y, and
         # on the top of the subvolume in the z axis.
-        x_step = int(self.args["subvolume_dimension_x"]/2)
-        y_step = int(self.args["subvolume_dimension_y"]/2)
-        z_step = self.args["subvolume_dimension_z"]
+        x_step = int(self.args["subvolume_shape"][0] / 2)
+        y_step = int(self.args["subvolume_shape"][1] / 2)
+        z_step = self.args["subvolume_shape"][2]
 
         x = xy_coordinate[0]
         y = xy_coordinate[1]
         # Cap the z value in case the surface data has a z height that
         # puts the subvolume outside the volume
-        z = min(max(0, self.surface_image[x, y] - self.args["surface_cushion"]), self.volume.shape[2] - z_step)
+        z = min(
+            max(
+                0,
+                self.surface_image[x, y] - self.args["surface_cushion"] # + np.random.randint(-2, 2) # TODO add back jitter using params
+            ),
+            self.volume.shape[2] - z_step
+        )
 
         xyz_coordinate = (x, y, z)
 
@@ -172,9 +190,9 @@ class Volume:
                                                   (y - y_step):(y + y_step)])
         
         if average_label > (self.truth_cutoff_high * self.max_truth):
-            label = [0, 1]
+            label = [0.0, 1.0]
         else:
-            label = [1, 0]
+            label = [1.0, 0.0]
 
         return (self.volume_ID, np.asarray(xyz_coordinate, np.int64),
                 np.asarray(subvolume, np.float32), np.asarray(label, np.float32))
@@ -207,161 +225,11 @@ class Volume:
         return new_z
 
 
-    def getTrainingBatch(self, args, n_samples):
-        """DEPRECATED"""
-        if len(self.coordinate_pool) == 0: # initialization
-            print("Generating coordinate pool for {}...".format(self.volume_args['name']))
-            self.coordinate_pool = ops.generateCoordinatePool(
-                args, self.volume.shape, self.ground_truth, self.surface_mask, self.train_bounds, self.train_portion)
-            np.random.shuffle(self.coordinate_pool)
-            print("Coordinate pool for {} is ready...".format(self.volume_args['name']))
-        if self.train_index + n_samples >= len(self.coordinate_pool): # end of epoch
-            self.incrementEpoch(args)
-
-        training_samples = np.zeros((n_samples, args["subvolume_dimension_x"], args["subvolume_dimension_y"], args["subvolume_dimension_z"]), dtype=np.float32)
-        ground_truth = np.zeros((n_samples, 2), dtype=np.float32)
-        row_step = int(args["subvolume_dimension_y"]/2)
-        col_step = int(args["subvolume_dimension_x"]/2)
-
-        # populate the samples and labels
-        for i in range(n_samples):
-            if args["balance_samples"] and (i > n_samples / 2):
-                if np.sum(ground_truth[:,1] / i) > .5:
-                    # more than 50% ink samples
-                    self.moveToNextNegativeSample(args)
-                else:
-                    # fewer than 50% ink samples
-                    self.moveToNextPositiveSample(args)
-
-            row_coord, col_coord, label, augment_seed = self.coordinate_pool[self.train_index]
-            z_coord = max(0, self.surface_image[row_coord, col_coord] - args["surface_cushion"])
-
-            if args["use_jitter"]:
-                z_coord = np.maximum(0, z_coord +  np.random.randint(args["jitter_range"][0], args["jitter_range"][1]))
-
-            if args["wobble_volume"]:
-                z_coord = ops.adjustDepthForWobble(args, row_coord, col_coord, z_coord, self.wobbled_angle, self.wobbled_axes, self.volume.shape)
-                sample = self.wobbled_volume[row_coord-row_step:row_coord+row_step, col_coord-col_step:col_coord+col_step, z_coord:z_coord+args["subvolume_dimension_z"]]
-            else:
-                sample = self.volume[row_coord-row_step:row_coord+row_step, col_coord-col_step:col_coord+col_step, z_coord:z_coord+args["subvolume_dimension_z"]]
-
-            if args["add_augmentation"]:
-                sample = ops.augmentSample(sample, augment_seed)
-                # change the augment seed for the next time around
-                self.coordinate_pool[self.train_index][3] = (augment_seed+1) % 4
-
-            training_samples[i, 0:sample.shape[0], 0:sample.shape[1], 0:sample.shape[2]] = sample
-            ground_truth[i, int(label)] = 1.0
-            self.training_image[row_coord,col_coord] = int(65534/2) +  int((65534/2)*label)
-            # if label_avg is greater than .9*255, then ground_truth=[0, 1]
-            self.train_index += 1
-
-        return training_samples, ground_truth, self.epoch
-
-
-    def getTestBatch(self, args, n_samples):
-        """DEPRECATED"""
-        print("Generating test set for {}...".format(self.volume_args['name']))
-        # allocate an empty array with appropriate size
-        test_samples = np.zeros((n_samples, args["subvolume_dimension_x"], args["subvolume_dimension_y"], args["subvolume_dimension_z"]), dtype=np.float32)
-        ground_truth = np.zeros((n_samples, 2), dtype=np.float32)
-        row_step = int(args["subvolume_dimension_y"]/2)
-        col_step = int(args["subvolume_dimension_x"]/2)
-
-
-        for i in range(n_samples):
-            row_coordinate, col_coordinate = ops.getRandomTestCoordinate(
-                    args, self.volume.shape)
-            z_coordinate = self.surface_image[row_coordinate, col_coordinate]
-            label_avg = ops.averageTruthInSubvolume(args, row_coordinate, col_coordinate, self.ground_truth)
-
-            # assume center coordinates
-            row_top = row_coordinate - row_step
-            col_left = col_coordinate - col_step
-
-            sample = (self.volume[row_top:row_top+args["subvolume_dimension_y"], \
-                        col_left:col_left+args["subvolume_dimension_x"], z_coordinate:z_coordinate+args["subvolume_dimension_z"]])
-
-            if label_avg > (args["truth_cutoff_high"] * self.max_truth):
-                gt = [0.0,1.0]
-                self.training_image[row_coordinate,col_coordinate] = int(65534)
-            else:
-                gt = [1.0,0.0]
-                self.training_image[row_coordinate,col_coordinate] = int(65534/2)
-
-            test_samples[i, 0:sample.shape[0], 0:sample.shape[1], 0:sample.shape[2]] = sample
-            ground_truth[i] = gt
-
-        return test_samples, ground_truth
-
-
-    def getPredictionSample3D(self, args, startingCoordinates, overlap_step):
-        """DEPRECATED"""
-        # Important: assume all coordinates as the center of the subvolume
-        row_step = int(args["subvolume_dimension_y"]/2)
-        col_step = int(args["subvolume_dimension_x"]/2)
-
-        row_coordinate = startingCoordinates[0]
-        col_coordinate = startingCoordinates[1]
-        depth_coordinate = startingCoordinates[2]
-
-        prediction_samples = np.zeros((args["prediction_batch_size"], args["subvolume_dimension_x"], args["subvolume_dimension_y"], args["subvolume_dimension_z"]), dtype=np.float32)
-        coordinates = np.zeros((args["prediction_batch_size"], 3), dtype=np.int)
-
-        sample_count = 0
-        while sample_count < args["prediction_batch_size"]:
-            #TODO make it possible to predict across the entire volume,
-            # including subvolumes only partially on the volume
-            if (row_coordinate - row_step < 0):
-                row_coordinate = row_step
-                col_coordinate = col_step
-            if (col_coordinate + col_step) > self.volume.shape[1]:
-                col_coordinate = col_step
-                row_coordinate += overlap_step
-                continue
-            if (row_coordinate + row_step) > self.volume.shape[0]:
-                col_coordinate = col_step
-                row_coordinate = row_step
-                depth_coordinate += 1
-                continue
-            if depth_coordinate >= args["predict_depth"]:
-                break
-
-            row_top = row_coordinate-row_step
-            col_left = col_coordinate-col_step
-            sample_z_coordinate = max(0,  self.surface_image[row_coordinate, col_coordinate] - args["surface_cushion"])
-
-            # don't predict on it if it's not on the fragment
-            if not ops.isOnSurface(args, row_coordinate, col_coordinate, self.surface_mask):
-                col_coordinate += overlap_step
-                continue
-
-            if args["predict_depth"] > 1:
-                #TODO this z-mapping mapping will eventually be something more intelligent
-                sample_z_coordinate += (depth_coordinate)
-
-            sample = (self.volume[row_top:row_top+args["subvolume_dimension_y"], \
-                    col_left:col_left+args["subvolume_dimension_x"], sample_z_coordinate:sample_z_coordinate+args["subvolume_dimension_z"]])
-            prediction_samples[sample_count, 0:sample.shape[0], 0:sample.shape[1], 0:sample.shape[2]] = sample
-            # populate the "prediction plus surface" with the initial surface value
-            olap = overlap_step
-            self.prediction_plus_surf[row_coordinate-olap:row_coordinate+olap, \
-                    col_coordinate-olap:col_coordinate+olap] = np.max(self.volume[row_coordinate, col_coordinate]) #, max(0,min(self.volume.shape[2]-1,zCoordinate))]
-            coordinates[sample_count] = [row_coordinate, col_coordinate, depth_coordinate]
-
-            # increment variables for next iteration
-            col_coordinate += overlap_step
-            sample_count += 1
-
-        return (prediction_samples), (coordinates), [row_coordinate, col_coordinate, depth_coordinate]
-
-
-
     def reconstruct3D(self, args, predictionValues, coordinates):
         # Important: assume all coordinates as the center of the subvolume
         center_step = int(round(self.prediction_overlap_step / 2))
-        row_step = int(args["subvolume_dimension_y"]/2)
-        col_step = int(args["subvolume_dimension_x"]/2)
+        row_step = int(args["subvolume_shape"][1]/2)
+        col_step = int(args["subvolume_shape"][0]/2)
         for i in range(coordinates.shape[0]):
             rowpoint = coordinates[i,0]
             colpoint = coordinates[i,1]
@@ -509,46 +377,9 @@ class Volume:
         self.wobbled_volume = rotate(self.volume, self.wobbled_angle, self.wobbled_axes, order=2, mode='nearest', reshape=False)
         print("Wobbling took {:.2f} minutes".format((time.time() - wobble_start_time)/60))
 
-
-
-    def moveToNextPositiveSample(self, args):
-        """DEPRECATED"""
-        if self.train_index >= len(self.coordinate_pool):
-            self.incrementEpoch(args)
-
-        while self.coordinate_pool[self.train_index][2] == 0:
-            if self.train_index + 1 == len(self.coordinate_pool):
-                self.incrementEpoch(args)
-            else:
-                self.train_index += 1
-
-
-
-    def moveToNextNegativeSample(self, args):
-        """DEPRECATED"""
-        if self.train_index >= len(self.coordinate_pool):
-            self.incrementEpoch(args)
-
-        while self.coordinate_pool[self.train_index][2] == 1:
-            if self.train_index + 1 == len(self.coordinate_pool):
-                self.incrementEpoch(args)
-            else:
-                self.train_index += 1
-
-
-
-    def incrementEpoch(self, args):
-        """DEPRECATED"""
-        print("Finished epoch for {}".format(self.volume_args['name']))
-        self.train_index = 0
-        self.training_image = np.zeros(self.prediction_image_ink.shape, dtype=np.uint16)
-        self.epoch += 1
-        np.random.shuffle(self.coordinate_pool)
-
-
-
+        
     def totalPredictions(self, args, overlap_step):
         #TODO don't count predictions off the fragment
-        x_slides = (self.volume.shape[0] - args["subvolume_dimension_x"]) / overlap_step
-        y_slides = (self.volume.shape[1] - args["subvolume_dimension_y"]) / overlap_step
+        x_slides = (self.volume.shape[0] - args["subvolume_shape"][0]) / overlap_step
+        y_slides = (self.volume.shape[1] - args["subvolume_shape"][1]) / overlap_step
         return int(x_slides * y_slides) * args["predict_depth"]
