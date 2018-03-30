@@ -11,6 +11,16 @@ import tensorflow as tf
 import inkid.ops
 import inkid.metrics
 
+# This is a bit of a Trojan horse that allows us to run evaluations,
+# predictions, or arbitrary logic in the middle of a training
+# run. This CheckpointSaverListener is passed to the estimator when
+# .train() is called. We also define in the RunConfig of the estimator
+# how often we want it to save a checkpoint. So it will save a
+# checkpoint that often, and this code gets run. In any calls below to
+# .evaluate() or .predict(), it will create a new graph and then fill
+# it with the values from the latest checkpoint that was just
+# saved. Once done, the training process will continue unaware that
+# any of this happened.
 # https://stackoverflow.com/a/47043377
 class EvalCheckpointSaverListener(tf.train.CheckpointSaverListener):
     def __init__(self, estimator, eval_input_fn, predict_input_fn, predict_every_n_steps, volume_set, args):
@@ -86,6 +96,14 @@ class Model3dcnn(object):
 
 
 def model_fn_3dcnn(features, labels, mode, params):
+    # Yes, the graph is built again every time .train(), .evaluate()
+    # or .predict() are called. In each case the estimator will first
+    # check the model directory to see if checkpoints have been saved,
+    # and then it will load the latest checkpoint weights into the
+    # graph. This is why it works for us to run an evaluation or
+    # prediction in the middle of training, because they are run right
+    # after checkpoints have been saved.
+    # https://github.com/tensorflow/tensorflow/issues/13895
     model = Model3dcnn(
         params['drop_rate'],
         params['subvolume_shape'],
@@ -166,6 +184,13 @@ def model_fn_3dcnn(features, labels, mode, params):
         tf.summary.scalar('train_recall', recall)
         tf.summary.scalar('train_fbeta_score', fbeta)
 
+        # These three lines are very important despite being a little
+        # opaque. Without them, batch normalization does not really
+        # work at all, and the model will appear to train successfully
+        # but this will not transfer to any evaluation or prediction
+        # runs.
+        # https://github.com/tensorflow/tensorflow/issues/16455
+        # https://www.tensorflow.org/api_docs/python/tf/layers/batch_normalization
         update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
         with tf.control_dependencies(update_ops):
             train_op = optimizer.minimize(loss, global_step=tf.train.get_global_step())
