@@ -119,6 +119,8 @@ def main():
     for prediction in predictions:
         volumes.reconstruct(params, np.array([prediction['probabilities']]), np.array([[prediction['XYZcoordinate'][0], prediction['XYZcoordinate'][1], 0]]))
     volumes.saveAllPredictions(params, 0)
+
+    # TODO write runtime to file
     
 if __name__ == '__main__':
     main()

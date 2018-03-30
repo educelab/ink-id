@@ -5,25 +5,34 @@ from functools import partial
 
 import numpy as np
 import tensorflow as tf
-# import tensorflow.contrib.slim as slim
-# from tensorflow import layers
 
 import inkid.ops
 import inkid.metrics
 
-# This is a bit of a Trojan horse that allows us to run evaluations,
-# predictions, or arbitrary logic in the middle of a training
-# run. This CheckpointSaverListener is passed to the estimator when
-# .train() is called. We also define in the RunConfig of the estimator
-# how often we want it to save a checkpoint. So it will save a
-# checkpoint that often, and this code gets run. In any calls below to
-# .evaluate() or .predict(), it will create a new graph and then fill
-# it with the values from the latest checkpoint that was just
-# saved. Once done, the training process will continue unaware that
-# any of this happened.
-# https://stackoverflow.com/a/47043377
 class EvalCheckpointSaverListener(tf.train.CheckpointSaverListener):
+    """Run some logic every time a checkpoint is saved.
+
+    This is a bit of a Trojan horse that allows us to run evaluations,
+    predictions, or arbitrary logic in the middle of a training
+    run. An instance of this class is passed to the estimator when
+    .train() is called. We also define in the RunConfig of the
+    estimator how often we want it to save a checkpoint. So it will
+    save a checkpoint that often, and then the after_save() method
+    below is called. By passing the estimator itself to this class
+    when it is initialized, we can call .evaluate() or .predict() on
+    the estimator from here. Once done, the training process will
+    continue unaware that any of this happened.
+
+    https://stackoverflow.com/a/47043377
+
+    """
     def __init__(self, estimator, eval_input_fn, predict_input_fn, predict_every_n_steps, volume_set, args):
+        """Initialize the listener.
+
+        Notably we pass the estimator itself to this class so that we
+        can use it later.
+
+        """
         self._estimator = estimator
         self._eval_input_fn = eval_input_fn
         self._predict_input_fn = predict_input_fn
@@ -31,22 +40,37 @@ class EvalCheckpointSaverListener(tf.train.CheckpointSaverListener):
         self._volume_set = volume_set
         self._args = args
 
+        
     def after_save(self, session, global_step):
+        """Run our custom logic after the estimator saves a checkpoint."""
         eval_results = self._estimator.evaluate(self._eval_input_fn)
         print('Evaluation results:\n\t%s' % eval_results)
 
+        # TODO configurable predict step
         iteration = global_step - 1
-        # if iteration > 0 and iteration % self._predict_every_n_steps == 0:
-        predictions = self._estimator.predict(self._predict_input_fn)
+        predictions = self._estimator.predict(
+            self._predict_input_fn,
+            predict_keys=[
+                'XYZcoordinate',
+                'probabilities',
+            ],
+        )
         for prediction in predictions:
             self._volume_set.reconstruct(self._args, np.array([prediction['probabilities']]), np.array([[prediction['XYZcoordinate'][0], prediction['XYZcoordinate'][1], 0]]))
         self._volume_set.saveAllPredictions(self._args, iteration)
 
-class Model3dcnn(object):
-    def __init__(self, drop_rate, subvolume_shape, batch_norm_momentum, filters):
 
+class Model3dcnn(object):
+    """Defines the network architecture."""
+    def __init__(self, drop_rate, subvolume_shape, batch_norm_momentum, filters):
+        """Initialize the layers as members with state."""
         self._input_shape = [-1, subvolume_shape[0], subvolume_shape[1], subvolume_shape[2], 1]
 
+        # To save some space below, this creates a tf.layers.Conv3D
+        # that is still missing the 'filters' argument, so it can be
+        # called multiple times below but we only need to specify
+        # 'filters' since the other arguments are the same for each
+        # convolutional layer.
         convolution_layer = partial(
             tf.layers.Conv3D,
             kernel_size=[3, 3, 3],
@@ -78,7 +102,9 @@ class Model3dcnn(object):
         self.fc = tf.layers.Dense(2)
         self.dropout = tf.layers.Dropout(drop_rate)
 
+        
     def __call__(self, inputs, training):
+        """Chain the layers together when this class is 'called'."""
         y = tf.reshape(inputs, self._input_shape)
         y = self.conv1(y)
         y = self.batch_norm1(y, training=training)
@@ -96,14 +122,23 @@ class Model3dcnn(object):
 
 
 def model_fn_3dcnn(features, labels, mode, params):
-    # Yes, the graph is built again every time .train(), .evaluate()
-    # or .predict() are called. In each case the estimator will first
-    # check the model directory to see if checkpoints have been saved,
-    # and then it will load the latest checkpoint weights into the
-    # graph. This is why it works for us to run an evaluation or
-    # prediction in the middle of training, because they are run right
-    # after checkpoints have been saved.
-    # https://github.com/tensorflow/tensorflow/issues/13895
+    """Define the model_fn for the Tensorflow Estimator.
+
+    Depending on what mode is passed (train, evaluate, or predict)
+    perform the necessary actions.
+
+    The graph is built again every time .train(), .evaluate() or
+    .predict() are called. In each case the estimator will first check
+    the model directory to see if checkpoints have been saved, and
+    then it will load the latest checkpoint weights into the
+    graph. This is why it works for us to run an evaluation or
+    prediction in the middle of training, because they are run right
+    after checkpoints have been saved. This functionality is all built
+    into the Tensorflow Estimator.
+
+    https://github.com/tensorflow/tensorflow/issues/13895
+
+    """
     model = Model3dcnn(
         params['drop_rate'],
         params['subvolume_shape'],
@@ -115,6 +150,10 @@ def model_fn_3dcnn(features, labels, mode, params):
 
     if mode == tf.estimator.ModeKeys.PREDICT:
         logits = model(inputs, training=False)
+        # Here we specify all of the possible outputs from calling
+        # .predict(), which returns a dictionary with these keys for
+        # each prediction. So by passing predict_keys to .predict(),
+        # we can select some of these and not return the others.
         predictions = {
             'volumeID': features['VolumeID'],
             'XYZcoordinate': features['XYZCoordinate'],
@@ -236,4 +275,3 @@ def model_fn_3dcnn(features, labels, mode, params):
                     predictions=tf.argmax(logits, 1)
                 ),
             })
-
