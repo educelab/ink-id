@@ -40,15 +40,6 @@ def main():
 
     volumes = VolumeSet(params)
 
-    # with tf.Session() as sess:
-    #     inputs, labels = volumes.prediction_input_fn(30)
-
-    #     inputs = sess.run((inputs))
-
-    #     for (n, i) in enumerate(inputs['Subvolume']):
-    #         inkid.ops.save_volume_to_image_stack(i, str(n))
-
-    print(args.model)
     estimator = tf.estimator.Estimator(
         model_fn=inkid.model.model_fn_3dcnn,
         model_dir=args.model,
@@ -61,10 +52,6 @@ def main():
         },
     )
 
-    print(estimator.get_variable_names())
-    print(estimator.get_variable_value('global_step'))
-    # print(estimator.get_variable_value('conv3d_3/kernel'))
-    
     predictions = estimator.predict(
         input_fn=lambda: volumes.prediction_input_fn(
             params['prediction_batch_size'],
@@ -72,8 +59,7 @@ def main():
         predict_keys=['classes', 'probabilities'],
     )
 
-    x = list(predictions)
-    
+    # Do something with the predictions here if you wish.
 
 if __name__ == '__main__':
     main()
