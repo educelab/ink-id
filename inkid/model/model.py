@@ -8,6 +8,9 @@ import tensorflow as tf
 # import tensorflow.contrib.slim as slim
 # from tensorflow import layers
 
+import inkid.ops
+import inkid.metrics
+
 # https://stackoverflow.com/a/47043377
 class EvalCheckpointSaverListener(tf.train.CheckpointSaverListener):
     def __init__(self, estimator, eval_input_fn, predict_input_fn, predict_every_n_steps, volume_set, args):
@@ -22,13 +25,16 @@ class EvalCheckpointSaverListener(tf.train.CheckpointSaverListener):
         eval_results = self._estimator.evaluate(self._eval_input_fn)
         print('Evaluation results:\n\t%s' % eval_results)
 
-        iteration = global_step - 1
-        # if iteration > 0 and iteration % self._predict_every_n_steps == 0:
-        if True:
-            predictions = self._estimator.predict(self._predict_input_fn)
-            for prediction in predictions:
-                self._volume_set.reconstruct(self._args, np.array([prediction['probabilities']]), np.array([[prediction['XYZcoordinate'][0], prediction['XYZcoordinate'][1], 0]]))
-            self._volume_set.saveAllPredictions(self._args, iteration)
+        # iteration = global_step - 1
+        # # if iteration > 0 and iteration % self._predict_every_n_steps == 0:
+        # if True:
+        #     predictions = self._estimator.predict(self._predict_input_fn)
+        #     for (n, prediction) in enumerate(predictions):
+        #         # inkid.ops.save_volume_to_image_stack(prediction['subvolumes'], str(n))
+        #         # print(n, prediction['XYZcoordinate'], prediction['probabilities'])
+        #         self._volume_set.reconstruct(self._args, np.array([prediction['probabilities']]), np.array([[prediction['XYZcoordinate'][0], prediction['XYZcoordinate'][1], 0]]))
+        #     self._volume_set.saveAllPredictions(self._args, iteration)
+        pass
 
 class Model3dcnn(object):
     def __init__(self, drop_rate, subvolume_shape, batch_norm_momentum, filters):
@@ -48,18 +54,66 @@ class Model3dcnn(object):
         )
         
         self.conv1 = convolution_layer(filters=filters[0])
+        # self.conv1 = tf.layers.Conv3D(
+        #     filters=filters[0],
+        #     kernel_size=[3, 3, 3],
+        #     strides=(2, 2, 2),
+        #     padding='valid',
+        #     data_format='channels_last',
+        #     dilation_rate=(1, 1, 1),
+        #     activation=tf.nn.relu,
+        #     kernel_initializer=tf.contrib.layers.xavier_initializer(),
+        #     bias_initializer=tf.zeros_initializer(),
+        # )
+
         self.batch_norm1 = tf.layers.BatchNormalization(
             scale=False, axis=4, momentum=batch_norm_momentum)
 
         self.conv2 = convolution_layer(filters=filters[1])
+        # self.conv2 = tf.layers.Conv3D(
+        #     filters=filters[1],
+        #     kernel_size=[3, 3, 3],
+        #     strides=(2, 2, 2),
+        #     padding='valid',
+        #     data_format='channels_last',
+        #     dilation_rate=(1, 1, 1),
+        #     activation=tf.nn.relu,
+        #     kernel_initializer=tf.contrib.layers.xavier_initializer(),
+        #     bias_initializer=tf.zeros_initializer(),
+        # )
+
         self.batch_norm2 = tf.layers.BatchNormalization(
             scale=False, axis=4, momentum=batch_norm_momentum)
 
         self.conv3 = convolution_layer(filters=filters[2])
+        # self.conv3 = tf.layers.Conv3D(
+        #     filters=filters[2],
+        #     kernel_size=[3, 3, 3],
+        #     strides=(2, 2, 2),
+        #     padding='valid',
+        #     data_format='channels_last',
+        #     dilation_rate=(1, 1, 1),
+        #     activation=tf.nn.relu,
+        #     kernel_initializer=tf.contrib.layers.xavier_initializer(),
+        #     bias_initializer=tf.zeros_initializer(),
+        # )
+
         self.batch_norm3 = tf.layers.BatchNormalization(
             scale=False, axis=4, momentum=batch_norm_momentum)
 
         self.conv4 = convolution_layer(filters=filters[3])
+        # self.conv4 = tf.layers.Conv3D(
+        #     filters=filters[3],
+        #     kernel_size=[3, 3, 3],
+        #     strides=(2, 2, 2),
+        #     padding='valid',
+        #     data_format='channels_last',
+        #     dilation_rate=(1, 1, 1),
+        #     activation=tf.nn.relu,
+        #     kernel_initializer=tf.contrib.layers.xavier_initializer(),
+        #     bias_initializer=tf.zeros_initializer(),
+        # )
+
         self.batch_norm4 = tf.layers.BatchNormalization(
             scale=False, axis=4, momentum=batch_norm_momentum)
 
@@ -100,13 +154,15 @@ def model_fn_3dcnn(features, labels, mode, params):
             'XYZcoordinate': features['XYZCoordinate'],
             'class': tf.argmax(logits, axis=1),
             'probabilities': tf.nn.softmax(logits),
+            'subvolumes': inputs,
         }
         return tf.estimator.EstimatorSpec(
             mode=tf.estimator.ModeKeys.PREDICT,
             predictions=predictions,
-            export_outputs={
-                'classify': tf.estimator.export.PredictOutput(predictions)
-            })
+            # export_outputs={
+            #     'classify': tf.estimator.export.PredictOutput(predictions)
+            # }
+        )
 
     if mode == tf.estimator.ModeKeys.TRAIN:
         optimizer = tf.train.AdamOptimizer(learning_rate=params['learning_rate'])
@@ -142,9 +198,6 @@ def model_fn_3dcnn(features, labels, mode, params):
             (precision * recall),
             (fbeta_squared * precision) + recall + epsilon
         )
-
-        # accuracy = tf.metrics.accuracy(
-        #     labels=tf.argmax(labels, axis=1), predictions=tf.argmax(logits, axis=1))
 
         tf.identity(true_positives, name='train_true_positives')
         tf.identity(true_negatives, name='train_true_negatives')
@@ -194,20 +247,18 @@ def model_fn_3dcnn(features, labels, mode, params):
                     labels=tf.argmax(labels, 1),
                     predictions=tf.argmax(logits, 1)
                 ),
-                'fbeta_score': fbeta_score(
+                'fbeta_score': inkid.metrics.fbeta_score(
                     labels=tf.argmax(labels, 1),
                     predictions=tf.argmax(logits, 1),
                     beta=params['fbeta_weight']
                 ),
+                'total_positives': inkid.metrics.total_positives(
+                    labels=tf.argmax(labels, 1),
+                    predictions=tf.argmax(logits, 1)
+                ),
+                'total_negatives': inkid.metrics.total_negatives(
+                    labels=tf.argmax(labels, 1),
+                    predictions=tf.argmax(logits, 1)
+                ),
             })
 
-# https://stackoverflow.com/a/45654762
-def fbeta_score(labels, predictions, beta=0.5):
-    precision, precision_update_op = tf.metrics.precision(labels, predictions)
-    recall, recall_update_op = tf.metrics.recall(labels, predictions)
-    epsilon = 1e-5
-    score = (1 + beta**2) * tf.divide(
-        (precision * recall),
-        (beta**2 * precision) + recall + epsilon
-    )
-    return (score, tf.group(precision_update_op, recall_update_op))

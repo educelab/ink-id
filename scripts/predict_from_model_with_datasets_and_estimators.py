@@ -48,6 +48,7 @@ def main():
     #     for (n, i) in enumerate(inputs['Subvolume']):
     #         inkid.ops.save_volume_to_image_stack(i, str(n))
 
+    print(args.model)
     estimator = tf.estimator.Estimator(
         model_fn=inkid.model.model_fn_3dcnn,
         model_dir=args.model,
@@ -59,6 +60,9 @@ def main():
             'learning_rate': params['learning_rate'],
         },
     )
+
+    print(estimator.get_variable_names())
+    print(estimator.get_variable_value('global_step'))
     
     predictions = estimator.predict(
         input_fn=lambda: volumes.prediction_input_fn(
@@ -67,7 +71,8 @@ def main():
         predict_keys=['classes', 'probabilities'],
     )
 
-    print(list(predictions))
+    # print(list(predictions))
+    
     
 
 if __name__ == '__main__':

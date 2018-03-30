@@ -124,10 +124,10 @@ class Volume:
         coordinates = np.array(coordinates)
 
         if perform_shuffle:
-            # np.random.seed(0) # TODO remove when properly creating datasets from regions of interest
             np.random.shuffle(coordinates)
 
         for coordinate in coordinates:
+            # print(self.volume_ID, (coordinate))
             yield (self.volume_ID, (coordinate))
 
 
@@ -157,7 +157,7 @@ class Volume:
         z = min(
             max(
                 0,
-                self.surface_image[x, y] - self.args["surface_cushion"] + np.random.randint(-2, 2) # todo use params
+                self.surface_image[x, y] - self.args["surface_cushion"] # + np.random.randint(-2, 2) # TODO add back jitter using params
             ),
             self.volume.shape[2] - z_step
         )

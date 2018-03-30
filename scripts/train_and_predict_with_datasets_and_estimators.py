@@ -80,6 +80,8 @@ def main():
         'train_precision': 'train_precision',
         'train_recall': 'train_recall',
         'train_fbeta_score': 'train_fbeta_score',
+        'train_positives': 'train_positives',
+        'train_negatives': 'train_negatives',
     }
     logging_hook = tf.train.LoggingTensorHook(
         tensors=tensors_to_log,
@@ -110,9 +112,13 @@ def main():
         ],
     )
 
-    estimator.predict(
+    predictions = estimator.predict(
         input_fn=lambda: volumes.prediction_input_fn(params['prediction_batch_size'])
     )
+
+    for prediction in predictions:
+        volumes.reconstruct(params, np.array([prediction['probabilities']]), np.array([[prediction['XYZcoordinate'][0], prediction['XYZcoordinate'][1], 0]]))
+    volumes.saveAllPredictions(params, 0)
     
 if __name__ == '__main__':
     main()
