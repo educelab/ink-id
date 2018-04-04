@@ -1,7 +1,7 @@
 {
     "_meta": {
         "hash": {
-            "sha256": "6833a513afabc5616767b4f9dddbd4fece98047007d6a9b50148cd8a51b46adf"
+            "sha256": "eec577156fd045ca2d12954cd05c12d8192f5992f6550a1d4c551acf835306bc"
         },
         "host-environment-markers": {
             "implementation_name": "cpython",
@@ -56,6 +56,9 @@
         },
         "e1839a8": {
             "editable": true,
+            "extras": [
+                "tf_gpu"
+            ],
             "path": "."
         },
         "gast": {
