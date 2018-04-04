@@ -8,7 +8,6 @@ setup(name='inkid',
       license='MS-RSL',
       packages=['inkid'],
       install_requires=[
-          'tensorflow-gpu',
           'jsmin',
           'matplotlib',
           'Pillow',
@@ -19,6 +18,10 @@ setup(name='inkid',
               'inkid-train-and-predict = scripts.train_and_predict:main',
               'inkid-top-n = scripts.get_top_bottom_n_subvolumes:main',
           ],
+      },
+      extras_require = {
+          'tf': ['tensorflow>=1.5.0'],
+          'tf_gpu': ['tensorflow-gpu>=1.5.0'],
       },
 )
 
