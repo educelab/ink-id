@@ -8,7 +8,6 @@ import time
 import imageio
 import numpy as np
 from PIL import Image
-from scipy.ndimage.interpolation import rotate
 from sklearn.metrics import confusion_matrix, recall_score, precision_score, f1_score
 import tensorflow as tf
 
@@ -369,12 +368,13 @@ class Volume:
 
 
     def wobbleVolume(self, args):
-        wobble_start_time = time.time()
-        self.wobbled_angle =  ((2*args["wobble_max_degrees"])*np.random.random_sample()) - args["wobble_max_degrees"]
-        print("Wobbling {} volume {:.2f} degrees...".format(self.volume_args['name'], self.wobbled_angle))
-        self.wobbled_axes = np.random.choice(3, 2, replace=False)
-        self.wobbled_volume = rotate(self.volume, self.wobbled_angle, self.wobbled_axes, order=2, mode='nearest', reshape=False)
-        print("Wobbling took {:.2f} minutes".format((time.time() - wobble_start_time)/60))
+        # wobble_start_time = time.time()
+        # self.wobbled_angle =  ((2*args["wobble_max_degrees"])*np.random.random_sample()) - args["wobble_max_degrees"]
+        # print("Wobbling {} volume {:.2f} degrees...".format(self.volume_args['name'], self.wobbled_angle))
+        # self.wobbled_axes = np.random.choice(3, 2, replace=False)
+        # self.wobbled_volume = rotate(self.volume, self.wobbled_angle, self.wobbled_axes, order=2, mode='nearest', reshape=False)
+        # print("Wobbling took {:.2f} minutes".format((time.time() - wobble_start_time)/60))
+        pass
 
         
     def totalPredictions(self, args, overlap_step):
