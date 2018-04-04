@@ -12,7 +12,6 @@ setup(name='inkid',
           'jsmin',
           'matplotlib',
           'Pillow',
-          'sklearn',
           'imageio',
       ],
       entry_points = {
