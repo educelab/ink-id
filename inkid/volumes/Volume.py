@@ -127,7 +127,6 @@ class Volume:
             np.random.shuffle(coordinates)
 
         for coordinate in coordinates:
-            # print(self.volume_ID, (coordinate))
             yield (self.volume_ID, (coordinate))
 
 

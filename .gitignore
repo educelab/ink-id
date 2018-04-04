@@ -12,6 +12,7 @@ old_output/
 Pipfile.lock
 build/
 data/
+!inkid/data/
 out/
 *.egg-info
 .vscode
