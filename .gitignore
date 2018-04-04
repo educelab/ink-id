@@ -9,7 +9,6 @@ old_output/
 *.npy
 *.pyc
 
-Pipfile.lock
 build/
 data/
 !inkid/data/
