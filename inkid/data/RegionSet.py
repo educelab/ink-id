@@ -119,24 +119,27 @@ class RegionSet:
                                     grid_spacing=None,
                                     probability_of_selection=None):
         """TODO"""
-        points_with_normals = np.array([])
+        print('Fetching points/normals for region group: {}... '.format(region_group), end='')
+        points_with_normals = []
         for region in self._regions[region_group]:
-            points_with_normals = np.concatenate(
-                points_with_normals,
+            points_with_normals.append(
                 region.get_points_with_normals(
                     restrict_to_surface=restrict_to_surface,
                     grid_spacing=grid_spacing,
                     probability_of_selection=probability_of_selection
                 )
             )
+        points_with_normals = np.array(points_with_normals)
+        print('done.')
         if perform_shuffle:
+            print('Shuffling points/normals for region group: {}... '.format(region_group), end='')
             np.shuffle(points_with_normals)
+            print('done.')
         return points_with_normals
 
 
     def point_with_normal_to_subvolume(self,
                                        point_with_normal,
-                                       radians_about_normal_axis,
                                        subvolume_shape,
                                        translation_along_normal):
         """TODO
@@ -144,8 +147,6 @@ class RegionSet:
         Return None if the subvolume is not bounded in the original
         volume.
 
-        https://en.wikipedia.org/wiki/Euler_angles
-        https://en.wikipedia.org/wiki/Axis%E2%80%93angle_representation
-
         """
-        pass
+        assert(len(point_with_normal) == 6)
+        assert(len(subvolume_shape) == 3)

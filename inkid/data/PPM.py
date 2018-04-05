@@ -13,6 +13,8 @@ class PPM:
             default_mask_path = ppm_path_without_file_extension + '_mask.png'
             if os.path.isfile(default_mask_path):
                 self._mask_path = default_mask_path
+            else:
+                self._mask_path = None
 
         if ground_truth_path is not None:
             self._ground_truth_path = ground_truth_path
@@ -20,3 +22,5 @@ class PPM:
             default_ground_truth_path = ppm_path_without_file_extension + '_ground-truth.png'
             if os.path.isfile(default_ground_truth_path):
                 self._ground_truth_path = default_ground_truth_path
+            else:
+                self._ground_truth_path = None

@@ -1,4 +1,6 @@
-"""Define the Volume class to represent volumetric data."""
+"""
+Define the Volume class to represent volumetric data.
+"""
 
 import math
 import os
@@ -7,6 +9,7 @@ from mathutils import Vector
 import numpy as np
 from PIL import Image
 import progressbar
+
 
 class Volume:
     """Represent a volume and support accesses of the volume data.
@@ -44,11 +47,9 @@ class Volume:
         self._data = np.array(self._data)
         print('Loaded volume {} with shape {}'.format(slices_abs_path, self._data.shape))
 
-
     def intensity_at_xyz(self, x, y, z):
         """Get the intensity value at a voxel position."""
         return self._data[int(z), int(y), int(x)]
-
 
     def interpolate_at_xyz(self, x, y, z):
         """Get the intensity value at a subvoxel position.
@@ -76,7 +77,6 @@ class Volume:
 
         c = c0 * (1 - dz) + c1 * dz
         return c
-
 
     def get_subvolume(self, center_xyz, shape_zyx,
                       x_vec=(1, 0, 0),
@@ -130,7 +130,6 @@ class Volume:
 
         return subvolume
 
-
     def get_subvolume_using_normal(self, center_xyz, shape_zyx, normal_vec=(0, 0, 1)):
         """Get a subvolume oriented based on a surface normal vector.
 
@@ -143,7 +142,7 @@ class Volume:
         x_vec = Vector([1, 0, 0])
         y_vec = Vector([0, 1, 0])
         z_vec = Vector([0, 0, 1])
-        normal_vec = Vector(normal_vec)
+        normal_vec = Vector(normal_vec).normalized()
 
         quaternion = z_vec.rotation_difference(normal_vec)
 
