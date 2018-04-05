@@ -1,4 +1,5 @@
 import json
+import os
 
 from jsmin import jsmin
 import tensorflow as tf
@@ -19,33 +20,8 @@ class RegionSet:
             self._region_groups[region_group] = []
             
             for region_data in data['regions'][region_group]:
-                ppm_name = region_data['ppm']
-                
-                if ppm_name not in self._ppms:
-                    ppm_data = data['ppms'][ppm_name]
-                    ppm_path = ppm_data['path']
-                    volume_path = ppm_data['volume']
-
-                    mask_path = None
-                    if 'mask' in ppm_data:
-                        mask_path = ppm_data['mask']
-
-                    ground_truth_path = None
-                    if 'ground_truth' in ppm_data:
-                        ground_truth_path = ppm_data['ground_truth']
-                    
-                    if volume_path not in self._volumes:
-                        self._volumes[volume_path] = inkid.data.Volume(volume_path)
-
-                    volume = self._volumes[volume_path]
-                    self._ppms[ppm_name] = inkid.data.PPM(ppm_path, volume, mask_path, ground_truth_path)
-
-                ppm = self._ppms[ppm_name]
-
-                bounds = None
-                if 'bounds' in region_data:
-                    bounds = region_data['bounds']
-                    
+                ppm = self.create_ppm_if_needed(region_data['ppm'], data['ppms'][region_data['ppm']])
+                bounds = region_data.get('bounds')
                 region = inkid.data.Region(region_counter, ppm, bounds)
                     
                 self._regions.append(region)
@@ -61,7 +37,60 @@ class RegionSet:
             # minify to remove comments
             minified = jsmin(str(f.read()))
             data = json.loads(minified)
+            data = RegionSet.make_data_paths_absolute(data, os.path.dirname(filename))
             return cls(data)
+
+
+    @staticmethod
+    def make_data_paths_absolute(data, paths_were_relative_to=os.getcwd()):
+        """Convert the input data paths to absolute paths.
+
+        This was designed for the case where the user passes a JSON
+        data input file to a script, containing paths that were
+        relative to the location of the data file and not to the
+        script. In this case you would set paths_were_relative_to to
+        the dirname of the JSON file.
+
+        """
+        for ppm in data['ppms']:
+            for key in data['ppms'][ppm]:
+                data['ppms'][ppm][key] = os.path.normpath(
+                    os.path.join(
+                        paths_were_relative_to,
+                        data['ppms'][ppm][key]
+                    )
+                )
+        return data
+        
+
+    def create_ppm_if_needed(self, ppm_name, ppm_data):
+        """Return the ppm from its name and data, creating first if needed.
+
+        Check if the provided ppm_name already has a ppm stored in the
+        RegionSet. If so, go ahead and return it. If not, create the
+        ppm object first and then return it. When creating the ppm,
+        perform the same check for that ppm's volume (create it if
+        needed, and then get the object so the ppm object can hold a
+        reference to it).
+
+        """
+        if ppm_name not in self._ppms:
+            ppm_path = ppm_data['path']
+            volume_path = ppm_data['volume']
+            
+            # .get() will return None if the key is not
+            # defined (which is good here).
+            mask_path = ppm_data.get('mask')
+            ground_truth_path = ppm_data.get('ground_truth')
+
+            # TODO handle paths relative to input file
+            if volume_path not in self._volumes:
+                self._volumes[volume_path] = inkid.data.Volume(volume_path)
+
+            volume = self._volumes[volume_path]
+            self._ppms[ppm_name] = inkid.data.PPM(ppm_path, volume, mask_path, ground_truth_path)
+
+        return self._ppms[ppm_name]
 
 
     def num_regions(self):
