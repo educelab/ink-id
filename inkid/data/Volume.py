@@ -1,14 +1,34 @@
+"""Define the Volume class to represent volumetric data."""
+
 import math
 import os
 
-from mathutils import Matrix, Vector
+from mathutils import Vector
 import numpy as np
 from PIL import Image
 import progressbar
 
-
 class Volume:
+    """Represent a volume and support accesses of the volume data.
+
+    The volume class supports the access of raw volume data, either
+    directly (indexing into the 3d array) or through supporting
+    functions (e.g. extracting a subvolume from an arbitrary position
+    and orientation).
+
+    Notably this class knows nothing about the PPMs or regions that
+    the ink-id user might be working with, or any notion of ground
+    truth, etc.
+
+    """
     def __init__(self, slices_path):
+        """Initialize a volume using a path to the slices directory.
+
+        Get the absolute path and filename for each slice in the given
+        directory. Load them into a contiguous volume in memory,
+        represented as a numpy array and indexed self._data[z, y, x].
+
+        """
         slices_abs_path = os.path.abspath(slices_path)
         slice_files = []
         for root, dirs, files in os.walk(slices_abs_path):
@@ -24,13 +44,6 @@ class Volume:
         self._data = np.array(self._data)
         print('Loaded volume {} with shape {}'.format(slices_abs_path, self._data.shape))
 
-
-        # x = self.get_subvolume_using_normal(
-        #     (100, 100, 100),
-        #     (48, 96, 96),
-        #     (0.3, 0.5, 1)
-        # )
-        # print(x)
 
     def intensity_at_xyz(self, x, y, z):
         """Get the intensity value at a voxel position."""
@@ -69,6 +82,14 @@ class Volume:
                       x_vec=(1, 0, 0),
                       y_vec=(0, 1, 0),
                       z_vec=(0, 0, 1)):
+        """Get a subvolume using normalized axis vectors.
+
+        Get a subvolume from the volume, with orientation defined by
+        three axis vectors. These should be normalized before this
+        function is called if the user wants a unit in the subvolume
+        space to represent one unit in the volume space.
+
+        """
         assert(len(center_xyz) == 3)
         assert(len(shape_zyx) == 3)
         assert(len(x_vec) == 3)
@@ -83,14 +104,20 @@ class Volume:
         subvolume = np.zeros(shape_zyx)
 
         # Iterate over the subvolume space
-        bar = progressbar.ProgressBar()
-        for z in bar(range(shape_zyx[0])):
+        for z in range(shape_zyx[0]):
             for y in range(shape_zyx[1]):
                 for x in range(shape_zyx[2]):
+                    # Convert from an index relative to an origin in
+                    # the corner to a position relative to the
+                    # subvolume center (which may not correspond
+                    # exactly to one of the subvolume voxel positions
+                    # if any of the side lengths are even).
                     x_offset = -1 * (shape_zyx[2] - 1) / 2.0 + x
                     y_offset = -1 * (shape_zyx[1] - 1) / 2.0 + y
                     z_offset = -1 * (shape_zyx[0] - 1) / 2.0 + z
 
+                    # Calculate the corresponding position in the
+                    # volume.
                     volume_point = center_xyz \
                                    + x_offset * x_vec \
                                    + y_offset * y_vec \
@@ -105,6 +132,14 @@ class Volume:
 
 
     def get_subvolume_using_normal(self, center_xyz, shape_zyx, normal_vec=(0, 0, 1)):
+        """Get a subvolume oriented based on a surface normal vector.
+
+        Calculate the rotation needed to align the z axis of the
+        subvolume with the surface normal vector, and then apply that
+        rotation to all three axes of the subvolume in order to get
+        the vectors for the subvolume axes in the volume space.
+
+        """
         x_vec = Vector([1, 0, 0])
         y_vec = Vector([0, 1, 0])
         z_vec = Vector([0, 0, 1])
@@ -117,5 +152,3 @@ class Volume:
         z_vec = (quaternion * z_vec).normalized()
 
         return self.get_subvolume(center_xyz, shape_zyx, x_vec, y_vec, z_vec)
-
-        
