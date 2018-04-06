@@ -26,10 +26,16 @@ To install the package you can use `pipenv <https://docs.pipenv.org/>`_:
 
    $ pip install pipenv   # If needed, install pipenv
    $ pipenv --three       # Create a new virtual environment with Python 3
-   $ pipenv install
+   $ pipenv install -e .  # Install inkid to the virtual environment and use symlinks
 
-This will create a virtual environment, and then check ``Pipfile`` for the packages to install, where it will find ``inkid`` not by name but by path (``.``).
-It will then find ``setup.py`` and install the dependencies for ``inkid``.
+The install command will find ``setup.py`` and install the dependencies for ``inkid``.
+
+The default installation assumes you have already installed ``tensorflow`` on your machine. If you wish to install ``tensorflow`` along with ``inkid``, you can run either of these commands depending on whether or not you wish to include GPU support:
+
+.. code-block:: bash
+
+   $ pipenv install -e .[tf]      # Install inkid and install tensorflow (CPU only)
+   $ pipenv install -e .[tf_gpu]  # Install inkid and install tensorflow-gpu
 
 Some other useful pipenv commands:
 

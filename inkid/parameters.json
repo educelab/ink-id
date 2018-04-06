@@ -1,32 +1,7 @@
-// Comments are OK in this file because they are removed with a
-// minimizer before the JSON is parsed (JSON does not usually have
-// comments).
-
 {
     "parameters": {
-	"volumes": [
-            {
-		"name": "lunate-sigma",
-		"microns_per_voxel": 5,
-		"data_path": "",
-
-		"ppm": "",
-		"ground_truth": "",
-
-		"train_portion": 0.6,
-		"train_bounds": 3,  // 0=TOP || 1=RIGHT || 2=BOTTOM || 3=LEFT
-		"use_in_training": true, // TODO use this
-		"use_in_evaluation": true, // TODO use this
-		"use_in_prediction": true, // TODO use this
-
-		// To be deprecated when PPM works
-		"surface_mask": "",
-		"surface_data": ""
-	    }
-	],
-
 	// Geometry
-	"subvolume_shape": [96, 96, 48], // [x, y, z]
+	"subvolume_shape": [48, 96, 96], // [z, y, x]
 	"surface_cushion": 10,
 
 	// Network architecture
@@ -38,31 +13,24 @@
 	"filters": [16, 8, 4, 2],
 
 	// Run configuration
-	"training_batch_size": 30,
-	"training_steps": 1000000,
-	"training_epochs": 2, // TODO use this
-	"prediction_batch_size": 400,
+	"train_batch_size": 30,
+	// "train_max_batches": 1000000,
+	"train_epochs": 2, // TODO use this
+	
+	"predict_batch_size": 400,
 	"predict_every_n_steps": 10000,
-	"prediction_overlap_step": 4, // predict on one sample for each _ by _ voxel square
-	"predict_depth": 1,
-	"evaluation_batch_size": 400,
-	"display_every_n_steps": 100,
+	"predict_overlap_step": 4, // predict on one sample for each _ by _ voxel square
+	
+	"evaluate_batch_size": 400,
 	"evaluate_every_n_steps": 1000,
-	"output_path": "",
+
+	"summary_every_n_steps": 100,
 
 	// Data organization/augmentation
-	// (concerning the getting of subvolumes from volumes)
-	"wobble_volume": false,
-	"wobble_every_n_steps": 1000,
-	"wobble_max_degrees": 2,
 	"use_jitter": true, // TODO check using this
 	"jitter_range": [-4, 4],
 	"add_augmentation": true,
 	"balance_samples": false,
-	"use_grid_training": true,
-	"grid_n_squares": 10,
-	"grid_test_square": 0,
-	"restrict_surface": true,
 	"truth_cutoff_low": 0.15,
 	"truth_cutoff_high": 0.85
     }

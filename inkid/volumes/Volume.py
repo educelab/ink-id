@@ -8,8 +8,7 @@ import time
 import imageio
 import numpy as np
 from PIL import Image
-from scipy.ndimage.interpolation import rotate
-from sklearn.metrics import confusion_matrix, recall_score, precision_score, f1_score
+# from sklearn.metrics import confusion_matrix, recall_score, precision_score, f1_score
 import tensorflow as tf
 
 from inkid import ops
@@ -127,7 +126,6 @@ class Volume:
             np.random.shuffle(coordinates)
 
         for coordinate in coordinates:
-            # print(self.volume_ID, (coordinate))
             yield (self.volume_ID, (coordinate))
 
 
@@ -324,58 +322,59 @@ class Volume:
 
     def savePredictionMetrics(self, args, iteration, minutes):
         print("\n\n\tMetrics for {}:".format(self.volume_args['name']))
-        all_confusion = confusion_matrix(self.all_truth, self.all_preds)
-        test_confusion = confusion_matrix(self.test_truth, self.test_preds)
-        all_confusion_norm = all_confusion.astype('float') / all_confusion.sum(axis=1)[:, np.newaxis]
-        test_confusion_norm = test_confusion.astype('float') / test_confusion.sum(axis=1)[:, np.newaxis]
-        print("\tNormalized confusion matrix for ALL points: \n{}".format(all_confusion_norm))
-        print("\tNormalized confusion matrix for TEST points: \n{}".format(test_confusion_norm))
+        # all_confusion = confusion_matrix(self.all_truth, self.all_preds)
+        # test_confusion = confusion_matrix(self.test_truth, self.test_preds)
+        # all_confusion_norm = all_confusion.astype('float') / all_confusion.sum(axis=1)[:, np.newaxis]
+        # test_confusion_norm = test_confusion.astype('float') / test_confusion.sum(axis=1)[:, np.newaxis]
+        # print("\tNormalized confusion matrix for ALL points: \n{}".format(all_confusion_norm))
+        # print("\tNormalized confusion matrix for TEST points: \n{}".format(test_confusion_norm))
 
-        #calculate metrics
-        all_precision = precision_score(self.all_truth, self.all_preds)
-        all_recall = recall_score(self.all_truth, self.all_preds)
-        all_f1 = f1_score(self.all_truth, self.all_preds)
-        test_precision = precision_score(self.test_truth, self.test_preds)
-        test_recall = recall_score(self.test_truth, self.test_preds)
-        test_f1 = f1_score(self.test_truth, self.test_preds)
+        # #calculate metrics
+        # all_precision = precision_score(self.all_truth, self.all_preds)
+        # all_recall = recall_score(self.all_truth, self.all_preds)
+        # all_f1 = f1_score(self.all_truth, self.all_preds)
+        # test_precision = precision_score(self.test_truth, self.test_preds)
+        # test_recall = recall_score(self.test_truth, self.test_preds)
+        # test_f1 = f1_score(self.test_truth, self.test_preds)
 
-        test_confusion_norm_list = [0,0,0,0]
-        all_confusion_norm_list = [0,0,0,0]
-        try:
-            test_confusion_norm_list = test_confusion_norm.reshape(4).tolist()
-            all_confusion_norm_list = all_confusion_norm.reshape(4).tolist()
-        except:
-            pass
-        #save results in csv
-        column_names = 'iteration, minutes, true positive papyrus, false positive ink, false positive papyrus, true positive ink, precision, recall, f1'
-        self.test_results_norm.append([iteration] + [minutes] + test_confusion_norm_list + [test_precision] + [test_recall] + [test_f1])
-        self.all_results_norm.append([iteration] + [minutes] + all_confusion_norm_list + [all_precision] + [all_recall] + [all_f1])
-        np.savetxt(self.output_path + "confusion-all.csv", self.all_results_norm, fmt='%1.4f', header=column_names, delimiter=',')
-        np.savetxt(self.output_path + "confusion-test.csv", self.test_results_norm, fmt='%1.4f', header=column_names, delimiter=',')
+        # test_confusion_norm_list = [0,0,0,0]
+        # all_confusion_norm_list = [0,0,0,0]
+        # try:
+        #     test_confusion_norm_list = test_confusion_norm.reshape(4).tolist()
+        #     all_confusion_norm_list = all_confusion_norm.reshape(4).tolist()
+        # except:
+        #     pass
+        # #save results in csv
+        # column_names = 'iteration, minutes, true positive papyrus, false positive ink, false positive papyrus, true positive ink, precision, recall, f1'
+        # self.test_results_norm.append([iteration] + [minutes] + test_confusion_norm_list + [test_precision] + [test_recall] + [test_f1])
+        # self.all_results_norm.append([iteration] + [minutes] + all_confusion_norm_list + [all_precision] + [all_recall] + [all_f1])
+        # np.savetxt(self.output_path + "confusion-all.csv", self.all_results_norm, fmt='%1.4f', header=column_names, delimiter=',')
+        # np.savetxt(self.output_path + "confusion-test.csv", self.test_results_norm, fmt='%1.4f', header=column_names, delimiter=',')
 
-        # save description of this training session
-        description = ""
-        for arg in sorted(args.keys()):
-            description += arg+": " + str(args[arg]) + "\n"
-        np.savetxt(self.output_path +'description.txt', [description], delimiter=' ', fmt="%s")
-        shutil.copy(os.path.join(os.path.dirname(inspect.getfile(inkid.model)), 'model.py'),
-                    self.output_path + 'network_model.txt')
+        # # save description of this training session
+        # description = ""
+        # for arg in sorted(args.keys()):
+        #     description += arg+": " + str(args[arg]) + "\n"
+        # np.savetxt(self.output_path +'description.txt', [description], delimiter=' ', fmt="%s")
+        # shutil.copy(os.path.join(os.path.dirname(inspect.getfile(inkid.model)), 'model.py'),
+        #             self.output_path + 'network_model.txt')
 
-        # zero-out predictions & images so next output is correct
-        self.all_truth = []
-        self.all_preds = []
-        self.test_truth = []
-        self.test_preds = []
+        # # zero-out predictions & images so next output is correct
+        # self.all_truth = []
+        # self.all_preds = []
+        # self.test_truth = []
+        # self.test_preds = []
 
 
 
     def wobbleVolume(self, args):
-        wobble_start_time = time.time()
-        self.wobbled_angle =  ((2*args["wobble_max_degrees"])*np.random.random_sample()) - args["wobble_max_degrees"]
-        print("Wobbling {} volume {:.2f} degrees...".format(self.volume_args['name'], self.wobbled_angle))
-        self.wobbled_axes = np.random.choice(3, 2, replace=False)
-        self.wobbled_volume = rotate(self.volume, self.wobbled_angle, self.wobbled_axes, order=2, mode='nearest', reshape=False)
-        print("Wobbling took {:.2f} minutes".format((time.time() - wobble_start_time)/60))
+        # wobble_start_time = time.time()
+        # self.wobbled_angle =  ((2*args["wobble_max_degrees"])*np.random.random_sample()) - args["wobble_max_degrees"]
+        # print("Wobbling {} volume {:.2f} degrees...".format(self.volume_args['name'], self.wobbled_angle))
+        # self.wobbled_axes = np.random.choice(3, 2, replace=False)
+        # self.wobbled_volume = rotate(self.volume, self.wobbled_angle, self.wobbled_axes, order=2, mode='nearest', reshape=False)
+        # print("Wobbling took {:.2f} minutes".format((time.time() - wobble_start_time)/60))
+        pass
 
         
     def totalPredictions(self, args, overlap_step):

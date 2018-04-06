@@ -7,49 +7,36 @@ import datetime
 import os
 import time
 
-from sklearn.metrics import precision_score, fbeta_score
 import tensorflow as tf
 import numpy as np
 
-from inkid.volumes import VolumeSet
 import inkid.model
 import inkid.ops
+import inkid.data
 
 
 def main():
     """Run the training and prediction process."""
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--data', metavar='path', required=True,
-                        help='path to volume data (slices directory)')
-    parser.add_argument('--groundtruth', metavar='path', required=True,
-                        help='path to ground truth image')
-    parser.add_argument('--surfacemask', metavar='path', required=True,
-                        help='path to surface mask image')
-    parser.add_argument('--surfacedata', metavar='path', required=True,
-                        help='path to surface data')
-    parser.add_argument('--gridtestsquare', metavar='num', default=0, type=int,
-                        help='index of grid test square for this k-fold run')
-    parser.add_argument('--outputdir', metavar='path', default='out',
-                        help='path to output directory')
+    parser.add_argument('-d', '--data', metavar='path', required=True,
+                        help='input data file (JSON)')
+    parser.add_argument('-o', '--output', metavar='path', default='out',
+                        help='output directory')
+    parser.add_argument('-m', '--model', metavar='path', default=None,
+                        help='existing model directory to start with')
 
     args = parser.parse_args()
-
-    # Load default parameters
-    params = inkid.ops.load_default_parameters()
-
-    # Adjust some parameters from supplied arguments
-    params['volumes'][0]['data_path'] = args.data
-    params['volumes'][0]['ground_truth'] = args.groundtruth
-    params['volumes'][0]['surface_mask'] = args.surfacemask
-    params['volumes'][0]['surface_data'] = args.surfacedata
-    params['grid_test_square'] = args.gridtestsquare
-    params['output_path'] = os.path.join( # TODO make this an optional input argument so we can pick up from previous training
-        args.outputdir,
-        '3dcnn-predictions',
+    output_path = os.path.join(
+        args.output,
         datetime.datetime.today().strftime('%Y-%m-%d_%H.%M.%S')
     )
+    if args.model is not None:
+        model_path = args.model
+    else:
+        model_path = output_path
 
-    volumes = VolumeSet(params)
+    params = inkid.ops.load_default_parameters()
+    regions = inkid.data.RegionSet.from_json(args.data)
 
     # Save checkpoints every n steps. EvalCheckpointSaverListener
     # (below) runs an evaluation each time this happens.
@@ -62,7 +49,7 @@ def main():
     # and model directory specified.
     estimator = tf.estimator.Estimator(
         model_fn=inkid.model.model_fn_3dcnn,
-        model_dir=params['output_path'],
+        model_dir=model_path,
         config=run_config,
         params={
             'drop_rate': params['drop_rate'],
@@ -74,7 +61,7 @@ def main():
         },
     )
 
-    # Define tensors to be shown in a "display" step.
+    # Define tensors to be shown in a "summary" step.
     tensors_to_log = {
         'train_accuracy': 'train_accuracy',
         'train_precision': 'train_precision',
@@ -85,40 +72,41 @@ def main():
     }
     logging_hook = tf.train.LoggingTensorHook(
         tensors=tensors_to_log,
-        every_n_iter=params['display_every_n_steps'],
+        every_n_iter=params['summary_every_n_steps'],
     )
     tf.logging.set_verbosity(tf.logging.INFO)
 
     # Run the training process.
     estimator.train(
-        input_fn=lambda: volumes.training_input_fn(
+        input_fn=lambda: regions.training_input_fn(
             params['training_batch_size'],
+            params['training_epochs'],
         ),
-        # steps=params['training_steps'],  # If not defined, will run through entire training dataset.
+        steps=params.get('train_max_batches'),
         hooks=[logging_hook],
         saving_listeners=[
             inkid.model.EvalCheckpointSaverListener(
                 estimator=estimator,
-                eval_input_fn=lambda: volumes.evaluation_input_fn(
+                eval_input_fn=lambda: regions.evaluation_input_fn(
                     params['evaluation_batch_size'],
                 ),
-                predict_input_fn=lambda: volumes.prediction_input_fn(
+                predict_input_fn=lambda: regions.prediction_input_fn(
                     params['prediction_batch_size'],
                 ),
                 predict_every_n_steps=params['predict_every_n_steps'],
-                volume_set=volumes,
+                # volume_set=volumes,
                 args=params,
             ),
         ],
     )
 
-    predictions = estimator.predict(
-        input_fn=lambda: volumes.prediction_input_fn(params['prediction_batch_size'])
-    )
+    # predictions = estimator.predict(
+    #     input_fn=lambda: volumes.prediction_input_fn(params['prediction_batch_size'])
+    # )
 
-    for prediction in predictions:
-        volumes.reconstruct(params, np.array([prediction['probabilities']]), np.array([[prediction['XYZcoordinate'][0], prediction['XYZcoordinate'][1], 0]]))
-    volumes.saveAllPredictions(params, 0)
+    # for prediction in predictions:
+    #     volumes.reconstruct(params, np.array([prediction['probabilities']]), np.array([[prediction['XYZcoordinate'][0], prediction['XYZcoordinate'][1], 0]]))
+    # volumes.saveAllPredictions(params, 0)
 
     # TODO write runtime to file
     
