@@ -31,12 +31,16 @@ class Volume:
         directory. Load them into a contiguous volume in memory,
         represented as a numpy array and indexed self._data[z, y, x].
 
+        Ignores hidden files in that directory, but will get all other
+        files, so it must be a directory with only image files.
+
         """
         slices_abs_path = os.path.abspath(slices_path)
         slice_files = []
         for root, dirs, files in os.walk(slices_abs_path):
             for filename in files:
-                slice_files.append(os.path.join(root, filename))
+                if filename[0] != '.':
+                    slice_files.append(os.path.join(root, filename))
         slice_files.sort()
         
         self._data = []
@@ -47,11 +51,11 @@ class Volume:
         self._data = np.array(self._data)
         print('Loaded volume {} with shape {}'.format(slices_abs_path, self._data.shape))
 
-    def intensity_at_xyz(self, x, y, z):
+    def intensity_at(self, x, y, z):
         """Get the intensity value at a voxel position."""
         return self._data[int(z), int(y), int(x)]
 
-    def interpolate_at_xyz(self, x, y, z):
+    def interpolate_at(self, x, y, z):
         """Get the intensity value at a subvoxel position.
 
         Values are trilinearly interpolated.
@@ -67,10 +71,10 @@ class Volume:
         y1 = y0 + 1
         z1 = z0 + 1
 
-        c00 = self.intensity_at_xyz(x0, y0, z0) * (1 - dx) + self.intensity_at_xyz(x1, y0, z0) * dx
-        c10 = self.intensity_at_xyz(x0, y1, z0) * (1 - dx) + self.intensity_at_xyz(x1, y0, z0) * dx
-        c01 = self.intensity_at_xyz(x0, y0, z1) * (1 - dx) + self.intensity_at_xyz(x1, y0, z1) * dx
-        c11 = self.intensity_at_xyz(x0, y1, z1) * (1 - dx) + self.intensity_at_xyz(x1, y1, z1) * dx
+        c00 = self.intensity_at(x0, y0, z0) * (1 - dx) + self.intensity_at(x1, y0, z0) * dx
+        c10 = self.intensity_at(x0, y1, z0) * (1 - dx) + self.intensity_at(x1, y0, z0) * dx
+        c01 = self.intensity_at(x0, y0, z1) * (1 - dx) + self.intensity_at(x1, y0, z1) * dx
+        c11 = self.intensity_at(x0, y1, z1) * (1 - dx) + self.intensity_at(x1, y1, z1) * dx
 
         c0 = c00 * (1 - dy) + c10 * dy
         c1 = c01 * (1 - dy) + c11 * dy
@@ -88,6 +92,17 @@ class Volume:
         three axis vectors. These should be normalized before this
         function is called if the user wants a unit in the subvolume
         space to represent one unit in the volume space.
+
+        At the time of writing, this function very closely resembles
+        but is not identical to a similar one in the
+        VolumeCartographer core. Volume::getVoxelNeighborsInterpolated
+        is centered on a position and goes out an integer number of
+        points from that position in each axis, so the side lengths
+        are always odd and there is always a voxel at the center of
+        the returned volume. Not the case here, since we tend to want
+        even-sided subvolumes for machine learning. See
+        getVoxelNeighborsInterpolated in
+        https://code.vis.uky.edu/seales-research/volume-cartographer/blob/develop/core/include/vc/core/types/Volume.hpp.
 
         """
         assert(len(center_xyz) == 3)
@@ -122,7 +137,7 @@ class Volume:
                                    + x_offset * x_vec \
                                    + y_offset * y_vec \
                                    + z_offset * z_vec
-                    subvolume[z, y, x] = self.interpolate_at_xyz(
+                    subvolume[z, y, x] = self.interpolate_at(
                         volume_point[0],
                         volume_point[1],
                         volume_point[2],
@@ -138,6 +153,9 @@ class Volume:
         rotation to all three axes of the subvolume in order to get
         the vectors for the subvolume axes in the volume space.
 
+        See:
+        https://docs.blender.org/api/blender_python_api_current/mathutils.html
+
         """
         x_vec = Vector([1, 0, 0])
         y_vec = Vector([0, 1, 0])
@@ -146,8 +164,8 @@ class Volume:
 
         quaternion = z_vec.rotation_difference(normal_vec)
 
-        x_vec = (quaternion * x_vec).normalized()
-        y_vec = (quaternion * y_vec).normalized()
-        z_vec = (quaternion * z_vec).normalized()
+        x_vec.rotate(quaternion)
+        y_vec.rotate(quaternion)
+        z_vec.rotate(quaternion)
 
         return self.get_subvolume(center_xyz, shape_zyx, x_vec, y_vec, z_vec)
