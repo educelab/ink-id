@@ -13,16 +13,17 @@
 	"filters": [16, 8, 4, 2],
 
 	// Run configuration
-	"train_batch_size": 30,
-	// "train_max_batches": 1000000,
-	"train_epochs": 2, // TODO use this
+	"training_batch_size": 30,
+	// "training_max_batches": 1000000,
+	"training_epochs": 1,
 	
-	"predict_batch_size": 400,
+	"prediction_batch_size": 400,
 	"predict_every_n_steps": 10000,
-	"predict_overlap_step": 4, // predict on one sample for each _ by _ voxel square
+	"prediction_grid_spacing": 4, // predict on one sample for each _ by _ voxel square
 	
-	"evaluate_batch_size": 400,
+	"evaluation_batch_size": 400,
 	"evaluate_every_n_steps": 1000,
+	"evalution_max_samples": 5000,
 
 	"summary_every_n_steps": 100,
 
