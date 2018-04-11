@@ -48,8 +48,9 @@ class Volume:
         bar = progressbar.ProgressBar()
         for slice_file in bar(slice_files):
             self._data.append(np.array(Image.open(slice_file)))
+        print()
         self._data = np.array(self._data)
-        print('Loaded volume {} with shape {}'.format(slices_abs_path, self._data.shape))
+        print('Loaded volume {} with shape (z, y, x) = {}'.format(slices_abs_path, self._data.shape))
 
     def intensity_at(self, x, y, z):
         """Get the intensity value at a voxel position."""
@@ -61,6 +62,9 @@ class Volume:
         Values are trilinearly interpolated.
 
         https://en.wikipedia.org/wiki/Trilinear_interpolation
+
+        Potential speed improvement:
+        https://stackoverflow.com/questions/6427276/3d-interpolation-of-numpy-arrays-without-scipy
 
         """
         dx, x0 = math.modf(x)
@@ -105,43 +109,54 @@ class Volume:
         https://code.vis.uky.edu/seales-research/volume-cartographer/blob/develop/core/include/vc/core/types/Volume.hpp.
 
         """
-        assert(len(center_xyz) == 3)
-        assert(len(shape_zyx) == 3)
-        assert(len(x_vec) == 3)
-        assert(len(y_vec) == 3)
-        assert(len(z_vec) == 3)
+        # TODO get zeros if the entire subvolume is not in the volume
+        assert len(center_xyz) == 3
+        assert len(shape_zyx) == 3
+        assert len(x_vec) == 3
+        assert len(y_vec) == 3
+        assert len(z_vec) == 3
 
-        center_xyz = np.array(center_xyz)
-        x_vec = np.array(x_vec)
-        y_vec = np.array(y_vec)
-        z_vec = np.array(z_vec)
+        # center_xyz = np.array(center_xyz)
+        # x_vec = np.array(x_vec)
+        # y_vec = np.array(y_vec)
+        # z_vec = np.array(z_vec)
 
-        subvolume = np.zeros(shape_zyx)
+        # subvolume = np.zeros(shape_zyx)
 
-        # Iterate over the subvolume space
-        for z in range(shape_zyx[0]):
-            for y in range(shape_zyx[1]):
-                for x in range(shape_zyx[2]):
-                    # Convert from an index relative to an origin in
-                    # the corner to a position relative to the
-                    # subvolume center (which may not correspond
-                    # exactly to one of the subvolume voxel positions
-                    # if any of the side lengths are even).
-                    x_offset = -1 * (shape_zyx[2] - 1) / 2.0 + x
-                    y_offset = -1 * (shape_zyx[1] - 1) / 2.0 + y
-                    z_offset = -1 * (shape_zyx[0] - 1) / 2.0 + z
+        # # Iterate over the subvolume space
+        # for z in range(shape_zyx[0]):
+        #     for y in range(shape_zyx[1]):
+        #         for x in range(shape_zyx[2]):
+        #             # Convert from an index relative to an origin in
+        #             # the corner to a position relative to the
+        #             # subvolume center (which may not correspond
+        #             # exactly to one of the subvolume voxel positions
+        #             # if any of the side lengths are even).
+        #             x_offset = -1 * (shape_zyx[2] - 1) / 2.0 + x
+        #             y_offset = -1 * (shape_zyx[1] - 1) / 2.0 + y
+        #             z_offset = -1 * (shape_zyx[0] - 1) / 2.0 + z
 
-                    # Calculate the corresponding position in the
-                    # volume.
-                    volume_point = center_xyz \
-                                   + x_offset * x_vec \
-                                   + y_offset * y_vec \
-                                   + z_offset * z_vec
-                    subvolume[z, y, x] = self.interpolate_at(
-                        volume_point[0],
-                        volume_point[1],
-                        volume_point[2],
-                    )
+        #             # Calculate the corresponding position in the
+        #             # volume.
+        #             volume_point = center_xyz \
+        #                            + x_offset * x_vec \
+        #                            + y_offset * y_vec \
+        #                            + z_offset * z_vec
+        #             try:
+        #                 subvolume[z, y, x] = self.interpolate_at(
+        #                     volume_point[0],
+        #                     volume_point[1],
+        #                     volume_point[2],
+        #                 )
+        #             except IndexError:
+        #                 subvolume[z, y, x] = 0
+
+        ### Testing axis-aligned ###
+        x, y, z = (int(i) for i in center_xyz)
+        subvolume = self._data[z-48:z+48, y-48:y+48, x-24:x+24]
+        if subvolume.shape != (96, 96, 48):
+            subvolume = np.zeros((96, 96, 48))
+        ### Testing axis-aligned ###
 
         return subvolume
 

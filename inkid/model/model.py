@@ -26,7 +26,7 @@ class EvalCheckpointSaverListener(tf.train.CheckpointSaverListener):
     https://stackoverflow.com/a/47043377
 
     """
-    def __init__(self, estimator, eval_input_fn, predict_input_fn, predict_every_n_steps, volume_set, args):
+    def __init__(self, estimator, eval_input_fn, predict_input_fn, predict_every_n_steps, region_set):
         """Initialize the listener.
 
         Notably we pass the estimator itself to this class so that we
@@ -37,27 +37,34 @@ class EvalCheckpointSaverListener(tf.train.CheckpointSaverListener):
         self._eval_input_fn = eval_input_fn
         self._predict_input_fn = predict_input_fn
         self._predict_every_n_steps = predict_every_n_steps
-        self._volume_set = volume_set
-        self._args = args
-
+        self._region_set = region_set
         
     def after_save(self, session, global_step):
         """Run our custom logic after the estimator saves a checkpoint."""
         eval_results = self._estimator.evaluate(self._eval_input_fn)
-        print('Evaluation results:\n\t%s' % eval_results)
+        print('Evaluation results:\n\t%s' % eval_results) # TODO remove?
 
         # TODO configurable predict step
         iteration = global_step - 1
         predictions = self._estimator.predict(
             self._predict_input_fn,
             predict_keys=[
-                'XYZcoordinate',
+                'region_id',
+                'ppm_xy',
                 'probabilities',
             ],
         )
         for prediction in predictions:
-            self._volume_set.reconstruct(self._args, np.array([prediction['probabilities']]), np.array([[prediction['XYZcoordinate'][0], prediction['XYZcoordinate'][1], 0]]))
-        self._volume_set.saveAllPredictions(self._args, iteration)
+            self._region_set.reconstruct_predicted_ink_class(
+                prediction['region_id'],
+                np.array([prediction['probabilities']]),
+                np.array([[
+                    prediction['ppm_xy'][0],
+                    prediction['ppm_xy'][1],
+                ]])
+            )
+        self._region_set.save_predictions(iteration)
+        self._region_set.reset_predictions()
 
 
 class Model3dcnn(object):
@@ -146,7 +153,7 @@ def model_fn_3dcnn(features, labels, mode, params):
         params['filters']
     )
 
-    inputs = features['Subvolume']
+    inputs = features['Input']
 
     if mode == tf.estimator.ModeKeys.PREDICT:
         logits = model(inputs, training=False)
@@ -155,11 +162,11 @@ def model_fn_3dcnn(features, labels, mode, params):
         # each prediction. So by passing predict_keys to .predict(),
         # we can select some of these and not return the others.
         predictions = {
-            'volumeID': features['VolumeID'],
-            'XYZcoordinate': features['XYZCoordinate'],
+            'region_id': features['RegionID'],
+            'ppm_xy': features['PPM_XY'],
             'class': tf.argmax(logits, axis=1),
             'probabilities': tf.nn.softmax(logits),
-            'subvolumes': inputs,
+            'inputs': inputs,
         }
         return tf.estimator.EstimatorSpec(
             mode=tf.estimator.ModeKeys.PREDICT,

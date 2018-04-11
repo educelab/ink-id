@@ -19,11 +19,11 @@
 	
 	"prediction_batch_size": 400,
 	"predict_every_n_steps": 10000,
-	"prediction_grid_spacing": 4, // predict on one sample for each _ by _ voxel square
+	"prediction_grid_spacing": 4,
 	
 	"evaluation_batch_size": 400,
 	"evaluate_every_n_steps": 1000,
-	"evalution_max_samples": 5000,
+	"evaluation_max_samples": 5000,
 
 	"summary_every_n_steps": 100,
 
