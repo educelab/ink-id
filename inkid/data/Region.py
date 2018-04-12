@@ -35,5 +35,3 @@ class Region:
 
     def point_to_subvolume(self, point, subvolume_shape):
         return self._ppm.point_to_subvolume(point, subvolume_shape)
-        
-        

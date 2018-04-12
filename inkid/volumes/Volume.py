@@ -226,8 +226,6 @@ class Volume:
     def reconstruct3D(self, args, predictionValues, coordinates):
         # Important: assume all coordinates as the center of the subvolume
         center_step = int(round(self.prediction_overlap_step / 2))
-        row_step = int(args["subvolume_shape"][1]/2)
-        col_step = int(args["subvolume_shape"][0]/2)
         for i in range(coordinates.shape[0]):
             rowpoint = coordinates[i,0]
             colpoint = coordinates[i,1]

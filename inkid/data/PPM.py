@@ -3,6 +3,7 @@ import re
 import struct
 import sys
 
+import imageio
 import numpy as np
 from PIL import Image
 import progressbar
@@ -39,7 +40,9 @@ class PPM:
 
         self._ink_label = None
         if self._ink_label_path is not None:
-            self._ink_label = np.asarray(Image.open(self._ink_label_path), np.int16)
+            self._ink_label = np.asarray(Image.open(self._ink_label_path), np.uint16)
+
+        self._predicted_ink_classes = None
 
         self.process_PPM_file(self._path)
 
@@ -135,5 +138,30 @@ class PPM:
             (x, y, z),
             subvolume_shape,
             normal_vec=(n_x, n_y, n_z),
+        )
+        
+    def reconstruct_predicted_ink_classes(self, class_probabilities, ppm_xy, square_r=2):
+        assert len(ppm_xy) == 2
+        x, y = ppm_xy
+        if self._predicted_ink_classes is None:
+            self._predicted_ink_classes = np.zeros((self._height, self._width), np.uint16)
+        intensity = class_probabilities[1] * np.iinfo(np.uint16).max
+        self._predicted_ink_classes[y-square_r:y+square_r, x-square_r:x+square_r] = intensity
+        
+    def reset_predictions(self):
+        self._predicted_ink_classes = None
+
+    def save_predictions(self, directory, iteration):
+        if not os.path.exists(directory):
+            os.makedirs(directory)
+        imageio.imsave(
+            os.path.join(
+                directory,
+                '{}_predicted-ink-classes_{}.tif'.format(
+                    os.path.splitext(os.path.basename(self._path))[0],
+                    iteration,
+                ),
+            ),
+            self._predicted_ink_classes
         )
         

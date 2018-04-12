@@ -262,15 +262,18 @@ class RegionSet:
             
         return point_to_network_input
 
-    def reconstruct_predicted_ink_class(self, region_ids, probabilities, xy_ppm_coordinates):
+    def reconstruct_predicted_ink_classes(self, region_ids, probabilities, ppm_xy_coordinates):
         """TODO"""
-        # self._regions[region_id].reconstruct_predicted_ink_class(probabilities, xy_ppm_coordinate)
-        pass
+        assert len(region_ids) == len(probabilities) == len(ppm_xy_coordinates)
+        for region_id, class_probabilities, ppm_xy in zip(region_ids, probabilities, ppm_xy_coordinates):
+            self._regions[region_id]._ppm.reconstruct_predicted_ink_classes(class_probabilities, ppm_xy)
 
-    def save_predictions(self, iteration):
+    def save_predictions(self, directory, iteration):
         """TODO"""
-        pass
+        for region in self._regions:
+            region._ppm.save_predictions(directory, iteration)  # TODO(srp) clean up use of ppm
 
     def reset_predictions(self):
         """TODO"""
-        pass
+        for region in self._regions:
+            region._ppm.reset_predictions()  # TODO(srp) clean up use of ppm

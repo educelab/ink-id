@@ -19,7 +19,7 @@
 	
 	"prediction_batch_size": 400,
 	"predict_every_n_steps": 10000,
-	"prediction_grid_spacing": 4,
+	"prediction_grid_spacing": 20,
 	
 	"evaluation_batch_size": 400,
 	"evaluate_every_n_steps": 1000,

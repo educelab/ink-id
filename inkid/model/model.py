@@ -26,7 +26,7 @@ class EvalCheckpointSaverListener(tf.train.CheckpointSaverListener):
     https://stackoverflow.com/a/47043377
 
     """
-    def __init__(self, estimator, eval_input_fn, predict_input_fn, predict_every_n_steps, region_set):
+    def __init__(self, estimator, eval_input_fn, predict_input_fn, predict_every_n_steps, region_set, predictions_dir):
         """Initialize the listener.
 
         Notably we pass the estimator itself to this class so that we
@@ -38,13 +38,14 @@ class EvalCheckpointSaverListener(tf.train.CheckpointSaverListener):
         self._predict_input_fn = predict_input_fn
         self._predict_every_n_steps = predict_every_n_steps
         self._region_set = region_set
+        self._predictions_dir = predictions_dir
         
     def after_save(self, session, global_step):
         """Run our custom logic after the estimator saves a checkpoint."""
         eval_results = self._estimator.evaluate(self._eval_input_fn)
-        print('Evaluation results:\n\t%s' % eval_results) # TODO remove?
+        print('Evaluation results:\n\t%s' % eval_results) # TODO(srp) remove?
 
-        # TODO configurable predict step
+        # TODO(srp) configurable predict step
         iteration = global_step - 1
         predictions = self._estimator.predict(
             self._predict_input_fn,
@@ -55,15 +56,12 @@ class EvalCheckpointSaverListener(tf.train.CheckpointSaverListener):
             ],
         )
         for prediction in predictions:
-            self._region_set.reconstruct_predicted_ink_class(
-                prediction['region_id'],
+            self._region_set.reconstruct_predicted_ink_classes(
+                np.array([prediction['region_id']]),
                 np.array([prediction['probabilities']]),
-                np.array([[
-                    prediction['ppm_xy'][0],
-                    prediction['ppm_xy'][1],
-                ]])
+                np.array([prediction['ppm_xy']]),
             )
-        self._region_set.save_predictions(iteration)
+        self._region_set.save_predictions(self._predictions_dir, iteration)
         self._region_set.reset_predictions()
 
 

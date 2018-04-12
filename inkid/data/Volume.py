@@ -10,6 +10,8 @@ import numpy as np
 from PIL import Image
 import progressbar
 
+import inkid.ops
+
 
 class Volume:
     """Represent a volume and support accesses of the volume data.

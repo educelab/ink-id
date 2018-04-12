@@ -123,6 +123,7 @@ def main():
                 predict_input_fn=prediction_input_fn,
                 predict_every_n_steps=params['predict_every_n_steps'],
                 region_set=regions,
+                predictions_dir=os.path.join(output_path, 'predictions'),
             ),
         ],
     )
