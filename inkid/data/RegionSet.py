@@ -78,7 +78,7 @@ class RegionSet:
             # .get() will return None if the key is not
             # defined (which is good here).
             mask_path = ppm_data.get('mask')
-            ink_label_path = ppm_data.get('ink_label')
+            ink_label_path = ppm_data.get('ink-label')
 
             if volume_path not in self._volumes:
                 self._volumes[volume_path] = inkid.data.Volume(volume_path)
