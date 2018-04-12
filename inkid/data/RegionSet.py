@@ -137,6 +137,16 @@ class RegionSet:
                 num_parallel_calls=multiprocessing.cpu_count()
             )
 
+            # Filter out inputs that are all 0
+            if label_fn is None:
+                dataset = dataset.filter(
+                    lambda tensors: tf.not_equal(tf.reduce_sum(tf.abs(tensors['Input'])), 0)
+                )
+            else:
+                dataset = dataset.filter(
+                    lambda tensors, _: tf.not_equal(tf.reduce_sum(tf.abs(tensors['Input'])), 0)
+                )
+
             dataset = dataset.repeat(epochs)
             dataset = dataset.take(max_samples)
             dataset = dataset.batch(batch_size)
