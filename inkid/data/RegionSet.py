@@ -110,14 +110,23 @@ class RegionSet:
 
         """
         def tf_input_fn():
-            dataset = tf.data.Dataset.from_tensor_slices(
-                self.get_points(
+            # It is also possible to create a Dataset using
+            # .from_tensor_slices(), to which you can pass a
+            # np.array() of the already calculated set of points. For
+            # some reason this saves a lot of information in the
+            # graph.pbtxt file and makes the graph file impossibly
+            # large for Tensorboard to parse it and show you
+            # anything. Using .from_generator() instead does not do
+            # this. Practically they are the same.
+            dataset = tf.data.Dataset.from_generator(
+                self.get_points_generator(
                     region_groups=region_groups,
                     restrict_to_surface=restrict_to_surface,
                     perform_shuffle=perform_shuffle,
                     grid_spacing=grid_spacing,
                     probability_of_selection=probability_of_selection,
-                )
+                ),
+                (tf.int64),
             )
 
             dataset = dataset.map(
@@ -142,7 +151,7 @@ class RegionSet:
         
         return tf_input_fn
     
-    def get_points(self, region_groups, restrict_to_surface=False,
+    def get_points_generator(self, region_groups, restrict_to_surface=False,
                      perform_shuffle=False,
                      grid_spacing=None,
                      probability_of_selection=None):
@@ -173,7 +182,11 @@ class RegionSet:
             # in practice.
             np.random.shuffle(points)
             print('done')
-        return points
+
+        def generator():
+            for point in points:
+                yield point
+        return generator
 
     def point_to_subvolume_input(self, region_id_with_point, subvolume_shape):
         """Take a region_id and (x, y) point, and return a subvolume.
