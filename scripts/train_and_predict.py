@@ -128,15 +128,24 @@ def main():
         ],
     )
 
-    # predictions = estimator.predict(
-    #     input_fn=lambda: volumes.prediction_input_fn(params['prediction_batch_size'])
-    # )
-
-    # for prediction in predictions:
-    #     volumes.reconstruct(params, np.array([prediction['probabilities']]), np.array([[prediction['XYZcoordinate'][0], prediction['XYZcoordinate'][1], 0]]))
-    # volumes.saveAllPredictions(params, 0)
-
-    # TODO write runtime to file
+    predictions = estimator.predict(
+        prediction_input_fn,
+        predict_keys=[
+            'region_id',
+            'ppm_xy',
+            'probabilities',
+        ],
+    )
+    for prediction in predictions:
+        regions.reconstruct_predicted_ink_classes(
+            np.array([prediction['region_id']]),
+            np.array([prediction['probabilities']]),
+            np.array([prediction['ppm_xy']]),
+        )
+    regions.save_predictions(os.path.join(output_path, 'predictions'), 'final')
+    regions.reset_predictions()
+    
+    # TODO(srp) write runtime to file
     
 if __name__ == '__main__':
     main()

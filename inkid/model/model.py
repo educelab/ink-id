@@ -43,7 +43,6 @@ class EvalCheckpointSaverListener(tf.train.CheckpointSaverListener):
     def after_save(self, session, global_step):
         """Run our custom logic after the estimator saves a checkpoint."""
         eval_results = self._estimator.evaluate(self._eval_input_fn)
-        print('Evaluation results:\n\t%s' % eval_results) # TODO(srp) remove?
 
         # TODO(srp) configurable predict step
         iteration = global_step - 1
