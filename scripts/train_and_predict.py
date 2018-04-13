@@ -111,7 +111,8 @@ def main():
         grid_spacing=params['prediction_grid_spacing'],
     )
 
-    # Run the training process.
+    # Run the training process. Predictions are run during training
+    # and also after training.
     estimator.train(
         input_fn=training_input_fn,
         steps=params.get('training_max_batches'),
@@ -127,23 +128,6 @@ def main():
             ),
         ],
     )
-
-    predictions = estimator.predict(
-        prediction_input_fn,
-        predict_keys=[
-            'region_id',
-            'ppm_xy',
-            'probabilities',
-        ],
-    )
-    for prediction in predictions:
-        regions.reconstruct_predicted_ink_classes(
-            np.array([prediction['region_id']]),
-            np.array([prediction['probabilities']]),
-            np.array([prediction['ppm_xy']]),
-        )
-    regions.save_predictions(os.path.join(output_path, 'predictions'), 'final')
-    regions.reset_predictions()
     
     # TODO(srp) write runtime to file
     
