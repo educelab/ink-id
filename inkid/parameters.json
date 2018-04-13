@@ -28,7 +28,7 @@
 	"summary_every_n_steps": 100,
 
 	// Data organization/augmentation
-	"use_jitter": true, // TODO check using this
+	"use_jitter": true,
 	"jitter_range": [-4, 4],
 	"add_augmentation": true,
 	"balance_samples": false,

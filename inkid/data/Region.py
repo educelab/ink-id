@@ -29,9 +29,3 @@ class Region:
                     if self._ppm.is_on_surface(x, y):
                         points.append([self._region_id, x, y])
         return points
-
-    def point_to_ink_classes_label(self, point):
-        return self._ppm.point_to_ink_classes_label(point)
-
-    def point_to_subvolume(self, point, subvolume_shape):
-        return self._ppm.point_to_subvolume(point, subvolume_shape)

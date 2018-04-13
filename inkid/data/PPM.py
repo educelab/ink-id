@@ -81,8 +81,7 @@ class PPM:
                     self._ordering = line.split(': ')[1].strip() == 'true'
                 elif type_re.match(line):
                     self._type = line.split(': ')[1].strip()
-                    # assert self._type in ['double', 'int', 'float']
-                    assert self._type in ['double']  # TODO support other data formats
+                    assert self._type in ['double']
                 elif version_re.match(line):
                     self._version = line.split(': ')[1].strip()
                 elif header_terminator_re.match(line):

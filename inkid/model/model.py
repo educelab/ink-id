@@ -44,7 +44,6 @@ class EvalCheckpointSaverListener(tf.train.CheckpointSaverListener):
         """Run our custom logic after the estimator saves a checkpoint."""
         eval_results = self._estimator.evaluate(self._eval_input_fn)
 
-        # TODO(srp) configurable predict step
         iteration = global_step - 1
         predictions = self._estimator.predict(
             self._predict_input_fn,
@@ -198,7 +197,7 @@ def model_fn_3dcnn(features, labels, mode, params):
             true_positives + false_negatives + epsilon
         )
         # https://en.wikipedia.org/wiki/F1_score
-        fbeta_weight = 0.3 # TODO use parameter
+        fbeta_weight = 0.3
         fbeta_squared = tf.constant(fbeta_weight ** 2.0)
         fbeta = (1 + fbeta_squared) * tf.divide(
             (precision * recall),

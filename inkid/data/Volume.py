@@ -111,7 +111,6 @@ class Volume:
         https://code.vis.uky.edu/seales-research/volume-cartographer/blob/develop/core/include/vc/core/types/Volume.hpp.
 
         """
-        # TODO get zeros if the entire subvolume is not in the volume
         assert len(center_xyz) == 3
         assert len(shape_zyx) == 3
         assert len(x_vec) == 3
@@ -155,7 +154,7 @@ class Volume:
 
         ### Testing axis-aligned ###
         x, y, z = (int(i) for i in center_xyz)
-        subvolume = self._data[z-48:z+48, y-48:y+48, x-24:x+24]
+        subvolume = self._data[z-48:z+48, y-48:y+48, x-24+14:x+24+14]
         if subvolume.shape != (96, 96, 48):
             subvolume = np.zeros((96, 96, 48))
         ### Testing axis-aligned ###

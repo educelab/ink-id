@@ -210,13 +210,13 @@ class RegionSet:
 
         """
         region_id, x, y = region_id_with_point
-        subvolume = self._regions[region_id].point_to_subvolume((x, y), subvolume_shape)
+        subvolume = self._regions[region_id]._ppm.point_to_subvolume((x, y), subvolume_shape)
         return np.asarray(subvolume, np.float32)
     
     def point_to_ink_classes_label(self, region_id_with_point):
         """Take a region_id and point, and return the ink classes label."""
         region_id, x, y = region_id_with_point
-        return self._regions[region_id].point_to_ink_classes_label((x, y))
+        return self._regions[region_id]._ppm.point_to_ink_classes_label((x, y))
 
     def point_to_other_feature_tensors(self, region_id_with_point):
         """Take a region_id and point, and return some general network inputs.
@@ -286,17 +286,21 @@ class RegionSet:
         return point_to_network_input
 
     def reconstruct_predicted_ink_classes(self, region_ids, probabilities, ppm_xy_coordinates):
-        """TODO"""
+        """Save a predicted ink classes label in the internal prediction image.
+        
+        Inputs are lists so that multiple can be processed at once.
+
+        """
         assert len(region_ids) == len(probabilities) == len(ppm_xy_coordinates)
         for region_id, class_probabilities, ppm_xy in zip(region_ids, probabilities, ppm_xy_coordinates):
             self._regions[region_id]._ppm.reconstruct_predicted_ink_classes(class_probabilities, ppm_xy)
 
     def save_predictions(self, directory, iteration):
-        """TODO"""
+        """Save all predictions to files, with iteration in the filename."""
         for region in self._regions:
-            region._ppm.save_predictions(directory, iteration)  # TODO(srp) clean up use of ppm
+            region._ppm.save_predictions(directory, iteration)
 
     def reset_predictions(self):
-        """TODO"""
+        """Reset all predictions."""
         for region in self._regions:
-            region._ppm.reset_predictions()  # TODO(srp) clean up use of ppm
+            region._ppm.reset_predictions()

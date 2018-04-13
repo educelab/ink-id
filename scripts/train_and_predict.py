@@ -129,7 +129,5 @@ def main():
         ],
     )
     
-    # TODO(srp) write runtime to file
-    
 if __name__ == '__main__':
     main()

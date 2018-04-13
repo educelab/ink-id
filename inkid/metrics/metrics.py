@@ -11,7 +11,7 @@ def total_negatives(labels, predictions):
     return (true_negatives + false_negatives, tf.group(true_negatives_update_op, false_negatives_update_op))
 
 # https://stackoverflow.com/a/45654762
-def fbeta_score(labels, predictions, beta=0.3): # TODO use param
+def fbeta_score(labels, predictions, beta=0.3):
     precision, precision_update_op = tf.metrics.precision(labels, predictions)
     recall, recall_update_op = tf.metrics.recall(labels, predictions)
     epsilon = 1e-5
