@@ -1,0 +1,104 @@
+{
+    "ppms": {
+        "lunate-sigma": {
+            "path": "lunate-sigma.ppm",
+            "volume": "slices"
+        }
+    },
+    "regions": {
+        "prediction": [],
+        "evaluation": [],
+        "training": [
+            {
+                "bounds": [
+                    0,
+                    0,
+                    720,
+                    506
+                ],
+                "ppm": "lunate-sigma"
+            },
+            {
+                "bounds": [
+                    0,
+                    506,
+                    720,
+                    1012
+                ],
+                "ppm": "lunate-sigma"
+            },
+            {
+                "bounds": [
+                    0,
+                    1012,
+                    720,
+                    1518
+                ],
+                "ppm": "lunate-sigma"
+            },
+            {
+                "bounds": [
+                    0,
+                    1518,
+                    720,
+                    2024
+                ],
+                "ppm": "lunate-sigma"
+            },
+            {
+                "bounds": [
+                    0,
+                    2024,
+                    720,
+                    2530
+                ],
+                "ppm": "lunate-sigma"
+            },
+            {
+                "bounds": [
+                    720,
+                    0,
+                    1440,
+                    506
+                ],
+                "ppm": "lunate-sigma"
+            },
+            {
+                "bounds": [
+                    720,
+                    506,
+                    1440,
+                    1012
+                ],
+                "ppm": "lunate-sigma"
+            },
+            {
+                "bounds": [
+                    720,
+                    1012,
+                    1440,
+                    1518
+                ],
+                "ppm": "lunate-sigma"
+            },
+            {
+                "bounds": [
+                    720,
+                    1518,
+                    1440,
+                    2024
+                ],
+                "ppm": "lunate-sigma"
+            },
+            {
+                "bounds": [
+                    720,
+                    2024,
+                    1440,
+                    2530
+                ],
+                "ppm": "lunate-sigma"
+            }
+        ]
+    }
+}
