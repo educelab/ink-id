@@ -130,13 +130,22 @@ class PPM:
         else:
             return np.asarray([1.0, 0.0], np.float32)
 
-    def point_to_subvolume(self, point, subvolume_shape):
+    def point_to_subvolume(self, point, subvolume_shape,
+                           out_of_bounds=None,
+                           move_along_normal=None,
+                           jitter_max=None,
+                           augment_subvolume=None, method=None):
         ppm_x, ppm_y = point
         x, y, z, n_x, n_y, n_z = self.get_point_with_normal(ppm_x, ppm_y)
-        return self._volume.get_subvolume_using_normal(
+        return self._volume.get_subvolume(
             (x, y, z),
             subvolume_shape,
-            normal_vec=(n_x, n_y, n_z),
+            normal=(n_x, n_y, n_z),
+            out_of_bounds=out_of_bounds,
+            move_along_normal=move_along_normal,
+            jitter_max=jitter_max,
+            augment_subvolume=augment_subvolume,
+            method=method,
         )
         
     def reconstruct_predicted_ink_classes(self, class_probabilities, ppm_xy, square_r=2):

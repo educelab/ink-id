@@ -2,7 +2,7 @@
     "parameters": {
 	// Geometry
 	"subvolume_shape": [48, 96, 96], // [z, y, x]
-	"surface_cushion": 10,
+	"surface_cushion": 14,
 
 	// Network architecture
 	"learning_rate": 0.001,
@@ -28,8 +28,7 @@
 	"summary_every_n_steps": 100,
 
 	// Data organization/augmentation
-	"use_jitter": true,
-	"jitter_range": [-4, 4],
+	"jitter_max": 4, // Set to 0 for no jitter
 	"add_augmentation": true,
 	"balance_samples": false,
 	"truth_cutoff_low": 0.15,

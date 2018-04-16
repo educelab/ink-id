@@ -198,19 +198,28 @@ class RegionSet:
                 yield point
         return generator
 
-    def point_to_subvolume_input(self, region_id_with_point, subvolume_shape):
+    def point_to_subvolume_input(self, region_id_with_point,
+                                 subvolume_shape, out_of_bounds=None,
+                                 move_along_normal=None,
+                                 jitter_max=None,
+                                 augment_subvolume=None, method=None):
         """Take a region_id and (x, y) point, and return a subvolume.
 
         First use the PPM (x, y) to find the 3D position and normal
         orientation of this point in the Volume. Then get a subvolume
         from the Volume at that position.
 
-        Return None if the subvolume is not bounded in the original
-        volume.
-
         """
         region_id, x, y = region_id_with_point
-        subvolume = self._regions[region_id]._ppm.point_to_subvolume((x, y), subvolume_shape)
+        subvolume = self._regions[region_id]._ppm.point_to_subvolume(
+            (x, y),
+            subvolume_shape,
+            out_of_bounds=out_of_bounds,
+            move_along_normal=move_along_normal,
+            jitter_max=jitter_max,
+            augment_subvolume=augment_subvolume,
+            method=method,
+        )
         return np.asarray(subvolume, np.float32)
     
     def point_to_ink_classes_label(self, region_id_with_point):

@@ -5,7 +5,7 @@ Define the Volume class to represent volumetric data.
 import math
 import os
 
-from mathutils import Vector
+import mathutils
 import numpy as np
 from PIL import Image
 import progressbar
@@ -88,10 +88,9 @@ class Volume:
         c = c0 * (1 - dz) + c1 * dz
         return c
 
-    def get_subvolume(self, center_xyz, shape_zyx,
-                      x_vec=(1, 0, 0),
-                      y_vec=(0, 1, 0),
-                      z_vec=(0, 0, 1)):
+    def get_subvolume(self, center, shape, normal, out_of_bounds,
+                      move_along_normal, jitter_max,
+                      augment_subvolume, method):
         """Get a subvolume using normalized axis vectors.
 
         Get a subvolume from the volume, with orientation defined by
@@ -111,13 +110,103 @@ class Volume:
         https://code.vis.uky.edu/seales-research/volume-cartographer/blob/develop/core/include/vc/core/types/Volume.hpp.
 
         """
-        assert len(center_xyz) == 3
-        assert len(shape_zyx) == 3
-        assert len(x_vec) == 3
-        assert len(y_vec) == 3
-        assert len(z_vec) == 3
+        assert len(center) == 3
+        assert len(shape) == 3
 
-        # center_xyz = np.array(center_xyz)
+        if normal is None:
+            normal = mathutils.Vector((0, 0, 1))
+        else:
+            normal = mathutils.Vector(normal).normalized()
+
+        if out_of_bounds is None:
+            out_of_bounds = 'all_zeros'
+        assert out_of_bounds in ['all_zeros', 'partial_zeros', 'index_error']
+
+        if move_along_normal is None:
+            move_along_normal = 0
+
+        if jitter_max is None:
+            jitter_max = 0
+
+        if augment_subvolume is None:
+            augment_subvolume = False
+
+        if method is None:
+            method = 'snap_to_axis_aligned'
+        assert method in ['snap_to_axis_aligned', 'interpolated', 'nearest_neighbor']
+        if method == 'snap_to_axis_aligned':
+            method_fn = self.get_subvolume_snap_to_axis_aligned
+        elif method == 'interpolated':
+            method_fn = self.get_subvolume_interpolated
+        elif method == 'nearest_neighbor':
+            method_fn = self.get_subvolume_nearest_neighbor
+
+        center = np.array(center)
+        center += (move_along_normal + np.random.randint(-jitter_max, jitter_max)) * normal
+
+        subvolume = method_fn(
+            center,
+            shape,
+            normal,
+            out_of_bounds,
+        )
+
+        if augment_subvolume:
+            flip_direction = np.random.randint(4)
+            if flip_direction == 0:
+                subvolume = np.flip(subvolume, axis=1) # Flip y 
+            elif flip_direction == 1:
+                subvolume = np.flip(subvolume, axis=2) # Flip x
+            elif flip_direction == 2:
+                subvolume = np.flip(subvolume, axis=1) # Flip x and y
+                subvolume = np.flip(subvolume, axis=2)
+            
+            rotate_direction = np.random.randint(4)
+            subvolume = np.rot90(subvolume, k=rotate_direction, axes=(1,2))
+
+        assert subvolume.shape == tuple(shape)
+
+        return subvolume
+
+    def get_subvolume_snap_to_axis_aligned(self, center, shape,
+                                           normal, out_of_bounds):
+        strongest_normal_axis = np.argmax(np.absolute(normal))
+        x, y, z = (int(i) for i in center)
+        z_r, y_r, x_r = (i // 2 for i in shape)
+        
+        # z in subvolume space is along x in volume space
+        if strongest_normal_axis == 0:
+            subvolume = self._data[z-y_r:z+y_r, y-x_r:y+x_r, x-z_r:x+z_r]
+            subvolume = np.rot90(subvolume, axes=(2,0))
+
+        # z in subvolume space is along y in volume space
+        elif strongest_normal_axis == 1:
+            subvolume = self._data[z-x_r:z+x_r, y-z_r:y+z_r, x-y_r:x+y_r]
+            subvolume = np.rot90(subvolume, axes=(1,0))
+
+        # z in subvolume space is along z in volume space
+        elif strongest_normal_axis == 2:
+            subvolume = self._data[z-z_r:z+z_r, y-y_r:y+y_r, x-x_r:x+x_r]
+
+        # If the normal was pointed along a negative axis, flip the
+        # subvolume over
+        if normal[strongest_normal_axis] < 0:
+            subvolume = np.rot90(subvolume, k=2, axes=(0,1))
+        
+        if out_of_bounds == 'all_zeros':
+            if subvolume.shape != tuple(shape):
+                subvolume = np.zeros(shape)
+        elif out_of_bounds == 'partial_zeros':
+            pass
+        elif out_of_bounds == 'index_error':
+            pass
+        else:
+            raise ValueError('Out of bounds method not recognized.')
+
+        return subvolume
+
+    def get_subvolume_interpolated(self, center, shape, normal,
+                                   out_of_bounds):
         # x_vec = np.array(x_vec)
         # y_vec = np.array(y_vec)
         # z_vec = np.array(z_vec)
@@ -151,37 +240,34 @@ class Volume:
         #                 )
         #             except IndexError:
         #                 subvolume[z, y, x] = 0
+        # return subvolume
+        pass
 
-        ### Testing axis-aligned ###
-        x, y, z = (int(i) for i in center_xyz)
-        subvolume = self._data[z-48:z+48, y-48:y+48, x-24+14:x+24+14]
-        if subvolume.shape != (96, 96, 48):
-            subvolume = np.zeros((96, 96, 48))
-        ### Testing axis-aligned ###
+    def get_subvolume_nearest_neighbor(self, center, shape, normal,
+                                       out_of_bounds):
+        pass
+            
+    # def get_subvolume_using_normal(self, center_xyz, shape_zyx, normal_vec=(0, 0, 1)):
+    #     """Get a subvolume oriented based on a surface normal vector.
 
-        return subvolume
+    #     Calculate the rotation needed to align the z axis of the
+    #     subvolume with the surface normal vector, and then apply that
+    #     rotation to all three axes of the subvolume in order to get
+    #     the vectors for the subvolume axes in the volume space.
 
-    def get_subvolume_using_normal(self, center_xyz, shape_zyx, normal_vec=(0, 0, 1)):
-        """Get a subvolume oriented based on a surface normal vector.
+    #     See:
+    #     https://docs.blender.org/api/blender_python_api_current/mathutils.html
 
-        Calculate the rotation needed to align the z axis of the
-        subvolume with the surface normal vector, and then apply that
-        rotation to all three axes of the subvolume in order to get
-        the vectors for the subvolume axes in the volume space.
+    #     """
+    #     x_vec = mathutils.Vector([1, 0, 0])
+    #     y_vec = mathutils.Vector([0, 1, 0])
+    #     z_vec = mathutils.Vector([0, 0, 1])
+    #     normal_vec = mathutils.Vector(normal_vec).normalized()
 
-        See:
-        https://docs.blender.org/api/blender_python_api_current/mathutils.html
+    #     quaternion = z_vec.rotation_difference(normal_vec)
 
-        """
-        x_vec = Vector([1, 0, 0])
-        y_vec = Vector([0, 1, 0])
-        z_vec = Vector([0, 0, 1])
-        normal_vec = Vector(normal_vec).normalized()
+    #     x_vec.rotate(quaternion)
+    #     y_vec.rotate(quaternion)
+    #     z_vec.rotate(quaternion)
 
-        quaternion = z_vec.rotation_difference(normal_vec)
-
-        x_vec.rotate(quaternion)
-        y_vec.rotate(quaternion)
-        z_vec.rotate(quaternion)
-
-        return self.get_subvolume(center_xyz, shape_zyx, x_vec, y_vec, z_vec)
+    #     return self.get_subvolume(center_xyz, shape_zyx, x_vec, y_vec, z_vec)

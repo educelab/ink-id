@@ -80,12 +80,19 @@ def main():
     point_to_subvolume_input = functools.partial(
         regions.point_to_subvolume_input,
         subvolume_shape=params['subvolume_shape'],
+        out_of_bounds='all_zeros',
+        move_along_normal=params['surface_cushion'],
+        jitter_max=params['jitter_max'],
+        method='snap_to_axis_aligned',
     )
 
     training_input_fn = regions.create_tf_input_fn(
         region_groups=['training'],
         batch_size=params['training_batch_size'],
-        features_fn=point_to_subvolume_input,
+        features_fn=functools.partial(
+            point_to_subvolume_input,
+            augment_subvolume=params['add_augmentation'],
+        ),
         label_fn=regions.point_to_ink_classes_label,
         perform_shuffle=True,
         restrict_to_surface=True,
@@ -94,7 +101,10 @@ def main():
     evaluation_input_fn = regions.create_tf_input_fn(
         region_groups=['evaluation'],
         batch_size=params['evaluation_batch_size'],
-        features_fn=point_to_subvolume_input,
+        features_fn=functools.partial(
+            point_to_subvolume_input,
+            augment_subvolume=False,
+        ),
         label_fn=regions.point_to_ink_classes_label,
         max_samples=params['evaluation_max_samples'],
         perform_shuffle=True,
@@ -104,7 +114,10 @@ def main():
     prediction_input_fn = regions.create_tf_input_fn(
         region_groups=['prediction'],
         batch_size=params['prediction_batch_size'],
-        features_fn=point_to_subvolume_input,
+        features_fn=functools.partial(
+            point_to_subvolume_input,
+            augment_subvolume=False,
+        ),
         label_fn=None,
         perform_shuffle=False,
         restrict_to_surface=True,
