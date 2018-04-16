@@ -24,10 +24,10 @@ def main():
                         help='input file (JSON)')
     parser.add_argument('-o', '--output', metavar='path', required=True,
                         help='output file')
-    parser.add_argument('-x', metavar='num', default=3,
-                        help='grid squares along x axis (number of columns)')
-    parser.add_argument('-y', metavar='num', default=3,
-                        help='grid squares along y axis (number of rows)')
+    parser.add_argument('-rows', metavar='num', default=3,
+                        help='grid squares along x axis (number of rows)')
+    parser.add_argument('-columns', metavar='num', default=3,
+                        help='grid squares along y axis (number of columns)')
 
     args = parser.parse_args()
     
@@ -56,19 +56,21 @@ def main():
 
     width = bounds[2] - bounds[0]
     height = bounds[3] - bounds[1]
-    grid_square_width = width // int(args.x)
-    grid_square_height = height // int(args.y)
+    rows = int(args.rows)
+    columns = int(args.columns)
+    grid_square_width = width // columns
+    grid_square_height = height // rows
 
     training_regions = []
     
-    for i in range(int(args.x)):
-        for j in range(int(args.y)):
+    for x in range(columns):
+        for y in range(rows):
             region = { 'ppm': ppm_name }
             region['bounds'] = [
-                bounds[0] + i * grid_square_width,
-                bounds[1] + j * grid_square_height,
-                bounds[0] + (i + 1) * grid_square_width,
-                bounds[1] + (j + 1) * grid_square_height,
+                bounds[0] + x * grid_square_width,
+                bounds[1] + y * grid_square_height,
+                bounds[0] + (x + 1) * grid_square_width,
+                bounds[1] + (y + 1) * grid_square_height,
             ]
             training_regions.append(region)
 
