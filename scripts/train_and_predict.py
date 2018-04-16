@@ -1,5 +1,5 @@
 """
-Train an ink classifier and produce predicted output for a volume.
+TODO
 """
 
 import argparse
@@ -25,6 +25,8 @@ def main():
                         help='output directory')
     parser.add_argument('-m', '--model', metavar='path', default=None,
                         help='existing model directory to start with')
+    parser.add_argument('-k', metavar='num', default=None,
+                        help='index of region to use for prediction and evaluation')
 
     args = parser.parse_args()
     output_path = os.path.join(
@@ -37,7 +39,15 @@ def main():
         model_path = output_path
 
     params = inkid.ops.load_default_parameters()
-    regions = inkid.data.RegionSet.from_json(args.data)
+
+    if args.k is not None:
+        region_data = inkid.data.RegionSet.get_data_from_json(args.data)
+        k_region = region_data['regions']['training'].pop(int(args.k))
+        region_data['regions']['prediction'].append(k_region)
+        region_data['regions']['evaluation'].append(k_region)
+        regions = inkid.data.RegionSet(region_data)
+    else:
+        regions = inkid.data.RegionSet.from_json(args.data)
     
     # Save checkpoints every n steps. EvalCheckpointSaverListener
     # (below) runs an evaluation each time this happens.
