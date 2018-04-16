@@ -93,10 +93,11 @@ class RegionSet:
 
         return self._ppms[ppm_name]
 
-    def create_tf_input_fn(self, region_groups, batch_size, features_fn,
-                    label_fn=None, epochs=1, max_samples=-1,
-                    perform_shuffle=None, restrict_to_surface=None,
-                    grid_spacing=None, probability_of_selection=None):
+    def create_tf_input_fn(self, region_groups, batch_size,
+                           features_fn, label_fn=None, epochs=1,
+                           max_samples=-1, perform_shuffle=None,
+                           shuffle_seed=None, restrict_to_surface=None,
+                           grid_spacing=None, probability_of_selection=None):
         """Generate Tensorflow input_fn function for the model/network.
 
         A Tensorflow Estimator requires an input_fn to be passed to
@@ -128,6 +129,7 @@ class RegionSet:
                     region_groups=region_groups,
                     restrict_to_surface=restrict_to_surface,
                     perform_shuffle=perform_shuffle,
+                    shuffle_seed=shuffle_seed,
                     grid_spacing=grid_spacing,
                     probability_of_selection=probability_of_selection,
                 ),
@@ -166,10 +168,11 @@ class RegionSet:
         
         return tf_input_fn
     
-    def get_points_generator(self, region_groups, restrict_to_surface=False,
-                     perform_shuffle=False,
-                     grid_spacing=None,
-                     probability_of_selection=None):
+    def get_points_generator(self, region_groups,
+                             restrict_to_surface=False,
+                             perform_shuffle=False, shuffle_seed=None,
+                             grid_spacing=None,
+                             probability_of_selection=None):
         """Return a numpy array of region_ids and points.
 
         Used as the initial input to a Dataset, which will later map
@@ -192,6 +195,10 @@ class RegionSet:
         if perform_shuffle:
             print('Shuffling points for region groups: {}... '.format(region_groups), end='')
             sys.stdout.flush()
+            if shuffle_seed is None:
+                np.random.seed()
+            else:
+                np.random.seed(shuffle_seed)
             # Tensorflow Dataset objects also have a .shuffle() method
             # which would be a more natural fit, but it is much slower
             # in practice.

@@ -118,6 +118,7 @@ def main():
         label_fn=regions.point_to_ink_classes_label,
         max_samples=params['evaluation_max_samples'],
         perform_shuffle=True,
+        shuffle_seed=0, # We want the eval set to be the same each time
         restrict_to_surface=True,
     )
 
