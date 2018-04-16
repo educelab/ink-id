@@ -46,17 +46,8 @@ class PPM:
 
         self.process_PPM_file(self._path)
 
-    def process_PPM_file(self, filename):
-        """Read a PPM file and store the data in the PPM object.
-
-        The data is stored in an internal array indexed by [y, x, idx]
-        where idx is an index into an array of size dim.
-
-        Example: For a PPM of dimension 6 to store 3D points and
-        normals, the first component of the normal vector for the PPM
-        origin would be at self._data[0, 0, 3].
-
-        """
+    @staticmethod
+    def parse_PPM_header(filename):
         comments_re = re.compile('^#')
         width_re = re.compile('^width')
         height_re = re.compile('^height')
@@ -72,37 +63,74 @@ class PPM:
                 if comments_re.match(line):
                     pass
                 elif width_re.match(line):
-                    self._width = int(line.split(': ')[1])
+                    width = int(line.split(': ')[1])
                 elif height_re.match(line):
-                    self._height = int(line.split(': ')[1])
+                    height = int(line.split(': ')[1])
                 elif dim_re.match(line):
-                    self._dim = int(line.split(': ')[1])
+                    dim = int(line.split(': ')[1])
                 elif ordering_re.match(line):
-                    self._ordering = line.split(': ')[1].strip() == 'true'
+                    ordering = line.split(': ')[1].strip() == 'true'
                 elif type_re.match(line):
-                    self._type = line.split(': ')[1].strip()
-                    assert self._type in ['double']
+                    val_type = line.split(': ')[1].strip()
+                    assert val_type in ['double']
                 elif version_re.match(line):
-                    self._version = line.split(': ')[1].strip()
+                    version = line.split(': ')[1].strip()
                 elif header_terminator_re.match(line):
                     break
                 else:
                     print('Warning: PPM header contains unknown line: {}'.format(line.strip()))
-            print(
-                'Processing PPM data for {} with width {}, height {}, dim {}... '.format(
-                    self._path, self._width, self._height, self._dim
-                )
+
+        return {
+            'width': width,
+            'height': height,
+            'dim': dim,
+            'ordering': ordering,
+            'type': val_type,
+            'version': version
+        }
+        
+
+    def process_PPM_file(self, filename):
+        """Read a PPM file and store the data in the PPM object.
+
+        The data is stored in an internal array indexed by [y, x, idx]
+        where idx is an index into an array of size dim.
+
+        Example: For a PPM of dimension 6 to store 3D points and
+        normals, the first component of the normal vector for the PPM
+        origin would be at self._data[0, 0, 3].
+
+        """
+        header = PPM.parse_PPM_header(filename)
+        self._width = header['width']
+        self._height = header['height']
+        self._dim = header['dim']
+        self._ordering = header['ordering']
+        self._type = header['type']
+        self._version = header['version']
+        
+        print(
+            'Processing PPM data for {} with width {}, height {}, dim {}... '.format(
+                self._path, self._width, self._height, self._dim
             )
+        )
 
-            self._data = np.empty((self._height, self._width, self._dim))
+        self._data = np.empty((self._height, self._width, self._dim))
 
+        with open(filename, 'rb') as f:
+            header_terminator_re = re.compile('^<>$')
+            while True:
+                line = f.readline().decode('utf-8')
+                if header_terminator_re.match(line):
+                    break
+            
             bar = progressbar.ProgressBar()
             for y in bar(range(self._height)):
                 for x in range(self._width):
                     for idx in range(self._dim):
                         self._data[y, x, idx] = struct.unpack('d', f.read(8))[0]
-            print()
-
+        print()
+            
     def get_default_bounds(self):
         """Return the full bounds of the PPM in (x0, y0, x1, y1) format."""
         return (0, 0, self._width, self._height)
