@@ -7,7 +7,7 @@ assumptions about axes that should be changed if used for other data.
 import argparse
 import struct
 
-import imageio
+from Pillow import Image
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
@@ -18,7 +18,7 @@ def main():
 
     args = parser.parse_args()
 
-    tif = imageio.imread(args.tif)
+    tif = np.array(Image.open(args.tif))
 
     # Write the header
     with open(args.ppm, 'w') as f:

@@ -3,7 +3,6 @@ import re
 import struct
 import sys
 
-import imageio
 import numpy as np
 from PIL import Image
 import progressbar
@@ -190,7 +189,9 @@ class PPM:
     def save_predictions(self, directory, iteration):
         if not os.path.exists(directory):
             os.makedirs(directory)
-        imageio.imsave(
+            
+        im = Image.fromarray(self._predicted_ink_classes)
+        im.save(
             os.path.join(
                 directory,
                 '{}_predicted-ink-classes_{}.tif'.format(
@@ -198,6 +199,5 @@ class PPM:
                     iteration,
                 ),
             ),
-            self._predicted_ink_classes
         )
         

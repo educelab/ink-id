@@ -8,7 +8,7 @@ import os
 
 from jsmin import jsmin
 import numpy as np
-import imageio
+from Pillow import Image
 
 import inkid
 
@@ -38,7 +38,8 @@ def save_volume_to_image_stack(volume, dirname):
     for z in range(volume.shape[0]):
         image = volume[z, :, :]
         image = image.astype(np.uint16)
-        imageio.imsave(os.path.join(dirname, str(z) + '.tif'), image)        
+        image = Image.fromarray(image)
+        image.save(os.path.join(dirname, str(z) + '.tif'))        
 
 
 def load_default_parameters():
