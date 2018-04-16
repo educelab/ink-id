@@ -7,7 +7,7 @@ assumptions about axes that should be changed if used for other data.
 import argparse
 import struct
 
-from Pillow import Image
+from PIL import Image
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)

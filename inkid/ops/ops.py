@@ -8,7 +8,7 @@ import os
 
 from jsmin import jsmin
 import numpy as np
-from Pillow import Image
+from PIL import Image
 
 import inkid
 
