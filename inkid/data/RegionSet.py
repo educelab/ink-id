@@ -32,12 +32,17 @@ class RegionSet:
     @classmethod
     def from_json(cls, filename):
         """Initialize a RegionSet from a JSON filename."""
+        data = RegionSet.get_data_from_json(filename)
+        return cls(data)
+
+    @staticmethod
+    def get_data_from_json(filename):
         with open(filename, 'r') as f:
             # minify to remove comments
             minified = jsmin(str(f.read()))
             data = json.loads(minified)
             data = RegionSet.make_data_paths_absolute(data, os.path.dirname(filename))
-            return cls(data)
+        return data
 
     @staticmethod
     def make_data_paths_absolute(data, paths_were_relative_to=os.getcwd()):
