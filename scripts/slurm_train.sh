@@ -1,6 +1,6 @@
 #!/bin/bash
 
-#SBATCH --gres=gpu:1
+#SBATCH --gres=gpu:2
 #SBATCH --job-name=lunateGridTraining
 #SBATCH --output=lunateGridTraining_%A_%a.out
 #SBATCH --array=0-9
@@ -9,5 +9,4 @@
 
 echo "My SLURM_ARRAY_TASK_ID: " $SLURM_ARRAY_TASK_ID
 
-# Updated with refactored script format. Will need paths passed to it.
-python ~/devel/ink-id/scripts/train-and-predict.py --data DATAPATH --groundtruth GROUNDTRUTH --surfacemask SURFACEMASK --surfacedata SURFACEDATA --gridtestsquare $SLURM_ARRAY_TASK_ID
+time inkid-train-and-predict -d ~/data/lunate-sigma/grid-2x5.json -o ~/data/out -k $SLURM_ARRAY_TASK_ID

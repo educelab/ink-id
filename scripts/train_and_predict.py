@@ -1,5 +1,5 @@
 """
-TODO
+Train and predict using subvolumes.
 """
 
 import argparse
