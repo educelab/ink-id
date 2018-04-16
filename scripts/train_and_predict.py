@@ -4,6 +4,7 @@ Train an ink classifier and produce predicted output for a volume.
 
 import argparse
 import datetime
+import functools
 import os
 import time
 
@@ -37,7 +38,7 @@ def main():
 
     params = inkid.ops.load_default_parameters()
     regions = inkid.data.RegionSet.from_json(args.data)
-
+    
     # Save checkpoints every n steps. EvalCheckpointSaverListener
     # (below) runs an evaluation each time this happens.
     run_config = tf.estimator.RunConfig(
@@ -76,39 +77,70 @@ def main():
     )
     tf.logging.set_verbosity(tf.logging.INFO)
 
-    # Run the training process.
-    estimator.train(
-        input_fn=lambda: regions.training_input_fn(
-            params['training_batch_size'],
-            params['training_epochs'],
+    point_to_subvolume_input = functools.partial(
+        regions.point_to_subvolume_input,
+        subvolume_shape=params['subvolume_shape'],
+        out_of_bounds='all_zeros',
+        move_along_normal=params['surface_cushion'],
+        jitter_max=params['jitter_max'],
+        method='snap_to_axis_aligned',
+    )
+
+    training_input_fn = regions.create_tf_input_fn(
+        region_groups=['training'],
+        batch_size=params['training_batch_size'],
+        features_fn=functools.partial(
+            point_to_subvolume_input,
+            augment_subvolume=params['add_augmentation'],
         ),
-        steps=params.get('train_max_batches'),
+        label_fn=regions.point_to_ink_classes_label,
+        perform_shuffle=True,
+        restrict_to_surface=True,
+    )
+
+    evaluation_input_fn = regions.create_tf_input_fn(
+        region_groups=['evaluation'],
+        batch_size=params['evaluation_batch_size'],
+        features_fn=functools.partial(
+            point_to_subvolume_input,
+            augment_subvolume=False,
+        ),
+        label_fn=regions.point_to_ink_classes_label,
+        max_samples=params['evaluation_max_samples'],
+        perform_shuffle=True,
+        restrict_to_surface=True,
+    )
+
+    prediction_input_fn = regions.create_tf_input_fn(
+        region_groups=['prediction'],
+        batch_size=params['prediction_batch_size'],
+        features_fn=functools.partial(
+            point_to_subvolume_input,
+            augment_subvolume=False,
+        ),
+        label_fn=None,
+        perform_shuffle=False,
+        restrict_to_surface=True,
+        grid_spacing=params['prediction_grid_spacing'],
+    )
+
+    # Run the training process. Predictions are run during training
+    # and also after training.
+    estimator.train(
+        input_fn=training_input_fn,
+        steps=params.get('training_max_batches'),
         hooks=[logging_hook],
         saving_listeners=[
             inkid.model.EvalCheckpointSaverListener(
                 estimator=estimator,
-                eval_input_fn=lambda: regions.evaluation_input_fn(
-                    params['evaluation_batch_size'],
-                ),
-                predict_input_fn=lambda: regions.prediction_input_fn(
-                    params['prediction_batch_size'],
-                ),
+                eval_input_fn=evaluation_input_fn,
+                predict_input_fn=prediction_input_fn,
                 predict_every_n_steps=params['predict_every_n_steps'],
-                # volume_set=volumes,
-                args=params,
+                region_set=regions,
+                predictions_dir=os.path.join(output_path, 'predictions'),
             ),
         ],
     )
-
-    # predictions = estimator.predict(
-    #     input_fn=lambda: volumes.prediction_input_fn(params['prediction_batch_size'])
-    # )
-
-    # for prediction in predictions:
-    #     volumes.reconstruct(params, np.array([prediction['probabilities']]), np.array([[prediction['XYZcoordinate'][0], prediction['XYZcoordinate'][1], 0]]))
-    # volumes.saveAllPredictions(params, 0)
-
-    # TODO write runtime to file
     
 if __name__ == '__main__':
     main()

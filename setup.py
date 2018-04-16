@@ -8,15 +8,16 @@ setup(name='inkid',
       license='MS-RSL',
       packages=['inkid'],
       install_requires=[
+          'imageio',
           'jsmin',
+          'mathutils',
           'matplotlib',
           'Pillow',
-          'imageio',
+          'progressbar2',
       ],
       entry_points = {
           'console_scripts': [
               'inkid-train-and-predict = scripts.train_and_predict:main',
-              'inkid-top-n = scripts.get_top_bottom_n_subvolumes:main',
           ],
       },
       extras_require = {
