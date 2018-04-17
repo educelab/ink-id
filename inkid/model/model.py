@@ -205,7 +205,7 @@ def model_fn_3dcnn(features, labels, mode, params):
             true_positives + false_negatives + epsilon
         )
         # https://en.wikipedia.org/wiki/F1_score
-        fbeta_weight = 0.3
+        fbeta_weight = params['fbeta_weight']
         fbeta_squared = tf.constant(fbeta_weight ** 2.0)
         fbeta = (1 + fbeta_squared) * tf.divide(
             (precision * recall),
@@ -244,7 +244,7 @@ def model_fn_3dcnn(features, labels, mode, params):
         update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
         with tf.control_dependencies(update_ops):
             train_op = optimizer.minimize(loss, global_step=tf.train.get_global_step())
-        
+
         return tf.estimator.EstimatorSpec(
             mode=tf.estimator.ModeKeys.TRAIN,
             loss=loss,
