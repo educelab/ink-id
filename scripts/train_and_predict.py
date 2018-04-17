@@ -164,7 +164,7 @@ def main():
     )
 
     stop = timeit.default_timer()
-    with open(os.join(output_path, 'info.txt'), 'w') as f:
+    with open(os.path.join(output_path, 'info.txt'), 'w') as f:
         f.write('Arguments: {}'.format(args))
         f.write('Runtime: {}s'.format(stop - start))
 
