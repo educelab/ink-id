@@ -99,7 +99,6 @@ def main():
         subvolume_shape=params['subvolume_shape'],
         out_of_bounds='all_zeros',
         move_along_normal=params['surface_cushion'],
-        jitter_max=params['jitter_max'],
         method='snap_to_axis_aligned',
     )
 
@@ -109,6 +108,7 @@ def main():
         features_fn=functools.partial(
             point_to_subvolume_input,
             augment_subvolume=params['add_augmentation'],
+            jitter_max=params['jitter_max'],
         ),
         label_fn=regions.point_to_ink_classes_label,
         perform_shuffle=True,
@@ -121,6 +121,7 @@ def main():
         features_fn=functools.partial(
             point_to_subvolume_input,
             augment_subvolume=False,
+            jitter_max=0,
         ),
         label_fn=regions.point_to_ink_classes_label,
         max_samples=params['evaluation_max_samples'],
@@ -135,6 +136,7 @@ def main():
         features_fn=functools.partial(
             point_to_subvolume_input,
             augment_subvolume=False,
+            jitter_max=0,
         ),
         label_fn=None,
         perform_shuffle=False,
