@@ -30,10 +30,16 @@ def main():
                         help='index of region to use for prediction and evaluation')
 
     args = parser.parse_args()
-    output_path = os.path.join(
-        args.output,
-        datetime.datetime.today().strftime('%Y-%m-%d_%H.%M.%S')
-    )
+    if args.k is None:
+        output_path = os.path.join(
+            args.output,
+            datetime.datetime.today().strftime('%Y-%m-%d_%H.%M.%S')
+        )
+    else:
+        output_path = os.path.join(
+            args.output,
+            datetime.datetime.today().strftime('%Y-%m-%d_%H.%M.%S') + '_' + args.k
+        )
     if args.model is not None:
         model_path = args.model
     else:
