@@ -1,11 +1,11 @@
 import os
 import re
 import struct
-import sys
 
 import numpy as np
 from PIL import Image
 import progressbar
+
 
 class PPM:
     def __init__(self, path, volume, mask_path, ink_label_path):
@@ -87,7 +87,6 @@ class PPM:
             'type': val_type,
             'version': version
         }
-        
 
     def process_PPM_file(self, filename):
         """Read a PPM file and store the data in the PPM object.
@@ -107,7 +106,7 @@ class PPM:
         self._ordering = header['ordering']
         self._type = header['type']
         self._version = header['version']
-        
+
         print(
             'Processing PPM data for {} with width {}, height {}, dim {}... '.format(
                 self._path, self._width, self._height, self._dim
@@ -122,14 +121,14 @@ class PPM:
                 line = f.readline().decode('utf-8')
                 if header_terminator_re.match(line):
                     break
-            
+
             bar = progressbar.ProgressBar()
             for y in bar(range(self._height)):
                 for x in range(self._width):
                     for idx in range(self._dim):
                         self._data[y, x, idx] = struct.unpack('d', f.read(8))[0]
         print()
-            
+
     def get_default_bounds(self):
         """Return the full bounds of the PPM in (x0, y0, x1, y1) format."""
         return (0, 0, self._width, self._height)
@@ -174,7 +173,7 @@ class PPM:
             augment_subvolume=augment_subvolume,
             method=method,
         )
-        
+
     def reconstruct_predicted_ink_classes(self, class_probabilities, ppm_xy, square_r=2):
         assert len(ppm_xy) == 2
         x, y = ppm_xy
@@ -182,14 +181,14 @@ class PPM:
             self._predicted_ink_classes = np.zeros((self._height, self._width), np.uint16)
         intensity = class_probabilities[1] * np.iinfo(np.uint16).max
         self._predicted_ink_classes[y-square_r:y+square_r, x-square_r:x+square_r] = intensity
-        
+
     def reset_predictions(self):
         self._predicted_ink_classes = None
 
     def save_predictions(self, directory, iteration):
         if not os.path.exists(directory):
             os.makedirs(directory)
-            
+
         im = Image.fromarray(self._predicted_ink_classes)
         im.save(
             os.path.join(
@@ -200,4 +199,3 @@ class PPM:
                 ),
             ),
         )
-        

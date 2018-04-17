@@ -20,15 +20,18 @@ class RegionSet:
 
         for region_group in data['regions']:
             self._region_groups[region_group] = []
-            
+
             for region_data in data['regions'][region_group]:
-                ppm = self.create_ppm_if_needed(region_data['ppm'], data['ppms'][region_data['ppm']])
+                ppm = self.create_ppm_if_needed(
+                    region_data['ppm'],
+                    data['ppms'][region_data['ppm']]
+                )
                 bounds = region_data.get('bounds')
                 region = inkid.data.Region(len(self._regions), ppm, bounds)
-                    
+
                 self._region_groups[region_group].append(len(self._regions))
                 self._regions.append(region)
-                    
+
     @classmethod
     def from_json(cls, filename):
         """Initialize a RegionSet from a JSON filename."""
@@ -64,7 +67,7 @@ class RegionSet:
                     )
                 )
         return data
-        
+
     def create_ppm_if_needed(self, ppm_name, ppm_data):
         """Return the ppm from its name and data, creating first if needed.
 
@@ -79,7 +82,7 @@ class RegionSet:
         if ppm_name not in self._ppms:
             ppm_path = ppm_data['path']
             volume_path = ppm_data['volume']
-            
+
             # .get() will return None if the key is not
             # defined (which is good here).
             mask_path = ppm_data.get('mask')
@@ -165,9 +168,9 @@ class RegionSet:
             else:
                 batch_features, batch_labels = dataset.make_one_shot_iterator().get_next()
                 return batch_features, batch_labels
-        
+
         return tf_input_fn
-    
+
     def get_points_generator(self, region_groups,
                              restrict_to_surface=False,
                              perform_shuffle=False, shuffle_seed=None,
@@ -180,7 +183,8 @@ class RegionSet:
         such as batching.
 
         """
-        print('Fetching points for region groups: {}... '.format(region_groups), end='')
+        print('Fetching points for region groups: {}... '
+              .format(region_groups), end='')
         sys.stdout.flush()
         points = []
         for region_group in region_groups:
@@ -193,7 +197,8 @@ class RegionSet:
         points = np.array(points)
         print('done ({} points)'.format(len(points)))
         if perform_shuffle:
-            print('Shuffling points for region groups: {}... '.format(region_groups), end='')
+            print('Shuffling points for region groups: {}... '
+                  .format(region_groups), end='')
             sys.stdout.flush()
             if shuffle_seed is None:
                 np.random.seed()
@@ -223,7 +228,7 @@ class RegionSet:
 
         """
         region_id, x, y = region_id_with_point
-        subvolume = self._regions[region_id]._ppm.point_to_subvolume(
+        subvolume = self._regions[region_id].ppm.point_to_subvolume(
             (x, y),
             subvolume_shape,
             out_of_bounds=out_of_bounds,
@@ -233,11 +238,11 @@ class RegionSet:
             method=method,
         )
         return np.asarray(subvolume, np.float32)
-    
+
     def point_to_ink_classes_label(self, region_id_with_point):
         """Take a region_id and point, and return the ink classes label."""
         region_id, x, y = region_id_with_point
-        return self._regions[region_id]._ppm.point_to_ink_classes_label((x, y))
+        return self._regions[region_id].ppm.point_to_ink_classes_label((x, y))
 
     def point_to_other_feature_tensors(self, region_id_with_point):
         """Take a region_id and point, and return some general network inputs.
@@ -303,25 +308,31 @@ class RegionSet:
                                    [region_id_with_point],
                                    tf.float32)
                 return network_input, label
-            
+
         return point_to_network_input
 
     def reconstruct_predicted_ink_classes(self, region_ids, probabilities, ppm_xy_coordinates):
         """Save a predicted ink classes label in the internal prediction image.
-        
+
         Inputs are lists so that multiple can be processed at once.
 
         """
         assert len(region_ids) == len(probabilities) == len(ppm_xy_coordinates)
-        for region_id, class_probabilities, ppm_xy in zip(region_ids, probabilities, ppm_xy_coordinates):
-            self._regions[region_id]._ppm.reconstruct_predicted_ink_classes(class_probabilities, ppm_xy)
+        for region_id, class_probabilities, ppm_xy in zip(
+                region_ids,
+                probabilities,
+                ppm_xy_coordinates):
+            self._regions[region_id].ppm.reconstruct_predicted_ink_classes(
+                class_probabilities,
+                ppm_xy
+            )
 
     def save_predictions(self, directory, iteration):
         """Save all predictions to files, with iteration in the filename."""
         for region in self._regions:
-            region._ppm.save_predictions(directory, iteration)
+            region.ppm.save_predictions(directory, iteration)
 
     def reset_predictions(self):
         """Reset all predictions."""
         for region in self._regions:
-            region._ppm.reset_predictions()
+            region.ppm.reset_predictions()

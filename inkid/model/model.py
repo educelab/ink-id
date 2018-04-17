@@ -85,7 +85,7 @@ class Model3dcnn(object):
             kernel_initializer=tf.contrib.layers.xavier_initializer(),
             bias_initializer=tf.zeros_initializer(),
         )
-        
+
         self.conv1 = convolution_layer(filters=filters[0])
         self.batch_norm1 = tf.layers.BatchNormalization(
             scale=False, axis=4, momentum=batch_norm_momentum)
@@ -105,7 +105,6 @@ class Model3dcnn(object):
         self.fc = tf.layers.Dense(2)
         self.dropout = tf.layers.Dropout(drop_rate)
 
-        
     def __call__(self, inputs, training):
         """Chain the layers together when this class is 'called'."""
         y = tf.reshape(inputs, self._input_shape)

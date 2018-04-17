@@ -54,6 +54,7 @@ class Volume:
         self._data = np.array(self._data)
         print('Loaded volume {} with shape (z, y, x) = {}'.format(slices_abs_path, self._data.shape))
 
+        
     def intensity_at(self, x, y, z):
         """Get the intensity value at a voxel position."""
         return self._data[int(z), int(y), int(x)]
