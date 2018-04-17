@@ -9,6 +9,7 @@ import tensorflow as tf
 import inkid.ops
 import inkid.metrics
 
+
 class EvalCheckpointSaverListener(tf.train.CheckpointSaverListener):
     """Run some logic every time a checkpoint is saved.
 
@@ -26,7 +27,10 @@ class EvalCheckpointSaverListener(tf.train.CheckpointSaverListener):
     https://stackoverflow.com/a/47043377
 
     """
-    def __init__(self, estimator, eval_input_fn, predict_input_fn, predict_every_n_steps, region_set, predictions_dir):
+    def __init__(self, estimator, eval_input_fn, predict_input_fn,
+                 evaluate_every_n_checkpoints,
+                 predict_every_n_checkpoints, region_set,
+                 predictions_dir):
         """Initialize the listener.
 
         Notably we pass the estimator itself to this class so that we
@@ -36,31 +40,36 @@ class EvalCheckpointSaverListener(tf.train.CheckpointSaverListener):
         self._estimator = estimator
         self._eval_input_fn = eval_input_fn
         self._predict_input_fn = predict_input_fn
-        self._predict_every_n_steps = predict_every_n_steps
+        self._evaluate_every_n_checkpoints = evaluate_every_n_checkpoints
+        self._predict_every_n_checkpoints = predict_every_n_checkpoints
         self._region_set = region_set
         self._predictions_dir = predictions_dir
-        
+        self._total_checkpoints = 0
+
     def after_save(self, session, global_step):
         """Run our custom logic after the estimator saves a checkpoint."""
-        eval_results = self._estimator.evaluate(self._eval_input_fn)
+        self._total_checkpoints += 1
 
-        iteration = global_step - 1
-        predictions = self._estimator.predict(
-            self._predict_input_fn,
-            predict_keys=[
-                'region_id',
-                'ppm_xy',
-                'probabilities',
-            ],
-        )
-        for prediction in predictions:
-            self._region_set.reconstruct_predicted_ink_classes(
-                np.array([prediction['region_id']]),
-                np.array([prediction['probabilities']]),
-                np.array([prediction['ppm_xy']]),
+        if self._total_checkpoints % self._evaluate_every_n_checkpoints == 0:
+            self._estimator.evaluate(self._eval_input_fn)
+
+        if self._total_checkpoints % self._predict_every_n_checkpoints == 0:
+            predictions = self._estimator.predict(
+                self._predict_input_fn,
+                predict_keys=[
+                    'region_id',
+                    'ppm_xy',
+                    'probabilities',
+                ],
             )
-        self._region_set.save_predictions(self._predictions_dir, iteration)
-        self._region_set.reset_predictions()
+            for prediction in predictions:
+                self._region_set.reconstruct_predicted_ink_classes(
+                    np.array([prediction['region_id']]),
+                    np.array([prediction['probabilities']]),
+                    np.array([prediction['ppm_xy']]),
+                )
+            self._region_set.save_predictions(self._predictions_dir, global_step)
+            self._region_set.reset_predictions()
 
 
 class Model3dcnn(object):

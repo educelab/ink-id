@@ -6,10 +6,9 @@ import argparse
 import datetime
 import functools
 import os
-import time
+import timeit
 
 import tensorflow as tf
-import numpy as np
 
 import inkid.model
 import inkid.ops
@@ -18,6 +17,8 @@ import inkid.data
 
 def main():
     """Run the training and prediction process."""
+    start = timeit.default_timer()
+
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('-d', '--data', metavar='path', required=True,
                         help='input data file (JSON)')
@@ -48,12 +49,12 @@ def main():
         regions = inkid.data.RegionSet(region_data)
     else:
         regions = inkid.data.RegionSet.from_json(args.data)
-    
+
     # Save checkpoints every n steps. EvalCheckpointSaverListener
     # (below) runs an evaluation each time this happens.
     run_config = tf.estimator.RunConfig(
-        save_checkpoints_steps=params['evaluate_every_n_steps'],
-        keep_checkpoint_max=None, # save all checkpoints
+        save_checkpoints_steps=params['save_checkpoint_every_n_steps'],
+        keep_checkpoint_max=None,  # save all checkpoints
     )
 
     # Create an Estimator with the run configuration, hyperparameters,
@@ -118,7 +119,7 @@ def main():
         label_fn=regions.point_to_ink_classes_label,
         max_samples=params['evaluation_max_samples'],
         perform_shuffle=True,
-        shuffle_seed=0, # We want the eval set to be the same each time
+        shuffle_seed=0,  # We want the eval set to be the same each time
         restrict_to_surface=True,
     )
 
@@ -146,12 +147,19 @@ def main():
                 estimator=estimator,
                 eval_input_fn=evaluation_input_fn,
                 predict_input_fn=prediction_input_fn,
-                predict_every_n_steps=params['predict_every_n_steps'],
+                evaluate_every_n_checkpoints=params['evaluate_every_n_checkpoints'],
+                predict_every_n_checkpoints=params['predict_every_n_checkpoints'],
                 region_set=regions,
                 predictions_dir=os.path.join(output_path, 'predictions'),
             ),
         ],
     )
-    
+
+    stop = timeit.default_timer()
+    with open(os.join(output_path, 'info.txt'), 'w') as f:
+        f.write('Arguments: {}'.format(args))
+        f.write('Runtime: {}s'.format(stop - start))
+
+
 if __name__ == '__main__':
     main()

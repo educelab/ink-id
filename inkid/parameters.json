@@ -18,14 +18,16 @@
 	"training_epochs": 1,
 	
 	"prediction_batch_size": 400,
-	"predict_every_n_steps": 10000,
 	"prediction_grid_spacing": 20,
 	
 	"evaluation_batch_size": 400,
-	"evaluate_every_n_steps": 1000,
 	"evaluation_max_samples": 5000,
 
 	"summary_every_n_steps": 100,
+	
+	"save_checkpoint_every_n_steps": 5000,
+	"evaluate_every_n_checkpoints": 1,
+	"predict_every_n_checkpoints": 1,
 
 	// Data organization/augmentation
 	"jitter_max": 4, // Set to 0 for no jitter
