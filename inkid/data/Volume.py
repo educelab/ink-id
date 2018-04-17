@@ -4,13 +4,12 @@ Define the Volume class to represent volumetric data.
 
 import math
 import os
+import random
 
 import mathutils
 import numpy as np
 from PIL import Image
 import progressbar
-
-import inkid.ops
 
 
 class Volume:
@@ -44,7 +43,7 @@ class Volume:
                 if filename[0] != '.':
                     slice_files.append(os.path.join(root, filename))
         slice_files.sort()
-        
+
         self._data = []
         print('Loading volume slices from {}...'.format(slices_abs_path))
         bar = progressbar.ProgressBar()
@@ -52,9 +51,11 @@ class Volume:
             self._data.append(np.array(Image.open(slice_file)))
         print()
         self._data = np.array(self._data)
-        print('Loaded volume {} with shape (z, y, x) = {}'.format(slices_abs_path, self._data.shape))
+        print('Loaded volume {} with shape (z, y, x) = {}'.format(
+            slices_abs_path,
+            self._data.shape)
+        )
 
-        
     def intensity_at(self, x, y, z):
         """Get the intensity value at a voxel position."""
         return self._data[int(z), int(y), int(x)]
@@ -143,7 +144,7 @@ class Volume:
             method_fn = self.get_subvolume_nearest_neighbor
 
         center = np.array(center)
-        center += (move_along_normal + np.random.randint(-jitter_max, jitter_max)) * normal
+        center += (move_along_normal + random.randint(-jitter_max, jitter_max)) * normal
 
         subvolume = method_fn(
             center,
@@ -155,15 +156,15 @@ class Volume:
         if augment_subvolume:
             flip_direction = np.random.randint(4)
             if flip_direction == 0:
-                subvolume = np.flip(subvolume, axis=1) # Flip y 
+                subvolume = np.flip(subvolume, axis=1)  # Flip y
             elif flip_direction == 1:
-                subvolume = np.flip(subvolume, axis=2) # Flip x
+                subvolume = np.flip(subvolume, axis=2)  # Flip x
             elif flip_direction == 2:
-                subvolume = np.flip(subvolume, axis=1) # Flip x and y
+                subvolume = np.flip(subvolume, axis=1)  # Flip x and y
                 subvolume = np.flip(subvolume, axis=2)
-            
+
             rotate_direction = np.random.randint(4)
-            subvolume = np.rot90(subvolume, k=rotate_direction, axes=(1,2))
+            subvolume = np.rot90(subvolume, k=rotate_direction, axes=(1, 2))
 
         assert subvolume.shape == tuple(shape)
 
@@ -174,16 +175,16 @@ class Volume:
         strongest_normal_axis = np.argmax(np.absolute(normal))
         x, y, z = (int(i) for i in center)
         z_r, y_r, x_r = (i // 2 for i in shape)
-        
+
         # z in subvolume space is along x in volume space
         if strongest_normal_axis == 0:
             subvolume = self._data[z-y_r:z+y_r, y-x_r:y+x_r, x-z_r:x+z_r]
-            subvolume = np.rot90(subvolume, axes=(2,0))
+            subvolume = np.rot90(subvolume, axes=(2, 0))
 
         # z in subvolume space is along y in volume space
         elif strongest_normal_axis == 1:
             subvolume = self._data[z-x_r:z+x_r, y-z_r:y+z_r, x-y_r:x+y_r]
-            subvolume = np.rot90(subvolume, axes=(1,0))
+            subvolume = np.rot90(subvolume, axes=(1, 0))
 
         # z in subvolume space is along z in volume space
         elif strongest_normal_axis == 2:
@@ -192,8 +193,8 @@ class Volume:
         # If the normal was pointed along a negative axis, flip the
         # subvolume over
         if normal[strongest_normal_axis] < 0:
-            subvolume = np.rot90(subvolume, k=2, axes=(0,1))
-        
+            subvolume = np.rot90(subvolume, k=2, axes=(0, 1))
+
         if out_of_bounds == 'all_zeros':
             if subvolume.shape != tuple(shape):
                 subvolume = np.zeros(shape)
@@ -247,7 +248,7 @@ class Volume:
     def get_subvolume_nearest_neighbor(self, center, shape, normal,
                                        out_of_bounds):
         pass
-            
+
     # def get_subvolume_using_normal(self, center_xyz, shape_zyx, normal_vec=(0, 0, 1)):
     #     """Get a subvolume oriented based on a surface normal vector.
 
