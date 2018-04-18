@@ -18,7 +18,7 @@
 	"training_epochs": 1,
 	
 	"prediction_batch_size": 400,
-	"prediction_grid_spacing": 20,
+	"prediction_grid_spacing": 4,
 	
 	"evaluation_batch_size": 400,
 	"evaluation_max_samples": 5000,
