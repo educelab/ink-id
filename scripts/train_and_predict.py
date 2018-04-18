@@ -21,7 +21,9 @@ the prediction and evaluation sets for that run.
 import argparse
 import datetime
 import functools
+import json
 import os
+import time
 import timeit
 
 import tensorflow as tf
@@ -62,6 +64,7 @@ def main():
         model_path = output_path
 
     params = inkid.ops.load_default_parameters()
+    print('Parameters:\n{}'.format(json.dumps(params, indent=4, sort_keys=True)))
 
     if args.k is not None:
         region_data = inkid.data.RegionSet.get_data_from_json(args.data)
@@ -162,27 +165,34 @@ def main():
 
     # Run the training process. Predictions are run during training
     # and also after training.
-    estimator.train(
-        input_fn=training_input_fn,
-        steps=params.get('training_max_batches'),
-        hooks=[logging_hook],
-        saving_listeners=[
-            inkid.model.EvalCheckpointSaverListener(
-                estimator=estimator,
-                eval_input_fn=evaluation_input_fn,
-                predict_input_fn=prediction_input_fn,
-                evaluate_every_n_checkpoints=params['evaluate_every_n_checkpoints'],
-                predict_every_n_checkpoints=params['predict_every_n_checkpoints'],
-                region_set=regions,
-                predictions_dir=os.path.join(output_path, 'predictions'),
-            ),
-        ],
-    )
+    try:
+        estimator.train(
+            input_fn=training_input_fn,
+            steps=params.get('training_max_batches'),
+            hooks=[logging_hook],
+            saving_listeners=[
+                inkid.model.EvalCheckpointSaverListener(
+                    estimator=estimator,
+                    eval_input_fn=evaluation_input_fn,
+                    predict_input_fn=prediction_input_fn,
+                    evaluate_every_n_checkpoints=params['evaluate_every_n_checkpoints'],
+                    predict_every_n_checkpoints=params['predict_every_n_checkpoints'],
+                    region_set=regions,
+                    predictions_dir=os.path.join(output_path, 'predictions'),
+                ),
+            ],
+        )
+
+    # Write metadata even if cut short
+    except KeyboardInterrupt:
+        pass
 
     stop = timeit.default_timer()
-    with open(os.path.join(output_path, 'info.txt'), 'w') as f:
-        f.write('Arguments: {}'.format(args))
-        f.write('Runtime: {}s'.format(stop - start))
+    with open(os.path.join(output_path, 'metadata.txt'), 'w') as f:
+        f.write('Command Line Arguments:\n{}\n\n'.format(args))
+        f.write('Parameters:\n{}\n\n'.format(json.dumps(params, indent=4, sort_keys=True)))
+        f.write('Runtime:\n{}s\n\n'.format(stop - start))
+        f.write('Finished at:\n{}\n'.format(time.strftime('%Y-%m-%d %H:%M:%S')))
 
 
 if __name__ == '__main__':
