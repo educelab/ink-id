@@ -123,7 +123,7 @@ class Volume:
             jitter_max: Jitter the center point a random amount up to
                 this value in either direction along the normal vector.
             augment_subvolume: Whether or not to perform augmentation.
-            method: Callable function used to get the volume data.
+            method: String to indicate how to get the volume data.
 
         Returns:
             A numpy array of the requested shape.
