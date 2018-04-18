@@ -1,5 +1,21 @@
-"""
-Train and predict using subvolumes.
+"""Train and predict using subvolumes.
+
+This script will read a RegionSet JSON file and create a RegionSet for
+training, evaluation, and prediction. It will then run the training
+process, evaluating and predicting along the way as defined by the
+RegionSet and the parameters file.
+
+It is possible to pass a model directory to the script, in which case
+it will use that model as a starting point rather than random
+initialization.
+
+The optional value k can be passed in order to use this script for
+k-fold cross validation (and prediction in this case). To do that,
+create a RegionSet of entirely training regions, and then pass an
+index k to this script via the command line argument. It will take the
+kth training region, remove it from the training set, and add it to
+the prediction and evaluation sets for that run.
+
 """
 
 import argparse

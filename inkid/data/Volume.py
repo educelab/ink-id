@@ -24,6 +24,12 @@ class Volume:
     the ink-id user might be working with, or any notion of ground
     truth, etc.
 
+    Indexing conventions:
+    - Points/coordinates are in (x, y, z)
+    - 3D vectors are (x, y, z)
+    - Volumes are indexed by [z, y, x]
+    - Volume shapes are (z, y, x)
+
     """
     def __init__(self, slices_path):
         """Initialize a volume using a path to the slices directory.
@@ -93,12 +99,7 @@ class Volume:
     def get_subvolume(self, center, shape, normal, out_of_bounds,
                       move_along_normal, jitter_max,
                       augment_subvolume, method):
-        """Get a subvolume using normalized axis vectors.
-
-        Get a subvolume from the volume, with orientation defined by
-        three axis vectors. These should be normalized before this
-        function is called if the user wants a unit in the subvolume
-        space to represent one unit in the volume space.
+        """Get a subvolume from a center point and normal vector.
 
         At the time of writing, this function very closely resembles
         but is not identical to a similar one in the
@@ -110,6 +111,22 @@ class Volume:
         even-sided subvolumes for machine learning. See
         getVoxelNeighborsInterpolated in
         https://code.vis.uky.edu/seales-research/volume-cartographer/blob/develop/core/include/vc/core/types/Volume.hpp.
+
+        Args:
+            center: The starting center point of the subvolume.
+            shape: The desired shape of the subvolume.
+            normal: The normal vector at the center point.
+            out_of_bounds: String indicating what to do if the requested
+                subvolume does not fit entirely within the volume.
+            move_along_normal: Scalar of how many units to translate
+                the center point along the center vector.
+            jitter_max: Jitter the center point a random amount up to
+                this value in either direction along the normal vector.
+            augment_subvolume: Whether or not to perform augmentation.
+            method: Callable function used to get the volume data.
+
+        Returns:
+            A numpy array of the requested shape.
 
         """
         assert len(center) == 3
@@ -172,6 +189,16 @@ class Volume:
 
     def get_subvolume_snap_to_axis_aligned(self, center, shape,
                                            normal, out_of_bounds):
+        """Snap to and get the closest axis-aligned subvolume.
+
+        Snap the normal vector to the closest axis vector (including
+        in the negative directions) and get a subvolume as if that
+        were the original normal vector.
+
+        Implemented for speed, not accuracy (instead of full
+        interpolation for example, which would be the opposite).
+
+        """
         strongest_normal_axis = np.argmax(np.absolute(normal))
         x, y, z = (int(i) for i in center)
         z_r, y_r, x_r = (i // 2 for i in shape)

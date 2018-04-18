@@ -49,7 +49,27 @@ Pipenv is recommended, but you could also just use pip:
 
 .. code-block:: bash
    
-   $ pip install -e . 
+   $ pip install -e .
+
+Installation on IBM Power8 Server
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Since a global install is not possible, install locally:
+
+.. code-block:: bash
+
+   $ pip3 install -e . --user --upgrade
+
+Grid Training
+-------------
+
+To perform grid training, create a RegionSet JSON file for the PPM
+with only one training region (with no bounds, meaning it will default
+to the full size of the PPM). Then use
+``scripts/misc/split_region_into_grid.py`` to split this into a grid
+of the desired shape. Then use ``scripts/train_and_predict.py`` with
+the ``-k`` argument to indicate which grid square should be isolated
+for evaluation and prediction.
 
 Documentation
 -------------
@@ -64,32 +84,17 @@ The package can be imported into Python programs, for example:
 .. code-block:: python
 
    import inkid.volumes
-   import inkid.ops
 
    params = inkid.ops.load_default_parameters()
-   volumes = inkid.volumes.VolumeSet(params)
+   regions = inkid.data.RegionSet.from_json(region_set_filename)
 
 There are also some console scripts included, for example:
 
 ::
 
-   $ inkid-top-n -h
-   usage: inkid-top-n [-h] --data path --surfacemask path --surfacedata path
-                      --model path [--number N] [--outputdir path]
-
-   Using a trained model and volume data, get the n subvolumes on that surface
-   that have the highest and lowest prediction score in the model.
-
-   optional arguments:
-       -h, --help            show this help message and exit
-       --data path, -d path  path to volume data (slices directory)
-       --surfacemask path    path to surface mask image
-       --surfacedata path    path to surface data
-       --model path          path to trained model
-       --number N, -n N      number of subvolumes to keep
-       --outputdir path      path to output directory
-
-
+   $ inkid-train-and-predict
+   usage: inkid-train-and-predict [-h] -d path [-o path] [-m path] [-k num]
+   
 Contributing
 ------------
 

@@ -14,9 +14,9 @@ import json
 import os
 
 from jsmin import jsmin
-from PIL import Image
 
 import inkid.data
+
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
@@ -30,7 +30,7 @@ def main():
                         help='grid squares along y axis (number of columns)')
 
     args = parser.parse_args()
-    
+
     with open(args.input, 'r') as f:
         minified = jsmin(str(f.read()))
         data = json.loads(minified)
@@ -39,7 +39,7 @@ def main():
     assert len(data['regions']['evaluation']) == 0
     assert len(data['regions']['prediction']) == 0
 
-    bounds =  data['regions']['training'][0].get('bounds')
+    bounds = data['regions']['training'][0].get('bounds')
 
     if bounds is None:
         ppm_name = data['regions']['training'][0]['ppm']
@@ -50,7 +50,7 @@ def main():
                 ppm_path
             )
         )
-        
+
         header = inkid.data.PPM.parse_PPM_header(ppm_path)
         bounds = [0, 0, header['width'], header['height']]
 
@@ -62,10 +62,10 @@ def main():
     grid_square_height = height // rows
 
     training_regions = []
-    
+
     for x in range(columns):
         for y in range(rows):
-            region = { 'ppm': ppm_name }
+            region = {'ppm': ppm_name}
             region['bounds'] = [
                 bounds[0] + x * grid_square_width,
                 bounds[1] + y * grid_square_height,
@@ -78,6 +78,7 @@ def main():
 
     with open(args.output, 'w') as outfile:
         json.dump(data, outfile, indent=4)
-            
+
+
 if __name__ == '__main__':
     main()
