@@ -1,5 +1,6 @@
 import argparse
 import os
+import re
 
 import numpy as np
 from PIL import Image
@@ -16,10 +17,17 @@ def main():
     dirs = [os.path.join(args.dir, name) for name in os.listdir(args.dir)
             if os.path.isdir(os.path.join(args.dir, name))]
 
+    print('Using images:')
+
     image = None
     for d in dirs:
-        image_name = sorted(os.listdir(os.path.join(d, 'predictions')))[-1]
+        # Sort by the iteration number and pick the last one
+        image_name = sorted(
+            os.listdir(os.path.join(d, 'predictions')),
+            key=lambda name: int(re.findall('\d+', name)[-1])
+        )[-1]
         image_name = os.path.join(d, 'predictions', image_name)
+        print('\t{}'.format(image_name))
         if image is None:
             image = np.array(Image.open(image_name))
         else:
