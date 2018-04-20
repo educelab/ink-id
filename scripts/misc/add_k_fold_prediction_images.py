@@ -22,8 +22,10 @@ def main():
     image = None
     for d in dirs:
         # Sort by the iteration number and pick the last one
+        names = os.listdir(os.path.join(d, 'predictions'))
+        names = list(filter(lambda s: s.contains('_best_f1'), names))
         image_name = sorted(
-            os.listdir(os.path.join(d, 'predictions')),
+            names,
             key=lambda name: int(re.findall('\d+', name)[-1])
         )[-1]
         image_name = os.path.join(d, 'predictions', image_name)

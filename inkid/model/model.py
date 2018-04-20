@@ -45,13 +45,17 @@ class EvalCheckpointSaverListener(tf.train.CheckpointSaverListener):
         self._region_set = region_set
         self._predictions_dir = predictions_dir
         self._total_checkpoints = 0
+        self._best_f1 = 0
 
     def after_save(self, session, global_step):
         """Run our custom logic after the estimator saves a checkpoint."""
         self._total_checkpoints += 1
 
+        best_f1 = False
         if self._total_checkpoints % self._evaluate_every_n_checkpoints == 0:
-            self._estimator.evaluate(self._eval_input_fn)
+            eval_results = self._estimator.evaluate(self._eval_input_fn)
+            if eval_results['fbeta_score'] > self._best_f1:
+                best_f1 = True
 
         if self._total_checkpoints % self._predict_every_n_checkpoints == 0:
             predictions = self._estimator.predict(
@@ -68,7 +72,13 @@ class EvalCheckpointSaverListener(tf.train.CheckpointSaverListener):
                     np.array([prediction['probabilities']]),
                     np.array([prediction['ppm_xy']]),
                 )
-            self._region_set.save_predictions(self._predictions_dir, global_step)
+            if best_f1:
+                self._region_set.save_predictions(
+                    self._predictions_dir,
+                    str(global_step)+'_best_f1'
+                )
+            else:
+                self._region_set.save_predictions(self._predictions_dir, global_step)
             self._region_set.reset_predictions()
 
 
@@ -128,7 +138,7 @@ class Model3dcnn(object):
         y = tf.layers.flatten(y)
         y = self.fc(y)
         y = self.dropout(y, training=training)
-        
+
         return y
 
 
