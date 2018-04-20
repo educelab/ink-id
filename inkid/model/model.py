@@ -56,6 +56,7 @@ class EvalCheckpointSaverListener(tf.train.CheckpointSaverListener):
             eval_results = self._estimator.evaluate(self._eval_input_fn)
             if eval_results['fbeta_score'] > self._best_f1:
                 best_f1 = True
+                self._best_f1 = eval_results['best_f1']
 
         if self._total_checkpoints % self._predict_every_n_checkpoints == 0:
             predictions = self._estimator.predict(
