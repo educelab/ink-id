@@ -39,7 +39,7 @@ def main():
         for tif_y in bar(range(len(tif))):
             for tif_x in range(len(tif[tif_y])):
                 tif_z = tif[tif_y][tif_x]
-                ppm_coordinate = [tif_z, tif_x, tif.shape[0] - tif_y - 1]
+                ppm_coordinate = [tif_z, tif_x, tif_y]
                 ppm_normal = [-1, 0, 0]
                 ppm = ppm_coordinate + ppm_normal
                 ppm = [float(i) for i in ppm]

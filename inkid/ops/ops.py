@@ -32,7 +32,7 @@ def save_volume_to_image_stack(volume, dirname):
     starting at 0 and going up to the z height of the volume.
 
     """
-    os.makedirs(dirname)
+    os.makedirs(dirname, exist_ok=True)
     for z in range(volume.shape[0]):
         image = volume[z, :, :]
         image = image.astype(np.uint16)
