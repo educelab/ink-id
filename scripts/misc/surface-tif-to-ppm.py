@@ -7,7 +7,10 @@ assumptions about axes that should be changed if used for other data.
 import argparse
 import struct
 
+import numpy as np
 from PIL import Image
+import progressbar
+
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
@@ -31,17 +34,18 @@ def main():
         f.write('{}\n'.format('<>'))
 
     # Write the data
+    bar = progressbar.ProgressBar()
     with open(args.ppm, 'ab') as f:
-        for tif_y in range(len(tif)):
+        for tif_y in bar(range(len(tif))):
             for tif_x in range(len(tif[tif_y])):
                 tif_z = tif[tif_y][tif_x]
-                ppm_coordinate = [tif_z, tif_x, tif.shape[0] - tif_y]
+                ppm_coordinate = [tif_z, tif_x, tif.shape[0] - tif_y - 1]
                 ppm_normal = [-1, 0, 0]
                 ppm = ppm_coordinate + ppm_normal
                 ppm = [float(i) for i in ppm]
                 s = struct.pack('d'*len(ppm), *ppm)
                 f.write(s)
 
-            
+
 if __name__ == '__main__':
     main()
