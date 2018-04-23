@@ -1,9 +1,7 @@
 """Miscellaneous operations used in ink-id."""
 
-import datetime
 import inspect
 import json
-import sys
 import os
 
 from jsmin import jsmin
@@ -39,7 +37,7 @@ def save_volume_to_image_stack(volume, dirname):
         image = volume[z, :, :]
         image = image.astype(np.uint16)
         image = Image.fromarray(image)
-        image.save(os.path.join(dirname, str(z) + '.tif'))        
+        image.save(os.path.join(dirname, str(z) + '.tif'))
 
 
 def load_default_parameters():
@@ -51,7 +49,9 @@ def load_default_parameters():
     https://stackoverflow.com/questions/247770/retrieving-python-module-path
 
     """
-    return load_parameters_from_json(os.path.join(os.path.dirname(inspect.getfile(inkid)), 'parameters.json'))
+    return load_parameters_from_json(
+        os.path.join(os.path.dirname(inspect.getfile(inkid)), 'parameters.json')
+    )
 
 
 def load_parameters_from_json(filename):
