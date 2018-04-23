@@ -26,7 +26,7 @@ def main():
         names = list(filter(lambda s: '_best_f1' in s, names))
         image_name = sorted(
             names,
-            key=lambda name: int(re.findall('\d+', name)[-1])
+            key=lambda name: int(re.findall('\d+', name)[0])
         )[-1]
         image_name = os.path.join(d, 'predictions', image_name)
         print('\t{}'.format(image_name))
