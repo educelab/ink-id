@@ -12,6 +12,7 @@ def main():
                         help='input directory')
     parser.add_argument('--outfile', metavar='path', required=True,
                         help='output image name')
+    parser.add_argument('--best-f1', action='store_true')
 
     args = parser.parse_args()
     dirs = [os.path.join(args.dir, name) for name in os.listdir(args.dir)
@@ -23,7 +24,8 @@ def main():
     for d in dirs:
         # Sort by the iteration number and pick the last one
         names = os.listdir(os.path.join(d, 'predictions'))
-        names = list(filter(lambda s: '_best_f1' in s, names))
+        if args.best_f1:
+            names = list(filter(lambda s: '_best_f1' in s, names))
         image_name = sorted(
             names,
             key=lambda name: int(re.findall('\d+', name)[0])
