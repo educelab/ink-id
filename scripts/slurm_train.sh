@@ -13,4 +13,4 @@
 
 echo "My SLURM_ARRAY_TASK_ID: " $SLURM_ARRAY_TASK_ID
 
-time inkid-train-and-predict -d ~/data/lunate-sigma/grid-2x5.json -o ~/data/out -k $SLURM_ARRAY_TASK_ID
+time inkid-train-and-predict -d ~/data/lunate-sigma/grid-2x5.json -o $1 -k $SLURM_ARRAY_TASK_ID
