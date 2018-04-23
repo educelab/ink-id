@@ -63,9 +63,6 @@ def main():
     else:
         model_path = output_path
 
-    params = inkid.ops.load_default_parameters()
-    print('Parameters:\n{}'.format(json.dumps(params, indent=4, sort_keys=True)))
-
     if args.k is not None:
         region_data = inkid.data.RegionSet.get_data_from_json(args.data)
         k_region = region_data['regions']['training'].pop(int(args.k))
@@ -74,6 +71,9 @@ def main():
         regions = inkid.data.RegionSet(region_data)
     else:
         regions = inkid.data.RegionSet.from_json(args.data)
+
+    params = inkid.ops.load_default_parameters()
+    print('Parameters:\n{}'.format(json.dumps(params, indent=4, sort_keys=True)))
 
     # Save checkpoints every n steps. EvalCheckpointSaverListener
     # (below) runs an evaluation each time this happens.

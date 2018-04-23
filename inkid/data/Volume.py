@@ -200,7 +200,7 @@ class Volume:
 
         """
         strongest_normal_axis = np.argmax(np.absolute(normal))
-        x, y, z = (int(i) for i in center)
+        x, y, z = (int(round(i)) for i in center)
         z_r, y_r, x_r = (i // 2 for i in shape)
 
         # z in subvolume space is along x in volume space
