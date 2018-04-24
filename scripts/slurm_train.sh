@@ -11,6 +11,4 @@
 # Array to iterate over, as well as (%) number of jobs to run at once.
 #SBATCH --array=0-9%2
 
-echo "My SLURM_ARRAY_TASK_ID: " $SLURM_ARRAY_TASK_ID
-
 time inkid-train-and-predict -d ~/data/lunate-sigma/grid-2x5.json -o $1 -k $SLURM_ARRAY_TASK_ID

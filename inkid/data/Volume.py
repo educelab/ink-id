@@ -46,7 +46,9 @@ class Volume:
         slice_files = []
         for root, dirs, files in os.walk(slices_abs_path):
             for filename in files:
-                if filename[0] != '.':
+                # Make sure it is not a hidden file and it's a
+                # .tif. In the future we might add other formats.
+                if filename[0] != '.' and os.path.splitext(filename)[1] == '.tif':
                     slice_files.append(os.path.join(root, filename))
         slice_files.sort()
 
