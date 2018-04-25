@@ -1,0 +1,61 @@
+{
+    "ppms": {
+	"Col1": {
+	    "path": "Col1.ppm",
+	    "volume": "../../volumes/20180305102003",
+	    "mask": "Col1_mask.png",
+	    "ink-label": "Col1_ground-truth-carbon.png"
+	}
+    },
+    "regions": {
+	"prediction": [],
+	"evaluation": [],
+	"training": [
+	    {
+		"bounds": [
+		    824,
+		    640,
+		    2088,
+		    1808
+		],
+		"ppm": "Col1"
+	    },
+	    {
+		"bounds": [
+		    766,
+		    2080,
+		    2072,
+		    3288
+		],
+		"ppm": "Col1"
+	    },
+	    {
+		"bounds": [
+		    776,
+		    3544,
+		    2008,
+		    4784
+		],
+		"ppm": "Col1"
+	    },
+	    {
+		"bounds": [
+		    760,
+		    5000,
+		    2024,
+		    6200
+		],
+		"ppm": "Col1"
+	    },
+	    {
+		"bounds": [
+		    776,
+		    6440,
+		    2088,
+		    7848
+		],
+		"ppm": "Col1"
+	    }
+	]
+    }
+}
