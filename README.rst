@@ -63,7 +63,7 @@ Since a global install is not possible, install locally:
 Tensorboard on IBM Power8 Server
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-It is possible to ssh into the server with port forwarding so that you can view the Tensorboard output on your local machine. To do so check out this `answer <https://stackoverflow.com/a/40413202>`_:
+It is possible to ssh into the server with port forwarding so that you can view the Tensorboard output on your local machine. To do so check out this `answer <https://stackoverflow.com/a/40413202>`_.
 
 Grid Training
 -------------

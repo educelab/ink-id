@@ -26,6 +26,7 @@ import os
 import time
 import timeit
 
+import numpy as np
 import tensorflow as tf
 
 import inkid.model
@@ -46,6 +47,7 @@ def main():
                         help='existing model directory to start with')
     parser.add_argument('-k', metavar='num', default=None,
                         help='index of region to use for prediction and evaluation')
+    parser.add_argument('--final-prediction-on-all', action='store_true')
 
     args = parser.parse_args()
     if args.k is None:
@@ -182,6 +184,46 @@ def main():
                 ),
             ],
         )
+
+    # Still attempt final prediction
+    except KeyboardInterrupt:
+        pass
+
+    try:
+        if args.final_prediction_on_all:
+            print('Running a final prediction on all regions...')
+            final_prediction_input_fn = regions.create_tf_input_fn(
+                region_groups=['prediction', 'training', 'evaluation'],
+                batch_size=params['prediction_batch_size'],
+                features_fn=functools.partial(
+                    point_to_subvolume_input,
+                    augment_subvolume=False,
+                    jitter_max=0,
+                ),
+                label_fn=None,
+                perform_shuffle=False,
+                restrict_to_surface=True,
+                grid_spacing=params['prediction_grid_spacing'],
+            )
+
+            predictions = estimator.predict(
+                final_prediction_input_fn,
+                predict_keys=[
+                    'region_id',
+                    'ppm_xy',
+                    'probabilities',
+                ],
+            )
+
+            for prediction in predictions:
+                regions.reconstruct_predicted_ink_classes(
+                    np.array([prediction['region_id']]),
+                    np.array([prediction['probabilities']]),
+                    np.array([prediction['ppm_xy']]),
+                )
+
+            regions.save_predictions(os.path.join(output_path, 'predictions'), 'final')
+            regions.reset_predictions()
 
     # Write metadata even if cut short
     except KeyboardInterrupt:
