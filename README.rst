@@ -121,6 +121,12 @@ K-Fold Cross Validation (and Prediction)
 
    $ inkid-train-and-predict -d ~/data/lunate-sigma/grid-2x5.json -o ~/data/out/ -k 7 --final-prediction-on-all
 
+It is possible to run all of these with one command if using ``sbatch`` on the server. Example:
+
+.. code-block:: bash
+
+   $ sbatch scripts/slurm_carbon_phantom.sh ~/data/out/carbon_phantom_col1_test
+
 After performing a run for each value of k, each will have created a directory of output. If these are all in the same parent directory, there is a script to merge together the individual predictions into a final prediction image. If ``--best-f1`` is passed, it will take the prediction with the best f1 score for each individual region, rather than the final prediction for that region. Example:
 
 .. code-block:: bash
