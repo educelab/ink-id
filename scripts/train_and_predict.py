@@ -117,7 +117,7 @@ def main():
         regions.point_to_subvolume_input,
         subvolume_shape=params['subvolume_shape'],
         out_of_bounds='all_zeros',
-        move_along_normal=params['surface_cushion'],
+        move_along_normal=params['move_along_normal'],
         method='snap_to_axis_aligned',
     )
 
