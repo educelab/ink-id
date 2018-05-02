@@ -1,8 +1,8 @@
 {
     "parameters": {
 	// Geometry
-	"subvolume_shape": [48, 96, 96], // [z, y, x]
-	"move_along_normal": 0,
+	"subvolume_shape": [28, 42, 42], // [z, y, x]
+	"move_along_normal": -4,
 
 	// Network architecture
 	"learning_rate": 0.001,
@@ -10,12 +10,12 @@
 	"batch_norm_momentum": 0.9,
 	"fbeta_weight": 0.3,
 	"filter_size": [3, 3, 3],
-	"filters": [16, 8, 4, 2],
+	"filters": [32, 16, 8, 4],
 
 	// Run configuration
 	"training_batch_size": 30,
 	// "training_max_batches": 1000000,
-	"training_epochs": 1,
+	"training_epochs": 2,
 	
 	"prediction_batch_size": 400,
 	"prediction_grid_spacing": 4,

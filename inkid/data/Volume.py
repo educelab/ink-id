@@ -276,7 +276,38 @@ class Volume:
 
     def get_subvolume_nearest_neighbor(self, center, shape, normal,
                                        out_of_bounds):
-        pass
+        subvolume = np.zeros(shape)
+        x_vec = mathutils.Vector([1, 0, 0])
+        y_vec = mathutils.Vector([0, 1, 0])
+        z_vec = mathutils.Vector([0, 0, 1])
+        for z in range(shape[0]):
+            for y in range(shape[1]):
+                for x in range(shape[2]):
+                    # Convert from an index relative to an origin in
+                    # the corner to a position relative to the
+                    # subvolume center (which may not correspond
+                    # exactly to one of the subvolume voxel positions
+                    # if any of the side lengths are even).
+                    x_offset = int(round(-1 * (shape[2] - 1) / 2.0 + x))
+                    y_offset = int(round(-1 * (shape[1] - 1) / 2.0 + y))
+                    z_offset = int(round(-1 * (shape[0] - 1) / 2.0 + z))
+
+                    # Calculate the corresponding position in the
+                    # volume.
+                    volume_point = center \
+                                   + x_offset * x_vec \
+                                   + y_offset * y_vec \
+                                   + z_offset * z_vec
+                    try:
+                        subvolume[z, y, x] = self.intensity_at(
+                            (volume_point[0]),
+                            (volume_point[1]),
+                            (volume_point[2])
+                        )
+                    except IndexError:
+                        subvolume[z, y, x] = 0
+        return subvolume
+
 
     # def get_subvolume_using_normal(self, center_xyz, shape_zyx, normal_vec=(0, 0, 1)):
     #     """Get a subvolume oriented based on a surface normal vector.

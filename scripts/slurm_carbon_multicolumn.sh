@@ -1,5 +1,7 @@
 #!/bin/bash
 
+# This script can be used to schedule train/predict sessions on multiple columns
+
 # Number of GPUs per job. For now is set to one so that we can run
 # multiple jobs at once, rather than one job with two GPUs.
 #SBATCH --gres=gpu:1
