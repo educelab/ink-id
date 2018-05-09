@@ -186,6 +186,10 @@ class PPM:
         self._predicted_ink_classes = None
 
     def save_predictions(self, directory, iteration):
+	# temporary patch to prevent crash on dual-column training
+        if self._predicted_ink_classes is None:
+            self._predicted_ink_classes = np.zeros((self._height, self._width), np.uint16)
+
         if not os.path.exists(directory):
             os.makedirs(directory)
 

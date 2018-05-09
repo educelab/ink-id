@@ -106,7 +106,7 @@ class Model3dcnn(object):
             bias_initializer=tf.zeros_initializer(),
         )
 
-        self.conv1 = convolution_layer(filters=filters[0])
+        self.conv1 = convolution_layer(strides=(1,1,1), filters=filters[0])
         self.batch_norm1 = tf.layers.BatchNormalization(
             scale=False, axis=4, momentum=batch_norm_momentum)
 

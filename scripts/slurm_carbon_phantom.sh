@@ -9,8 +9,8 @@
 #SBATCH --output=k_fold_training_and_prediction_%A_%a.out
 
 # Array to iterate over, as well as (%) number of jobs to run at once.
-#SBATCH --array=0-4%2
+#SBATCH --array=2-4%2
 
-time inkid-train-and-predict -d ~/data/CarbonPhantomV3.volpkg/working/1/Col1_k-fold-characters-region-set.json -o $1 -k $SLURM_ARRAY_TASK_ID
+time inkid-train-and-predict -d ~/data/CarbonPhantomV3.volpkg/working/Cols1+2_k-fold-characters-region-set.json -o $1 -k $SLURM_ARRAY_TASK_ID --final-prediction-on-all
 
 time rclone sync -v /home/$USER/data/out/ dri-datasets-drive:ml-results/$USER
