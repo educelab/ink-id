@@ -11,6 +11,6 @@
 # Array to iterate over, as well as (%) number of jobs to run at once.
 #SBATCH --array=0-4%2
 
-echo "My SLURM_ARRAY_TASK_ID: " $SLURM_ARRAY_TASK_ID
-
 time inkid-train-and-predict -d ~/data/CarbonPhantomV3.volpkg/working/1/Col1_k-fold-characters-region-set.json -o $1 -k $SLURM_ARRAY_TASK_ID
+
+time rclone sync -v /home/$USER/data/out/ dri-datasets-drive:ml-results/$USER
