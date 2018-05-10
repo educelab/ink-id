@@ -24,11 +24,12 @@ def main():
     for d in dirs:
         # Sort by the iteration number and pick the last one
         names = os.listdir(os.path.join(d, 'predictions'))
+        names = list(filter(lambda name: re.search('_(\d+)\.', name) is not None, names))
         if args.best_f1:
             names = list(filter(lambda s: '_best_f1' in s, names))
         image_name = sorted(
             names,
-            key=lambda name: int(re.findall('\d+', name)[0])
+            key=lambda name: int(re.findall('_(\d+)\.', name)[0])
         )[-1]
         image_name = os.path.join(d, 'predictions', image_name)
         print('\t{}'.format(image_name))
