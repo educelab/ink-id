@@ -10,26 +10,31 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--dir', metavar='path', required=True,
                         help='input directory')
-    parser.add_argument('--outfile', metavar='path', required=True,
-                        help='output image name')
-    parser.add_argument('--best-f1', action='store_true')
 
     args = parser.parse_args()
     dirs = [os.path.join(args.dir, name) for name in os.listdir(args.dir)
             if os.path.isdir(os.path.join(args.dir, name))]
 
-    print('Using images:')
+    print('Note: This script relies on the auto-generated iteration number'
+          ' in the filename being the only number preceded by "_"'
+          ' and followed by "_" or ".".')
 
+    print('\nFor final predictions, using images:')
+    get_and_merge_images(dirs, False, os.path.join(args.dir, 'final.tif'))
+    print('\nFor best f1 predictions, using images:')
+    get_and_merge_images(dirs, True, os.path.join(args.dir, 'best-f1.tif'))
+
+def get_and_merge_images(dirs, best_f1, outfile):
     image = None
     for d in dirs:
         # Sort by the iteration number and pick the last one
         names = os.listdir(os.path.join(d, 'predictions'))
-        names = list(filter(lambda name: re.search('_(\d+)\.', name) is not None, names))
-        if args.best_f1:
+        names = list(filter(lambda name: re.search('_(\d+)[\._]', name) is not None, names))
+        if best_f1:
             names = list(filter(lambda s: '_best_f1' in s, names))
         image_name = sorted(
             names,
-            key=lambda name: int(re.findall('_(\d+)\.', name)[0])
+            key=lambda name: int(re.findall('_(\d+)[\._]', name)[0])
         )[-1]
         image_name = os.path.join(d, 'predictions', image_name)
         print('\t{}'.format(image_name))
@@ -38,7 +43,7 @@ def main():
         else:
             image += np.array(Image.open(image_name))
     image = Image.fromarray(image)
-    image.save(args.outfile)
+    image.save(outfile)
 
 
 if __name__ == '__main__':

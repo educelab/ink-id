@@ -131,7 +131,7 @@ After performing a run for each value of k, each will have created a directory o
 
 .. code-block:: bash
 
-   $ python scripts/misc/add_k_fold_prediction_images.py --dir ~/data/out/carbon_phantom_col1_test/ --outfile added_image.tif --best-f1
+   $ python scripts/misc/add_k_fold_prediction_images.py --dir ~/data/out/carbon_phantom_col1_test/
 
 Contributing
 ============
