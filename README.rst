@@ -125,7 +125,7 @@ It is possible to run all of these with one command if using ``sbatch`` on the s
 
 .. code-block:: bash
 
-   $ sbatch scripts/slurm_carbon_phantom.sh ~/data/out/carbon_phantom_col1_test
+   $ sbatch --array=0-4%2 scripts/slurm_train_and_predict.sh -d ~/data/CarbonPhantomV3.volpkg/working/2/Col2_k-fold-characters-region-set.json -o ~/data/out/col2_not_flattened --final-prediction-on-all
 
 After performing a run for each value of k, each will have created a directory of output. If these are all in the same parent directory, there is a script to merge together the individual predictions into a final prediction image. If ``--best-f1`` is passed, it will take the prediction with the best f1 score for each individual region, rather than the final prediction for that region. Example:
 
