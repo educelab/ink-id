@@ -1,4 +1,5 @@
 #output that would inflate the repository
+*.out
 small-fragment-data/
 predictions/
 .DS_Store
