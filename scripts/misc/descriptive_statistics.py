@@ -62,7 +62,7 @@ def main():
         for i in range(len(all_statistics)):
             region_id, x, y = all_points[i]
             statistics = all_statistics[i]
-            regions.reconstruct_prediction_value(
+            regions.reconstruct_prediction_values(
                 np.array([region_id]),
                 np.array(
                     [

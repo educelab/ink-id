@@ -146,6 +146,13 @@ def main():
         )
         evaluation_features_fn = training_features_fn
         prediction_features_fn = training_features_fn
+    elif args.model_type == 'descriptive_statistics':
+        training_features_fn = functools.partial(
+            regions.point_to_descriptive_statistics,
+            subvolume_shape=params['subvolume_shape'],
+        )
+        evaluation_features_fn = training_features_fn
+        prediction_features_fn = training_features_fn
 
     training_input_fn = regions.create_tf_input_fn(
         region_groups=['training'],

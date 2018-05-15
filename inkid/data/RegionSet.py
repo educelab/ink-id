@@ -217,6 +217,15 @@ class RegionSet:
                 yield point
         return generator
 
+    def point_to_descriptive_statistics(self, region_id_with_point,
+                                        subvolume_shape):
+        region_id, x, y = region_id_with_point
+        subvolume = self._regions[region_id].ppm.point_to_subvolume(
+            (x, y),
+            subvolume_shape,
+        )
+        return np.asarray(inkid.ops.get_descriptive_statistics(subvolume), np.float32)
+
     def point_to_voxel_vector_input(self, region_id_with_point,
                                     length_in_each_direction, out_of_bounds=None):
         region_id, x, y = region_id_with_point
@@ -322,6 +331,16 @@ class RegionSet:
                 return network_input, label
 
         return point_to_network_input
+
+    def reconstruct_prediction_values(self, region_ids, values, ppm_xy_coordinates):
+        for region_id, value, ppm_xy in zip(
+                region_ids,
+                values,
+                ppm_xy_coordinates):
+            self._regions[region_id].ppm.reconstruct_prediction_value(
+                value,
+                ppm_xy
+            )
 
     def reconstruct_predicted_ink_classes(self, region_ids, probabilities, ppm_xy_coordinates):
         """Save a predicted ink classes label in the internal prediction image.
