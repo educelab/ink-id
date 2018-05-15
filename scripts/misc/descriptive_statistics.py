@@ -34,8 +34,7 @@ def main():
         perform_shuffle=False,
     )
 
-    print('Calculating summary statistics...', end='')
-    sys.stdout.flush()
+    print('Calculating summary statistics...')
     all_statistics = []
     all_points = []
     bar = progressbar.ProgressBar()
@@ -50,7 +49,6 @@ def main():
         all_statistics.append(statistics)
         all_points.append(point)
     all_statistics = np.array(all_statistics)
-    print('done')
 
     print('Calculating max and min for each statistic...', end='')
     sys.stdout.flush()
