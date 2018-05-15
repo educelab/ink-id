@@ -65,3 +65,27 @@ def load_parameters_from_json(filename):
         # minify to remove comments
         minified = jsmin(str(f.read()))
         return json.loads(minified)['parameters']
+
+
+def remap(x, in_min, in_max, out_min, out_max):
+    return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min
+
+
+def get_descriptive_statistics(tensor):
+    t_min = tensor.min()
+    t_max = tensor.max()
+    t_range = tensor.ptp()
+    t_mean = tensor.mean()
+    t_std = tensor.std()
+    t_median = np.median(tensor)
+    t_var = tensor.var()
+
+    return np.array([
+        t_min,
+        t_max,
+        t_range,
+        t_mean,
+        t_std,
+        t_median,
+        t_var
+    ])

@@ -24,19 +24,21 @@ def main():
     print('\nFor best f1 predictions, using images:')
     get_and_merge_images(dirs, True, os.path.join(args.dir, 'best-f1.tif'))
 
+
 def get_and_merge_images(dirs, best_f1, outfile):
     image = None
     for d in dirs:
         # Sort by the iteration number and pick the last one
         names = os.listdir(os.path.join(d, 'predictions'))
         names = list(filter(lambda name: re.search('_(\d+)[\._]', name) is not None, names))
-        if best_f1:
-            names = list(filter(lambda s: '_best_f1' in s, names))
-        image_name = sorted(
+        names = sorted(
             names,
             key=lambda name: int(re.findall('_(\d+)[\._]', name)[0])
-        )[-1]
-        image_name = os.path.join(d, 'predictions', image_name)
+        )
+        # TODO add option to create gif here
+        if best_f1:
+            names = list(filter(lambda s: '_best_f1' in s, names))
+        image_name = os.path.join(d, 'predictions', names[-1])
         print('\t{}'.format(image_name))
         if image is None:
             image = np.array(Image.open(image_name))

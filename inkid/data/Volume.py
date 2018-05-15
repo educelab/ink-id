@@ -68,7 +68,7 @@ class Volume:
         """Get the intensity value at a voxel position."""
         return self._data[int(z), int(y), int(x)]
 
-    def interpolate_at(self, x, y, z):
+    def interpolate_at(self, x, y, z, return_zero_instead_of_index_error=False):
         """Get the intensity value at a subvoxel position.
 
         Values are trilinearly interpolated.
@@ -79,24 +79,58 @@ class Volume:
         https://stackoverflow.com/questions/6427276/3d-interpolation-of-numpy-arrays-without-scipy
 
         """
-        dx, x0 = math.modf(x)
-        dy, y0 = math.modf(y)
-        dz, z0 = math.modf(z)
+        try:
+            dx, x0 = math.modf(x)
+            dy, y0 = math.modf(y)
+            dz, z0 = math.modf(z)
 
-        x1 = x0 + 1
-        y1 = y0 + 1
-        z1 = z0 + 1
+            x1 = x0 + 1
+            y1 = y0 + 1
+            z1 = z0 + 1
 
-        c00 = self.intensity_at(x0, y0, z0) * (1 - dx) + self.intensity_at(x1, y0, z0) * dx
-        c10 = self.intensity_at(x0, y1, z0) * (1 - dx) + self.intensity_at(x1, y0, z0) * dx
-        c01 = self.intensity_at(x0, y0, z1) * (1 - dx) + self.intensity_at(x1, y0, z1) * dx
-        c11 = self.intensity_at(x0, y1, z1) * (1 - dx) + self.intensity_at(x1, y1, z1) * dx
+            c00 = self.intensity_at(x0, y0, z0) * (1 - dx) + self.intensity_at(x1, y0, z0) * dx
+            c10 = self.intensity_at(x0, y1, z0) * (1 - dx) + self.intensity_at(x1, y0, z0) * dx
+            c01 = self.intensity_at(x0, y0, z1) * (1 - dx) + self.intensity_at(x1, y0, z1) * dx
+            c11 = self.intensity_at(x0, y1, z1) * (1 - dx) + self.intensity_at(x1, y1, z1) * dx
 
-        c0 = c00 * (1 - dy) + c10 * dy
-        c1 = c01 * (1 - dy) + c11 * dy
+            c0 = c00 * (1 - dy) + c10 * dy
+            c1 = c01 * (1 - dy) + c11 * dy
 
-        c = c0 * (1 - dz) + c1 * dz
-        return c
+            c = c0 * (1 - dz) + c1 * dz
+            return c
+
+        except IndexError:
+            if return_zero_instead_of_index_error:
+                return 0.0
+            else:
+                raise IndexError
+
+    def get_voxel_vector(self, center, normal, length_in_each_direction, out_of_bounds):
+        """Get a voxel vector from within the volume."""
+        assert len(center) == 3
+        assert len(normal) == 3
+
+        normal = mathutils.Vector(normal).normalized()
+
+        if out_of_bounds is None:
+            out_of_bounds = 'all_zeros'
+        assert out_of_bounds in ['all_zeros', 'partial_zeros', 'index_error']
+
+        center = np.array(center)
+
+        voxel_vector = []
+
+        try:
+            for i in range(-length_in_each_direction, length_in_each_direction + 1):
+                x, y, z = center + i * normal
+                voxel_vector.append(self.interpolate_at(x, y, z, out_of_bounds == 'partial_zeros'))
+            return voxel_vector
+
+        except IndexError:
+            if out_of_bounds == 'all_zeros':
+                return [0.0] * (length_in_each_direction * 2 + 1)
+            else:
+                raise IndexError
 
     def get_subvolume(self, center, shape, normal, out_of_bounds,
                       move_along_normal, jitter_max,

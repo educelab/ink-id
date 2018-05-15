@@ -183,6 +183,8 @@ class RegionSet:
         such as batching.
 
         """
+        if type(region_groups) == str:
+            region_groups = [region_groups]
         print('Fetching points for region groups: {}... '
               .format(region_groups), end='')
         sys.stdout.flush()
@@ -214,6 +216,16 @@ class RegionSet:
             for point in points:
                 yield point
         return generator
+
+    def point_to_voxel_vector_input(self, region_id_with_point,
+                                    length_in_each_direction, out_of_bounds=None):
+        region_id, x, y = region_id_with_point
+        voxel_vector = self._regions[region_id].ppm.point_to_voxel_vector(
+            (x, y),
+            length_in_each_direction,
+            out_of_bounds=out_of_bounds,
+        )
+        return np.asarray(voxel_vector, np.float32)
 
     def point_to_subvolume_input(self, region_id_with_point,
                                  subvolume_shape, out_of_bounds=None,

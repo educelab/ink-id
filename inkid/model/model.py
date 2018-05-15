@@ -83,8 +83,8 @@ class EvalCheckpointSaverListener(tf.train.CheckpointSaverListener):
             self._region_set.reset_predictions()
 
 
-class Model3dcnn(object):
-    """Defines the network architecture."""
+class Subvolume3dcnnModel(object):
+    """Defines the network architecture for a 3D CNN."""
     def __init__(self, drop_rate, subvolume_shape, batch_norm_momentum, filters):
         """Initialize the layers as members with state."""
         self._input_shape = [-1, subvolume_shape[0], subvolume_shape[1], subvolume_shape[2], 1]
@@ -106,7 +106,7 @@ class Model3dcnn(object):
             bias_initializer=tf.zeros_initializer(),
         )
 
-        self.conv1 = convolution_layer(strides=(1,1,1), filters=filters[0])
+        self.conv1 = convolution_layer(strides=(1, 1, 1), filters=filters[0])
         self.batch_norm1 = tf.layers.BatchNormalization(
             scale=False, axis=4, momentum=batch_norm_momentum)
 
@@ -143,7 +143,62 @@ class Model3dcnn(object):
         return y
 
 
-def model_fn_3dcnn(features, labels, mode, params):
+class VoxelVector1dcnnModel(object):
+    """Defines the network architecture for a 1D CNN."""
+    def __init__(self, drop_rate, length_in_each_direction, batch_norm_momentum, filters):
+        """Initialize the layers as members with state."""
+        self._input_shape = [-1, length_in_each_direction * 2 + 1, 1]
+
+        convolution_layer = partial(
+            tf.layers.Conv1D,
+            kernel_size=[3],
+            strides=(2),
+            padding='valid',
+            data_format='channels_last',
+            dilation_rate=(1),
+            activation=tf.nn.relu,
+            kernel_initializer=tf.contrib.layers.xavier_initializer(),
+            bias_initializer=tf.zeros_initializer(),
+        )
+
+        self.conv1 = convolution_layer(strides=(1), filters=filters[0])
+        self.batch_norm1 = tf.layers.BatchNormalization(
+            scale=False, axis=2, momentum=batch_norm_momentum)
+
+        self.conv2 = convolution_layer(filters=filters[1])
+        self.batch_norm2 = tf.layers.BatchNormalization(
+            scale=False, axis=2, momentum=batch_norm_momentum)
+
+        self.conv3 = convolution_layer(filters=filters[2])
+        self.batch_norm3 = tf.layers.BatchNormalization(
+            scale=False, axis=2, momentum=batch_norm_momentum)
+
+        self.conv4 = convolution_layer(filters=filters[3])
+        self.batch_norm4 = tf.layers.BatchNormalization(
+            scale=False, axis=2, momentum=batch_norm_momentum)
+
+        self.fc = tf.layers.Dense(2)
+        self.dropout = tf.layers.Dropout(drop_rate)
+
+    def __call__(self, inputs, training):
+        """Chain the layers together when this class is 'called'."""
+        y = tf.reshape(inputs, self._input_shape)
+        y = self.conv1(y)
+        y = self.batch_norm1(y, training=training)
+        y = self.conv2(y)
+        y = self.batch_norm2(y, training=training)
+        # y = self.conv3(y)
+        # y = self.batch_norm3(y, training=training)
+        # y = self.conv4(y)
+        # y = self.batch_norm4(y, training=training)
+        y = tf.layers.flatten(y)
+        y = self.fc(y)
+        y = self.dropout(y, training=training)
+
+        return y
+
+
+def model_fn(features, labels, mode, params):
     """Define the model_fn for the Tensorflow Estimator.
 
     Depending on what mode is passed (train, evaluate, or predict)
@@ -161,12 +216,22 @@ def model_fn_3dcnn(features, labels, mode, params):
     https://github.com/tensorflow/tensorflow/issues/13895
 
     """
-    model = Model3dcnn(
-        params['drop_rate'],
-        params['subvolume_shape'],
-        params['batch_norm_momentum'],
-        params['filters']
-    )
+    assert params['model'] in ['voxel_vector_1dcnn', 'subvolume_3dcnn']
+
+    if params['model'] == 'voxel_vector_1dcnn':
+        model = VoxelVector1dcnnModel(
+            params['drop_rate'],
+            params['length_in_each_direction'],
+            params['batch_norm_momentum'],
+            params['filters']
+        )
+    elif params['model'] == 'subvolume_3dcnn':
+        model = Subvolume3dcnnModel(
+            params['drop_rate'],
+            params['subvolume_shape'],
+            params['batch_norm_momentum'],
+            params['filters']
+        )
 
     inputs = features['Input']
 

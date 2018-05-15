@@ -11,7 +11,6 @@ class PPM:
     def __init__(self, path, volume, mask_path, ink_label_path):
         self._path = path
         self._volume = volume
-        self._predicted_ink_classes = None
 
         ppm_path_stem, _ = os.path.splitext(self._path)
 
@@ -41,9 +40,9 @@ class PPM:
         if self._ink_label_path is not None:
             self._ink_label = np.asarray(Image.open(self._ink_label_path), np.uint16)
 
-        self._predicted_ink_classes = None
-
         self.process_PPM_file(self._path)
+
+        self._prediction_image = np.zeros((self._height, self._width), np.uint16)
 
     @staticmethod
     def parse_PPM_header(filename):
@@ -156,6 +155,17 @@ class PPM:
         else:
             return np.asarray([1.0, 0.0], np.float32)
 
+    def point_to_voxel_vector(self, point, length_in_each_direction,
+                              out_of_bounds=None):
+        ppm_x, ppm_y = point
+        x, y, z, n_x, n_y, n_z = self.get_point_with_normal(ppm_x, ppm_y)
+        return self._volume.get_voxel_vector(
+            (x, y, z),
+            (n_x, n_y, n_z),
+            length_in_each_direction,
+            out_of_bounds
+        )
+
     def point_to_subvolume(self, point, subvolume_shape,
                            out_of_bounds=None,
                            move_along_normal=None,
@@ -174,26 +184,23 @@ class PPM:
             method=method,
         )
 
-    def reconstruct_predicted_ink_classes(self, class_probabilities, ppm_xy, square_r=2):
+    def reconstruct_predicted_ink_classes(self, class_probabilities, ppm_xy):
+        intensity = class_probabilities[1] * np.iinfo(np.uint16).max
+        self.reconstruct_prediction_value(intensity, ppm_xy)
+
+    def reconstruct_prediction_value(self, value, ppm_xy, square_r=2):
         assert len(ppm_xy) == 2
         x, y = ppm_xy
-        if self._predicted_ink_classes is None:
-            self._predicted_ink_classes = np.zeros((self._height, self._width), np.uint16)
-        intensity = class_probabilities[1] * np.iinfo(np.uint16).max
-        self._predicted_ink_classes[y-square_r:y+square_r, x-square_r:x+square_r] = intensity
+        self._prediction_image[y-square_r:y+square_r, x-square_r:x+square_r] = value
 
     def reset_predictions(self):
-        self._predicted_ink_classes = None
+        self._prediction_image = np.zeros((self._height, self._width), np.uint16)
 
     def save_predictions(self, directory, iteration):
-	# temporary patch to prevent crash on dual-column training
-        if self._predicted_ink_classes is None:
-            self._predicted_ink_classes = np.zeros((self._height, self._width), np.uint16)
-
         if not os.path.exists(directory):
             os.makedirs(directory)
 
-        im = Image.fromarray(self._predicted_ink_classes)
+        im = Image.fromarray(self._prediction_image)
         im.save(
             os.path.join(
                 directory,

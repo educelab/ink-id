@@ -45,6 +45,8 @@ def main():
                         help='output directory')
     parser.add_argument('-m', '--model', metavar='path', default=None,
                         help='existing model directory to start with')
+    parser.add_argument('--model-type', metavar='name', default='subvolume_3dcnn',
+                        help='type of model to train (subvolume_3dcnn or voxel_vector_1dcnn)')
     parser.add_argument('-k', metavar='num', default=None,
                         help='index of region to use for prediction and evaluation')
     parser.add_argument('--final-prediction-on-all', action='store_true')
@@ -87,16 +89,18 @@ def main():
     # Create an Estimator with the run configuration, hyperparameters,
     # and model directory specified.
     estimator = tf.estimator.Estimator(
-        model_fn=inkid.model.model_fn_3dcnn,
+        model_fn=inkid.model.model_fn,
         model_dir=model_path,
         config=run_config,
         params={
             'drop_rate': params['drop_rate'],
             'subvolume_shape': params['subvolume_shape'],
+            'length_in_each_direction': params['length_in_each_direction'],
             'batch_norm_momentum': params['batch_norm_momentum'],
             'filters': params['filters'],
             'learning_rate': params['learning_rate'],
             'fbeta_weight': params['fbeta_weight'],
+            'model': args.model_type,
         },
     )
 
@@ -115,22 +119,38 @@ def main():
     )
     tf.logging.set_verbosity(tf.logging.INFO)
 
-    point_to_subvolume_input = functools.partial(
-        regions.point_to_subvolume_input,
-        subvolume_shape=params['subvolume_shape'],
-        out_of_bounds='all_zeros',
-        move_along_normal=params['move_along_normal'],
-        method='snap_to_axis_aligned',
-    )
+    if args.model_type == 'subvolume_3dcnn':
+        point_to_subvolume_input = functools.partial(
+            regions.point_to_subvolume_input,
+            subvolume_shape=params['subvolume_shape'],
+            out_of_bounds='all_zeros',
+            move_along_normal=params['move_along_normal'],
+            method='snap_to_axis_aligned',
+        )
+        training_features_fn = functools.partial(
+            point_to_subvolume_input,
+            augment_subvolume=params['add_augmentation'],
+            jitter_max=params['jitter_max'],
+        )
+        evaluation_features_fn = functools.partial(
+            point_to_subvolume_input,
+            augment_subvolume=False,
+            jitter_max=0,
+        )
+        prediction_features_fn = evaluation_features_fn
+    elif args.model_type == 'voxel_vector_1dcnn':
+        training_features_fn = functools.partial(
+            regions.point_to_voxel_vector_input,
+            length_in_each_direction=params['length_in_each_direction'],
+            out_of_bounds='all_zeros',
+        )
+        evaluation_features_fn = training_features_fn
+        prediction_features_fn = training_features_fn
 
     training_input_fn = regions.create_tf_input_fn(
         region_groups=['training'],
         batch_size=params['training_batch_size'],
-        features_fn=functools.partial(
-            point_to_subvolume_input,
-            augment_subvolume=params['add_augmentation'],
-            jitter_max=params['jitter_max'],
-        ),
+        features_fn=training_features_fn,
         label_fn=regions.point_to_ink_classes_label,
         perform_shuffle=True,
         restrict_to_surface=True,
@@ -139,11 +159,7 @@ def main():
     evaluation_input_fn = regions.create_tf_input_fn(
         region_groups=['evaluation'],
         batch_size=params['evaluation_batch_size'],
-        features_fn=functools.partial(
-            point_to_subvolume_input,
-            augment_subvolume=False,
-            jitter_max=0,
-        ),
+        features_fn=evaluation_features_fn,
         label_fn=regions.point_to_ink_classes_label,
         max_samples=params['evaluation_max_samples'],
         perform_shuffle=True,
@@ -154,11 +170,7 @@ def main():
     prediction_input_fn = regions.create_tf_input_fn(
         region_groups=['prediction'],
         batch_size=params['prediction_batch_size'],
-        features_fn=functools.partial(
-            point_to_subvolume_input,
-            augment_subvolume=False,
-            jitter_max=0,
-        ),
+        features_fn=prediction_features_fn,
         label_fn=None,
         perform_shuffle=False,
         restrict_to_surface=True,
@@ -195,11 +207,7 @@ def main():
             final_prediction_input_fn = regions.create_tf_input_fn(
                 region_groups=['prediction', 'training', 'evaluation'],
                 batch_size=params['prediction_batch_size'],
-                features_fn=functools.partial(
-                    point_to_subvolume_input,
-                    augment_subvolume=False,
-                    jitter_max=0,
-                ),
+                features_fn=prediction_features_fn,
                 label_fn=None,
                 perform_shuffle=False,
                 restrict_to_surface=True,

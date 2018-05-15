@@ -1,8 +1,11 @@
 {
     "parameters": {
-	// Geometry
+	// Subvolume eometry
 	"subvolume_shape": [28, 42, 42], // [z, y, x]
 	"move_along_normal": 0,
+
+	// Voxel vector geometry
+	"length_in_each_direction": 8,
 
 	// Network architecture
 	"learning_rate": 0.001,
