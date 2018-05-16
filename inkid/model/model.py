@@ -145,7 +145,7 @@ class Subvolume3dcnnModel:
 
 class DescriptiveStatisticsModel:
     def __init__(self, num_stats):
-        self._input_shape = [-1, num_stats, 1]
+        self._input_shape = [-1, num_stats]
 
         self.layer1 = tf.layers.Dense(20)
         self.layer2 = tf.layers.Dense(20)
