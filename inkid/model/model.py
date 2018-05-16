@@ -83,7 +83,7 @@ class EvalCheckpointSaverListener(tf.train.CheckpointSaverListener):
             self._region_set.reset_predictions()
 
 
-class Subvolume3dcnnModel(object):
+class Subvolume3dcnnModel:
     """Defines the network architecture for a 3D CNN."""
     def __init__(self, drop_rate, subvolume_shape, batch_norm_momentum, filters):
         """Initialize the layers as members with state."""
@@ -143,7 +143,24 @@ class Subvolume3dcnnModel(object):
         return y
 
 
-class VoxelVector1dcnnModel(object):
+class DescriptiveStatisticsModel:
+    def __init__(self, num_stats):
+        self._input_shape = [-1, num_stats, 1]
+
+        self.layer1 = tf.layers.Dense(20)
+        self.layer2 = tf.layers.Dense(20)
+        self.layer3 = tf.layers.Dense(2)
+
+    def __call__(self, inputs, training):
+        y = tf.reshape(inputs, self._input_shape)
+        y = self.layer1(y)
+        y = self.layer2(y)
+        y = self.layer3(y)
+
+        return y
+
+
+class VoxelVector1dcnnModel:
     """Defines the network architecture for a 1D CNN."""
     def __init__(self, drop_rate, length_in_each_direction, batch_norm_momentum, filters):
         """Initialize the layers as members with state."""
@@ -216,8 +233,6 @@ def model_fn(features, labels, mode, params):
     https://github.com/tensorflow/tensorflow/issues/13895
 
     """
-    assert params['model'] in ['voxel_vector_1dcnn', 'subvolume_3dcnn']
-
     if params['model'] == 'voxel_vector_1dcnn':
         model = VoxelVector1dcnnModel(
             params['drop_rate'],
@@ -232,6 +247,14 @@ def model_fn(features, labels, mode, params):
             params['batch_norm_momentum'],
             params['filters']
         )
+    elif params['model'] == 'descriptive_statistics':
+        model = DescriptiveStatisticsModel(
+            # Create a dummy array to see how many descriptive
+            # statistics there will be
+            len(inkid.ops.get_descriptive_statistics(np.array([0, 1, 2])))
+        )
+    else:
+        raise ValueError('Model type {} was not recognized'.format(params['model']))
 
     inputs = features['Input']
 
