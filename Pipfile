@@ -15,7 +15,6 @@ mathutils = "*"
 
 [dev-packages]
 
-sphinx = "*"
+Sphinx = "*"
 pylint = "*"
-rope = "*"
 "autopep8" = "*"
