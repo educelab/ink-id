@@ -187,22 +187,24 @@ def main():
     # Run the training process. Predictions are run during training
     # and also after training.
     try:
-        estimator.train(
-            input_fn=training_input_fn,
-            steps=params.get('training_max_batches'),
-            hooks=[logging_hook],
-            saving_listeners=[
-                inkid.model.EvalCheckpointSaverListener(
-                    estimator=estimator,
-                    eval_input_fn=evaluation_input_fn,
-                    predict_input_fn=prediction_input_fn,
-                    evaluate_every_n_checkpoints=params['evaluate_every_n_checkpoints'],
-                    predict_every_n_checkpoints=params['predict_every_n_checkpoints'],
-                    region_set=regions,
-                    predictions_dir=os.path.join(output_path, 'predictions'),
-                ),
-            ],
-        )
+        # Only train if the training region set group is not empty
+        if len(regions._region_groups['training']) > 0:
+            estimator.train(
+                input_fn=training_input_fn,
+                steps=params.get('training_max_batches'),
+                hooks=[logging_hook],
+                saving_listeners=[
+                    inkid.model.EvalCheckpointSaverListener(
+                        estimator=estimator,
+                        eval_input_fn=evaluation_input_fn,
+                        predict_input_fn=prediction_input_fn,
+                        evaluate_every_n_checkpoints=params['evaluate_every_n_checkpoints'],
+                        predict_every_n_checkpoints=params['predict_every_n_checkpoints'],
+                        region_set=regions,
+                        predictions_dir=os.path.join(output_path, 'predictions'),
+                    ),
+                ],
+            )
 
     # Still attempt final prediction
     except KeyboardInterrupt:

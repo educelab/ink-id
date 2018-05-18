@@ -25,6 +25,7 @@ class RegionSet:
                 ppm = self.create_ppm_if_needed(
                     region_data['ppm'],
                     data['ppms'][region_data['ppm']]
+                    
                 )
                 bounds = region_data.get('bounds')
                 region = inkid.data.Region(len(self._regions), ppm, bounds)
@@ -60,12 +61,13 @@ class RegionSet:
         """
         for ppm in data['ppms']:
             for key in data['ppms'][ppm]:
-                data['ppms'][ppm][key] = os.path.normpath(
-                    os.path.join(
-                        paths_were_relative_to,
-                        data['ppms'][ppm][key]
+                if type(data['ppms'][ppm][key]) == str:
+                    data['ppms'][ppm][key] = os.path.normpath(
+                        os.path.join(
+                            paths_were_relative_to,
+                            data['ppms'][ppm][key]
+                        )
                     )
-                )
         return data
 
     def create_ppm_if_needed(self, ppm_name, ppm_data):
@@ -92,7 +94,15 @@ class RegionSet:
                 self._volumes[volume_path] = inkid.data.Volume(volume_path)
 
             volume = self._volumes[volume_path]
-            self._ppms[ppm_name] = inkid.data.PPM(ppm_path, volume, mask_path, ink_label_path)
+
+            invert_normal = ppm_data.get('invert_normal')
+            self._ppms[ppm_name] = inkid.data.PPM(
+                ppm_path,
+                volume,
+                mask_path,
+                ink_label_path,
+                invert_normal
+            )
 
         return self._ppms[ppm_name]
 

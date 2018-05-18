@@ -8,7 +8,7 @@ import progressbar
 
 
 class PPM:
-    def __init__(self, path, volume, mask_path, ink_label_path):
+    def __init__(self, path, volume, mask_path, ink_label_path, invert_normal):
         self._path = path
         self._volume = volume
 
@@ -39,6 +39,12 @@ class PPM:
         self._ink_label = None
         if self._ink_label_path is not None:
             self._ink_label = np.asarray(Image.open(self._ink_label_path), np.uint16)
+
+        self._invert_normal = False
+        if invert_normal is not None:
+            self._invert_normal = invert_normal
+        if self._invert_normal:
+            print('Normals are being inverted for this PPM.')
 
         self.process_PPM_file(self._path)
 
@@ -125,7 +131,13 @@ class PPM:
             for y in bar(range(self._height)):
                 for x in range(self._width):
                     for idx in range(self._dim):
-                        self._data[y, x, idx] = struct.unpack('d', f.read(8))[0]
+                        # This only works if we assume dimension 6
+                        # PPMs with (x, y, z, n_x, n_y, n_z)
+                        if self._dim == 6:
+                            if idx in [3, 4, 5] and self._invert_normal:
+                                self._data[y, x, idx] = -1 * struct.unpack('d', f.read(8))[0]
+                            else:
+                                self._data[y, x, idx] = struct.unpack('d', f.read(8))[0]
         print()
 
     def get_default_bounds(self):
