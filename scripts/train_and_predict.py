@@ -47,6 +47,8 @@ def main():
                         help='existing model directory to start with')
     parser.add_argument('--model-type', metavar='name', default='subvolume_3dcnn',
                         help='type of model to train (subvolume_3dcnn or voxel_vector_1dcnn)')
+    parser.add_argument('--subvolume-method', metavar='name', default='snap_to_axis_aligned',
+                        help='method for getting subvolumes')
     parser.add_argument('-k', metavar='num', default=None,
                         help='index of region to use for prediction and evaluation')
     parser.add_argument('--final-prediction-on-all', action='store_true')
@@ -125,7 +127,7 @@ def main():
             subvolume_shape=params['subvolume_shape'],
             out_of_bounds='all_zeros',
             move_along_normal=params['move_along_normal'],
-            method='snap_to_axis_aligned',
+            method=args.subvolume_method,
         )
         training_features_fn = functools.partial(
             point_to_subvolume_input,

@@ -329,9 +329,9 @@ class Volume:
                     # Calculate the corresponding position in the
                     # volume.
                     volume_point = center \
-                                   + x_offset * x_vec \
-                                   + y_offset * y_vec \
-                                   + z_offset * z_vec
+                        + x_offset * x_vec \
+                        + y_offset * y_vec \
+                        + z_offset * z_vec
                     try:
                         subvolume[z, y, x] = self.intensity_at(
                             (volume_point[0]),
@@ -341,7 +341,6 @@ class Volume:
                     except IndexError:
                         subvolume[z, y, x] = 0
         return subvolume
-
 
     # def get_subvolume_using_normal(self, center_xyz, shape_zyx, normal_vec=(0, 0, 1)):
     #     """Get a subvolume oriented based on a surface normal vector.
