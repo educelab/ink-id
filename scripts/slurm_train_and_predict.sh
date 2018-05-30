@@ -18,4 +18,4 @@
 time inkid-train-and-predict "$@" -k $SLURM_ARRAY_TASK_ID
 
 # Backup ~/data/out to Team Google Drive.
-time rclone sync -v /home/$USER/data/out/ dri-datasets-drive:ml-results/$USER
+time rclone sync -v /home/$USER/data/out/ dri-datasets-drive:ml-results/$USER-$HOSTNAME-uploads
