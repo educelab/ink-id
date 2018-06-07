@@ -52,7 +52,7 @@ def main():
     parser.add_argument('-k', metavar='num', default=None,
                         help='index of region to use for prediction and evaluation')
     parser.add_argument('--final-prediction-on-all', action='store_true')
-    parser.add_argument('--overwrite-volume-slices-dir', metavar='path', default=None,
+    parser.add_argument('--override-volume-slices-dir', metavar='path', default=None,
                         help='optional directory to use for volume slices (only works if there is '
                         'only one volume in the region set file)')
 
@@ -74,15 +74,15 @@ def main():
 
     region_data = inkid.data.RegionSet.get_data_from_json(args.data)
 
-    if args.overwrite_volume_slices_dir is not None:
+    if args.override_volume_slices_dir is not None:
         volume_dirs_seen = set()
         for ppm in region_data['ppms']:
             volume_dirs_seen.add(region_data['ppms'][ppm]['volume'])
             if len(volume_dirs_seen) > 1:
-                raise ValueError('--overwrite-volume-slices-dir only '
+                raise ValueError('--override-volume-slices-dir only '
                                  'permitted if there is one volume in the region set')
         for ppm in region_data['ppms']:
-            region_data['ppms'][ppm]['volume'] = args.overwrite_volume_slices_dir
+            region_data['ppms'][ppm]['volume'] = args.override_volume_slices_dir
 
     if args.k is not None:
         k_region = region_data['regions']['training'].pop(int(args.k))
