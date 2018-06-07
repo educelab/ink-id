@@ -25,7 +25,6 @@ class RegionSet:
                 ppm = self.create_ppm_if_needed(
                     region_data['ppm'],
                     data['ppms'][region_data['ppm']]
-                    
                 )
                 bounds = region_data.get('bounds')
                 region = inkid.data.Region(len(self._regions), ppm, bounds)
