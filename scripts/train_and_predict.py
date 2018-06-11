@@ -26,6 +26,7 @@ import os
 import time
 import timeit
 
+import git
 import numpy as np
 import tensorflow as tf
 
@@ -269,7 +270,15 @@ def main():
         f.write('Parameters:\n{}\n\n'.format(json.dumps(params, indent=4, sort_keys=True)))
         f.write('Region Set:\n{}\n\n'.format(json.dumps(region_data, indent=4, sort_keys=False)))
         f.write('Runtime:\n{}s\n\n'.format(stop - start))
-        f.write('Finished at:\n{}\n'.format(time.strftime('%Y-%m-%d %H:%M:%S')))
+        f.write('Finished at:\n{}\n\n'.format(time.strftime('%Y-%m-%d %H:%M:%S')))
+
+        # Print out the git hash if we are running from a repository
+        try:
+            repo = git.Repo(search_parent_directories=True)
+            sha = repo.head.object.hexsha
+            f.write('Git hash:\n{}\n\n'.format(repo.git.rev_parse(sha, short=6)))
+        except git.exc.InvalidGitRepositoryError:
+            f.write('No git hash available (not run from a valid repository).\n\n')
 
 
 if __name__ == '__main__':
