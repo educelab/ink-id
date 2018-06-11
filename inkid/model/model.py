@@ -45,18 +45,18 @@ class EvalCheckpointSaverListener(tf.train.CheckpointSaverListener):
         self._region_set = region_set
         self._predictions_dir = predictions_dir
         self._total_checkpoints = 0
-        self._best_f1 = 0
+        self._best_auc = 0
 
     def after_save(self, session, global_step):
         """Run our custom logic after the estimator saves a checkpoint."""
         self._total_checkpoints += 1
 
-        best_f1 = False
+        best_auc = False
         if self._total_checkpoints % self._evaluate_every_n_checkpoints == 0:
             eval_results = self._estimator.evaluate(self._eval_input_fn)
-            if eval_results['fbeta_score'] > self._best_f1:
-                best_f1 = True
-                self._best_f1 = eval_results['fbeta_score']
+            if eval_results['area_under_roc_curve'] > self._best_auc:
+                best_auc = True
+                self._best_auc = eval_results['area_under_roc_curve']
 
         if self._total_checkpoints % self._predict_every_n_checkpoints == 0:
             predictions = self._estimator.predict(
@@ -73,10 +73,10 @@ class EvalCheckpointSaverListener(tf.train.CheckpointSaverListener):
                     np.array([prediction['probabilities']]),
                     np.array([prediction['ppm_xy']]),
                 )
-            if best_f1:
+            if best_auc:
                 self._region_set.save_predictions(
                     self._predictions_dir,
-                    str(global_step)+'_best_f1'
+                    str(global_step)+'_best_auc'
                 )
             else:
                 self._region_set.save_predictions(self._predictions_dir, global_step)
@@ -383,5 +383,9 @@ def model_fn(features, labels, mode, params):
                 'total_negatives': inkid.metrics.total_negatives(
                     labels=tf.argmax(labels, 1),
                     predictions=tf.argmax(logits, 1)
+                ),
+                'area_under_roc_curve': tf.metrics.auc(
+                    labels=tf.argmax(labels, 1),
+                    predictions=tf.nn.softmax(logits)[:, 1],
                 ),
             })
