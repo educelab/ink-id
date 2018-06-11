@@ -21,6 +21,7 @@ the prediction and evaluation sets for that run.
 import argparse
 import datetime
 import functools
+import inspect
 import json
 import os
 import time
@@ -30,9 +31,7 @@ import git
 import numpy as np
 import tensorflow as tf
 
-import inkid.model
-import inkid.ops
-import inkid.data
+import inkid
 
 
 def main():
@@ -272,9 +271,9 @@ def main():
         f.write('Runtime:\n{}s\n\n'.format(stop - start))
         f.write('Finished at:\n{}\n\n'.format(time.strftime('%Y-%m-%d %H:%M:%S')))
 
-        # Print out the git hash if we are running from a repository
+        # Print out the git hash if there is a repository
         try:
-            repo = git.Repo(search_parent_directories=True)
+            repo = git.Repo(os.path.join(os.path.dirname(inspect.getfile(inkid))))
             sha = repo.head.object.hexsha
             f.write('Git hash:\n{}\n\n'.format(repo.git.rev_parse(sha, short=6)))
         except git.exc.InvalidGitRepositoryError:
