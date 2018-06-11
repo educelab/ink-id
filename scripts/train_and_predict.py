@@ -92,7 +92,9 @@ def main():
     regions = inkid.data.RegionSet(region_data)
 
     params = inkid.ops.load_default_parameters()
-    print('Parameters:\n{}'.format(json.dumps(params, indent=4, sort_keys=True)))
+
+    print('Parameters:\n{}\n'.format(json.dumps(params, indent=4, sort_keys=True)))
+    print('Region Set:\n{}\n'.format(json.dumps(region_data, indent=4, sort_keys=False)))
 
     # Save checkpoints every n steps. EvalCheckpointSaverListener
     # (below) runs an evaluation each time this happens.
@@ -265,6 +267,7 @@ def main():
     with open(os.path.join(output_path, 'metadata.txt'), 'w') as f:
         f.write('Command Line Arguments:\n{}\n\n'.format(args))
         f.write('Parameters:\n{}\n\n'.format(json.dumps(params, indent=4, sort_keys=True)))
+        f.write('Region Set:\n{}\n\n'.format(json.dumps(region_data, indent=4, sort_keys=False)))
         f.write('Runtime:\n{}s\n\n'.format(stop - start))
         f.write('Finished at:\n{}\n'.format(time.strftime('%Y-%m-%d %H:%M:%S')))
 
