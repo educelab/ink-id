@@ -233,6 +233,10 @@ def model_fn(features, labels, mode, params):
     https://github.com/tensorflow/tensorflow/issues/13895
 
     """
+    print("Number of trainable parameters in model: {}".format(
+        int(np.sum([np.prod(v.shape) for v in tf.trainable_variables()]))
+    ))
+
     if params['model'] == 'voxel_vector_1dcnn':
         model = VoxelVector1dcnnModel(
             params['drop_rate'],

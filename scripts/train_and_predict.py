@@ -204,24 +204,25 @@ def main():
     # Run the training process. Predictions are run during training
     # and also after training.
     try:
-        # Only train if the training region set group is not empty
-        if len(regions._region_groups['training']) > 0:
-            estimator.train(
-                input_fn=training_input_fn,
-                steps=params.get('training_max_batches'),
-                hooks=[logging_hook],
-                saving_listeners=[
-                    inkid.model.EvalCheckpointSaverListener(
-                        estimator=estimator,
-                        eval_input_fn=evaluation_input_fn,
-                        predict_input_fn=prediction_input_fn,
-                        evaluate_every_n_checkpoints=params['evaluate_every_n_checkpoints'],
-                        predict_every_n_checkpoints=params['predict_every_n_checkpoints'],
-                        region_set=regions,
-                        predictions_dir=os.path.join(output_path, 'predictions'),
-                    ),
-                ],
-            )
+        with tf.contrib.tfprof.ProfileContext(params['output_path']):
+            # Only train if the training region set group is not empty
+            if len(regions._region_groups['training']) > 0:
+                estimator.train(
+                    input_fn=training_input_fn,
+                    steps=params.get('training_max_batches'),
+                    hooks=[logging_hook],
+                    saving_listeners=[
+                        inkid.model.EvalCheckpointSaverListener(
+                            estimator=estimator,
+                            eval_input_fn=evaluation_input_fn,
+                            predict_input_fn=prediction_input_fn,
+                            evaluate_every_n_checkpoints=params['evaluate_every_n_checkpoints'],
+                            predict_every_n_checkpoints=params['predict_every_n_checkpoints'],
+                            region_set=regions,
+                            predictions_dir=os.path.join(output_path, 'predictions'),
+                        ),
+                    ],
+                )
 
     # Still attempt final prediction
     except KeyboardInterrupt:
@@ -277,7 +278,7 @@ def main():
             sha = repo.head.object.hexsha
             f.write('Git hash:\n{}\n\n'.format(repo.git.rev_parse(sha, short=6)))
         except git.exc.InvalidGitRepositoryError:
-            f.write('No git hash available (not run from a valid repository).\n\n')
+            f.write('No git hash available (unable to find valid repository).\n\n')
 
 
 if __name__ == '__main__':
