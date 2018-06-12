@@ -204,7 +204,7 @@ def main():
     # Run the training process. Predictions are run during training
     # and also after training.
     try:
-        with tf.contrib.tfprof.ProfileContext(params['output_path']):
+        with tf.contrib.tfprof.ProfileContext(output_path):
             # Only train if the training region set group is not empty
             if len(regions._region_groups['training']) > 0:
                 estimator.train(
