@@ -210,8 +210,8 @@ def main():
     try:
         with tf.contrib.tfprof.ProfileContext(
                 output_path,
-                trace_steps=range(100, 900),
-                dump_steps=[900]
+                trace_steps=range(10, 90),
+                dump_steps=[90]
         ):
             # Run online profiling with 'op' view and 'opts' options at step 15, 18, 20.
             # pctx.add_auto_profiling('op', opts, [15, 18, 20])
