@@ -201,22 +201,19 @@ def main():
         grid_spacing=params['prediction_grid_spacing'],
     )
 
-    # builder = tf.profiler.ProfileOptionBuilder
-    # opts = builder(builder.time_and_memory()).order_by('micros').build()
-    # opts2 = tf.profiler.ProfileOptionBuilder.trainable_variables_parameter()
-
     # Run the training process. Predictions are run during training
     # and also after training.
     try:
         with tf.contrib.tfprof.ProfileContext(
-                output_path,
-                trace_steps=range(10, 90),
-                dump_steps=[90]
-        ):
+                '~/tmp/train'
+        ) as pctx:
+            opts = tf.profiler.ProfileOptionBuilder.time_and_memory()
+            opts2 = tf.profiler.ProfileOptionBuilder.trainable_variables_parameter()
+
             # Run online profiling with 'op' view and 'opts' options at step 15, 18, 20.
-            # pctx.add_auto_profiling('op', opts, [15, 18, 20])
+            pctx.add_auto_profiling('op', opts, [150, 200])
             # Run online profiling with 'scope' view and 'opts2' options at step 20.
-            # pctx.add_auto_profiling('scope', opts2, [20])
+            pctx.add_auto_profiling('scope', opts2, [150, 200])
 
             # Only train if the training region set group is not empty
             if len(regions._region_groups['training']) > 0:
