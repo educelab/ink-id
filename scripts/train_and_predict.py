@@ -136,6 +136,12 @@ def main():
     )
     tf.logging.set_verbosity(tf.logging.INFO)
 
+    profiler_hook = tf.train.ProfilerHook(
+        save_steps=100,
+        output_dir=output_path,
+        show_memory=True,
+    )
+
     if args.model_type == 'subvolume_3dcnn':
         point_to_subvolume_input = functools.partial(
             regions.point_to_subvolume_input,
@@ -204,37 +210,24 @@ def main():
     # Run the training process. Predictions are run during training
     # and also after training.
     try:
-        with tf.contrib.tfprof.ProfileContext(
-                '~/tmp/train',
-                trace_steps=range(10, 20),
-                dump_steps=[20]
-        ) as pctx:
-            opts = tf.profiler.ProfileOptionBuilder.time_and_memory()
-            opts2 = tf.profiler.ProfileOptionBuilder.trainable_variables_parameter()
-
-            # Run online profiling with 'op' view and 'opts' options at step 15, 18, 20.
-            pctx.add_auto_profiling('op', opts, [15, 18, 20])
-            # Run online profiling with 'scope' view and 'opts2' options at step 20.
-            pctx.add_auto_profiling('scope', opts2, [14, 17, 19])
-
-            # Only train if the training region set group is not empty
-            if len(regions._region_groups['training']) > 0:
-                estimator.train(
-                    input_fn=training_input_fn,
-                    steps=params.get('training_max_batches'),
-                    hooks=[logging_hook],
-                    saving_listeners=[
-                        inkid.model.EvalCheckpointSaverListener(
-                            estimator=estimator,
-                            eval_input_fn=evaluation_input_fn,
-                            predict_input_fn=prediction_input_fn,
-                            evaluate_every_n_checkpoints=params['evaluate_every_n_checkpoints'],
-                            predict_every_n_checkpoints=params['predict_every_n_checkpoints'],
-                            region_set=regions,
-                            predictions_dir=os.path.join(output_path, 'predictions'),
-                        ),
-                    ],
-                )
+        # Only train if the training region set group is not empty
+        if len(regions._region_groups['training']) > 0:
+            estimator.train(
+                input_fn=training_input_fn,
+                steps=params.get('training_max_batches'),
+                hooks=[logging_hook, profiler_hook],
+                saving_listeners=[
+                    inkid.model.EvalCheckpointSaverListener(
+                        estimator=estimator,
+                        eval_input_fn=evaluation_input_fn,
+                        predict_input_fn=prediction_input_fn,
+                        evaluate_every_n_checkpoints=params['evaluate_every_n_checkpoints'],
+                        predict_every_n_checkpoints=params['predict_every_n_checkpoints'],
+                        region_set=regions,
+                        predictions_dir=os.path.join(output_path, 'predictions'),
+                    ),
+                ],
+            )
 
     # Still attempt final prediction
     except KeyboardInterrupt:
