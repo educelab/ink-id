@@ -1,20 +1,15 @@
 [[source]]
-
 name = "pypi"
 verify_ssl = true
 url = "https://pypi.python.org/simple"
 
-
 [packages]
-
-"e1839a8" = {editable = true, extras = ["tf_gpu"], path = "."}
+"e1839a8" = {path = ".", editable = true}
 tensorflow-gpu = "*"
 "progressbar2" = "*"
 mathutils = "*"
 
-
 [dev-packages]
-
 Sphinx = "*"
 pylint = "*"
 "autopep8" = "*"
