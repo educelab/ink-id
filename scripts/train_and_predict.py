@@ -19,6 +19,7 @@ the prediction and evaluation sets for that run.
 """
 
 import argparse
+from contextlib import ExitStack
 import datetime
 import functools
 import inspect
@@ -53,8 +54,14 @@ def main():
                         help='index of region to use for prediction and evaluation')
     parser.add_argument('--final-prediction-on-all', action='store_true')
     parser.add_argument('--override-volume-slices-dir', metavar='path', default=None,
-                        help='optional directory to use for volume slices (only works if there is '
+                        help='override directory for all volume slices (only works if there is '
                         'only one volume in the region set file)')
+
+    parser.add_argument('--profile-file-name', metavar='path', default=None,
+                        help='filename to dump a TensorFlow profile '
+                        '(no profile produced if not defined)')
+    parser.add_argument('--profile-start-and-end-steps', metavar='num', nargs=2, default=[10, 90],
+                        help='start and end steps (and dump step) for profiling')
 
     args = parser.parse_args()
     if args.k is None:
@@ -136,12 +143,6 @@ def main():
     )
     tf.logging.set_verbosity(tf.logging.INFO)
 
-    profiler_hook = tf.train.ProfilerHook(
-        save_steps=100,
-        output_dir=output_path,
-        show_memory=True,
-    )
-
     if args.model_type == 'subvolume_3dcnn':
         point_to_subvolume_input = functools.partial(
             regions.point_to_subvolume_input,
@@ -210,24 +211,39 @@ def main():
     # Run the training process. Predictions are run during training
     # and also after training.
     try:
-        # Only train if the training region set group is not empty
-        if len(regions._region_groups['training']) > 0:
-            estimator.train(
-                input_fn=training_input_fn,
-                steps=params.get('training_max_batches'),
-                hooks=[logging_hook, profiler_hook],
-                saving_listeners=[
-                    inkid.model.EvalCheckpointSaverListener(
-                        estimator=estimator,
-                        eval_input_fn=evaluation_input_fn,
-                        predict_input_fn=prediction_input_fn,
-                        evaluate_every_n_checkpoints=params['evaluate_every_n_checkpoints'],
-                        predict_every_n_checkpoints=params['predict_every_n_checkpoints'],
-                        region_set=regions,
-                        predictions_dir=os.path.join(output_path, 'predictions'),
-                    ),
-                ],
-            )
+        with ExitStack() as stack:
+            # Only do profiling if user provided a profile file path
+            # https://stackoverflow.com/questions/27803059/conditional-with-statement-in-python?utm_medium=organic&utm_source=google_rich_qa&utm_campaign=google_rich_qa
+            if args.profile_file_name is not None:
+                stack.enter_context(
+                    tf.contrib.tfprof.ProfileContext(
+                        args.profile_file_name,
+                        trace_steps=range(
+                            args.profile_start_and_end_step[0],
+                            args.profile_start_and_end_step[1]
+                        ),
+                        dump_steps=[args.profile_start_and_end_step[1]]
+                    )
+                )
+
+            # Only train if the training region set group is not empty
+            if len(regions._region_groups['training']) > 0:
+                estimator.train(
+                    input_fn=training_input_fn,
+                    steps=params.get('training_max_batches'),
+                    hooks=[logging_hook],
+                    saving_listeners=[
+                        inkid.model.EvalCheckpointSaverListener(
+                            estimator=estimator,
+                            eval_input_fn=evaluation_input_fn,
+                            predict_input_fn=prediction_input_fn,
+                            evaluate_every_n_checkpoints=params['evaluate_every_n_checkpoints'],
+                            predict_every_n_checkpoints=params['predict_every_n_checkpoints'],
+                            region_set=regions,
+                            predictions_dir=os.path.join(output_path, 'predictions'),
+                        ),
+                    ],
+                )
 
     # Still attempt final prediction
     except KeyboardInterrupt:
