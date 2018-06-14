@@ -57,8 +57,8 @@ def main():
                         help='override directory for all volume slices (only works if there is '
                         'only one volume in the region set file)')
 
-    parser.add_argument('--profile-file-name', metavar='path', default=None,
-                        help='filename to dump a TensorFlow profile '
+    parser.add_argument('--profile-dir-name', metavar='path', default=None,
+                        help='dirname to dump TensorFlow profile '
                         '(no profile produced if not defined)')
     parser.add_argument('--profile-start-and-end-steps', metavar='num', nargs=2, default=[10, 90],
                         help='start and end steps (and dump step) for profiling')
@@ -214,10 +214,10 @@ def main():
         with ExitStack() as stack:
             # Only do profiling if user provided a profile file path
             # https://stackoverflow.com/questions/27803059/conditional-with-statement-in-python?utm_medium=organic&utm_source=google_rich_qa&utm_campaign=google_rich_qa
-            if args.profile_file_name is not None:
+            if args.profile_dir_name is not None:
                 stack.enter_context(
                     tf.contrib.tfprof.ProfileContext(
-                        args.profile_file_name,
+                        args.profile_dir_name,
                         trace_steps=range(
                             args.profile_start_and_end_steps[0],
                             args.profile_start_and_end_steps[1]
