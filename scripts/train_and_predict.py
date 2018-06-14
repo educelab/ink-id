@@ -219,10 +219,10 @@ def main():
                     tf.contrib.tfprof.ProfileContext(
                         args.profile_file_name,
                         trace_steps=range(
-                            args.profile_start_and_end_step[0],
-                            args.profile_start_and_end_step[1]
+                            args.profile_start_and_end_steps[0],
+                            args.profile_start_and_end_steps[1]
                         ),
-                        dump_steps=[args.profile_start_and_end_step[1]]
+                        dump_steps=[args.profile_start_and_end_steps[1]]
                     )
                 )
 
