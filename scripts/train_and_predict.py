@@ -215,6 +215,7 @@ def main():
             # Only do profiling if user provided a profile file path
             # https://stackoverflow.com/questions/27803059/conditional-with-statement-in-python?utm_medium=organic&utm_source=google_rich_qa&utm_campaign=google_rich_qa
             if args.profile_dir_name is not None:
+                print('Enabling TensorFlow profiling...')
                 stack.enter_context(
                     tf.contrib.tfprof.ProfileContext(
                         args.profile_dir_name,
