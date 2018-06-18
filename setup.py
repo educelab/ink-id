@@ -1,5 +1,7 @@
 from setuptools import setup
+
 from Cython.Build import cythonize
+import numpy as np
 
 setup(
     name='inkid',
@@ -20,6 +22,7 @@ setup(
         'progressbar2',
     ],
     ext_modules=cythonize('inkid/data/Volume.pyx'),
+    include_dirs=[np.get_include()],
     entry_points={
         'console_scripts': [
             'inkid-train-and-predict = scripts.train_and_predict:main',
