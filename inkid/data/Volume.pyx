@@ -8,11 +8,12 @@ import random
 
 import mathutils
 import numpy as np
+cimport numpy as np
 from PIL import Image
 import progressbar
 
 
-class Volume:
+cdef class Volume:
     """Represent a volume and support accesses of the volume data.
 
     The volume class supports the access of raw volume data, either
@@ -132,9 +133,9 @@ class Volume:
             else:
                 raise IndexError
 
-    def get_subvolume(self, center, shape, normal, out_of_bounds,
-                      move_along_normal, jitter_max,
-                      augment_subvolume, method, normalize):
+    cpdef np.ndarray[np.npy_float32, ndim=3] get_subvolume(
+        self, center, shape, normal, out_of_bounds, move_along_normal,
+        jitter_max, augment_subvolume, method):
         """Get a subvolume from a center point and normal vector.
 
         At the time of writing, this function very closely resembles
