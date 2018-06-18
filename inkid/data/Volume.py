@@ -57,10 +57,10 @@ class Volume:
         bar = progressbar.ProgressBar()
         for slice_file in bar(slice_files):
             fp = open(slice_file, 'rb')
-            im = Image.open(fp)
-            im.load()
-            fp.close()
-            self._data.append(np.array(im))
+            tmp = Image.open(fp)
+            keep = tmp.copy()
+            self._data.append(np.array(keep))
+            tmp.close()
         print()
         self._data = np.array(self._data)
         print('Loaded volume {} with shape (z, y, x) = {}'.format(
