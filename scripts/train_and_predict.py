@@ -91,7 +91,7 @@ def main():
         for ppm in region_data['ppms']:
             region_data['ppms'][ppm]['volume'] = args.override_volume_slices_dir
 
-    if args.k is not None:
+    if args.k is not None and args.k is not -1:
         k_region = region_data['regions']['training'].pop(int(args.k))
         region_data['regions']['prediction'].append(k_region)
         region_data['regions']['evaluation'].append(k_region)
@@ -231,9 +231,21 @@ def main():
                 opts2 = tf.profiler.ProfileOptionBuilder.trainable_variables_parameter()
                 builder = tf.profiler.ProfileOptionBuilder
                 opts3 = builder(builder.time_and_memory()).order_by('micros').build()
-                pctx.add_auto_profiling('op', opts, [args.profile_start_and_end_steps[0], args.profile_start_and_end_steps[1]])
-                pctx.add_auto_profiling('scope', opts2, [args.profile_start_and_end_steps[0], args.profile_start_and_end_steps[1]])
-                pctx.add_auto_profiling('op', opts3, [args.profile_start_and_end_steps[0], args.profile_start_and_end_steps[1]])
+                pctx.add_auto_profiling(
+                    'op',
+                    opts,
+                    [args.profile_start_and_end_steps[0], args.profile_start_and_end_steps[1]]
+                )
+                pctx.add_auto_profiling(
+                    'scope',
+                    opts2,
+                    [args.profile_start_and_end_steps[0], args.profile_start_and_end_steps[1]]
+                )
+                pctx.add_auto_profiling(
+                    'op',
+                    opts3,
+                    [args.profile_start_and_end_steps[0], args.profile_start_and_end_steps[1]]
+                )
 
             # Only train if the training region set group is not empty
             if len(regions._region_groups['training']) > 0:
