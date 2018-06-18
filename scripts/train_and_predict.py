@@ -216,9 +216,9 @@ def main():
             # https://stackoverflow.com/questions/27803059/conditional-with-statement-in-python?utm_medium=organic&utm_source=google_rich_qa&utm_campaign=google_rich_qa
             if args.profile_dir_name is not None:
                 print('Enabling TensorFlow profiling...')
-                stack.enter_context(
+                pctx = stack.enter_context(
                     tf.contrib.tfprof.ProfileContext(
-                        args.profile_dir_name,
+                        'tmp',
                         trace_steps=range(
                             args.profile_start_and_end_steps[0],
                             args.profile_start_and_end_steps[1]
@@ -226,6 +226,14 @@ def main():
                         dump_steps=[args.profile_start_and_end_steps[1]]
                     )
                 )
+
+                opts = tf.profiler.ProfileOptionBuilder.time_and_memory()
+                opts2 = tf.profiler.ProfileOptionBuilder.trainable_variables_parameter()
+                builder = tf.profiler.ProfileOptionBuilder
+                opts3 = builder(builder.time_and_memory()).order_by('micros').build()
+                pctx.add_auto_profiling('op', opts, [args.profile_start_and_end_steps[0], args.profile_start_and_end_steps[1]])
+                pctx.add_auto_profiling('scope', opts2, [args.profile_start_and_end_steps[0], args.profile_start_and_end_steps[1]])
+                pctx.add_auto_profiling('op', opts3, [args.profile_start_and_end_steps[0], args.profile_start_and_end_steps[1]])
 
             # Only train if the training region set group is not empty
             if len(regions._region_groups['training']) > 0:
