@@ -1,4 +1,4 @@
-#output that would inflate the repository
+# output that would inflate the repository
 *.out
 small-fragment-data/
 predictions/
