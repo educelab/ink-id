@@ -91,7 +91,7 @@ def main():
         for ppm in region_data['ppms']:
             region_data['ppms'][ppm]['volume'] = args.override_volume_slices_dir
 
-    if args.k is not None and args.k is not -1:
+    if args.k is not None:
         k_region = region_data['regions']['training'].pop(int(args.k))
         region_data['regions']['prediction'].append(k_region)
         region_data['regions']['evaluation'].append(k_region)
