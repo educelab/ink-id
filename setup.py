@@ -1,4 +1,5 @@
 from setuptools import setup
+from Cython.Build import cythonize
 
 setup(
     name='inkid',
@@ -18,6 +19,7 @@ setup(
         'Pillow',
         'progressbar2',
     ],
+    ext_modules=cythonize('inkid/data/Volume.pyx'),
     entry_points={
         'console_scripts': [
             'inkid-train-and-predict = scripts.train_and_predict:main',
@@ -27,4 +29,5 @@ setup(
         'tf': ['tensorflow>=1.5.0'],
         'tf_gpu': ['tensorflow-gpu>=1.5.0'],
     },
+    zip_safe=False,
 )
