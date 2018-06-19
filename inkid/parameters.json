@@ -1,7 +1,7 @@
 {
     "parameters": {
-	// Subvolume eometry
-	"subvolume_shape": [28, 42, 42], // [z, y, x]
+	// Subvolume geometry
+	"subvolume_shape": [48, 48, 48], // [z, y, x]
 	"move_along_normal": 0,
 
 	// Voxel vector geometry
