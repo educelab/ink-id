@@ -4,7 +4,7 @@
 # multiple jobs at once, rather than one job with two GPUs.
 #SBATCH --gres=gpu:1
 
-#SBATCH --cpus-per-task=64
+##SBATCH --cpus-per-task=64
 #SBATCH --job-name=slurm_train_and_predict
 #SBATCH --output=slurm_train_and_predict_%A_%a.out
 
