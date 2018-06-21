@@ -316,7 +316,7 @@ def main():
 
         # Print out the git hash if there is a repository
         try:
-            repo = git.Repo(os.path.join(os.path.dirname(inspect.getfile(inkid))))
+            repo = git.Repo(os.path.join(os.path.join(os.path.dirname(inspect.getfile(inkid)), '..')))
             sha = repo.head.object.hexsha
             f.write('Git hash:\n{}\n\n'.format(repo.git.rev_parse(sha, short=6)))
         except git.exc.InvalidGitRepositoryError:
