@@ -8,8 +8,7 @@ from PIL import Image
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--dir', metavar='path', required=True,
-                        help='input directory')
+    parser.add_argument('dir', metavar='path', help='input directory')
 
     args = parser.parse_args()
     dirs = [os.path.join(args.dir, name) for name in os.listdir(args.dir)
@@ -22,10 +21,10 @@ def main():
     print('\nFor final predictions, using images:')
     get_and_merge_images(dirs, False, os.path.join(args.dir, 'final.tif'))
     print('\nFor best f1 predictions, using images:')
-    get_and_merge_images(dirs, True, os.path.join(args.dir, 'best-f1.tif'))
+    get_and_merge_images(dirs, True, os.path.join(args.dir, 'best_auc.tif'))
 
 
-def get_and_merge_images(dirs, best_f1, outfile):
+def get_and_merge_images(dirs, best_auc, outfile):
     image = None
     for d in dirs:
         # Sort by the iteration number and pick the last one
@@ -36,8 +35,8 @@ def get_and_merge_images(dirs, best_f1, outfile):
             key=lambda name: int(re.findall('_(\d+)[\._]', name)[0])
         )
         # TODO add option to create gif here
-        if best_f1:
-            names = list(filter(lambda s: '_best_f1' in s, names))
+        if best_auc:
+            names = list(filter(lambda s: '_best_auc' in s, names))
         image_name = os.path.join(d, 'predictions', names[-1])
         print('\t{}'.format(image_name))
         if image is None:
