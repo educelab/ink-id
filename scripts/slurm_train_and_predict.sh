@@ -20,6 +20,3 @@ if [ -z "$SLURM_ARRAY_TASK_ID" ]; then
 else
     time inkid-train-and-predict "$@" -k $SLURM_ARRAY_TASK_ID
 fi
-
-# Backup ~/data/out to Team Google Drive.
-time rclone copy -u -v /home/$USER/data/dri-experiments-drive/2018-ml-inkid/results/ dri-experiments-drive:2018-ml-inkid/results/
