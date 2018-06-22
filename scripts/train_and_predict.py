@@ -25,6 +25,7 @@ import functools
 import inspect
 import json
 import os
+import subprocess
 import time
 import timeit
 
@@ -40,10 +41,8 @@ def main():
     start = timeit.default_timer()
 
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('-d', '--data', metavar='path', required=True,
-                        help='input data file (JSON)')
-    parser.add_argument('-o', '--output', metavar='path', default='out',
-                        help='output directory')
+    parser.add_argument('data', metavar='path', help='input data file (JSON)')
+    parser.add_argument('output', metavar='path', help='output directory')
     parser.add_argument('-m', '--model', metavar='path', default=None,
                         help='existing model directory to start with')
     parser.add_argument('--model-type', metavar='name', default='subvolume_3dcnn',
@@ -63,6 +62,11 @@ def main():
     parser.add_argument('--profile-start-and-end-steps', metavar='num', nargs=2, default=[10, 90],
                         help='start and end steps (and dump step) for profiling')
 
+    parser.add_argument('--rclone-transfer-remote', metavar='remote', default=None,
+                        help='if specified, and if matches the name of one of the directories in '
+                        'the output path, transfer the results to that rclone remote into the '
+                        'subpath following the remote name')
+
     args = parser.parse_args()
     if args.k is None:
         output_path = os.path.join(
@@ -74,6 +78,7 @@ def main():
             args.output,
             datetime.datetime.today().strftime('%Y-%m-%d_%H.%M.%S') + '_' + args.k
         )
+    os.makedirs(output_path)
     if args.model is not None:
         model_path = args.model
     else:
@@ -302,10 +307,11 @@ def main():
             regions.save_predictions(os.path.join(output_path, 'predictions'), 'final')
             regions.reset_predictions()
 
-    # Write metadata even if cut short
+    # Perform finishing touches even if cut short
     except KeyboardInterrupt:
         pass
 
+    # Write metadata to file
     stop = timeit.default_timer()
     with open(os.path.join(output_path, 'metadata.txt'), 'w') as f:
         f.write('Command Line Arguments:\n{}\n\n'.format(args))
@@ -316,11 +322,43 @@ def main():
 
         # Print out the git hash if there is a repository
         try:
-            repo = git.Repo(os.path.join(os.path.join(os.path.dirname(inspect.getfile(inkid)), '..')))
+            repo = git.Repo(os.path.join(os.path.dirname(inspect.getfile(inkid)), '..'))
             sha = repo.head.object.hexsha
             f.write('Git hash:\n{}\n\n'.format(repo.git.rev_parse(sha, short=6)))
         except git.exc.InvalidGitRepositoryError:
             f.write('No git hash available (unable to find valid repository).\n\n')
+
+    # Transfer via rclone if requested
+    if args.rclone_transfer_remote is not None:
+        folders = []
+        path = os.path.abspath(output_path)
+        while True:
+            path, folder = os.path.split(path)
+            if folder != "":
+                folders.append(folder)
+            else:
+                if path != "":
+                    folders.append(path)
+                break
+        folders.reverse()
+
+        if args.rclone_transfer_remote not in folders:
+            print('Provided rclone transfer remote was not a directory '
+                  'name in the output path, so it is not clear where in the '
+                  'remote to put the files. Transfer canceled.')
+        else:
+            while folders.pop(0) != args.rclone_transfer_remote:
+                continue
+
+            command = [
+                'rclone',
+                'move',
+                '-v',
+                output_path,
+                args.rclone_transfer_remote + ':' + os.path.join(*folders)
+            ]
+            print(' '.join(command))
+            subprocess.call(command)
 
 
 if __name__ == '__main__':
