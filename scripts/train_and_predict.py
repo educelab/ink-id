@@ -354,6 +354,7 @@ def main():
                 'rclone',
                 'move',
                 '-v',
+                '--delete-empty-src-dirs',
                 output_path,
                 args.rclone_transfer_remote + ':' + os.path.join(*folders)
             ]
