@@ -16,7 +16,7 @@
 
 # Run the train and predict process, passing all arguments to the script.
 if [ -z "$SLURM_ARRAY_TASK_ID" ]; then
-    time inkid-train-and-predict "$@"
+    time inkid-train-and-predict "$@" --rclone-transfer-remote dri-experiments-drive
 else
-    time inkid-train-and-predict "$@" -k $SLURM_ARRAY_TASK_ID
+    time inkid-train-and-predict "$@" -k $SLURM_ARRAY_TASK_ID --rclone-transfer-remote dri-experiments-drive
 fi
