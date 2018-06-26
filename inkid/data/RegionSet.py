@@ -106,7 +106,7 @@ class RegionSet:
         return self._ppms[ppm_name]
 
     def create_tf_input_fn(self, region_groups, batch_size,
-                           features_fn, label_fn=None, epochs=1,
+                           features_fn, label_fn=None, epochs=None,
                            max_samples=-1, perform_shuffle=None,
                            shuffle_seed=None, restrict_to_surface=None,
                            grid_spacing=None, probability_of_selection=None):
@@ -166,7 +166,8 @@ class RegionSet:
                     lambda tensors, _: tf.not_equal(tf.reduce_sum(tf.abs(tensors['Input'])), 0)
                 )
 
-            dataset = dataset.repeat(epochs)
+            if epochs is not None:
+                dataset = dataset.repeat(epochs)
             dataset = dataset.take(max_samples)
             dataset = dataset.batch(batch_size)
             dataset = dataset.prefetch(1)
