@@ -7,12 +7,8 @@ url = "https://pypi.python.org/simple"
 
 [packages]
 
-"e1839a8" = {path = ".", editable = true}
+"e1839a8" = {editable = true, path = "."}
 tensorflow-gpu = "*"
-"progressbar2" = "*"
-mathutils = "*"
-configargparse = "*"
-gitpython = "*"
 
 
 [dev-packages]
