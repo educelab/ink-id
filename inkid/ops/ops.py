@@ -1,11 +1,9 @@
 """Miscellaneous operations used in ink-id."""
 
 import inspect
-import json
 import math
 import os
 
-from jsmin import jsmin
 import numpy as np
 from PIL import Image
 
@@ -41,31 +39,13 @@ def save_volume_to_image_stack(volume, dirname):
         image.save(os.path.join(dirname, str(z) + '.tif'))
 
 
-def load_default_parameters():
-    """Return the default network parameters for ink-id.
-
-    Find the directory that the inkid package is loaded from, and then
-    return the network parameters in parameters.json.
+def default_arguments_file():
+    """Return the default arguments file.
 
     https://stackoverflow.com/questions/247770/retrieving-python-module-path
 
     """
-    return load_parameters_from_json(
-        os.path.join(os.path.dirname(inspect.getfile(inkid)), 'parameters.json')
-    )
-
-
-def load_parameters_from_json(filename):
-    """Return a dict of the parameters stored in a JSON file.
-
-    Given a filename to a .json, remove the comments from that file
-    and return a Python dictionary built from the JSON.
-
-    """
-    with open(filename, 'r') as f:
-        # minify to remove comments
-        minified = jsmin(str(f.read()))
-        return json.loads(minified)['parameters']
+    return os.path.join(os.path.dirname(inspect.getfile(inkid)), 'default_arguments.txt')
 
 
 def remap(x, in_min, in_max, out_min, out_max):

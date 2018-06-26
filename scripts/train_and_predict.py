@@ -18,7 +18,6 @@ the prediction and evaluation sets for that run.
 
 """
 
-import argparse
 from contextlib import ExitStack
 import datetime
 import functools
@@ -29,6 +28,7 @@ import subprocess
 import time
 import timeit
 
+import configargparse
 import git
 import numpy as np
 import tensorflow as tf
@@ -40,32 +40,91 @@ def main():
     """Run the training and prediction process."""
     start = timeit.default_timer()
 
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('data', metavar='path', help='input data file (JSON)')
-    parser.add_argument('output', metavar='path', help='output directory')
-    parser.add_argument('-m', '--model', metavar='path', default=None,
-                        help='existing model directory to start with')
-    parser.add_argument('--model-type', metavar='name', default='subvolume_3dcnn',
-                        help='type of model to train (subvolume_3dcnn or voxel_vector_1dcnn)')
-    parser.add_argument('--subvolume-method', metavar='name', default='snap_to_axis_aligned',
-                        help='method for getting subvolumes')
-    parser.add_argument('-k', metavar='num', default=None,
-                        help='index of region to use for prediction and evaluation')
-    parser.add_argument('--final-prediction-on-all', action='store_true')
-    parser.add_argument('--override-volume-slices-dir', metavar='path', default=None,
-                        help='override directory for all volume slices (only works if there is '
-                        'only one volume in the region set file)')
+    parser = configargparse.ArgumentParser(
+        description=__doc__,
+        default_config_files=[inkid.ops.default_arguments_file()],
+    )
+    # Needed files
+    parser.add('data', metavar='infile', help='input data file (JSON)')
+    parser.add('output', metavar='outfile', help='output directory')
 
-    parser.add_argument('--profile-dir-name', metavar='path', default=None,
-                        help='dirname to dump TensorFlow profile '
-                        '(no profile produced if not defined)')
-    parser.add_argument('--profile-start-and-end-steps', metavar='num', nargs=2, default=[10, 90],
-                        help='start and end steps (and dump step) for profiling')
+    # Config file
+    parser.add('-c', '--config-file', metavar='path', is_config_file=True,
+               help='file with pre-specified arguments (in addition to pre-loaded defaults)')
 
-    parser.add_argument('--rclone-transfer-remote', metavar='remote', default=None,
-                        help='if specified, and if matches the name of one of the directories in '
-                        'the output path, transfer the results to that rclone remote into the '
-                        'subpath following the remote name')
+    # Region set modifications
+    parser.add('-k', metavar='num', default=None, type=int,
+               help='index of region to use for prediction and evaluation')
+    parser.add('--override-volume-slices-dir', metavar='path', default=None,
+               help='override directory for all volume slices (only works if there is '
+               'only one volume in the region set file)')
+
+    # Pretrained model
+    parser.add('--model', metavar='path', default=None,
+               help='existing model directory to load checkpoints from')
+
+    # Method
+    parser.add('--model-type', metavar='name', default='subvolume_3dcnn',
+               help='type of model to train',
+               choices=['subvolume_3dcnn', 'voxel_vector_1dcnn'])
+
+    # Subvolumes
+    parser.add('--subvolume-method', metavar='name', default='snap_to_axis_aligned',
+               help='method for getting subvolumes')
+    parser.add('--subvolume-shape', metavar='n', nargs=3, type=int,
+               help='subvolume shape in z y x')
+    parser.add('--move-along-normal', metavar='n', type=float,
+               help='number of voxels to move along normal before getting a subvolume')
+
+    # Voxel vectors
+    parser.add('--length-in-each-direction', metavar='n', type=int,
+               help='length of voxel vector in each direction along normal')
+
+    # Data organization/augmentation
+    parser.add('--jitter-max', metavar='n', type=int)
+    parser.add('--add-augmentation', action='store_true')
+
+    # Network architecture
+    parser.add('--learning-rate', metavar='n', type=float)
+    parser.add('--drop-rate', metavar='n', type=float)
+    parser.add('--batch-norm-momentum', metavar='n', type=float)
+    parser.add('--fbeta-weight', metavar='n', type=float)
+    parser.add('--filter-size', metavar='n', nargs=3, type=int,
+               help='3D convolution filter size')
+    parser.add('--filters', metavar='n', nargs='*', type=int,
+               help='number of filters for each convolution layer')
+
+    # Run configuration
+    parser.add('--training-batch-size', metavar='n', type=int)
+    parser.add('--training-max-batches', metavar='n', type=int, default=None)
+    parser.add('--training-epochs', metavar='n', type=int)
+    parser.add('--prediction-batch-size', metavar='n', type=int)
+    parser.add('--prediction-grid-spacing', metavar='n', type=int,
+               help='prediction points will be taken from an NxN grid')
+    parser.add('--evaluation-batch-size', metavar='n', type=int)
+    parser.add('--evaluation-max-samples', metavar='n', type=int)
+    parser.add('--summary-every-n-steps', metavar='n', type=int)
+    parser.add('--save-checkpoint-every-n-steps', metavar='n', type=int)
+    parser.add('--evaluate-every-n-checkpoints', metavar='n', type=int)
+    parser.add('--predict-every-n-checkpoints', metavar='n', type=int)
+
+    # Prediction
+    parser.add('--rgb-labels', action='store_true',
+               help='use RGB ground truth and predictions')
+    parser.add('--final-prediction-on-all', action='store_true')
+
+    # Profiling
+    parser.add('--profile-dir-name', metavar='path', default=None,
+               help='dirname to dump TensorFlow profile '
+               '(no profile produced if not defined)')
+    parser.add('--profile-start-and-end-steps', metavar='n', nargs=2, default=[10, 90],
+               help='start and end steps (and dump step) for profiling')
+
+    # Rclone
+    parser.add('--rclone-transfer-remote', metavar='remote', default=None,
+               help='if specified, and if matches the name of one of the directories in '
+               'the output path, transfer the results to that rclone remote into the '
+               'subpath following the remote name')
 
     args = parser.parse_args()
     if args.k is None:
@@ -103,15 +162,13 @@ def main():
 
     regions = inkid.data.RegionSet(region_data)
 
-    params = inkid.ops.load_default_parameters()
-
-    print('Parameters:\n{}\n'.format(json.dumps(params, indent=4, sort_keys=True)))
+    print('Arguments:\n{}\n'.format(args))
     print('Region Set:\n{}\n'.format(json.dumps(region_data, indent=4, sort_keys=False)))
 
     # Save checkpoints every n steps. EvalCheckpointSaverListener
     # (below) runs an evaluation each time this happens.
     run_config = tf.estimator.RunConfig(
-        save_checkpoints_steps=params['save_checkpoint_every_n_steps'],
+        save_checkpoints_steps=args.save_checkpoint_every_n_steps,
         keep_checkpoint_max=None,  # save all checkpoints
     )
 
@@ -122,13 +179,13 @@ def main():
         model_dir=model_path,
         config=run_config,
         params={
-            'drop_rate': params['drop_rate'],
-            'subvolume_shape': params['subvolume_shape'],
-            'length_in_each_direction': params['length_in_each_direction'],
-            'batch_norm_momentum': params['batch_norm_momentum'],
-            'filters': params['filters'],
-            'learning_rate': params['learning_rate'],
-            'fbeta_weight': params['fbeta_weight'],
+            'drop_rate': args.drop_rate,
+            'subvolume_shape': args.subvolume_shape,
+            'length_in_each_direction': args.length_in_each_direction,
+            'batch_norm_momentum': args.batch_norm_momentum,
+            'filters': args.filters,
+            'learning_rate': args.learning_rate,
+            'fbeta_weight': args.fbeta_weight,
             'model': args.model_type,
         },
     )
@@ -144,22 +201,22 @@ def main():
     }
     logging_hook = tf.train.LoggingTensorHook(
         tensors=tensors_to_log,
-        every_n_iter=params['summary_every_n_steps'],
+        every_n_iter=args.summary_every_n_steps,
     )
     tf.logging.set_verbosity(tf.logging.INFO)
 
     if args.model_type == 'subvolume_3dcnn':
         point_to_subvolume_input = functools.partial(
             regions.point_to_subvolume_input,
-            subvolume_shape=params['subvolume_shape'],
+            subvolume_shape=args.subvolume_shape,
             out_of_bounds='all_zeros',
-            move_along_normal=params['move_along_normal'],
+            move_along_normal=args.move_along_normal,
             method=args.subvolume_method,
         )
         training_features_fn = functools.partial(
             point_to_subvolume_input,
-            augment_subvolume=params['add_augmentation'],
-            jitter_max=params['jitter_max'],
+            augment_subvolume=args.add_augmentation,
+            jitter_max=args.jitter_max,
         )
         evaluation_features_fn = functools.partial(
             point_to_subvolume_input,
@@ -170,7 +227,7 @@ def main():
     elif args.model_type == 'voxel_vector_1dcnn':
         training_features_fn = functools.partial(
             regions.point_to_voxel_vector_input,
-            length_in_each_direction=params['length_in_each_direction'],
+            length_in_each_direction=args.length_in_each_direction,
             out_of_bounds='all_zeros',
         )
         evaluation_features_fn = training_features_fn
@@ -178,14 +235,14 @@ def main():
     elif args.model_type == 'descriptive_statistics':
         training_features_fn = functools.partial(
             regions.point_to_descriptive_statistics,
-            subvolume_shape=params['subvolume_shape'],
+            subvolume_shape=args.subvolume_shape,
         )
         evaluation_features_fn = training_features_fn
         prediction_features_fn = training_features_fn
 
     training_input_fn = regions.create_tf_input_fn(
         region_groups=['training'],
-        batch_size=params['training_batch_size'],
+        batch_size=args.training_batch_size,
         features_fn=training_features_fn,
         label_fn=regions.point_to_ink_classes_label,
         perform_shuffle=True,
@@ -194,10 +251,10 @@ def main():
 
     evaluation_input_fn = regions.create_tf_input_fn(
         region_groups=['evaluation'],
-        batch_size=params['evaluation_batch_size'],
+        batch_size=args.evaluation_batch_size,
         features_fn=evaluation_features_fn,
         label_fn=regions.point_to_ink_classes_label,
-        max_samples=params['evaluation_max_samples'],
+        max_samples=args.evaluation_max_samples,
         perform_shuffle=True,
         shuffle_seed=0,  # We want the eval set to be the same each time
         restrict_to_surface=True,
@@ -205,12 +262,12 @@ def main():
 
     prediction_input_fn = regions.create_tf_input_fn(
         region_groups=['prediction'],
-        batch_size=params['prediction_batch_size'],
+        batch_size=args.prediction_batch_size,
         features_fn=prediction_features_fn,
         label_fn=None,
         perform_shuffle=False,
         restrict_to_surface=True,
-        grid_spacing=params['prediction_grid_spacing'],
+        grid_spacing=args.prediction_grid_spacing,
     )
 
     # Run the training process. Predictions are run during training
@@ -256,15 +313,15 @@ def main():
             if len(regions._region_groups['training']) > 0:
                 estimator.train(
                     input_fn=training_input_fn,
-                    steps=params.get('training_max_batches'),
+                    steps=args.training_max_batches,
                     hooks=[logging_hook],
                     saving_listeners=[
                         inkid.model.EvalCheckpointSaverListener(
                             estimator=estimator,
                             eval_input_fn=evaluation_input_fn,
                             predict_input_fn=prediction_input_fn,
-                            evaluate_every_n_checkpoints=params['evaluate_every_n_checkpoints'],
-                            predict_every_n_checkpoints=params['predict_every_n_checkpoints'],
+                            evaluate_every_n_checkpoints=args.evaluate_every_n_checkpoints,
+                            predict_every_n_checkpoints=args.predict_every_n_checkpoints,
                             region_set=regions,
                             predictions_dir=os.path.join(output_path, 'predictions'),
                         ),
@@ -280,12 +337,12 @@ def main():
             print('Running a final prediction on all regions...')
             final_prediction_input_fn = regions.create_tf_input_fn(
                 region_groups=['prediction', 'training', 'evaluation'],
-                batch_size=params['prediction_batch_size'],
+                batch_size=args.prediction_batch_size,
                 features_fn=prediction_features_fn,
                 label_fn=None,
                 perform_shuffle=False,
                 restrict_to_surface=True,
-                grid_spacing=params['prediction_grid_spacing'],
+                grid_spacing=args.prediction_grid_spacing,
             )
 
             predictions = estimator.predict(
@@ -315,7 +372,6 @@ def main():
     stop = timeit.default_timer()
     with open(os.path.join(output_path, 'metadata.txt'), 'w') as f:
         f.write('Command Line Arguments:\n{}\n\n'.format(args))
-        f.write('Parameters:\n{}\n\n'.format(json.dumps(params, indent=4, sort_keys=True)))
         f.write('Region Set:\n{}\n\n'.format(json.dumps(region_data, indent=4, sort_keys=False)))
         f.write('Runtime:\n{}s\n\n'.format(stop - start))
         f.write('Finished at:\n{}\n\n'.format(time.strftime('%Y-%m-%d %H:%M:%S')))

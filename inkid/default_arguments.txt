@@ -1,0 +1,31 @@
+# Subvolume geometry
+subvolume-shape = [28, 42, 42]
+move-along-normal = 0
+
+# Voxel vector geometry
+length-in-each-direction = 8
+
+# Data organization/augmentation
+jitter-max = 4  # Set to 0 for no jitter
+add-augmentation = true
+
+# Network architecture
+learning-rate = 0.001
+drop-rate = 0.5
+batch-norm-momentum = 0.9
+fbeta-weight = 0.3
+filter-size = [3, 3, 3]
+filters = [32, 16, 8, 4]
+
+# Run configuration
+training-batch-size = 30
+# training-max-batches = 1000000
+training-epochs = 1
+prediction-batch-size = 400
+prediction-grid-spacing = 4
+evaluation-batch-size = 400
+evaluation-max-samples = 5000
+summary-every-n-steps = 100
+save-checkpoint-every-n-steps = 5000
+evaluate-every-n-checkpoints = 1
+predict-every-n-checkpoints = 1
