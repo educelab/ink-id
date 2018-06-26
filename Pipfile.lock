@@ -1,7 +1,7 @@
 {
     "_meta": {
         "hash": {
-            "sha256": "7f36dba506475aba909c36fc7aeebf7a654b402a6863d7189e6f66d212267c8e"
+            "sha256": "f6dce192b6e90ef318cff589a72a899adcb5774318965283b2b07c2d2e939fc3"
         },
         "host-environment-markers": {
             "implementation_name": "cpython",
@@ -69,6 +69,20 @@
                 "sha256:7068908321ecd2774f145193c4b34a11305bd104b4551b09273dfd1d6a374930"
             ],
             "version": "==0.2.0"
+        },
+        "gitdb2": {
+            "hashes": [
+                "sha256:cf9a4b68e8c4da8d42e48728c944ff7af2d8c9db303ac1ab32eac37aa4194b0e",
+                "sha256:b60e29d4533e5e25bb50b7678bbc187c8f6bcff1344b4f293b2ba55c85795f09"
+            ],
+            "version": "==2.0.3"
+        },
+        "gitpython": {
+            "hashes": [
+                "sha256:1ec4c44846cf76a1e55769560673a97731849c9d05401e035e607495f10db959",
+                "sha256:b60b045cf64a321e5b620debb49890099fa6c7be6dfb7fb249027e5d34227301"
+            ],
+            "version": "==2.1.10"
         },
         "grpcio": {
             "hashes": [
@@ -328,6 +342,13 @@
             ],
             "version": "==1.11.0"
         },
+        "smmap2": {
+            "hashes": [
+                "sha256:b78ee0f1f5772d69ff50b1cbdb01b8c6647a8354f02f23b488cf4b2cfc923956",
+                "sha256:c7530db63f15f09f8251094b22091298e82bf6c699a6b8344aaaef3f2e1276c3"
+            ],
+            "version": "==2.0.3"
+        },
         "tensorboard": {
             "hashes": [
                 "sha256:2651a4d9261a6593cb2c3514576e4bf25e273837c79e98f68a3cf51759f68725",
@@ -365,7 +386,6 @@
                 "sha256:80044e51ec5bbf6c894ba0bc48d26a8c20a9ba629f4ca19ea26ecfcf87685f5f",
                 "sha256:0a2e54558a0628f2145d2fc822137e322412115173e8a2ddbe1c9024338ae83c"
             ],
-            "markers": "python_version >= '3'",
             "version": "==0.31.1"
         }
     },

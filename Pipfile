@@ -12,6 +12,7 @@ tensorflow-gpu = "*"
 "progressbar2" = "*"
 mathutils = "*"
 configargparse = "*"
+gitpython = "*"
 
 
 [dev-packages]
