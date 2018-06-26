@@ -97,7 +97,7 @@ def main():
     # Run configuration
     parser.add('--training-batch-size', metavar='n', type=int)
     parser.add('--training-max-batches', metavar='n', type=int, default=None)
-    parser.add('--training-epochs', metavar='n', type=int)
+    parser.add('--training-epochs', metavar='n', type=int, default=None)
     parser.add('--prediction-batch-size', metavar='n', type=int)
     parser.add('--prediction-grid-spacing', metavar='n', type=int,
                help='prediction points will be taken from an NxN grid')
@@ -247,6 +247,7 @@ def main():
         label_fn=regions.point_to_ink_classes_label,
         perform_shuffle=True,
         restrict_to_surface=True,
+        epochs=args.training_epochs,
     )
 
     evaluation_input_fn = regions.create_tf_input_fn(
