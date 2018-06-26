@@ -135,7 +135,7 @@ def main():
     else:
         output_path = os.path.join(
             args.output,
-            datetime.datetime.today().strftime('%Y-%m-%d_%H.%M.%S') + '_' + args.k
+            datetime.datetime.today().strftime('%Y-%m-%d_%H.%M.%S') + '_' + str(args.k)
         )
     os.makedirs(output_path)
     if args.model is not None:
