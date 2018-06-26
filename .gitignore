@@ -18,3 +18,5 @@ out/
 .vscode
 env/
 tmp/
+
+Pipfile*
