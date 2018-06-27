@@ -245,10 +245,10 @@ class PPM:
         if not os.path.exists(directory):
             os.makedirs(directory)
 
-        if sum(abs(self._ink_classes_prediction_image)) != 0:
+        if self._ink_classes_prediction_image.any():
             im = Image.fromarray(self._ink_classes_prediction_image)
-        elif sum(abs(self._rgb_values_prediction_image)) != 0:
-            im = Image.fromarray(self.rgb_values_prediction_image)
+        elif self._rgb_values_prediction_image.any():
+            im = Image.fromarray(self._rgb_values_prediction_image)
         im.save(
             os.path.join(
                 directory,
