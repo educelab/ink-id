@@ -65,7 +65,7 @@ class PPM:
         if self._ink_label is not None:
             self._ink_classes_prediction_image = np.zeros((self._height, self._width), np.uint16)
         if self._rgb_label is not None:
-            self._rgb_values_prediction_image = np.zeros((self._height, self._width, 3), np.uint16)
+            self._rgb_values_prediction_image = np.zeros((self._height, self._width, 3), np.uint8)
 
     @staticmethod
     def parse_PPM_header(filename):
@@ -233,13 +233,17 @@ class PPM:
         assert len(ppm_xy) == 2
         assert len(rgb) == 3
         x, y = ppm_xy
+        # Restrict value to uint16 rnage
+        rgb = [max(min(np.iinfo(np.uint16).max, val), 0) for val in rgb]
+        # Convert to uint8 range
+        rgb = [inkid.ops.remap(val, 0, np.iinfo(np.uint16).max, 0, np.iinfo(np.uint8).max) for val in rgb]
         self._rgb_values_prediction_image[y-square_r:y+square_r, x-square_r:x+square_r] = rgb
 
     def reset_predictions(self):
         if self._ink_label is not None:
             self._ink_classes_prediction_image = np.zeros((self._height, self._width), np.uint16)
         if self._rgb_label is not None:
-            self._rgb_values_prediction_image = np.zeros((self._height, self._width, 3), np.uint16)
+            self._rgb_values_prediction_image = np.zeros((self._height, self._width, 3), np.uint8)
 
     def save_predictions(self, directory, iteration):
         if not os.path.exists(directory):
