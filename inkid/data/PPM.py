@@ -8,7 +8,8 @@ import progressbar
 
 
 class PPM:
-    def __init__(self, path, volume, mask_path, ink_label_path, invert_normal):
+    def __init__(self, path, volume, mask_path, ink_label_path,
+                 rgb_label_path, invert_normal):
         self._path = path
         self._volume = volume
 
@@ -36,9 +37,22 @@ class PPM:
             else:
                 self._ink_label_path = None
 
+        if rgb_label_path is not None:
+            self._rgb_label_path = rgb_label_path
+        else:
+            default_rgb_label_path = ppm_path_stem + '_reference.png'
+            if os.path.isfile(default_rgb_label_path):
+                self._rgb_label_path = default_rgb_label_path
+            else:
+                self._rgb_label_path = None
+
         self._ink_label = None
         if self._ink_label_path is not None:
             self._ink_label = np.asarray(Image.open(self._ink_label_path), np.uint16)
+
+        self._rgb_label = None
+        if self._rgb_label_path is not None:
+            self._rgb_label = np.asarray(Image.open(self._rgb_label_path), np.uint16)
 
         self._invert_normal = False
         if invert_normal is not None:
@@ -48,7 +62,10 @@ class PPM:
 
         self.process_PPM_file(self._path)
 
-        self._prediction_image = np.zeros((self._height, self._width), np.uint16)
+        if self._ink_label is not None:
+            self._prediction_image = np.zeros((self._height, self._width), np.uint16)
+        elif self._rgb_label is not None:
+            self._prediction_image = np.zeros((self._height, self._width, 3), np.uint16)
 
     @staticmethod
     def parse_PPM_header(filename):
@@ -167,6 +184,13 @@ class PPM:
         else:
             return np.asarray([1.0, 0.0], np.float32)
 
+    def point_to_rgb_values_label(self, point):
+        assert self._rgb_label is not None
+        x, y = point
+        label = self._rgb_label[y, x]
+        assert len(label) == 3
+        return label
+
     def point_to_voxel_vector(self, point, length_in_each_direction,
                               out_of_bounds=None):
         ppm_x, ppm_y = point
@@ -205,8 +229,17 @@ class PPM:
         x, y = ppm_xy
         self._prediction_image[y-square_r:y+square_r, x-square_r:x+square_r] = value
 
+    def reconstruct_predicted_rgb(self, rgb, ppm_xy, square_r=2):
+        assert len(ppm_xy) == 2
+        assert len(rgb) == 3
+        x, y = ppm_xy
+        self._prediction_image[y-square_r:y+square_r, x-square_r:x+square_r] = rgb
+
     def reset_predictions(self):
-        self._prediction_image = np.zeros((self._height, self._width), np.uint16)
+        if self._ink_label is not None:
+            self._prediction_image = np.zeros((self._height, self._width), np.uint16)
+        elif self._rgb_label is not None:
+            self._prediction_image = np.zeros((self._height, self._width, 3), np.uint16)
 
     def save_predictions(self, directory, iteration):
         if not os.path.exists(directory):
@@ -216,7 +249,7 @@ class PPM:
         im.save(
             os.path.join(
                 directory,
-                '{}_predicted-ink-classes_{}.tif'.format(
+                '{}_prediction_{}.tif'.format(
                     os.path.splitext(os.path.basename(self._path))[0],
                     iteration,
                 ),

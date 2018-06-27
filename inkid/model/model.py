@@ -30,7 +30,7 @@ class EvalCheckpointSaverListener(tf.train.CheckpointSaverListener):
     def __init__(self, estimator, eval_input_fn, predict_input_fn,
                  evaluate_every_n_checkpoints,
                  predict_every_n_checkpoints, region_set,
-                 predictions_dir):
+                 predictions_dir, label_type):
         """Initialize the listener.
 
         Notably we pass the estimator itself to this class so that we
@@ -46,46 +46,70 @@ class EvalCheckpointSaverListener(tf.train.CheckpointSaverListener):
         self._predictions_dir = predictions_dir
         self._total_checkpoints = 0
         self._best_auc = 0
+        self._label_type = label_type
 
     def after_save(self, session, global_step):
         """Run our custom logic after the estimator saves a checkpoint."""
         self._total_checkpoints += 1
 
-        best_auc = False
-        if self._total_checkpoints % self._evaluate_every_n_checkpoints == 0:
-            eval_results = self._estimator.evaluate(self._eval_input_fn)
-            if eval_results['area_under_roc_curve'] > self._best_auc:
-                best_auc = True
-                self._best_auc = eval_results['area_under_roc_curve']
+        if self._label_type == 'ink_classes':
+            best_auc = False
+            if self._total_checkpoints % self._evaluate_every_n_checkpoints == 0:
+                eval_results = self._estimator.evaluate(self._eval_input_fn)
+                if eval_results['area_under_roc_curve'] > self._best_auc:
+                    best_auc = True
+                    self._best_auc = eval_results['area_under_roc_curve']
 
-        if self._total_checkpoints % self._predict_every_n_checkpoints == 0:
-            predictions = self._estimator.predict(
-                self._predict_input_fn,
-                predict_keys=[
-                    'region_id',
-                    'ppm_xy',
-                    'probabilities',
-                ],
-            )
-            for prediction in predictions:
-                self._region_set.reconstruct_predicted_ink_classes(
-                    np.array([prediction['region_id']]),
-                    np.array([prediction['probabilities']]),
-                    np.array([prediction['ppm_xy']]),
+            if self._total_checkpoints % self._predict_every_n_checkpoints == 0:
+                predictions = self._estimator.predict(
+                    self._predict_input_fn,
+                    predict_keys=[
+                        'region_id',
+                        'ppm_xy',
+                        'probabilities',
+                    ],
                 )
-            if best_auc:
-                self._region_set.save_predictions(
-                    self._predictions_dir,
-                    str(global_step)+'_best_auc'
+                for prediction in predictions:
+                    self._region_set.reconstruct_predicted_ink_classes(
+                        np.array([prediction['region_id']]),
+                        np.array([prediction['probabilities']]),
+                        np.array([prediction['ppm_xy']]),
+                    )
+                if best_auc:
+                    self._region_set.save_predictions(
+                        self._predictions_dir,
+                        str(global_step)+'_best_auc'
+                    )
+                else:
+                    self._region_set.save_predictions(self._predictions_dir, global_step)
+                self._region_set.reset_predictions()
+
+        elif self._label_type == 'rgb_values':
+            if self._total_checkpoints % self._evaluate_every_n_checkpoints == 0:
+                eval_results = self._estimator.evaluate(self._eval_input_fn)
+
+            if self._total_checkpoints % self._predict_every_n_checkpoints == 0:
+                predictions = self._estimator.predict(
+                    self._predict_input_fn,
+                    predict_keys=[
+                        'region_id',
+                        'ppm_xy',
+                        'rgb',
+                    ],
                 )
-            else:
+                for prediction in predictions:
+                    self._region_set.reconstruct_predicted_rgb(
+                        np.array([prediction['region_id']]),
+                        np.array([prediction['rgb']]),
+                        np.array([prediction['ppm_xy']]),
+                    )
                 self._region_set.save_predictions(self._predictions_dir, global_step)
-            self._region_set.reset_predictions()
+                self._region_set.reset_predictions()
 
 
 class Subvolume3dcnnModel:
     """Defines the network architecture for a 3D CNN."""
-    def __init__(self, drop_rate, subvolume_shape, batch_norm_momentum, filters):
+    def __init__(self, drop_rate, subvolume_shape, batch_norm_momentum, filters, output_neurons):
         """Initialize the layers as members with state."""
         self._input_shape = [-1, subvolume_shape[0], subvolume_shape[1], subvolume_shape[2], 1]
 
@@ -122,7 +146,7 @@ class Subvolume3dcnnModel:
         self.batch_norm4 = tf.layers.BatchNormalization(
             scale=False, axis=4, momentum=batch_norm_momentum)
 
-        self.fc = tf.layers.Dense(2)
+        self.fc = tf.layers.Dense(output_neurons)
         self.dropout = tf.layers.Dropout(drop_rate)
 
     def __call__(self, inputs, training):
@@ -144,12 +168,12 @@ class Subvolume3dcnnModel:
 
 
 class DescriptiveStatisticsModel:
-    def __init__(self, num_stats):
+    def __init__(self, num_stats, output_neurons):
         self._input_shape = [-1, num_stats]
 
         self.layer1 = tf.layers.Dense(20)
         self.layer2 = tf.layers.Dense(20)
-        self.layer3 = tf.layers.Dense(2)
+        self.layer3 = tf.layers.Dense(output_neurons)
 
     def __call__(self, inputs, training):
         y = tf.reshape(inputs, self._input_shape)
@@ -162,7 +186,8 @@ class DescriptiveStatisticsModel:
 
 class VoxelVector1dcnnModel:
     """Defines the network architecture for a 1D CNN."""
-    def __init__(self, drop_rate, length_in_each_direction, batch_norm_momentum, filters):
+    def __init__(self, drop_rate, length_in_each_direction,
+                 batch_norm_momentum, filters, output_neurons):
         """Initialize the layers as members with state."""
         self._input_shape = [-1, length_in_each_direction * 2 + 1, 1]
 
@@ -186,15 +211,7 @@ class VoxelVector1dcnnModel:
         self.batch_norm2 = tf.layers.BatchNormalization(
             scale=False, axis=2, momentum=batch_norm_momentum)
 
-        self.conv3 = convolution_layer(filters=filters[2])
-        self.batch_norm3 = tf.layers.BatchNormalization(
-            scale=False, axis=2, momentum=batch_norm_momentum)
-
-        self.conv4 = convolution_layer(filters=filters[3])
-        self.batch_norm4 = tf.layers.BatchNormalization(
-            scale=False, axis=2, momentum=batch_norm_momentum)
-
-        self.fc = tf.layers.Dense(2)
+        self.fc = tf.layers.Dense(output_neurons)
         self.dropout = tf.layers.Dropout(drop_rate)
 
     def __call__(self, inputs, training):
@@ -204,10 +221,6 @@ class VoxelVector1dcnnModel:
         y = self.batch_norm1(y, training=training)
         y = self.conv2(y)
         y = self.batch_norm2(y, training=training)
-        # y = self.conv3(y)
-        # y = self.batch_norm3(y, training=training)
-        # y = self.conv4(y)
-        # y = self.batch_norm4(y, training=training)
         y = tf.layers.flatten(y)
         y = self.fc(y)
         y = self.dropout(y, training=training)
@@ -215,7 +228,7 @@ class VoxelVector1dcnnModel:
         return y
 
 
-def model_fn(features, labels, mode, params):
+def ink_classes_model_fn(features, labels, mode, params):
     """Define the model_fn for the Tensorflow Estimator.
 
     Depending on what mode is passed (train, evaluate, or predict)
@@ -233,28 +246,33 @@ def model_fn(features, labels, mode, params):
     https://github.com/tensorflow/tensorflow/issues/13895
 
     """
-    if params['model'] == 'voxel_vector_1dcnn':
+    output_neurons = 2
+
+    if params['feature_type'] == 'voxel_vector_1dcnn':
         model = VoxelVector1dcnnModel(
             params['drop_rate'],
             params['length_in_each_direction'],
             params['batch_norm_momentum'],
-            params['filters']
+            params['filters'],
+            output_neurons,
         )
-    elif params['model'] == 'subvolume_3dcnn':
+    elif params['feature_type'] == 'subvolume_3dcnn':
         model = Subvolume3dcnnModel(
             params['drop_rate'],
             params['subvolume_shape'],
             params['batch_norm_momentum'],
-            params['filters']
+            params['filters'],
+            output_neurons,
         )
-    elif params['model'] == 'descriptive_statistics':
+    elif params['feature_type'] == 'descriptive_statistics':
         model = DescriptiveStatisticsModel(
             # Create a dummy array to see how many descriptive
             # statistics there will be
-            len(inkid.ops.get_descriptive_statistics(np.array([0, 1, 2])))
+            len(inkid.ops.get_descriptive_statistics(np.array([0, 1, 2]))),
+            output_neurons,
         )
     else:
-        raise ValueError('Model type {} was not recognized'.format(params['model']))
+        raise ValueError('Feature type {} was not recognized.'.format(params['feature_type']))
 
     inputs = features['Input']
 
@@ -389,3 +407,73 @@ def model_fn(features, labels, mode, params):
                     predictions=tf.nn.softmax(logits)[:, 1],
                 ),
             })
+
+
+def rgb_values_model_fn(features, labels, mode, params):
+    output_neurons = 3
+
+    if params['feature_type'] == 'voxel_vector_1dcnn':
+        model = VoxelVector1dcnnModel(
+            params['drop_rate'],
+            params['length_in_each_direction'],
+            params['batch_norm_momentum'],
+            params['filters'],
+            output_neurons,
+        )
+    elif params['feature_type'] == 'subvolume_3dcnn':
+        model = Subvolume3dcnnModel(
+            params['drop_rate'],
+            params['subvolume_shape'],
+            params['batch_norm_momentum'],
+            params['filters'],
+            output_neurons,
+        )
+    elif params['feature_type'] == 'descriptive_statistics':
+        model = DescriptiveStatisticsModel(
+            # Create a dummy array to see how many descriptive
+            # statistics there will be
+            len(inkid.ops.get_descriptive_statistics(np.array([0, 1, 2]))),
+            output_neurons,
+        )
+    else:
+        raise ValueError('Feature type {} was not recognized.'.format(params['feature_type']))
+
+    inputs = features['Input']
+
+    if mode == tf.estimator.ModeKeys.PREDICT:
+        logits = model(inputs, training=False)
+
+        predictions = {
+            'region_id': features['RegionID'],
+            'ppm_xy': features['PPM_XY'],
+            'rgb': logits,
+            'inputs': inputs,
+        }
+        return tf.estimator.EstimatorSpec(
+            mode=tf.estimator.ModeKeys.PREDICT,
+            predictions=predictions,
+        )
+
+    if mode == tf.estimator.ModeKeys.TRAIN:
+        optimizer = tf.train.AdamOptimizer(learning_rate=params['learning_rate'])
+        logits = model(inputs, training=True)
+        loss = tf.losses.huber_loss(labels, logits)
+
+        update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
+        with tf.control_dependencies(update_ops):
+            train_op = optimizer.minimize(loss, global_step=tf.train.get_global_step())
+
+        return tf.estimator.EstimatorSpec(
+            mode=tf.estimator.ModeKeys.TRAIN,
+            loss=loss,
+            train_op=train_op
+        )
+
+    if mode == tf.estimator.ModeKeys.EVAL:
+        logits = model(inputs, training=False)
+        loss = tf.losses.huber_loss(labels, logits)
+
+        return tf.estimator.EstimatorSpec(
+            mode=tf.estimator.ModeKeys.EVAL,
+            loss=loss,
+        )

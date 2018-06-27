@@ -64,9 +64,19 @@ def main():
                help='existing model directory to load checkpoints from')
 
     # Method
-    parser.add('--model-type', metavar='name', default='subvolume_3dcnn',
-               help='type of model to train',
-               choices=['subvolume_3dcnn', 'voxel_vector_1dcnn'])
+    parser.add('--feature-type', metavar='name', default='subvolume_3dcnn',
+               help='type of feature model is built on',
+               choices=[
+                   'subvolume_3dcnn',
+                   'voxel_vector_1dcnn',
+                   'descriptive_statistics',
+               ])
+    parser.add('--label-type', metavar='name', default='ink_classes',
+               help='type of label to train',
+               choices=[
+                   'ink_classes',
+                   'rgb_values',
+               ])
 
     # Subvolumes
     parser.add('--subvolume-method', metavar='name', default='snap_to_axis_aligned',
@@ -107,10 +117,6 @@ def main():
     parser.add('--save-checkpoint-every-n-steps', metavar='n', type=int)
     parser.add('--evaluate-every-n-checkpoints', metavar='n', type=int)
     parser.add('--predict-every-n-checkpoints', metavar='n', type=int)
-
-    # Prediction
-    parser.add('--rgb-labels', action='store_true',
-               help='use RGB ground truth and predictions')
     parser.add('--final-prediction-on-all', action='store_true')
 
     # Profiling
@@ -175,7 +181,10 @@ def main():
     # Create an Estimator with the run configuration, hyperparameters,
     # and model directory specified.
     estimator = tf.estimator.Estimator(
-        model_fn=inkid.model.model_fn,
+        model_fn={
+            'ink_classes': inkid.model.ink_classes_model_fn,
+            'rgb_values': inkid.model.rgb_values_model_fn,
+        }[args.label_type],
         model_dir=model_path,
         config=run_config,
         params={
@@ -186,26 +195,31 @@ def main():
             'filters': args.filters,
             'learning_rate': args.learning_rate,
             'fbeta_weight': args.fbeta_weight,
-            'model': args.model_type,
+            'feature_type': args.feature_type,
+            'label_type': args.label_type,
         },
     )
 
     # Define tensors to be shown in a "summary" step.
-    tensors_to_log = {
-        'train_accuracy': 'train_accuracy',
-        'train_precision': 'train_precision',
-        'train_recall': 'train_recall',
-        'train_fbeta_score': 'train_fbeta_score',
-        'train_positives': 'train_positives',
-        'train_negatives': 'train_negatives',
-    }
+    if args.label_type == 'ink_classes':
+        tensors_to_log = {
+            'train_accuracy': 'train_accuracy',
+            'train_precision': 'train_precision',
+            'train_recall': 'train_recall',
+            'train_fbeta_score': 'train_fbeta_score',
+            'train_positives': 'train_positives',
+            'train_negatives': 'train_negatives',
+        }
+    else:
+        tensors_to_log = {}
     logging_hook = tf.train.LoggingTensorHook(
         tensors=tensors_to_log,
         every_n_iter=args.summary_every_n_steps,
     )
     tf.logging.set_verbosity(tf.logging.INFO)
 
-    if args.model_type == 'subvolume_3dcnn':
+    # Define the feature inputs to the network
+    if args.feature_type == 'subvolume_3dcnn':
         point_to_subvolume_input = functools.partial(
             regions.point_to_subvolume_input,
             subvolume_shape=args.subvolume_shape,
@@ -224,7 +238,7 @@ def main():
             jitter_max=0,
         )
         prediction_features_fn = evaluation_features_fn
-    elif args.model_type == 'voxel_vector_1dcnn':
+    elif args.feature_type == 'voxel_vector_1dcnn':
         training_features_fn = functools.partial(
             regions.point_to_voxel_vector_input,
             length_in_each_direction=args.length_in_each_direction,
@@ -232,7 +246,7 @@ def main():
         )
         evaluation_features_fn = training_features_fn
         prediction_features_fn = training_features_fn
-    elif args.model_type == 'descriptive_statistics':
+    elif args.feature_type == 'descriptive_statistics':
         training_features_fn = functools.partial(
             regions.point_to_descriptive_statistics,
             subvolume_shape=args.subvolume_shape,
@@ -240,27 +254,32 @@ def main():
         evaluation_features_fn = training_features_fn
         prediction_features_fn = training_features_fn
 
+    # Define the labels
+    if args.label_type == 'ink_classes':
+        label_fn = regions.point_to_ink_classes_label
+    elif args.label_type == 'rgb_values':
+        label_fn = regions.point_to_rgb_values_label
+
+    # Define the datasets
     training_input_fn = regions.create_tf_input_fn(
         region_groups=['training'],
         batch_size=args.training_batch_size,
         features_fn=training_features_fn,
-        label_fn=regions.point_to_ink_classes_label,
+        label_fn=label_fn,
         perform_shuffle=True,
         restrict_to_surface=True,
         epochs=args.training_epochs,
     )
-
     evaluation_input_fn = regions.create_tf_input_fn(
         region_groups=['evaluation'],
         batch_size=args.evaluation_batch_size,
         features_fn=evaluation_features_fn,
-        label_fn=regions.point_to_ink_classes_label,
+        label_fn=label_fn,
         max_samples=args.evaluation_max_samples,
         perform_shuffle=True,
         shuffle_seed=0,  # We want the eval set to be the same each time
         restrict_to_surface=True,
     )
-
     prediction_input_fn = regions.create_tf_input_fn(
         region_groups=['prediction'],
         batch_size=args.prediction_batch_size,
@@ -325,6 +344,7 @@ def main():
                             predict_every_n_checkpoints=args.predict_every_n_checkpoints,
                             region_set=regions,
                             predictions_dir=os.path.join(output_path, 'predictions'),
+                            label_type=args.label_type,
                         ),
                     ],
                 )
@@ -346,24 +366,45 @@ def main():
                 grid_spacing=args.prediction_grid_spacing,
             )
 
-            predictions = estimator.predict(
-                final_prediction_input_fn,
-                predict_keys=[
-                    'region_id',
-                    'ppm_xy',
-                    'probabilities',
-                ],
-            )
-
-            for prediction in predictions:
-                regions.reconstruct_predicted_ink_classes(
-                    np.array([prediction['region_id']]),
-                    np.array([prediction['probabilities']]),
-                    np.array([prediction['ppm_xy']]),
+            if args.label_type == 'ink_classes':
+                predictions = estimator.predict(
+                    final_prediction_input_fn,
+                    predict_keys=[
+                        'region_id',
+                        'ppm_xy',
+                        'probabilities',
+                    ],
                 )
 
-            regions.save_predictions(os.path.join(output_path, 'predictions'), 'final')
-            regions.reset_predictions()
+                for prediction in predictions:
+                    regions.reconstruct_predicted_ink_classes(
+                        np.array([prediction['region_id']]),
+                        np.array([prediction['probabilities']]),
+                        np.array([prediction['ppm_xy']]),
+                    )
+
+                regions.save_predictions(os.path.join(output_path, 'predictions'), 'final')
+                regions.reset_predictions()
+
+            elif args.label_type == 'rgb_values':
+                predictions = estimator.predict(
+                    final_prediction_input_fn,
+                    predict_keys=[
+                        'region_id',
+                        'ppm_xy',
+                        'rgb',
+                    ],
+                )
+
+                for prediction in predictions:
+                    regions.reconstruct_predicted_rgb(
+                        np.array([prediction['region_id']]),
+                        np.array([prediction['rgb']]),
+                        np.array([prediction['ppm_xy']]),
+                    )
+
+                regions.save_predictions(os.path.join(output_path, 'predictions'), 'final')
+                regions.reset_predictions()
 
     # Perform finishing touches even if cut short
     except KeyboardInterrupt:

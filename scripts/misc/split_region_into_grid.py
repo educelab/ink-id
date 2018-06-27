@@ -20,13 +20,11 @@ import inkid.data
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('-i', '--input', metavar='path', required=True,
-                        help='input file (JSON)')
-    parser.add_argument('-o', '--output', metavar='path', required=True,
-                        help='output file')
-    parser.add_argument('-rows', metavar='num', default=3,
+    parser.add_argument('input', metavar='infile', help='input file (JSON)')
+    parser.add_argument('output', metavar='outfile', help='output file')
+    parser.add_argument('--rows', metavar='num', default=3,
                         help='grid squares along x axis (number of rows)')
-    parser.add_argument('-columns', metavar='num', default=3,
+    parser.add_argument('--columns', metavar='num', default=3,
                         help='grid squares along y axis (number of columns)')
 
     args = parser.parse_args()

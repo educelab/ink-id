@@ -88,6 +88,7 @@ class RegionSet:
             # defined (which is good here).
             mask_path = ppm_data.get('mask')
             ink_label_path = ppm_data.get('ink-label')
+            rgb_label_path = ppm_data.get('rgb-label')
 
             if volume_path not in self._volumes:
                 self._volumes[volume_path] = inkid.data.Volume(volume_path)
@@ -100,7 +101,8 @@ class RegionSet:
                 volume,
                 mask_path,
                 ink_label_path,
-                invert_normal
+                rgb_label_path,
+                invert_normal,
             )
 
         return self._ppms[ppm_name]
@@ -275,6 +277,10 @@ class RegionSet:
         region_id, x, y = region_id_with_point
         return self._regions[region_id].ppm.point_to_ink_classes_label((x, y))
 
+    def point_to_rgb_values_label(self, region_id_with_point):
+        region_id, x, y = region_id_with_point
+        return self._regions[region_id].ppm.point_to_rgb_values_label((x, y))
+
     def point_to_other_feature_tensors(self, region_id_with_point):
         """Take a region_id and point, and return some general network inputs.
 
@@ -349,6 +355,17 @@ class RegionSet:
                 ppm_xy_coordinates):
             self._regions[region_id].ppm.reconstruct_prediction_value(
                 value,
+                ppm_xy
+            )
+
+    def reconstruct_predicted_rgb(self, region_ids, rgbs, ppm_xy_coordinates):
+        assert len(region_ids) == len(rgbs) == len(ppm_xy_coordinates)
+        for region_id, rgb, ppm_xy in zip(
+                region_ids,
+                rgbs,
+                ppm_xy_coordinates):
+            self._regions[region_id].ppm.reconstruct_predicted_rgb(
+                rgb,
                 ppm_xy
             )
 
