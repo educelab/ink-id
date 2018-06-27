@@ -6,8 +6,6 @@ import numpy as np
 from PIL import Image
 import progressbar
 
-import inkid.ops
-
 
 class PPM:
     def __init__(self, path, volume, mask_path, ink_label_path,
