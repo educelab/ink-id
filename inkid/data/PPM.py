@@ -235,8 +235,8 @@ class PPM:
         assert len(ppm_xy) == 2
         assert len(rgb) == 3
         x, y = ppm_xy
-        # Restrict value to uint16 rnage
-        rgb = [max(min(np.iinfo(np.uint16).max, val), 0) for val in rgb]
+        # Restrict value to uint16 range
+        rgb = [max(min(np.iinfo(np.uint16).max, int(val)), 0) for val in rgb]
         # Convert to uint8 range
         rgb = [
             inkid.ops.remap(
