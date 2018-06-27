@@ -54,7 +54,7 @@ class PPM:
 
         self._rgb_label = None
         if self._rgb_label_path is not None:
-            self._rgb_label = np.asarray(Image.open(self._rgb_label_path), np.uint16)
+            self._rgb_label = np.asarray(Image.open(self._rgb_label_path), np.uint8)
 
         self._invert_normal = False
         if invert_normal is not None:
@@ -235,18 +235,8 @@ class PPM:
         assert len(ppm_xy) == 2
         assert len(rgb) == 3
         x, y = ppm_xy
-        # Restrict value to uint16 range
-        rgb = [max(min(np.iinfo(np.uint16).max, int(val)), 0) for val in rgb]
-        # Convert to uint8 range
-        rgb = [
-            inkid.ops.remap(
-                val,
-                0,
-                np.iinfo(np.uint16).max,
-                0,
-                np.iinfo(np.uint8).max
-            ) for val in rgb
-        ]
+        # Restrict value to uint8 range
+        rgb = [max(min(np.iinfo(np.uint8).max, int(val)), 0) for val in rgb]
         self._rgb_values_prediction_image[y-square_r:y+square_r, x-square_r:x+square_r] = rgb
 
     def reset_predictions(self):
