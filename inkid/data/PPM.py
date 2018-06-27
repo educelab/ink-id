@@ -64,7 +64,7 @@ class PPM:
 
         if self._ink_label is not None:
             self._ink_classes_prediction_image = np.zeros((self._height, self._width), np.uint16)
-        elif self._rgb_label is not None:
+        if self._rgb_label is not None:
             self._rgb_values_prediction_image = np.zeros((self._height, self._width, 3), np.uint16)
 
     @staticmethod
@@ -238,7 +238,7 @@ class PPM:
     def reset_predictions(self):
         if self._ink_label is not None:
             self._ink_classes_prediction_image = np.zeros((self._height, self._width), np.uint16)
-        elif self._rgb_label is not None:
+        if self._rgb_label is not None:
             self._rgb_values_prediction_image = np.zeros((self._height, self._width, 3), np.uint16)
 
     def save_predictions(self, directory, iteration):
