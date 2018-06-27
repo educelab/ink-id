@@ -189,7 +189,7 @@ class PPM:
         x, y = point
         label = self._rgb_label[y, x]
         assert len(label) == 3
-        return label
+        return np.asarray(label, np.float32)
 
     def point_to_voxel_vector(self, point, length_in_each_direction,
                               out_of_bounds=None):
