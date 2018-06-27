@@ -6,6 +6,8 @@ import numpy as np
 from PIL import Image
 import progressbar
 
+import inkid.ops
+
 
 class PPM:
     def __init__(self, path, volume, mask_path, ink_label_path,
@@ -236,7 +238,15 @@ class PPM:
         # Restrict value to uint16 rnage
         rgb = [max(min(np.iinfo(np.uint16).max, val), 0) for val in rgb]
         # Convert to uint8 range
-        rgb = [inkid.ops.remap(val, 0, np.iinfo(np.uint16).max, 0, np.iinfo(np.uint8).max) for val in rgb]
+        rgb = [
+            inkid.ops.remap(
+                val,
+                0,
+                np.iinfo(np.uint16).max,
+                0,
+                np.iinfo(np.uint8).max
+            ) for val in rgb
+        ]
         self._rgb_values_prediction_image[y-square_r:y+square_r, x-square_r:x+square_r] = rgb
 
     def reset_predictions(self):
@@ -249,16 +259,18 @@ class PPM:
         if not os.path.exists(directory):
             os.makedirs(directory)
 
+        im = None
         if self._ink_classes_prediction_image.any():
             im = Image.fromarray(self._ink_classes_prediction_image)
         elif self._rgb_values_prediction_image.any():
             im = Image.fromarray(self._rgb_values_prediction_image)
-        im.save(
-            os.path.join(
-                directory,
-                '{}_prediction_{}.tif'.format(
-                    os.path.splitext(os.path.basename(self._path))[0],
-                    iteration,
+        if im is not None:
+            im.save(
+                os.path.join(
+                    directory,
+                    '{}_prediction_{}.tif'.format(
+                        os.path.splitext(os.path.basename(self._path))[0],
+                        iteration,
+                    ),
                 ),
-            ),
-        )
+            )
