@@ -63,9 +63,9 @@ class PPM:
         self.process_PPM_file(self._path)
 
         if self._ink_label is not None:
-            self._prediction_image = np.zeros((self._height, self._width), np.uint16)
+            self._ink_classes_prediction_image = np.zeros((self._height, self._width), np.uint16)
         elif self._rgb_label is not None:
-            self._prediction_image = np.zeros((self._height, self._width, 3), np.uint16)
+            self._rgb_values_prediction_image = np.zeros((self._height, self._width, 3), np.uint16)
 
     @staticmethod
     def parse_PPM_header(filename):
@@ -227,25 +227,28 @@ class PPM:
     def reconstruct_prediction_value(self, value, ppm_xy, square_r=2):
         assert len(ppm_xy) == 2
         x, y = ppm_xy
-        self._prediction_image[y-square_r:y+square_r, x-square_r:x+square_r] = value
+        self._ink_classes_prediction_image[y-square_r:y+square_r, x-square_r:x+square_r] = value
 
     def reconstruct_predicted_rgb(self, rgb, ppm_xy, square_r=2):
         assert len(ppm_xy) == 2
         assert len(rgb) == 3
         x, y = ppm_xy
-        self._prediction_image[y-square_r:y+square_r, x-square_r:x+square_r] = rgb
+        self._rgb_values_prediction_image[y-square_r:y+square_r, x-square_r:x+square_r] = rgb
 
     def reset_predictions(self):
         if self._ink_label is not None:
-            self._prediction_image = np.zeros((self._height, self._width), np.uint16)
+            self._ink_classes_prediction_image = np.zeros((self._height, self._width), np.uint16)
         elif self._rgb_label is not None:
-            self._prediction_image = np.zeros((self._height, self._width, 3), np.uint16)
+            self._rgb_values_prediction_image = np.zeros((self._height, self._width, 3), np.uint16)
 
     def save_predictions(self, directory, iteration):
         if not os.path.exists(directory):
             os.makedirs(directory)
 
-        im = Image.fromarray(self._prediction_image)
+        if sum(abs(self._ink_classes_prediction_image)) != 0:
+            im = Image.fromarray(self._ink_classes_prediction_image)
+        elif sum(abs(self._rgb_values_prediction_image)) != 0:
+            im = Image.fromarray(self.rgb_values_prediction_image)
         im.save(
             os.path.join(
                 directory,
