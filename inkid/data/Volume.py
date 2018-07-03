@@ -8,12 +8,13 @@ import random
 
 import mathutils
 import numpy as np
-cimport numpy as np
 from PIL import Image
 import progressbar
 
+import inkid.data.Volume_cy
 
-cdef class Volume:
+
+class Volume:
     """Represent a volume and support accesses of the volume data.
 
     The volume class supports the access of raw volume data, either
@@ -64,6 +65,8 @@ cdef class Volume:
             slices_abs_path,
             self._data.shape)
         )
+
+        self._cython_volume = inkid.data.Volume_cy.Volume(slices_path)
 
     def intensity_at(self, x, y, z):
         """Get the intensity value at a voxel position."""
@@ -133,9 +136,9 @@ cdef class Volume:
             else:
                 raise IndexError
 
-    cpdef np.ndarray[np.npy_float32, ndim=3] get_subvolume(
-        self, center, shape, normal, out_of_bounds, move_along_normal,
-        jitter_max, augment_subvolume, method):
+    def get_subvolume(self, center, shape, normal, out_of_bounds,
+                      move_along_normal, jitter_max,
+                      augment_subvolume, method):
         """Get a subvolume from a center point and normal vector.
 
         At the time of writing, this function very closely resembles
@@ -189,13 +192,23 @@ cdef class Volume:
 
         if method is None:
             method = 'snap_to_axis_aligned'
-        assert method in ['snap_to_axis_aligned', 'interpolated', 'nearest_neighbor']
+        assert method in [
+            'snap_to_axis_aligned',
+            'interpolated',
+            'nearest_neighbor',
+            'snap_to_axis_aligned_cy',
+            'nearest_neighbor_cy',
+        ]
         if method == 'snap_to_axis_aligned':
             method_fn = self.get_subvolume_snap_to_axis_aligned
         elif method == 'interpolated':
             method_fn = self.get_subvolume_interpolated
         elif method == 'nearest_neighbor':
             method_fn = self.get_subvolume_nearest_neighbor
+        elif method == 'snap_to_axis_aligned_cy':
+            method_fn = self._cython_volume.get_subvolume_snap_to_axis_aligned
+        elif method == 'nearest_neighbor_cy':
+            method_fn = self._cython_volume.get_subvolume_nearest_neighbor
 
         center = np.array(center)
         center += (move_along_normal + random.randint(-jitter_max, jitter_max)) * normal
@@ -278,48 +291,63 @@ cdef class Volume:
 
     def get_subvolume_interpolated(self, center, shape, normal,
                                    out_of_bounds):
-        # x_vec = np.array(x_vec)
-        # y_vec = np.array(y_vec)
-        # z_vec = np.array(z_vec)
-
-        # subvolume = np.zeros(shape_zyx)
-
-        # # Iterate over the subvolume space
-        # for z in range(shape_zyx[0]):
-        #     for y in range(shape_zyx[1]):
-        #         for x in range(shape_zyx[2]):
-        #             # Convert from an index relative to an origin in
-        #             # the corner to a position relative to the
-        #             # subvolume center (which may not correspond
-        #             # exactly to one of the subvolume voxel positions
-        #             # if any of the side lengths are even).
-        #             x_offset = -1 * (shape_zyx[2] - 1) / 2.0 + x
-        #             y_offset = -1 * (shape_zyx[1] - 1) / 2.0 + y
-        #             z_offset = -1 * (shape_zyx[0] - 1) / 2.0 + z
-
-        #             # Calculate the corresponding position in the
-        #             # volume.
-        #             volume_point = center_xyz \
-        #                            + x_offset * x_vec \
-        #                            + y_offset * y_vec \
-        #                            + z_offset * z_vec
-        #             try:
-        #                 subvolume[z, y, x] = self.interpolate_at(
-        #                     volume_point[0],
-        #                     volume_point[1],
-        #                     volume_point[2],
-        #                 )
-        #             except IndexError:
-        #                 subvolume[z, y, x] = 0
-        # return subvolume
-        pass
-
-    def get_subvolume_nearest_neighbor(self, center, shape, normal,
-                                       out_of_bounds):
-        subvolume = np.zeros(shape)
         x_vec = mathutils.Vector([1, 0, 0])
         y_vec = mathutils.Vector([0, 1, 0])
         z_vec = mathutils.Vector([0, 0, 1])
+        normal = mathutils.Vector(normal).normalized()
+
+        quaternion = z_vec.rotation_difference(normal)
+
+        x_vec.rotate(quaternion)
+        y_vec.rotate(quaternion)
+        z_vec.rotate(quaternion)
+
+        subvolume = np.zeros(shape)
+
+        # Iterate over the subvolume space
+        for z in range(shape[0]):
+            for y in range(shape[1]):
+                for x in range(shape[2]):
+                    # Convert from an index relative to an origin in
+                    # the corner to a position relative to the
+                    # subvolume center (which may not correspond
+                    # exactly to one of the subvolume voxel positions
+                    # if any of the side lengths are even).
+                    x_offset = -1 * (shape[2] - 1) / 2.0 + x
+                    y_offset = -1 * (shape[1] - 1) / 2.0 + y
+                    z_offset = -1 * (shape[0] - 1) / 2.0 + z
+
+                    # Calculate the corresponding position in the
+                    # volume.
+                    volume_point = center \
+                        + x_offset * x_vec \
+                        + y_offset * y_vec \
+                        + z_offset * z_vec
+                    try:
+                        subvolume[z, y, x] = self.interpolate_at(
+                            volume_point[0],
+                            volume_point[1],
+                            volume_point[2],
+                        )
+                    except IndexError:
+                        subvolume[z, y, x] = 0
+        return subvolume
+
+    def get_subvolume_nearest_neighbor(self, center, shape, normal,
+                                       out_of_bounds):
+        x_vec = mathutils.Vector([1, 0, 0])
+        y_vec = mathutils.Vector([0, 1, 0])
+        z_vec = mathutils.Vector([0, 0, 1])
+        normal = mathutils.Vector(normal).normalized()
+
+        quaternion = z_vec.rotation_difference(normal)
+
+        x_vec.rotate(quaternion)
+        y_vec.rotate(quaternion)
+        z_vec.rotate(quaternion)
+
+        subvolume = np.zeros(shape)
+
         for z in range(shape[0]):
             for y in range(shape[1]):
                 for x in range(shape[2]):

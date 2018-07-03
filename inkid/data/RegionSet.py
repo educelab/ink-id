@@ -114,8 +114,12 @@ class RegionSet:
     def create_tf_input_fn(self, region_groups, batch_size,
                            features_fn, label_fn=None, epochs=None,
                            max_samples=-1, perform_shuffle=None,
-                           shuffle_seed=None, restrict_to_surface=None,
-                           grid_spacing=None, probability_of_selection=None):
+                           shuffle_seed=None,
+                           restrict_to_surface=None,
+                           grid_spacing=None,
+                           probability_of_selection=None,
+                           premade_points_generator=None,
+                           threads=multiprocessing.cpu_count()):
         """Generate Tensorflow input_fn function for the model/network.
 
         A Tensorflow Estimator requires an input_fn to be passed to
@@ -142,24 +146,30 @@ class RegionSet:
             # large for Tensorboard to parse it and show you
             # anything. Using .from_generator() instead does not do
             # this. Practically they are the same.
-            dataset = tf.data.Dataset.from_generator(
-                self.get_points_generator(
-                    region_groups=region_groups,
-                    restrict_to_surface=restrict_to_surface,
-                    perform_shuffle=perform_shuffle,
-                    shuffle_seed=shuffle_seed,
-                    grid_spacing=grid_spacing,
-                    probability_of_selection=probability_of_selection,
-                ),
-                (tf.int64),
-            )
+            if premade_points_generator is None:
+                dataset = tf.data.Dataset.from_generator(
+                    self.get_points_generator(
+                        region_groups=region_groups,
+                        restrict_to_surface=restrict_to_surface,
+                        perform_shuffle=perform_shuffle,
+                        shuffle_seed=shuffle_seed,
+                        grid_spacing=grid_spacing,
+                        probability_of_selection=probability_of_selection,
+                    ),
+                    (tf.int64),
+                )
+            else:
+                dataset = tf.data.Dataset.from_generator(
+                    premade_points_generator,
+                    (tf.int64)
+                )
 
             dataset = dataset.map(
                 self.create_point_to_network_input_function(
                     features_fn=features_fn,
                     label_fn=label_fn,
                 ),
-                num_parallel_calls=multiprocessing.cpu_count()
+                num_parallel_calls=threads
             )
 
             # Filter out inputs that are all 0
