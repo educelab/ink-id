@@ -31,6 +31,7 @@ import timeit
 import configargparse
 import git
 import numpy as np
+from tensorboard.backend.event_processing.event_accumulator import EventAccumulator
 import tensorflow as tf
 
 import inkid
@@ -125,6 +126,15 @@ def main():
                '(no profile produced if not defined)')
     parser.add('--profile-start-and-end-steps', metavar='n', nargs=2, default=[10, 90],
                help='start and end steps (and dump step) for profiling')
+
+    # Logging/metadata
+    parser.add('--eval-metrics-to-write', metavar='metric', nargs='*',
+               default=[
+                   'area_under_roc_curve',
+                   'loss'
+               ],
+               help='will try the final value for each of these eval metrics and '
+               'add it to metadata file.')
 
     # Rclone
     parser.add('--rclone-transfer-remote', metavar='remote', default=None,
@@ -418,13 +428,23 @@ def main():
         f.write('Runtime:\n{}s\n\n'.format(stop - start))
         f.write('Finished at:\n{}\n\n'.format(time.strftime('%Y-%m-%d %H:%M:%S')))
 
-        # Print out the git hash if there is a repository
+        # Add the git hash if there is a repository
         try:
             repo = git.Repo(os.path.join(os.path.dirname(inspect.getfile(inkid)), '..'))
             sha = repo.head.object.hexsha
             f.write('Git hash:\n{}\n\n'.format(repo.git.rev_parse(sha, short=6)))
         except git.exc.InvalidGitRepositoryError:
             f.write('No git hash available (unable to find valid repository).\n\n')
+
+        # Add some final metrics
+        f.write('Final evaluation metrics:\n')
+        eval_event_acc = EventAccumulator(os.path.join(output_path, 'eval'))
+        eval_event_acc.Reload()
+        for metric in args.eval_metrics_to_write:
+            if metric in eval_event_acc.Tags()['scalars']:
+                value = eval_event_acc.Scalars(metric)[-1].value
+                f.write('{}: {}\n'.format(metric, value))
+        f.write('\n')
 
     # Transfer via rclone if requested
     if args.rclone_transfer_remote is not None:
