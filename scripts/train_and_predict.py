@@ -90,7 +90,7 @@ def main():
                help='subvolume shape in z y x')
     parser.add('--move-along-normal', metavar='n', type=float,
                help='number of voxels to move along normal before getting a subvolume')
-    parser.add('--normalize-subvolume', action='store_true',
+    parser.add('--normalize-subvolumes', action='store_true',
                help='normalize each subvolume to zero mean and unit variance on the fly')
 
     # Voxel vectors
