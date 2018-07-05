@@ -134,7 +134,7 @@ class Volume:
 
     def get_subvolume(self, center, shape, normal, out_of_bounds,
                       move_along_normal, jitter_max,
-                      augment_subvolume, method):
+                      augment_subvolume, method, normalize):
         """Get a subvolume from a center point and normal vector.
 
         At the time of writing, this function very closely resembles
@@ -218,6 +218,11 @@ class Volume:
 
             rotate_direction = np.random.randint(4)
             subvolume = np.rot90(subvolume, k=rotate_direction, axes=(1, 2))
+
+        if normalize:
+            subvolume = np.asarray(subvolume, dtype=np.float32)
+            subvolume = subvolume - subvolume.mean()
+            subvolume = subvolume / subvolume.std()
 
         assert subvolume.shape == tuple(shape)
 
@@ -366,3 +371,8 @@ class Volume:
     #     z_vec.rotate(quaternion)
 
     #     return self.get_subvolume(center_xyz, shape_zyx, x_vec, y_vec, z_vec)
+
+    def normalize(self):
+        self._data = np.asarray(self._data, dtype=np.float32)
+        self._data = self._data - self.mean()
+        self._data = self._data / self.std()

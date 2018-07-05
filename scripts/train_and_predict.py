@@ -79,6 +79,10 @@ def main():
                    'rgb_values',
                ])
 
+    # Volume
+    parser.add('--normalize-volumes', action='store_true',
+               help='normalize volumes to zero mean and unit variance before training')
+
     # Subvolumes
     parser.add('--subvolume-method', metavar='name', default='snap_to_axis_aligned',
                help='method for getting subvolumes')
@@ -86,6 +90,8 @@ def main():
                help='subvolume shape in z y x')
     parser.add('--move-along-normal', metavar='n', type=float,
                help='number of voxels to move along normal before getting a subvolume')
+    parser.add('--normalize-subvolume', action='store_true',
+               help='normalize each subvolume to zero mean and unit variance on the fly')
 
     # Voxel vectors
     parser.add('--length-in-each-direction', metavar='n', type=int,
@@ -177,6 +183,10 @@ def main():
         region_data['regions']['evaluation'].append(k_region)
 
     regions = inkid.data.RegionSet(region_data)
+    if args.normalize_volumes:
+        print('Normalizing volumes...')
+        regions.normalize_volumes()
+        print('done')
 
     print('Arguments:\n{}\n'.format(args))
     print('Region Set:\n{}\n'.format(json.dumps(region_data, indent=4, sort_keys=False)))
@@ -236,6 +246,7 @@ def main():
             out_of_bounds='all_zeros',
             move_along_normal=args.move_along_normal,
             method=args.subvolume_method,
+            normalize=args.normalize_subvolumes,
         )
         training_features_fn = functools.partial(
             point_to_subvolume_input,

@@ -203,10 +203,9 @@ class PPM:
         )
 
     def point_to_subvolume(self, point, subvolume_shape,
-                           out_of_bounds=None,
-                           move_along_normal=None,
-                           jitter_max=None,
-                           augment_subvolume=None, method=None):
+                           out_of_bounds=None, move_along_normal=None,
+                           jitter_max=None, augment_subvolume=None,
+                           method=None, normalize=None):
         ppm_x, ppm_y = point
         x, y, z, n_x, n_y, n_z = self.get_point_with_normal(ppm_x, ppm_y)
         return self._volume.get_subvolume(
@@ -218,6 +217,7 @@ class PPM:
             jitter_max=jitter_max,
             augment_subvolume=augment_subvolume,
             method=method,
+            normalize=normalize,
         )
 
     def reconstruct_predicted_ink_classes(self, class_probabilities, ppm_xy):

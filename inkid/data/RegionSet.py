@@ -69,6 +69,10 @@ class RegionSet:
                     )
         return data
 
+    def normalize_volumes(self):
+        for volume_path in self._volumes:
+            self._volumes[volume_path].normalize()
+
     def create_ppm_if_needed(self, ppm_name, ppm_data):
         """Return the ppm from its name and data, creating first if needed.
 
@@ -252,7 +256,8 @@ class RegionSet:
                                  subvolume_shape, out_of_bounds=None,
                                  move_along_normal=None,
                                  jitter_max=None,
-                                 augment_subvolume=None, method=None):
+                                 augment_subvolume=None, method=None,
+                                 normalize=None):
         """Take a region_id and (x, y) point, and return a subvolume.
 
         First use the PPM (x, y) to find the 3D position and normal
@@ -269,6 +274,7 @@ class RegionSet:
             jitter_max=jitter_max,
             augment_subvolume=augment_subvolume,
             method=method,
+            normalize=normalize,
         )
         return np.asarray(subvolume, np.float32)
 
