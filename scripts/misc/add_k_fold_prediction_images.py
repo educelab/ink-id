@@ -13,6 +13,7 @@ def main():
     parser.add_argument('--final', action='store_true')
     parser.add_argument('--best-auc', action='store_true')
     parser.add_argument('--gif', action='store_true')
+    parser.add_argument('--caption-gif-with-iterations', action='store_true')
 
     args = parser.parse_args()
     dirs = [os.path.join(args.dir, name) for name in os.listdir(args.dir)
@@ -22,6 +23,8 @@ def main():
           ' in the filename being the only number preceded by "_"'
           ' and followed by "_" or ".".')
 
+    if not (args.final or args.best_auc or args.gif):
+        parser.print_help()
     if args.final:
         print('\nFor final predictions, using images:')
         get_and_merge_images(dirs, False, os.path.join(args.dir, 'final.tif'))
@@ -30,10 +33,10 @@ def main():
         get_and_merge_images(dirs, True, os.path.join(args.dir, 'best_auc.tif'))
     if args.gif:
         print('\nFor training .gif, using images:')
-        create_gif(dirs, os.path.join(args.dir, 'training.gif'))
+        create_gif(dirs, os.path.join(args.dir, 'training.gif'), args.caption_gif_with_iterations)
 
 
-def create_gif(dirs, outfile):
+def create_gif(dirs, outfile, caption):
     filenames_in_each_dir = []
     for d in dirs:
         names = os.listdir(os.path.join(d, 'predictions'))
@@ -51,8 +54,12 @@ def create_gif(dirs, outfile):
     gif = wand.image.Image()
     for i in range(num_frames):
         frame = None
+        iterations_getting_shown = []
         for d in filenames_in_each_dir:
             filename = d[i] if i < len(d) else d[-1]
+            iterations_getting_shown.append(
+                int(re.findall('_(\d+)[\._]', os.path.basename(filename))[0])
+            )
             print(filename)
             try:
                 partial_frame = wand.image.Image(filename=filename)
@@ -69,6 +76,15 @@ def create_gif(dirs, outfile):
                     left=0,
                     top=0,
                 )
+        iteration = max(iterations_getting_shown)
+        if caption:
+            frame.caption(
+                '{:08d}'.format(iteration),
+                font=wand.font.Font(
+                    path='',
+                    color=wand.color.Color('#0C0687')
+                )
+            )
         gif.sequence.append(frame)
 
     for i in range(num_frames):
