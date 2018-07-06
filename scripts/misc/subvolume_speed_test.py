@@ -40,9 +40,9 @@ def main():
 
     methods = [
         # 'snap_to_axis_aligned_cy',
-        # 'snap_to_axis_aligned',
-        'nearest_neighbor_cy',
-        # 'nearest_neighbor',
+        'snap_to_axis_aligned',
+        # 'nearest_neighbor_cy',
+        'nearest_neighbor',
         # 'interpolated'
     ]
 

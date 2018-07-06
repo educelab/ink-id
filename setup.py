@@ -3,8 +3,6 @@ from setuptools import setup
 from Cython.Build import cythonize
 import numpy as np
 
-import numpy as np
-
 setup(
     name='inkid',
     version='0.0.1',

@@ -346,3 +346,99 @@ cdef class Volume:
         self.nearest_neighbor_with_basis_vectors(c, s, basis, subvolume)
 
         return subvolume
+
+    def get_subvolume(self, center, shape, normal, out_of_bounds,
+                      move_along_normal, jitter_max,
+                      augment_subvolume, method, normalize):
+        """Get a subvolume from a center point and normal vector.
+
+        At the time of writing, this function very closely resembles
+        but is not identical to a similar one in the
+        VolumeCartographer core. Volume::getVoxelNeighborsInterpolated
+        is centered on a position and goes out an integer number of
+        points from that position in each axis, so the side lengths
+        are always odd and there is always a voxel at the center of
+        the returned volume. Not the case here, since we tend to want
+        even-sided subvolumes for machine learning. See
+        getVoxelNeighborsInterpolated in
+        https://code.vis.uky.edu/seales-research/volume-cartographer/blob/develop/core/include/vc/core/types/Volume.hpp.
+
+        Args:
+            center: The starting center point of the subvolume.
+            shape: The desired shape of the subvolume.
+            normal: The normal vector at the center point.
+            out_of_bounds: String indicating what to do if the requested
+                subvolume does not fit entirely within the volume.
+            move_along_normal: Scalar of how many units to translate
+                the center point along the center vector.
+            jitter_max: Jitter the center point a random amount up to
+                this value in either direction along the normal vector.
+            augment_subvolume: Whether or not to perform augmentation.
+            method: String to indicate how to get the volume data.
+
+        Returns:
+            A numpy array of the requested shape.
+
+        """
+        assert len(center) == 3
+        assert len(shape) == 3
+
+        if normal is None:
+            normal = mathutils.Vector((0, 0, 1))
+        else:
+            normal = mathutils.Vector(normal).normalized()
+
+        if out_of_bounds is None:
+            out_of_bounds = 'all_zeros'
+        assert out_of_bounds in ['all_zeros', 'partial_zeros', 'index_error']
+
+        if move_along_normal is None:
+            move_along_normal = 0
+
+        if jitter_max is None:
+            jitter_max = 0
+
+        if augment_subvolume is None:
+            augment_subvolume = False
+
+        if method is None:
+            method = 'snap_to_axis_aligned'
+        assert method in ['snap_to_axis_aligned', 'interpolated', 'nearest_neighbor']
+        if method == 'snap_to_axis_aligned':
+            method_fn = self.get_subvolume_snap_to_axis_aligned
+        elif method == 'interpolated':
+            method_fn = self.get_subvolume_interpolated
+        elif method == 'nearest_neighbor':
+            method_fn = self.get_subvolume_nearest_neighbor
+
+        center = np.array(center)
+        center += (move_along_normal + random.randint(-jitter_max, jitter_max)) * normal
+
+        subvolume = method_fn(
+            center,
+            shape,
+            normal,
+            out_of_bounds,
+        )
+
+        if augment_subvolume:
+            flip_direction = np.random.randint(4)
+            if flip_direction == 0:
+                subvolume = np.flip(subvolume, axis=1)  # Flip y
+            elif flip_direction == 1:
+                subvolume = np.flip(subvolume, axis=2)  # Flip x
+            elif flip_direction == 2:
+                subvolume = np.flip(subvolume, axis=1)  # Flip x and y
+                subvolume = np.flip(subvolume, axis=2)
+
+            rotate_direction = np.random.randint(4)
+            subvolume = np.rot90(subvolume, k=rotate_direction, axes=(1, 2))
+
+        if normalize:
+            subvolume = np.asarray(subvolume, dtype=np.float32)
+            subvolume = subvolume - subvolume.mean()
+            subvolume = subvolume / subvolume.std()
+
+        assert subvolume.shape == tuple(shape)
+
+        return subvolume
