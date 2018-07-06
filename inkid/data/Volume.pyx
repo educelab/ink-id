@@ -280,7 +280,7 @@ cdef class Volume:
         # return subvolume
         pass
 
-    cdef nearest_neighbor_with_basis_vectors(self, Float3 center, Int3 shape, BasisVectors basis, uint16[:,:,:] array):
+    cdef void nearest_neighbor_with_basis_vectors(self, Float3 center, Int3 shape, BasisVectors basis, uint16[:,:,:] array) nogil:
         cdef int x, y, z, x_offset, y_offset, z_offset
         cdef Float3 volume_point
         cdef Int3 offset
@@ -293,9 +293,9 @@ cdef class Volume:
                     # subvolume center (which may not correspond
                     # exactly to one of the subvolume voxel positions
                     # if any of the side lengths are even).
-                    offset.x = int(round(-1 * (shape.x - 1) / 2.0 + x))
-                    offset.y = int(round(-1 * (shape.y - 1) / 2.0 + y))
-                    offset.z = int(round(-1 * (shape.z - 1) / 2.0 + z))
+                    offset.x = <int>((-1 * (shape.x - 1) / 2.0 + x) + 0.5)
+                    offset.y = <int>((-1 * (shape.y - 1) / 2.0 + y) + 0.5)
+                    offset.z = <int>((-1 * (shape.z - 1) / 2.0 + z) + 0.5)
 
                     # Calculate the corresponding position in the
                     # volume.
@@ -315,15 +315,10 @@ cdef class Volume:
                     volume_point.y += offset.z * basis.z.y
                     volume_point.z += offset.z * basis.z.z
                     
-                    # volume_point = center \
-                    #     + x_offset * x_vec \
-                    #     + y_offset * y_vec \
-                    #     + z_offset * z_vec
-                    
                     array[z, y, x] = self.intensity_at(
-                        round(volume_point.x),
-                        round(volume_point.y),
-                        round(volume_point.z)
+                        <int>(volume_point.x + 0.5),
+                        <int>(volume_point.y + 0.5),
+                        <int>(volume_point.z + 0.5)
                     )
 
     cpdef get_subvolume_nearest_neighbor(self, center, shape, normal,

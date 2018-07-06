@@ -23,7 +23,7 @@ setup(
         'Pillow',
         'progressbar2',
     ],
-    ext_modules=cythonize('inkid/data/Volume_cy.pyx', annotate=True),
+    ext_modules=cythonize('inkid/data/Volume.pyx', annotate=True),
     include_dirs=[np.get_include()],
     entry_points={
         'console_scripts': [
