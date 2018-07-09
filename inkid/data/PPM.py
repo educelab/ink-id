@@ -62,10 +62,8 @@ class PPM:
 
         self.process_PPM_file(self._path)
 
-        if self._ink_label is not None:
-            self._ink_classes_prediction_image = np.zeros((self._height, self._width), np.uint16)
-        if self._rgb_label is not None:
-            self._rgb_values_prediction_image = np.zeros((self._height, self._width, 3), np.uint8)
+        self._ink_classes_prediction_image = np.zeros((self._height, self._width), np.uint16)
+        self._rgb_values_prediction_image = np.zeros((self._height, self._width, 3), np.uint8)
 
     @staticmethod
     def parse_PPM_header(filename):
