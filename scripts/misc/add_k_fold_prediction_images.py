@@ -10,10 +10,12 @@ import wand.image
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('dir', metavar='path', help='input directory')
+    parser.add_argument('--all', action='store_true')
     parser.add_argument('--final', action='store_true')
     parser.add_argument('--best-auc', action='store_true')
     parser.add_argument('--gif', action='store_true')
     parser.add_argument('--caption-gif-with-iterations', action='store_true')
+    parser.add_argument('--composite-at-iteration', type=int, default=None)
 
     args = parser.parse_args()
     dirs = [os.path.join(args.dir, name) for name in os.listdir(args.dir)
@@ -23,15 +25,23 @@ def main():
           ' in the filename being the only number preceded by "_"'
           ' and followed by "_" or ".".')
 
-    if not (args.final or args.best_auc or args.gif):
+    if not (args.final or args.best_auc or args.gif or args.all or args.composite_at_iteration):
         parser.print_help()
-    if args.final:
+    if args.final or args.all:
         print('\nFor final predictions, using images:')
         get_and_merge_images(dirs, False, os.path.join(args.dir, 'final.tif'))
-    if args.best_auc:
+    if args.best_auc or args.all:
         print('\nFor best auc predictions, using images:')
         get_and_merge_images(dirs, True, os.path.join(args.dir, 'best_auc.tif'))
-    if args.gif:
+    if args.composite_at_iteration is not None:
+        print('\nFor composite at iteration {}, using images:'.format(args.composite_at_iteration))
+        get_and_merge_images(
+            dirs,
+            False,
+            os.path.join(args.dir, 'iteration_{}.tif'.format(args.composite_at_iteration)),
+            iteration=args.composite_at_iteration
+        )
+    if args.gif or args.all:
         print('\nFor training .gif, using images:')
         create_gif(dirs, os.path.join(args.dir, 'training.gif'), args.caption_gif_with_iterations)
 
@@ -94,12 +104,20 @@ def create_gif(dirs, outfile, caption):
     gif.save(filename=outfile)
 
 
-def get_and_merge_images(dirs, best_auc, outfile):
+def get_and_merge_images(dirs, best_auc, outfile, iteration=None):
     image = None
     for d in dirs:
         # Sort by the iteration number and pick the last one
         names = os.listdir(os.path.join(d, 'predictions'))
         names = list(filter(lambda name: re.search('_(\d+)[\._]', name) is not None, names))
+        if iteration is not None:
+            names = list(filter(
+                lambda name: re.findall('_(\d+)[\._]', name)[0] in [
+                    str(iteration),
+                    str(iteration+1)
+                ],
+                names
+            ))
         names = sorted(
             names,
             key=lambda name: int(re.findall('_(\d+)[\._]', name)[0])
