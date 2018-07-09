@@ -212,6 +212,7 @@ def main():
         params={
             'drop_rate': args.drop_rate,
             'subvolume_shape': args.subvolume_shape,
+            'pad_to_shape': args.pad_to_shape,
             'length_in_each_direction': args.length_in_each_direction,
             'batch_norm_momentum': args.batch_norm_momentum,
             'filters': args.filters,

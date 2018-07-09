@@ -109,9 +109,13 @@ class EvalCheckpointSaverListener(tf.train.CheckpointSaverListener):
 
 class Subvolume3dcnnModel:
     """Defines the network architecture for a 3D CNN."""
-    def __init__(self, drop_rate, subvolume_shape, batch_norm_momentum, filters, output_neurons):
+    def __init__(self, drop_rate, subvolume_shape, pad_to_shape,
+                 batch_norm_momentum, filters, output_neurons):
         """Initialize the layers as members with state."""
-        self._input_shape = [-1, subvolume_shape[0], subvolume_shape[1], subvolume_shape[2], 1]
+        if pad_to_shape is not None:
+            self._input_shape = [-1, pad_to_shape[0], pad_to_shape[1], pad_to_shape[2], 1]
+        else:
+            self._input_shape = [-1, subvolume_shape[0], subvolume_shape[1], subvolume_shape[2], 1]
 
         # To save some space below, this creates a tf.layers.Conv3D
         # that is still missing the 'filters' argument, so it can be
@@ -260,6 +264,7 @@ def ink_classes_model_fn(features, labels, mode, params):
         model = Subvolume3dcnnModel(
             params['drop_rate'],
             params['subvolume_shape'],
+            params['pad_to_shape'],
             params['batch_norm_momentum'],
             params['filters'],
             output_neurons,
@@ -424,6 +429,7 @@ def rgb_values_model_fn(features, labels, mode, params):
         model = Subvolume3dcnnModel(
             params['drop_rate'],
             params['subvolume_shape'],
+            params['pad_to_shape'],
             params['batch_norm_momentum'],
             params['filters'],
             output_neurons,

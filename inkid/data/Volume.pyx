@@ -443,9 +443,9 @@ cdef class Volume:
             assert pad_to_shape[0] >= shape[0]
             assert pad_to_shape[1] >= shape[1]
             assert pad_to_shape[2] >= shape[2]
-            z_d = shape[0] - pad_to_shape[0]
-            y_d = shape[1] - pad_to_shape[1]
-            x_d = shape[2] - pad_to_shape[2]
+            z_d = pad_to_shape[0] - shape[0]
+            y_d = pad_to_shape[1] - shape[1]
+            x_d = pad_to_shape[2] - shape[2]
             subvolume = np.pad(
                 subvolume,
                 (
