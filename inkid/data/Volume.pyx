@@ -349,7 +349,7 @@ cdef class Volume:
 
     def get_subvolume(self, center, shape, normal, out_of_bounds,
                       move_along_normal, jitter_max,
-                      augment_subvolume, method, normalize):
+                      augment_subvolume, method, normalize, pad_to_shape):
         """Get a subvolume from a center point and normal vector.
 
         At the time of writing, this function very closely resembles
@@ -439,6 +439,24 @@ cdef class Volume:
             subvolume = subvolume - subvolume.mean()
             subvolume = subvolume / subvolume.std()
 
-        assert subvolume.shape == tuple(shape)
+        if pad_to_shape is not None:
+            assert pad_to_shape[0] >= shape[0]
+            assert pad_to_shape[1] >= shape[1]
+            assert pad_to_shape[2] >= shape[2]
+            z_d = shape[0] - pad_to_shape[0]
+            y_d = shape[1] - pad_to_shape[1]
+            x_d = shape[2] - pad_to_shape[2]
+            subvolume = np.pad(
+                subvolume,
+                (
+                    (z_d // 2, z_d - (z_d // 2)),
+                    (y_d // 2, y_d - (y_d // 2)),
+                    (x_d // 2, x_d - (x_d // 2)),
+                ),
+                'constant'
+            )
+            assert subvolume.shape == tuple(pad_to_shape)
+        else:
+            assert subvolume.shape == tuple(shape)
 
         return subvolume

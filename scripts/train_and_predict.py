@@ -88,6 +88,8 @@ def main():
                help='method for getting subvolumes')
     parser.add('--subvolume-shape', metavar='n', nargs=3, type=int,
                help='subvolume shape in z y x')
+    parser.add('--pad-to-shape', metavar='n', nargs=3, type=int, default=None,
+               help='pad subvolume with zeros to be of given shape (default no padding)')
     parser.add('--move-along-normal', metavar='n', type=float,
                help='number of voxels to move along normal before getting a subvolume')
     parser.add('--normalize-subvolumes', action='store_true',
@@ -247,6 +249,7 @@ def main():
             move_along_normal=args.move_along_normal,
             method=args.subvolume_method,
             normalize=args.normalize_subvolumes,
+            pad_to_shape=args.pad_to_shape,
         )
         training_features_fn = functools.partial(
             point_to_subvolume_input,
