@@ -23,3 +23,5 @@ tmp/
 
 Pipfile*
 test/
+
+inkid/data/Volume.html

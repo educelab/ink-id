@@ -84,8 +84,13 @@ def main():
                help='normalize volumes to zero mean and unit variance before training')
 
     # Subvolumes
-    parser.add('--subvolume-method', metavar='name', default='snap_to_axis_aligned',
-               help='method for getting subvolumes')
+    parser.add('--subvolume-method', metavar='name', default='nearest_neighbor',
+               help='method for getting subvolumes',
+               choices=[
+                   'nearest_neighbor',
+                   'interpolated',
+                   'snap_to_axis_aligned',
+               ])
     parser.add('--subvolume-shape', metavar='n', nargs=3, type=int,
                help='subvolume shape in z y x')
     parser.add('--pad-to-shape', metavar='n', nargs=3, type=int, default=None,
@@ -437,29 +442,34 @@ def main():
 
     # Write metadata to file
     stop = timeit.default_timer()
-    with open(os.path.join(output_path, 'metadata.txt'), 'w') as f:
-        f.write('Command Line Arguments:\n{}\n\n'.format(args))
-        f.write('Region Set:\n{}\n\n'.format(json.dumps(region_data, indent=4, sort_keys=False)))
-        f.write('Runtime:\n{}s\n\n'.format(stop - start))
-        f.write('Finished at:\n{}\n\n'.format(time.strftime('%Y-%m-%d %H:%M:%S')))
+    metadata = {}
+    metadata['Arguments'] = vars(args)
+    metadata['Region set'] = region_data
+    metadata['Runtime'] = stop - start
+    metadata['Finished at'] = time.strftime('%Y-%m-%d %H:%M:%S')
 
-        # Add the git hash if there is a repository
-        try:
-            repo = git.Repo(os.path.join(os.path.dirname(inspect.getfile(inkid)), '..'))
-            sha = repo.head.object.hexsha
-            f.write('Git hash:\n{}\n\n'.format(repo.git.rev_parse(sha, short=6)))
-        except git.exc.InvalidGitRepositoryError:
-            f.write('No git hash available (unable to find valid repository).\n\n')
+    # Add the git hash if there is a repository
+    try:
+        repo = git.Repo(os.path.join(os.path.dirname(inspect.getfile(inkid)), '..'))
+        sha = repo.head.object.hexsha
+        metadata['Git hash'] = repo.git.rev_parse(sha, short=6)
+    except git.exc.InvalidGitRepositoryError:
+        metadata['Git hash'] = 'No git hash available (unable to find valid repository).'
 
-        # Add some final metrics
-        f.write('Final evaluation metrics:\n')
+    # Add some final metrics
+    metrics = {}
+    try:
         eval_event_acc = EventAccumulator(os.path.join(output_path, 'eval'))
         eval_event_acc.Reload()
         for metric in args.eval_metrics_to_write:
             if metric in eval_event_acc.Tags()['scalars']:
-                value = eval_event_acc.Scalars(metric)[-1].value
-                f.write('{}: {}\n'.format(metric, value))
-        f.write('\n')
+                metrics[metric] = eval_event_acc.Scalars(metric)[-1].value
+    except:  # NOQA
+        pass
+    metadata['Final evaluation metrics'] = metrics
+
+    with open(os.path.join(output_path, 'metadata.txt'), 'w') as f:
+        f.write(json.dumps(metadata, indent=4, sort_keys=False))
 
     # Transfer via rclone if requested
     if args.rclone_transfer_remote is not None:
