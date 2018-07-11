@@ -43,7 +43,11 @@ def main():
         )
     if args.gif or args.all:
         print('\nFor training .gif, using images:')
-        create_gif(dirs, os.path.join(args.dir, 'training.gif'), args.caption_gif_with_iterations)
+        if args.caption_gif_with_iterations:
+            filename = 'training_captioned.gif'
+        else:
+            filename = 'training.gif'
+        create_gif(dirs, os.path.join(args.dir, filename), args.caption_gif_with_iterations)
 
 
 def create_gif(dirs, outfile, caption):
@@ -70,7 +74,7 @@ def create_gif(dirs, outfile, caption):
             iterations_getting_shown.append(
                 int(re.findall('_(\d+)[\._]', os.path.basename(filename))[0])
             )
-            print(filename)
+            print('\t{}'.format(filename))
             try:
                 partial_frame = wand.image.Image(filename=filename)
                 partial_frame.transform(resize='20%')
