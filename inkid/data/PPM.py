@@ -52,7 +52,7 @@ class PPM:
 
         self._rgb_label = None
         if self._rgb_label_path is not None:
-            self._rgb_label = np.asarray(Image.open(self._rgb_label_path), np.uint8)
+            self._rgb_label = np.asarray(Image.open(self._rgb_label_path).convert('RGB'), np.uint8)
 
         self._invert_normal = False
         if invert_normal is not None:
