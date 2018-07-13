@@ -468,7 +468,7 @@ def main():
         pass
     metadata['Final evaluation metrics'] = metrics
 
-    with open(os.path.join(output_path, 'metadata.txt'), 'w') as f:
+    with open(os.path.join(output_path, 'metadata.json'), 'w') as f:
         f.write(json.dumps(metadata, indent=4, sort_keys=False))
 
     # Transfer via rclone if requested
