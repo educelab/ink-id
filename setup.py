@@ -13,6 +13,7 @@ setup(
     packages=['inkid'],
     install_requires=[
         'configargparse',
+        'Cython',
         'gitpython',
         'imageio',
         'jsmin',
