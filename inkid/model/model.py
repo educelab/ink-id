@@ -110,7 +110,7 @@ class EvalCheckpointSaverListener(tf.train.CheckpointSaverListener):
 class Subvolume3dcnnModel:
     """Defines the network architecture for a 3D CNN."""
     def __init__(self, drop_rate, subvolume_shape, pad_to_shape,
-                 batch_norm_momentum, filters, output_neurons):
+                 batch_norm_momentum, no_batch_norm, filters, output_neurons):
         """Initialize the layers as members with state."""
         if pad_to_shape is not None:
             self._input_shape = [-1, pad_to_shape[0], pad_to_shape[1], pad_to_shape[2], 1]
@@ -157,13 +157,17 @@ class Subvolume3dcnnModel:
         """Chain the layers together when this class is 'called'."""
         y = tf.reshape(inputs, self._input_shape)
         y = self.conv1(y)
-        y = self.batch_norm1(y, training=training)
+        if not no_batch_norm:
+            y = self.batch_norm1(y, training=training)
         y = self.conv2(y)
-        y = self.batch_norm2(y, training=training)
+        if not no_batch_norm:
+            y = self.batch_norm2(y, training=training)
         y = self.conv3(y)
-        y = self.batch_norm3(y, training=training)
+        if not no_batch_norm:
+            y = self.batch_norm3(y, training=training)
         y = self.conv4(y)
-        y = self.batch_norm4(y, training=training)
+        if not no_batch_norm:
+            y = self.batch_norm4(y, training=training)
         y = tf.layers.flatten(y)
         y = self.fc(y)
         y = self.dropout(y, training=training)
@@ -266,6 +270,7 @@ def ink_classes_model_fn(features, labels, mode, params):
             params['subvolume_shape'],
             params['pad_to_shape'],
             params['batch_norm_momentum'],
+            params['no_batch_norm'],
             params['filters'],
             output_neurons,
         )
@@ -431,6 +436,7 @@ def rgb_values_model_fn(features, labels, mode, params):
             params['subvolume_shape'],
             params['pad_to_shape'],
             params['batch_norm_momentum'],
+            params['no_batch_norm'],
             params['filters'],
             output_neurons,
         )

@@ -112,6 +112,7 @@ def main():
     parser.add('--learning-rate', metavar='n', type=float)
     parser.add('--drop-rate', metavar='n', type=float)
     parser.add('--batch-norm-momentum', metavar='n', type=float)
+    parser.add('--no-batch-norm', action='store_true')
     parser.add('--fbeta-weight', metavar='n', type=float)
     parser.add('--filter-size', metavar='n', nargs=3, type=int,
                help='3D convolution filter size')
@@ -220,6 +221,7 @@ def main():
             'pad_to_shape': args.pad_to_shape,
             'length_in_each_direction': args.length_in_each_direction,
             'batch_norm_momentum': args.batch_norm_momentum,
+            'no_batch_norm': args.no_batch_norm,
             'filters': args.filters,
             'learning_rate': args.learning_rate,
             'fbeta_weight': args.fbeta_weight,
