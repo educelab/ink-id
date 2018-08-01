@@ -117,6 +117,8 @@ class Subvolume3dcnnModel:
         else:
             self._input_shape = [-1, subvolume_shape[0], subvolume_shape[1], subvolume_shape[2], 1]
 
+        self._no_batch_norm = no_batch_norm
+
         # To save some space below, this creates a tf.layers.Conv3D
         # that is still missing the 'filters' argument, so it can be
         # called multiple times below but we only need to specify
@@ -157,16 +159,16 @@ class Subvolume3dcnnModel:
         """Chain the layers together when this class is 'called'."""
         y = tf.reshape(inputs, self._input_shape)
         y = self.conv1(y)
-        if not no_batch_norm:
+        if not self._no_batch_norm:
             y = self.batch_norm1(y, training=training)
         y = self.conv2(y)
-        if not no_batch_norm:
+        if not self._no_batch_norm:
             y = self.batch_norm2(y, training=training)
         y = self.conv3(y)
-        if not no_batch_norm:
+        if not self._no_batch_norm:
             y = self.batch_norm3(y, training=training)
         y = self.conv4(y)
-        if not no_batch_norm:
+        if not self._no_batch_norm:
             y = self.batch_norm4(y, training=training)
         y = tf.layers.flatten(y)
         y = self.fc(y)
