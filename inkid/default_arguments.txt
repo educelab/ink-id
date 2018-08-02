@@ -7,7 +7,7 @@ length-in-each-direction = 8
 
 # Data organization/augmentation
 jitter-max = 4  # Set to 0 for no jitter
-add-augmentation = true
+augmentation = true
 
 # Network architecture
 learning-rate = 0.001

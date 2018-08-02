@@ -106,7 +106,8 @@ def main():
 
     # Data organization/augmentation
     parser.add('--jitter-max', metavar='n', type=int)
-    parser.add('--add-augmentation', action='store_true')
+    parser.add('--augmentation', action='store_true', dest='augmentation')
+    parser.add('--no-augmentation', action='store_false', dest='augmentation')
 
     # Network architecture
     parser.add('--learning-rate', metavar='n', type=float)
@@ -261,7 +262,7 @@ def main():
         )
         training_features_fn = functools.partial(
             point_to_subvolume_input,
-            augment_subvolume=args.add_augmentation,
+            augment_subvolume=args.augmentation,
             jitter_max=args.jitter_max,
         )
         evaluation_features_fn = functools.partial(
