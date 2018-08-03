@@ -119,6 +119,7 @@ def main():
                help='3D convolution filter size')
     parser.add('--filters', metavar='n', nargs='*', type=int,
                help='number of filters for each convolution layer')
+    parser.add('--adagrad-optimizer', action='store_true')
 
     # Run configuration
     parser.add('--training-batch-size', metavar='n', type=int)
@@ -228,6 +229,7 @@ def main():
             'fbeta_weight': args.fbeta_weight,
             'feature_type': args.feature_type,
             'label_type': args.label_type,
+            'adagrad_optimizer': args.adagrad_optimizer,
         },
     )
 

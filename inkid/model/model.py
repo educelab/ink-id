@@ -307,7 +307,10 @@ def ink_classes_model_fn(features, labels, mode, params):
         )
 
     if mode == tf.estimator.ModeKeys.TRAIN:
-        optimizer = tf.train.AdamOptimizer(learning_rate=params['learning_rate'])
+        if params['adagrad_optimizer']:
+            optimizer = tf.train.AdagradOptimizer(learning_rate=params['learning_rate'])
+        else:
+            optimizer = tf.train.AdamOptimizer(learning_rate=params['learning_rate'])
         logits = model(inputs, training=True)
         loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(
             labels=labels, logits=logits))
@@ -469,7 +472,10 @@ def rgb_values_model_fn(features, labels, mode, params):
         )
 
     if mode == tf.estimator.ModeKeys.TRAIN:
-        optimizer = tf.train.AdamOptimizer(learning_rate=params['learning_rate'])
+        if params['adagrad_optimizer']:
+            optimizer = tf.train.AdagradOptimizer(learning_rate=params['learning_rate'])
+        else:
+            optimizer = tf.train.AdamOptimizer(learning_rate=params['learning_rate'])
         logits = model(inputs, training=True)
         loss = tf.losses.huber_loss(labels, logits)
 
