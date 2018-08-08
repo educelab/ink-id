@@ -114,10 +114,13 @@ cdef class Volume:
         self.shape_x = data.shape[2]
 
     def normalize(self):
-        data = np.asarray(self._data_view, dtype=np.float32)
-        data = data - data.mean()
-        data = data / data.std()
-        self._data_view = data
+        # Don't have a good answer for this right now since it would make everything floats
+        # data = np.asarray(self._data_view, dtype=np.float32)
+        # data = data - data.mean()
+        # data = data / data.std()
+        # data = np.asarray(data, dtype=np.uint16)
+        # self._data_view = data
+        pass
 
     cdef unsigned short intensity_at(self, int x, int y, int z) nogil:
         """Get the intensity value at a voxel position."""
