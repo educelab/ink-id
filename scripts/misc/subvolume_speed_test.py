@@ -7,7 +7,6 @@ import functools
 import os
 import time
 
-# import numpy as np
 import tensorflow as tf
 
 import inkid
@@ -125,6 +124,10 @@ def run_speed_test(regions=None, count_zero=None, batch_size=None, method=None,
     with tf.Session() as sess:
         for i in range(batches_per_method):
             subvolumes = sess.run(batch_features)['Input']
+            
+            # for (idx, subvolume) in enumerate(subvolumes):
+            #     inkid.ops.save_volume_to_image_stack(subvolume, method + '_' + str(idx))
+                
             if count_zero:
                 for subvolume in subvolumes:
                     if not subvolume.any():
