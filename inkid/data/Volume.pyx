@@ -3,7 +3,7 @@
 Define the Volume class to represent volumetric data.
 """
 
-import math
+cimport libc.math as math
 import os
 import random
 import sys
@@ -113,13 +113,22 @@ cdef class Volume:
         self.shape_y = data.shape[1]
         self.shape_x = data.shape[2]
 
+    def normalize(self):
+        # Don't have a good answer for this right now since it would make everything floats
+        # data = np.asarray(self._data_view, dtype=np.float32)
+        # data = data - data.mean()
+        # data = data / data.std()
+        # data = np.asarray(data, dtype=np.uint16)
+        # self._data_view = data
+        pass
+
     cdef unsigned short intensity_at(self, int x, int y, int z) nogil:
         """Get the intensity value at a voxel position."""
         if x >= self.shape_x or y >= self.shape_y or z >= self.shape_z:
             return 0
         return self._data_view[z, y, x]
 
-    def interpolate_at(self, x, y, z, return_zero_instead_of_index_error=False):
+    cdef unsigned short interpolate_at(self, float x, float y, float z) nogil:
         """Get the intensity value at a subvoxel position.
 
         Values are trilinearly interpolated.
@@ -130,31 +139,35 @@ cdef class Volume:
         https://stackoverflow.com/questions/6427276/3d-interpolation-of-numpy-arrays-without-scipy
 
         """
-        try:
-            dx, x0 = math.modf(x)
-            dy, y0 = math.modf(y)
-            dz, z0 = math.modf(z)
+        if x >= self.shape_x or y >= self.shape_y or z >= self.shape_z:
+            return 0
 
-            x1 = x0 + 1
-            y1 = y0 + 1
-            z1 = z0 + 1
+        cdef double dx, dy, dz, x0d, y0d, z0d
+        cdef int x0, y0, z0, x1, y1, z1
+        cdef double c00, c10, c01, c11, c0, c1
+        cdef unsigned short c
+        dx = math.modf(x, &x0d)
+        dy = math.modf(y, &y0d)
+        dz = math.modf(z, &z0d)
 
-            c00 = self.intensity_at(x0, y0, z0) * (1 - dx) + self.intensity_at(x1, y0, z0) * dx
-            c10 = self.intensity_at(x0, y1, z0) * (1 - dx) + self.intensity_at(x1, y0, z0) * dx
-            c01 = self.intensity_at(x0, y0, z1) * (1 - dx) + self.intensity_at(x1, y0, z1) * dx
-            c11 = self.intensity_at(x0, y1, z1) * (1 - dx) + self.intensity_at(x1, y1, z1) * dx
+        x0 = <int>(x0d)
+        y0 = <int>(y0d)
+        z0 = <int>(z0d)
 
-            c0 = c00 * (1 - dy) + c10 * dy
-            c1 = c01 * (1 - dy) + c11 * dy
+        x1 = x0 + 1
+        y1 = y0 + 1
+        z1 = z0 + 1
 
-            c = c0 * (1 - dz) + c1 * dz
-            return c
+        c00 = self.intensity_at(x0, y0, z0) * (1 - dx) + self.intensity_at(x1, y0, z0) * dx
+        c10 = self.intensity_at(x0, y1, z0) * (1 - dx) + self.intensity_at(x1, y0, z0) * dx
+        c01 = self.intensity_at(x0, y0, z1) * (1 - dx) + self.intensity_at(x1, y0, z1) * dx
+        c11 = self.intensity_at(x0, y1, z1) * (1 - dx) + self.intensity_at(x1, y1, z1) * dx
 
-        except IndexError:
-            if return_zero_instead_of_index_error:
-                return 0.0
-            else:
-                raise IndexError
+        c0 = c00 * (1 - dy) + c10 * dy
+        c1 = c01 * (1 - dy) + c11 * dy
+
+        c = <unsigned short>(c0 * (1 - dz) + c1 * dz)
+        return c
 
     def get_voxel_vector(self, center, normal, length_in_each_direction, out_of_bounds):
         """Get a voxel vector from within the volume."""
@@ -174,7 +187,7 @@ cdef class Volume:
         try:
             for i in range(-length_in_each_direction, length_in_each_direction + 1):
                 x, y, z = center + i * normal
-                voxel_vector.append(self.interpolate_at(x, y, z, out_of_bounds == 'partial_zeros'))
+                voxel_vector.append(self.interpolate_at(x, y, z))
             return voxel_vector
 
         except IndexError:
@@ -242,43 +255,46 @@ cdef class Volume:
 
         return subvolume
 
-    def get_subvolume_interpolated(self, center, shape, normal,
-                                   out_of_bounds):
-        # x_vec = np.array(x_vec)
-        # y_vec = np.array(y_vec)
-        # z_vec = np.array(z_vec)
+    cdef void interpolated_with_basis_vectors(self, Float3 center, Int3 shape, BasisVectors basis, uint16[:,:,:] array) nogil:
+        cdef int x, y, z, x_offset, y_offset, z_offset
+        cdef Float3 volume_point
+        cdef Int3 offset
+        
+        for z in range(shape.z):
+            for y in range(shape.y):
+                for x in range(shape.x):
+                    # Convert from an index relative to an origin in
+                    # the corner to a position relative to the
+                    # subvolume center (which may not correspond
+                    # exactly to one of the subvolume voxel positions
+                    # if any of the side lengths are even).
+                    offset.x = <int>((-1 * (shape.x - 1) / 2.0 + x) + 0.5)
+                    offset.y = <int>((-1 * (shape.y - 1) / 2.0 + y) + 0.5)
+                    offset.z = <int>((-1 * (shape.z - 1) / 2.0 + z) + 0.5)
 
-        # subvolume = np.zeros(shape_zyx)
+                    # Calculate the corresponding position in the
+                    # volume.
+                    volume_point.x = center.x
+                    volume_point.y = center.y
+                    volume_point.z = center.z
+                    
+                    volume_point.x += offset.x * basis.x.x
+                    volume_point.y += offset.x * basis.x.y
+                    volume_point.z += offset.x * basis.x.z
 
-        # # Iterate over the subvolume space
-        # for z in range(shape_zyx[0]):
-        #     for y in range(shape_zyx[1]):
-        #         for x in range(shape_zyx[2]):
-        #             # Convert from an index relative to an origin in
-        #             # the corner to a position relative to the
-        #             # subvolume center (which may not correspond
-        #             # exactly to one of the subvolume voxel positions
-        #             # if any of the side lengths are even).
-        #             x_offset = -1 * (shape_zyx[2] - 1) / 2.0 + x
-        #             y_offset = -1 * (shape_zyx[1] - 1) / 2.0 + y
-        #             z_offset = -1 * (shape_zyx[0] - 1) / 2.0 + z
+                    volume_point.x += offset.y * basis.y.x
+                    volume_point.y += offset.y * basis.y.y
+                    volume_point.z += offset.y * basis.y.z
 
-        #             # Calculate the corresponding position in the
-        #             # volume.
-        #             volume_point = center_xyz \
-        #                            + x_offset * x_vec \
-        #                            + y_offset * y_vec \
-        #                            + z_offset * z_vec
-        #             try:
-        #                 subvolume[z, y, x] = self.interpolate_at(
-        #                     volume_point[0],
-        #                     volume_point[1],
-        #                     volume_point[2],
-        #                 )
-        #             except IndexError:
-        #                 subvolume[z, y, x] = 0
-        # return subvolume
-        pass
+                    volume_point.x += offset.z * basis.z.x
+                    volume_point.y += offset.z * basis.z.y
+                    volume_point.z += offset.z * basis.z.z
+                    
+                    array[z, y, x] = self.interpolate_at(
+                        volume_point.x,
+                        volume_point.y,
+                        volume_point.z
+                    )
 
     cdef void nearest_neighbor_with_basis_vectors(self, Float3 center, Int3 shape, BasisVectors basis, uint16[:,:,:] array) nogil:
         cdef int x, y, z, x_offset, y_offset, z_offset
@@ -346,6 +362,33 @@ cdef class Volume:
         self.nearest_neighbor_with_basis_vectors(c, s, basis, subvolume)
 
         return subvolume
+
+    cpdef get_subvolume_interpolated(self, center, shape, normal,
+                                     out_of_bounds):
+        cdef BasisVectors basis
+        cdef Float3 n, c
+        cdef Int3 s
+
+        n.x = normal[0]
+        n.y = normal[1]
+        n.z = normal[2]
+
+        c.x = center[0]
+        c.y = center[1]
+        c.z = center[2]
+
+        s.z = shape[0]
+        s.y = shape[1]
+        s.x = shape[2]
+
+        basis = get_component_vectors_from_normal(n)
+
+        subvolume = np.zeros(shape, dtype=np.uint16)
+
+        self.interpolated_with_basis_vectors(c, s, basis, subvolume)
+
+        return subvolume
+
 
     def get_subvolume(self, center, shape, normal, out_of_bounds,
                       move_along_normal, jitter_max,

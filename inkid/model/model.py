@@ -110,12 +110,14 @@ class EvalCheckpointSaverListener(tf.train.CheckpointSaverListener):
 class Subvolume3dcnnModel:
     """Defines the network architecture for a 3D CNN."""
     def __init__(self, drop_rate, subvolume_shape, pad_to_shape,
-                 batch_norm_momentum, filters, output_neurons):
+                 batch_norm_momentum, no_batch_norm, filters, output_neurons):
         """Initialize the layers as members with state."""
         if pad_to_shape is not None:
             self._input_shape = [-1, pad_to_shape[0], pad_to_shape[1], pad_to_shape[2], 1]
         else:
             self._input_shape = [-1, subvolume_shape[0], subvolume_shape[1], subvolume_shape[2], 1]
+
+        self._no_batch_norm = no_batch_norm
 
         # To save some space below, this creates a tf.layers.Conv3D
         # that is still missing the 'filters' argument, so it can be
@@ -157,13 +159,17 @@ class Subvolume3dcnnModel:
         """Chain the layers together when this class is 'called'."""
         y = tf.reshape(inputs, self._input_shape)
         y = self.conv1(y)
-        y = self.batch_norm1(y, training=training)
+        if not self._no_batch_norm:
+            y = self.batch_norm1(y, training=training)
         y = self.conv2(y)
-        y = self.batch_norm2(y, training=training)
+        if not self._no_batch_norm:
+            y = self.batch_norm2(y, training=training)
         y = self.conv3(y)
-        y = self.batch_norm3(y, training=training)
+        if not self._no_batch_norm:
+            y = self.batch_norm3(y, training=training)
         y = self.conv4(y)
-        y = self.batch_norm4(y, training=training)
+        if not self._no_batch_norm:
+            y = self.batch_norm4(y, training=training)
         y = tf.layers.flatten(y)
         y = self.fc(y)
         y = self.dropout(y, training=training)
@@ -266,6 +272,7 @@ def ink_classes_model_fn(features, labels, mode, params):
             params['subvolume_shape'],
             params['pad_to_shape'],
             params['batch_norm_momentum'],
+            params['no_batch_norm'],
             params['filters'],
             output_neurons,
         )
@@ -300,7 +307,10 @@ def ink_classes_model_fn(features, labels, mode, params):
         )
 
     if mode == tf.estimator.ModeKeys.TRAIN:
-        optimizer = tf.train.AdamOptimizer(learning_rate=params['learning_rate'])
+        if params['adagrad_optimizer']:
+            optimizer = tf.train.AdagradOptimizer(learning_rate=params['learning_rate'])
+        else:
+            optimizer = tf.train.AdamOptimizer(learning_rate=params['learning_rate'])
         logits = model(inputs, training=True)
         loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(
             labels=labels, logits=logits))
@@ -431,6 +441,7 @@ def rgb_values_model_fn(features, labels, mode, params):
             params['subvolume_shape'],
             params['pad_to_shape'],
             params['batch_norm_momentum'],
+            params['no_batch_norm'],
             params['filters'],
             output_neurons,
         )
@@ -461,7 +472,10 @@ def rgb_values_model_fn(features, labels, mode, params):
         )
 
     if mode == tf.estimator.ModeKeys.TRAIN:
-        optimizer = tf.train.AdamOptimizer(learning_rate=params['learning_rate'])
+        if params['adagrad_optimizer']:
+            optimizer = tf.train.AdagradOptimizer(learning_rate=params['learning_rate'])
+        else:
+            optimizer = tf.train.AdamOptimizer(learning_rate=params['learning_rate'])
         logits = model(inputs, training=True)
         loss = tf.losses.huber_loss(labels, logits)
 

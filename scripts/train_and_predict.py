@@ -106,17 +106,20 @@ def main():
 
     # Data organization/augmentation
     parser.add('--jitter-max', metavar='n', type=int)
-    parser.add('--add-augmentation', action='store_true')
+    parser.add('--augmentation', action='store_true', dest='augmentation')
+    parser.add('--no-augmentation', action='store_false', dest='augmentation')
 
     # Network architecture
     parser.add('--learning-rate', metavar='n', type=float)
     parser.add('--drop-rate', metavar='n', type=float)
     parser.add('--batch-norm-momentum', metavar='n', type=float)
+    parser.add('--no-batch-norm', action='store_true')
     parser.add('--fbeta-weight', metavar='n', type=float)
     parser.add('--filter-size', metavar='n', nargs=3, type=int,
                help='3D convolution filter size')
     parser.add('--filters', metavar='n', nargs='*', type=int,
                help='number of filters for each convolution layer')
+    parser.add('--adagrad-optimizer', action='store_true')
 
     # Run configuration
     parser.add('--training-batch-size', metavar='n', type=int)
@@ -220,11 +223,13 @@ def main():
             'pad_to_shape': args.pad_to_shape,
             'length_in_each_direction': args.length_in_each_direction,
             'batch_norm_momentum': args.batch_norm_momentum,
+            'no_batch_norm': args.no_batch_norm,
             'filters': args.filters,
             'learning_rate': args.learning_rate,
             'fbeta_weight': args.fbeta_weight,
             'feature_type': args.feature_type,
             'label_type': args.label_type,
+            'adagrad_optimizer': args.adagrad_optimizer,
         },
     )
 
@@ -259,7 +264,7 @@ def main():
         )
         training_features_fn = functools.partial(
             point_to_subvolume_input,
-            augment_subvolume=args.add_augmentation,
+            augment_subvolume=args.augmentation,
             jitter_max=args.jitter_max,
         )
         evaluation_features_fn = functools.partial(

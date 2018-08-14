@@ -7,7 +7,6 @@ import functools
 import os
 import time
 
-# import numpy as np
 import tensorflow as tf
 
 import inkid
@@ -19,8 +18,7 @@ def println(method, times):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('-d', '--data', metavar='path', required=True,
-                        help='input data file (JSON)')
+    parser.add_argument('data', metavar='path', help='input data file (JSON)')
     parser.add_argument('--batch-size', metavar='num', default=32, type=int,
                         help='number of subvolumes per TensorFlow batch')
     parser.add_argument('--batches-per-method', metavar='num', default=1000, type=int,
@@ -41,7 +39,7 @@ def main():
     methods = [
         'snap_to_axis_aligned',
         'nearest_neighbor',
-        # 'interpolated'
+        'interpolated'
     ]
 
     # Get list of points (to be used multiple times)
@@ -126,6 +124,10 @@ def run_speed_test(regions=None, count_zero=None, batch_size=None, method=None,
     with tf.Session() as sess:
         for i in range(batches_per_method):
             subvolumes = sess.run(batch_features)['Input']
+            
+            # for (idx, subvolume) in enumerate(subvolumes):
+            #     inkid.ops.save_volume_to_image_stack(subvolume, method + '_' + str(idx))
+                
             if count_zero:
                 for subvolume in subvolumes:
                     if not subvolume.any():

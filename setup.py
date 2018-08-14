@@ -13,6 +13,7 @@ setup(
     packages=['inkid'],
     install_requires=[
         'configargparse',
+        'Cython',
         'gitpython',
         'imageio',
         'jsmin',
@@ -20,6 +21,7 @@ setup(
         'matplotlib',
         'Pillow',
         'progressbar2',
+        'wand',
     ],
     ext_modules=cythonize('inkid/data/Volume.pyx', annotate=True),
     include_dirs=[np.get_include()],
