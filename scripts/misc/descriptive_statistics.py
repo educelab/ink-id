@@ -11,9 +11,9 @@ import inkid
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('-d', '--data', metavar='path', required=True,
+    parser.add_argument('data', metavar='path',
                         help='input data file (JSON)')
-    parser.add_argument('-o', '--output', metavar='path', default='out',
+    parser.add_argument('output', metavar='path', default='out',
                         help='output directory')
     parser.add_argument('--subvolume-shape', metavar='n', nargs=3, type=int, default=[34, 34, 34],
                         help='subvolume shape in z y x')
