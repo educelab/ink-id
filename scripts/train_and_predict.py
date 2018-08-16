@@ -135,6 +135,7 @@ def main():
     parser.add('--evaluate-every-n-checkpoints', metavar='n', type=int)
     parser.add('--predict-every-n-checkpoints', metavar='n', type=int)
     parser.add('--final-prediction-on-all', action='store_true')
+    parser.add('--skip-training', action='store_true')
 
     # Profiling
     parser.add('--profile-dir-name', metavar='path', default=None,
@@ -365,7 +366,7 @@ def main():
                 )
 
             # Only train if the training region set group is not empty
-            if len(regions._region_groups['training']) > 0:
+            if len(regions._region_groups['training']) > 0 and not args.skip_training:
                 estimator.train(
                     input_fn=training_input_fn,
                     steps=args.training_max_batches,
