@@ -6,17 +6,17 @@ import sys
 import numpy as np
 import progressbar
 
-import inkid.model
-import inkid.ops
-import inkid.data
+import inkid
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('-d', '--data', metavar='path', required=True,
+    parser.add_argument('data', metavar='path',
                         help='input data file (JSON)')
-    parser.add_argument('-o', '--output', metavar='path', default='out',
+    parser.add_argument('output', metavar='path', default='out',
                         help='output directory')
+    parser.add_argument('--subvolume-shape', metavar='n', nargs=3, type=int, default=[34, 34, 34],
+                        help='subvolume shape in z y x')
 
     args = parser.parse_args()
     output_path = os.path.join(
@@ -26,23 +26,22 @@ def main():
 
     regions = inkid.data.RegionSet.from_json(args.data)
 
-    params = inkid.ops.load_default_parameters()
-
-    points = regions.get_points_generator(
-        'training',
+    points = [p for p in regions.get_points_generator(
+        ['training', 'prediction', 'evaluation'],
         restrict_to_surface=True,
-        perform_shuffle=False,
-    )
+        perform_shuffle=True,
+        shuffle_seed=37,
+    )()]
 
     print('Calculating summary statistics...')
     all_statistics = []
     all_points = []
     bar = progressbar.ProgressBar()
-    for point in bar(points()):
+    for point in bar(points):
         region_id, x, y = point
         subvolume = regions._regions[region_id].ppm.point_to_subvolume(
             (x, y),
-            params['subvolume_shape'],
+            args.subvolume_shape,
             augment_subvolume=False
         )
         statistics = inkid.ops.get_descriptive_statistics(subvolume)
