@@ -24,6 +24,7 @@ import functools
 import inspect
 import json
 import os
+import random
 import subprocess
 import time
 import timeit
@@ -46,8 +47,8 @@ def main():
         default_config_files=[inkid.ops.default_arguments_file()],
     )
     # Needed files
-    parser.add('data', metavar='infile', help='input data file (JSON)')
-    parser.add('output', metavar='outfile', help='output directory')
+    parser.add('data', metavar='infile', help='input data file (JSON)', nargs='?')
+    parser.add('output', metavar='outfile', help='output directory', nargs='?')
 
     # Config file
     parser.add('-c', '--config-file', metavar='path', is_config_file=True,
@@ -136,6 +137,9 @@ def main():
     parser.add('--predict-every-n-checkpoints', metavar='n', type=int)
     parser.add('--final-prediction-on-all', action='store_true')
     parser.add('--skip-training', action='store_true')
+    parser.add('--continue-training-from-checkpoint', metavar='path', default=None)
+    parser.add('--skip-batches', metavar='n', type=int, default=0)
+    parser.add('--training-shuffle-seed', metavar='n', type=int, default=random.randint(0,10000))
 
     # Profiling
     parser.add('--profile-dir-name', metavar='path', default=None,
@@ -160,6 +164,24 @@ def main():
                'subpath following the remote name')
 
     args = parser.parse_args()
+
+    if args.continue_training_from_checkpoint is not None:
+        prev_dir = args.continue_training_from_checkpoint
+        prev_metadata_file = os.path.join(args.continue_training_from_checkpoint, 'metadata.json')
+        with open(prev_metadata_file) as f:
+            prev_metadata = json.load(f)
+        # Set all the args to be what they were last time
+        prev_args = prev_metadata['Arguments']
+        d_args = vars(args)
+        for prev_arg in prev_args:
+            d_args[prev_arg] = prev_args[prev_arg]
+        # Calculate number of batches to drop
+        files = os.listdir(prev_dir)
+        checkpoint_files = list(filter(lambda name: re.search('model\.ckpt-(\d+)\.index', name) is not None, files))
+        iterations = [int(re.findall('model\.ckpt-(\d+)\.index', name)[0]) for name in checkpoint_files]
+        max_iteration = max(iterations)
+        d_args['skip_batches'] = max_iteration
+
     if args.k is None:
         output_path = os.path.join(
             args.output,
@@ -201,6 +223,22 @@ def main():
 
     print('Arguments:\n{}\n'.format(args))
     print('Region Set:\n{}\n'.format(json.dumps(region_data, indent=4, sort_keys=False)))
+
+    # Write metadata to file
+    metadata = {}
+    metadata['Arguments'] = vars(args)
+    metadata['Region set'] = region_data
+
+    # Add the git hash if there is a repository
+    try:
+        repo = git.Repo(os.path.join(os.path.dirname(inspect.getfile(inkid)), '..'))
+        sha = repo.head.object.hexsha
+        metadata['Git hash'] = repo.git.rev_parse(sha, short=6)
+    except git.exc.InvalidGitRepositoryError:
+        metadata['Git hash'] = 'No git hash available (unable to find valid repository).'
+
+    with open(os.path.join(output_path, 'metadata.json'), 'w') as f:
+        f.write(json.dumps(metadata, indent=4, sort_keys=False))
 
     # Save checkpoints every n steps. EvalCheckpointSaverListener
     # (below) runs an evaluation each time this happens.
@@ -303,8 +341,10 @@ def main():
         features_fn=training_features_fn,
         label_fn=label_fn,
         perform_shuffle=True,
+        shuffle_seed=args.training_shuffle_seed,
         restrict_to_surface=True,
         epochs=args.training_epochs,
+        skip_batches=args.skip_batches,
     )
     evaluation_input_fn = regions.create_tf_input_fn(
         region_groups=['evaluation'],
@@ -446,21 +486,10 @@ def main():
     except KeyboardInterrupt:
         pass
 
-    # Write metadata to file
+    # Add some post-run info to metadata file
     stop = timeit.default_timer()
-    metadata = {}
-    metadata['Arguments'] = vars(args)
-    metadata['Region set'] = region_data
     metadata['Runtime'] = stop - start
     metadata['Finished at'] = time.strftime('%Y-%m-%d %H:%M:%S')
-
-    # Add the git hash if there is a repository
-    try:
-        repo = git.Repo(os.path.join(os.path.dirname(inspect.getfile(inkid)), '..'))
-        sha = repo.head.object.hexsha
-        metadata['Git hash'] = repo.git.rev_parse(sha, short=6)
-    except git.exc.InvalidGitRepositoryError:
-        metadata['Git hash'] = 'No git hash available (unable to find valid repository).'
 
     # Add some final metrics
     metrics = {}

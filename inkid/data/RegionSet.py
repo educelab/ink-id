@@ -119,7 +119,8 @@ class RegionSet:
                            grid_spacing=None,
                            probability_of_selection=None,
                            premade_points_generator=None,
-                           threads=multiprocessing.cpu_count()):
+                           threads=multiprocessing.cpu_count(),
+                           skip_batches=None):
         """Generate Tensorflow input_fn function for the model/network.
 
         A Tensorflow Estimator requires an input_fn to be passed to
@@ -184,8 +185,13 @@ class RegionSet:
 
             if epochs is not None:
                 dataset = dataset.repeat(epochs)
+
             dataset = dataset.take(max_samples)
             dataset = dataset.batch(batch_size)
+
+            if skip_batches is not None:
+                dataset = dataset.skip(skip_batches)
+
             dataset = dataset.prefetch(1)
 
             if label_fn is None:
