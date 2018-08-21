@@ -14,7 +14,7 @@ def main():
     parser.add_argument('--final', action='store_true')
     parser.add_argument('--best-auc', action='store_true')
     parser.add_argument('--gif', action='store_true')
-    parser.add_argument('--caption-gif-with-iterations', action='store_true')
+    parser.add_argument('--no-caption-gif-with-iterations', action='store_false')
     parser.add_argument('--composite-at-iteration', type=int, default=None)
 
     args = parser.parse_args()
@@ -43,11 +43,11 @@ def main():
         )
     if args.gif or args.all:
         print('\nFor training .gif, using images:')
-        if args.caption_gif_with_iterations:
+        if args.no_caption_gif_with_iterations:
             filename = 'training_captioned.gif'
         else:
             filename = 'training.gif'
-        create_gif(dirs, os.path.join(args.dir, filename), args.caption_gif_with_iterations)
+        create_gif(dirs, os.path.join(args.dir, filename), args.no_caption_gif_with_iterations)
 
 
 def create_gif(dirs, outfile, caption):
