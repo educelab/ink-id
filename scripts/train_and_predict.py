@@ -165,6 +165,10 @@ def main():
 
     args = parser.parse_args()
 
+    if not args.data and not args.output and not args.continue_training_from_checkpoint:
+        parser.print_help()
+        return
+
     if args.continue_training_from_checkpoint is not None:
         prev_dir = args.continue_training_from_checkpoint
         prev_metadata_file = os.path.join(args.continue_training_from_checkpoint, 'metadata.json')
