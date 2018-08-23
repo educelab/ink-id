@@ -25,6 +25,7 @@ import inspect
 import json
 import os
 import random
+import re
 import subprocess
 import time
 import timeit
@@ -185,6 +186,7 @@ def main():
         iterations = [int(re.findall('model\.ckpt-(\d+)\.index', name)[0]) for name in checkpoint_files]
         max_iteration = max(iterations)
         d_args['skip_batches'] = max_iteration
+        print('Skipping {} batches.'.format(max_iteration))
 
     if args.k is None:
         output_path = os.path.join(
@@ -197,7 +199,10 @@ def main():
             datetime.datetime.today().strftime('%Y-%m-%d_%H.%M.%S') + '_' + str(args.k)
         )
     os.makedirs(output_path)
-    if args.model is not None:
+
+    if args.continue_training_from_checkpoint is not None:
+        model_path = prev_dir
+    elif args.model is not None:
         model_path = args.model
     else:
         model_path = output_path
