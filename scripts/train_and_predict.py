@@ -171,15 +171,18 @@ def main():
         return
 
     if args.continue_training_from_checkpoint is not None:
+        # Get previous metadata file
         prev_dir = args.continue_training_from_checkpoint
         prev_metadata_file = os.path.join(args.continue_training_from_checkpoint, 'metadata.json')
         with open(prev_metadata_file) as f:
             prev_metadata = json.load(f)
+
         # Set all the args to be what they were last time
         prev_args = prev_metadata['Arguments']
         d_args = vars(args)
         for prev_arg in prev_args:
             d_args[prev_arg] = prev_args[prev_arg]
+
         # Calculate number of batches to drop
         files = os.listdir(prev_dir)
         checkpoint_files = list(filter(lambda name: re.search('model\.ckpt-(\d+)\.index', name) is not None, files))
@@ -187,6 +190,9 @@ def main():
         max_iteration = max(iterations)
         d_args['skip_batches'] = max_iteration
         print('Skipping {} batches.'.format(max_iteration))
+
+        # Set this again since it got wiped above
+        d_args['continue_training_from_checkpoint'] = prev_dir
 
     if args.k is None:
         output_path = os.path.join(
