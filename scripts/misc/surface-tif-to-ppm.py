@@ -18,6 +18,8 @@ def main():
                         help='path to input surface .tif')
     parser.add_argument('--ppm', metavar='path', required=True,
                         help='path to output .ppm')
+    parser.add_argument('--stepsize', metavar='n', required=False, type=int, default=1,
+                        help='step along input this many pixels at a time (will downscale output)')
 
     args = parser.parse_args()
 
@@ -25,8 +27,8 @@ def main():
 
     # Write the header
     with open(args.ppm, 'w') as f:
-        f.write('width: {}\n'.format(tif.shape[1]))
-        f.write('height: {}\n'.format(tif.shape[0]))
+        f.write('width: {}\n'.format(tif.shape[1] // args.stepsize))  # TODO hacky
+        f.write('height: {}\n'.format(tif.shape[0] // args.stepsize))
         f.write('dim: {}\n'.format(6))
         f.write('ordered: {}\n'.format('true'))
         f.write('type: {}\n'.format('double'))
@@ -36,8 +38,8 @@ def main():
     # Write the data
     bar = progressbar.ProgressBar()
     with open(args.ppm, 'ab') as f:
-        for tif_y in bar(range(len(tif))):
-            for tif_x in range(len(tif[tif_y])):
+        for tif_y in bar(range(0, len(tif), args.stepsize)):
+            for tif_x in range(0, len(tif[tif_y]), args.stepsize):
                 tif_z = tif[tif_y][tif_x]
                 ppm_coordinate = [tif_z, tif_x, tif_y]
                 ppm_normal = [-1, 0, 0]
