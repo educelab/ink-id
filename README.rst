@@ -78,7 +78,7 @@ The package can be imported into Python programs, for example:
 
 .. code-block:: python
 
-   import inkid.volumes
+   import inkid
 
    params = inkid.ops.load_default_parameters()
    regions = inkid.data.RegionSet.from_json(region_set_filename)
@@ -88,7 +88,7 @@ There are also some console scripts included, for example:
 ::
 
    $ inkid-train-and-predict
-   usage: inkid-train-and-predict [-h] -d path [-o path] [-m path] [-k num]
+   usage: inkid-train-and-predict [-h] input-file output-path [options]
 
 Examples
 --------
@@ -104,8 +104,8 @@ Then use `scripts/misc/split_region_into_grid.py <https://code.vis.uky.edu/seale
 .. code-block:: bash
 
    $ python scripts/misc/split_region_into_grid.py \
-		-i ~/data/lunate-sigma/lunate-sigma.json \
-		-o lunate-sigma-grid-2x5.json \
+		~/data/lunate-sigma/lunate-sigma.json \
+		lunate-sigma-grid-2x5.json \
 		-columns 2 \
 		-rows 5
 
@@ -119,13 +119,13 @@ K-Fold Cross Validation (and Prediction)
 
 .. code-block:: bash
 
-   $ inkid-train-and-predict -d ~/data/lunate-sigma/grid-2x5.json -o ~/data/out/ -k 7 --final-prediction-on-all
+   $ inkid-train-and-predict ~/data/lunate-sigma/grid-2x5.json ~/data/out/ -k 7 --final-prediction-on-all
 
 It is possible to run all of these with one command if using ``sbatch`` on the server. Example:
 
 .. code-block:: bash
 
-   $ sbatch --array=0-4%2 scripts/slurm_train_and_predict.sh -d ~/data/CarbonPhantomV3.volpkg/working/2/Col2_k-fold-characters-region-set.json -o ~/data/out/col2_not_flattened --final-prediction-on-all
+   $ sbatch --array=0-4%2 scripts/slurm_train_and_predict.sh ~/data/CarbonPhantomV3.volpkg/working/2/Col2_k-fold-characters-region-set.json ~/data/out/col2_not_flattened --final-prediction-on-all
 
 After performing a run for each value of k, each will have created a directory of output. If these are all in the same parent directory, there is a script to merge together the individual predictions into a final prediction image. If ``--best-f1`` is passed, it will take the prediction with the best f1 score for each individual region, rather than the final prediction for that region. Example:
 
@@ -156,4 +156,4 @@ New console/command line scripts can be added to the package using the ``entry_p
 License
 =======
 
-This package is licensed under the Microsoft Reference Source License (MS-RSL) - see `LICENSE <https://code.vis.uky.edu/seales-research/ink-id/blob/develop/LICENSE>`_ for details.
+This package is licensed under the Microsoft Reference Source License (MS-RSL) - see `LICENSE <https://code.cs.uky.edu/seales-research/ink-id/blob/develop/LICENSE>`_ for details.
