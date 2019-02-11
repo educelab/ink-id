@@ -35,17 +35,38 @@ class RegionSet:
     @classmethod
     def from_json(cls, filename):
         """Initialize a RegionSet from a JSON filename."""
-        data = RegionSet.get_data_from_json(filename)
+        data = RegionSet.get_data_from_file(filename)
         return cls(data)
 
     @staticmethod
-    def get_data_from_json(filename):
-        with open(filename, 'r') as f:
-            # minify to remove comments
-            minified = jsmin(str(f.read()))
-            data = json.loads(minified)
-            data = RegionSet.make_data_paths_absolute(data, os.path.dirname(filename))
-        return data
+    def get_data_from_file(filename):
+        _, file_extension = os.path.splitext(filename)
+        file_extension = file_extension.lower()
+        # If it's a PPM, just make one region covering the entire image
+        if file_extension == '.ppm':
+            return {
+                "ppms": {
+                    "ppm": {
+                        "path": filename,
+                        "volume": "",
+                    },
+                },
+                "regions": {
+                    "training": [
+                        { "ppm": "ppm" },
+                    ],
+                    "evaluation": [],
+                    "prediction": []
+                },
+            }
+        # If it's a JSON file then actually read the JSON region set
+        elif file_extension == '.json':
+            with open(filename, 'r') as f:
+                # minify to remove comments
+                minified = jsmin(str(f.read()))
+                data = json.loads(minified)
+                data = RegionSet.make_data_paths_absolute(data, os.path.dirname(filename))
+                return data
 
     @staticmethod
     def make_data_paths_absolute(data, paths_were_relative_to=os.getcwd()):

@@ -48,7 +48,7 @@ def main():
         default_config_files=[inkid.ops.default_arguments_file()],
     )
     # Needed files
-    parser.add('data', metavar='infile', help='input data file (JSON)', nargs='?')
+    parser.add('data', metavar='infile', help='input data file (JSON or PPM)', nargs='?')
     parser.add('output', metavar='outfile', help='output directory', nargs='?')
 
     # Config file
@@ -213,7 +213,23 @@ def main():
     else:
         model_path = output_path
 
-    region_data = inkid.data.RegionSet.get_data_from_json(args.data)
+    # If input file is a PPM, treat this as a texturing module
+    # Skip training, run a prediction on all regions, require trained model, require slices dir
+    _, file_extension = os.path.splitext(args.data)
+    file_extension = file_extension.lower()
+    if file_extension == '.ppm':
+        if args.model is None:
+            print("Pretrained model (--model) required when texturing a .ppm file.")
+            return
+        if args.override_volume_slices_dir is None:
+            print("Volume (--override-volume-slices-dir) required when texturing a .ppm file.")
+            return
+        print("PPM input file provided. Automatically skipping training and running a final prediction on all.")
+        args.skip_training = True
+        args.final_prediction_on_all = True
+
+    # Transform the input file into region set, can handle JSON or PPM
+    region_data = inkid.data.RegionSet.get_data_from_file(args.data)
 
     if args.override_volume_slices_dir is not None:
         volume_dirs_seen = set()
