@@ -25,9 +25,10 @@ To install the package you can use `pipenv <https://docs.pipenv.org/>`_:
 
 .. code-block:: bash
 
-   $ pip install pipenv   # If needed, install pipenv
-   $ pipenv --three       # Create a new virtual environment with Python 3
-   $ pipenv install -e .  # Install inkid to the virtual environment and use symlinks
+   $ pip install pipenv           # If needed, install pipenv
+   $ pipenv --three               # Create a new virtual environment with Python 3
+   $ pipenv install Cython numpy  # These are required before inkid can be installed
+   $ pipenv install -e .          # Install inkid to the virtual environment and make it editable
 
 The install command will find ``setup.py`` and install the dependencies for ``inkid``.
 

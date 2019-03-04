@@ -17,7 +17,7 @@ setup(
         'gitpython',
         'imageio',
         'jsmin',
-        'mathutils',
+        'mathutils==2.78',
         'matplotlib',
         'Pillow',
         'progressbar2',
