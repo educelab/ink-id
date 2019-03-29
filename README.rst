@@ -18,7 +18,7 @@ First, clone this repository and navigate to the root directory:
 
 .. code-block:: bash
 
-   $ git clone https://code.vis.uky.edu/seales-research/ink-id.git
+   $ git clone https://code.cs.uky.edu/seales-research/ink-id.git
    $ cd ink-id
 
 To install the package you can use `pipenv <https://docs.pipenv.org/>`_:
