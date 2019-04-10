@@ -59,23 +59,34 @@ For detailed instruction, refer to the Singularity Doc mentioned above.
 
 On all machines, the two most useful commands are
 
-   .. code-block:: bash
+.. code-block:: bash
    
-       $ singularity run inkid-cpu.sif inkid-train-and predict <args>
-       $ singularity run python <python_script>.py <args>
+   $ singularity run inkid-cpu.sif inkid-train-and predict <args>
+   $ singularity run python <python_script>.py <args>
 
 To use singularity shell, remember to activate the virtualenv environment first
 
-   .. code-block:: bash
+.. code-block:: bash
 
-       $ singularity shell
-       $ . /tensorflow/bin/activate
+   $ singularity shell
+   $ . /tensorflow/bin/activate
    
 For LCC, remember to load the singularity module and pass the ``--nv`` parameter
 
-   .. code-block:: bash
+.. code-block:: bash
 
-       $ singularity run --nv inkid-gpu.sif inkid-train-and-predict <args>
+   $ singularity run --nv inkid-gpu.sif inkid-train-and-predict <args>
+
+Viewing Definition File Inside the Container
+============================================
+Given ``<container>.sif`` file, ``<container>.def`` file that was used to build
+the container can be viewed with the following command.  This is particularly a 
+useful feature when pulling a container image from the container library.
+
+.. code-block:: bash
+
+   $ singulairy exec <container>.sif cat /.singularity.d/Singularity
+
    
 Slurm Script
 ============
