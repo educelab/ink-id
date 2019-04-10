@@ -67,12 +67,14 @@ On all machines, the two most useful commands are
 To use singularity shell, remember to activate the virtualenv environment first
 
    .. code-block:: bash
+
        $ singularity shell
        $ . /tensorflow/bin/activate
    
 For LCC, remember to load the singularity module and pass the ``--nv`` parameter
 
    .. code-block:: bash
+
        $ singularity run --nv inkid-gpu.sif inkid-train-and-predict <args>
    
 Slurm Script
