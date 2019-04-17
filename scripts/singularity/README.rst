@@ -26,8 +26,7 @@ Build a Singularity Container for CPU
 
    .. code-block:: bash
    
-      $ git clone https://code.cs.uky.edu/seales-research/ink-id.git
-      $ cd ink-id
+      $ sudo singularity build inkid-cpu.sif inkid-cpu.def
 
 
 3. The freshly built Singularity container (.sif) already has all the ``ink-id``
