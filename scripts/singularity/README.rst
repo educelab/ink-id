@@ -87,8 +87,13 @@ useful feature when pulling a container image from the container library.
    $ singulairy exec <container>.sif cat /.singularity.d/Singularity
 
    
-Slurm Script
-============
-``submit.sh`` is a sample script for submitting a job on LCC using ink-id 
-Singularity container.
+Slurm Script for Running Jobs on LCC at University of Kentucky
+==============================================================
+``submit.sh`` is a slurm script template for running a job on LCC using the ink-id 
+Singularity container.  It is important to specify the size of memory, upper limit
+on the running time as the project would be billedd to the capacity of the machine,
+regardless of the actual resource usage, if those parameters are unspecified.
+
+``submit_example1.sh`` is the actual script that was used to run a job on LCC in 
+April 2019.
 
