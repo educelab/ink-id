@@ -18,8 +18,11 @@ How to Build ink-id Containers Using Def Files
 
 Build a Singularity Container for CPU
 -------------------------------------
-1. Replace the ``username`` and ``password`` with your own and save the file . 
-   This pulls the latest version of ``ink-id`` code from the repo.
+1. Create a text file containing at least two lines: gitlab username on the first
+   line and password on the second line and save it locally. Third line can be
+   added if a branch other than master is to be used when running the container.
+   The file should contain nothing but the username, password, and, optionally,
+   the branch name in each line. 
 
 2. Run the following command (.sif file name does not have to match the .def
    file) to build a Singularity container. 
