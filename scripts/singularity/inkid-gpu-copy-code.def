@@ -1,0 +1,53 @@
+Bootstrap: localimage 
+From: tf-gpu-1.13.1.sif
+
+
+%files
+  # Copy the current contents of the local ink-id directory into the
+  # root directory inside the container.
+
+  /home/mhaya2/ink-id/   /ink-id
+
+
+%post
+  apt -y  update
+  DEBIAN_FRONTEND=noninteractive apt --fix-missing install -y git-all
+
+  # There is already a virtualenv installed in the tf-gpu-1.13.1.sif container,
+  # and there is a tensorflow environment already created. Simply activate it:
+  . /usr/local/tensorflow/bin/activate
+
+  pip install --upgrade Cython
+
+
+  # Install ink-id
+  pip install -e ./ink-id/.
+  
+
+%runscript
+  if [ $# -lt 1 ]; then
+      echo "Usage: ./container RUN COMMAND"
+      exit 1
+  fi
+  
+  . /usr/local/tensorflow/bin/activate
+  exec "$@"  
+
+
+%labels
+  Maintainer Mami Hayashida <mami.hayashida@uky.edu>
+  Version v.0.1
+
+
+%help
+  This container, bootstrapped to lcc:tf-gpu-py3 container, is for inkid project.
+  It assumes at the time of container-building, there is a directory containing
+  all the files necessary for inkid software installation. Unlike the 
+  inkid-cpu.def script, this script does NOT download the code from git. 
+  Instead, it simply copies the current version of the code residing on the host 
+  system.
+
+  Run scripts as shown below: 
+  	singularity run --nv inkid-gpu-copy-code.sif inkid-train-and-predict <args>
+  	singilarity run --nv inkid-gpu-copy-code.sif python <python_script>.py <args>
+
