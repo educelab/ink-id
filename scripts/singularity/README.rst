@@ -18,6 +18,8 @@ How to Build ink-id Containers Using Def Files
 
 Build a Singularity Container for CPU
 -------------------------------------
+Version 1: Pulling code from git (inkid-cpu.def)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 1. Create a text file containing at least two lines: gitlab username on the first
    line and password on the second line and save it locally. Third line can be
    added if a branch other than master is to be used when running the container.
@@ -35,8 +37,26 @@ Build a Singularity Container for CPU
 3. The freshly built Singularity container (.sif) already has all the ``ink-id``
    software and all the dependencies installed inside. 
 
+Version 2: Copying the local ink-id code (inkid-cpu-copy-code.def)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+1. Insert the full path to the ink-id script under the %files section. It will
+   be copied into the container.
+
+2. Run the following command (.sif file name does not have to match the .def
+   file) to build a Singularity container. 
+
+   .. code-block:: bash
+   
+      $ sudo singularity build inkid-cpu-copy-code.sif inkid-cpu-copy-code.def
+
+
+3. The freshly built Singularity container (.sif) already has all the ``ink-id``
+   software and all the dependencies installed inside. 
+ 
 Build a Singularity Container for GPU (specifically for LCC)
 ------------------------------------------------------------
+Version 1: Pulling code from git (inkid-gpu.def)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 1. As mentioned above, edit the ``username`` and ``password`` in the .def file.
 2. Since this container needs to have various GPU related files, packages, and 
    software, run the following command to download the ``tf-gpu`` image in the 
@@ -54,6 +74,14 @@ Build a Singularity Container for GPU (specifically for LCC)
        $ sudo singularity build inkid-gpu.sif  inkid-gpu.def
    
 4. Copy the ``.sif`` file to LCC.
+
+Version 2: Copying the local ink-id code (inkid-gpu-copy-code.def)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+1. Insert the full path to the ink-id directory under the %files section. It will
+   be copied into the container.
+
+2. Follow steps 2, 3, 4 of Version 1.
+
 
 Using the Singularity Container
 ===============================
@@ -97,6 +125,9 @@ Singularity container.  It is important to specify the size of memory, upper lim
 on the running time as the project would be billedd to the capacity of the machine,
 regardless of the actual resource usage, if those parameters are unspecified.
 
-``submit_example1.sh`` is the actual script that was used to run a job on LCC in 
+``submit_example1.sh`` is a script that was successfully used to run a job on LCC in 
 April 2019.
 
+``submit_debug_example1.sh`` is a script that was successfully used test a 
+container on LCC in June, 2019.
+ 
