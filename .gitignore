@@ -11,6 +11,7 @@ old_output/
 *.pyc
 *.c
 *.so
+*.sif
 
 build/
 data/
