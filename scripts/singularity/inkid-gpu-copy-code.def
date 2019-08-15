@@ -6,7 +6,7 @@ From: tf-gpu-1.13.1.sif
   # Copy the current contents of the local ink-id directory into the
   # root directory inside the container.
 
-  /home/mhaya2/ink-id/   /ink-id
+  ../../   /ink-id
 
 
 %post
