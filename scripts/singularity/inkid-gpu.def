@@ -1,0 +1,65 @@
+Bootstrap: localimage 
+From: tf-gpu-1.13.1.sif
+
+%files
+  # Copying git credentials from a local file
+  <full path to the local credentials file>   /login.txt
+  
+
+%post
+  apt -y  update
+  DEBIAN_FRONTEND=noninteractive apt --fix-missing install -y git-all
+  
+  # There is already a virtualenv installed in the tf-gpu-1.13.1.sif container,
+  # and there is a tensorflow environment already created. Simply activate it:
+  . /usr/local/tensorflow/bin/activate
+
+  pip install --upgrade Cython
+
+  # Retrieve git login info
+  USERNAME=`sed -n 1p /login.txt`
+  PASSWORD=`sed -n 2p /login.txt`
+  BRANCH=`sed -n 3p /login.txt`
+
+  git clone https://${USERNAME}:${PASSWORD}@code.cs.uky.edu/seales-research/ink-id.git
+
+  # If there is a specified branch, switch to it (Default is 'master')
+  if [ -n "${BRANCH}" ]
+  then
+    cd ./ink-id/
+    git checkout ${BRANCH}
+    cd ..
+  fi
+
+	# Install ink-id
+  pip install -e ./ink-id/.
+
+  # Remove the git login-credential file from the container
+  rm /login.txt
+
+%runscript
+  if [ $# -lt 1 ]; then
+      echo "Usage: ./container RUN COMMAND"
+      exit 1
+  fi
+  
+  . /usr/local/tensorflow/bin/activate
+  exec "$@"  
+
+%labels
+  Maintainer Mami Hayashida <mami.hayashida@uky.edu>
+  Version v.0.2
+
+%help
+  This container, bootstrapped to lcc:tf-gpu-py3 container, is for inkid project. 
+
+  Run scripts as shown below: 
+  	singularity run --nv inkid-gpu.sif inkid-train-and-predict <args>
+  	singilarity run --nv inkid-gpu.sif python <python_script>.py <args>
+  
+  login.txt must contain the following lines.  The third line is optional.
+  <login name>
+  <login password>
+  <branch name>   (optional)
+
+
