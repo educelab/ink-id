@@ -122,6 +122,8 @@ def main():
     parser.add('--filters', metavar='n', nargs='*', type=int,
                help='number of filters for each convolution layer')
     parser.add('--adagrad-optimizer', action='store_true')
+    parser.add('--decay-steps', metavar='n', type=int, default=None)
+    parser.add('--decay-rate', metavar='n', type=float, default=None)
 
     # Run configuration
     parser.add('--training-batch-size', metavar='n', type=int)
@@ -300,6 +302,8 @@ def main():
             'feature_type': args.feature_type,
             'label_type': args.label_type,
             'adagrad_optimizer': args.adagrad_optimizer,
+            'decay_steps': args.decay_steps,
+            'decay_rate': args.decay_rate,
         },
     )
 

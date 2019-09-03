@@ -308,9 +308,24 @@ def ink_classes_model_fn(features, labels, mode, params):
 
     if mode == tf.estimator.ModeKeys.TRAIN:
         if params['adagrad_optimizer']:
-            optimizer = tf.train.AdagradOptimizer(learning_rate=params['learning_rate'])
+            if params['decay_steps'] and params['decay_rate']:
+                start_learning_rate=params['learning_rate']
+                global_step = tf.train.get_global_step()
+                learning_rate = tf.train.exponential_decay(start_learning_rate,
+                        global_step, params['decay_steps'], params['decay_rate'])
+                optimizer = tf.train.AdagradOptimizer(learning_rate)
+            else:
+                optimizer = tf.train.AdagradOptimizer(learning_rate=params['learning_rate'])
         else:
-            optimizer = tf.train.AdamOptimizer(learning_rate=params['learning_rate'])
+            if params['decay_steps'] and params['decay_rate']:
+                start_learning_rate=params['learning_rate']
+                global_step = tf.train.get_global_step()
+                learning_rate = tf.train.exponential_decay(start_learning_rate,
+                        global_step, params['decay_steps'], params['decay_rate'])
+                optimizer = tf.train.AdamOptimizer(learning_rate)
+            else:
+                optimizer = tf.train.AdamOptimizer(learning_rate=params['learning_rate'])
+        
         logits = model(inputs, training=True)
         loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(
             labels=labels, logits=logits))
@@ -473,9 +488,24 @@ def rgb_values_model_fn(features, labels, mode, params):
 
     if mode == tf.estimator.ModeKeys.TRAIN:
         if params['adagrad_optimizer']:
-            optimizer = tf.train.AdagradOptimizer(learning_rate=params['learning_rate'])
+            if params['decay_steps'] and params['decay_rate']:
+                start_learning_rate=params['learning_rate']
+                global_step = tf.train.get_global_step()
+                learning_rate = tf.train.exponential_decay(start_learning_rate,
+                        global_step, params['decay_steps'], params['decay_rate'])
+                optimizer = tf.train.AdagradOptimizer(learning_rate)
+            else:
+                optimizer = tf.train.AdagradOptimizer(learning_rate=params['learning_rate'])
         else:
-            optimizer = tf.train.AdamOptimizer(learning_rate=params['learning_rate'])
+            if params['decay_steps'] and params['decay_rate']:
+                start_learning_rate=params['learning_rate']
+                global_step = tf.train.get_global_step()
+                learning_rate = tf.train.exponential_decay(start_learning_rate,
+                        global_step, params['decay_steps'], params['decay_rate'])
+                optimizer = tf.train.AdamOptimizer(learning_rate)
+            else:
+                optimizer = tf.train.AdamOptimizer(learning_rate=params['learning_rate'])
+
         logits = model(inputs, training=True)
         loss = tf.losses.huber_loss(labels, logits)
 
