@@ -5,7 +5,6 @@ import re
 import numpy as np
 from PIL import Image
 import wand.image
-import wand.sequence
 
 
 def main():
