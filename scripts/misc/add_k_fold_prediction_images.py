@@ -13,7 +13,9 @@ def main():
     parser.add_argument('--all', action='store_true')
     parser.add_argument('--final', action='store_true')
     parser.add_argument('--best-auc', action='store_true')
-    parser.add_argument('--gif', action='store_true')
+    parser.add_argument('--seq-dir', type=String, "Generate an image sequence and save it to the provided directory")
+    parser.add_argument('--gif', action='store_true', "Generate an image sequence and save it as an animated GIF")
+    parser.add_argument('--gif-delay', type=int, "GIF frame delay in hundredths of a second", default=10)
     parser.add_argument('--no-caption-gif-with-iterations', action='store_false')
     parser.add_argument('--composite-at-iteration', type=int, default=None)
 
@@ -41,16 +43,22 @@ def main():
             os.path.join(args.dir, 'iteration_{}.tif'.format(args.composite_at_iteration)),
             iteration=args.composite_at_iteration
         )
+
+    if args.seq_dir or args.gif or args.all:
+        sequence = create_sequence(dirs, args.no_caption_gif_with_iterations)
+
+    if args.seq_dir:
+        write_img_sequence(sequence, args.seq_dir)
+
     if args.gif or args.all:
         print('\nFor training .gif, using images:')
         if args.no_caption_gif_with_iterations:
             filename = 'training_captioned.gif'
         else:
             filename = 'training.gif'
-        create_gif(dirs, os.path.join(args.dir, filename), args.no_caption_gif_with_iterations)
+        write_gif(sequence, os.path.join(args.dir, filename), args.gif_delay)
 
-
-def create_gif(dirs, outfile, caption):
+def create_sequence(dirs, caption):
     filenames_in_each_dir = []
     for d in dirs:
         names = os.listdir(os.path.join(d, 'predictions'))
@@ -61,11 +69,10 @@ def create_gif(dirs, outfile, caption):
         )
         names = [os.path.join(d, 'predictions', name) for name in names]
         filenames_in_each_dir.append(names)
+
     max_number_of_images = max([len(i) for i in filenames_in_each_dir])
-
     num_frames = max_number_of_images
-
-    gif = wand.image.Image()
+    frames = []
     for i in range(num_frames):
         frame = None
         iterations_getting_shown = []
@@ -90,8 +97,8 @@ def create_gif(dirs, outfile, caption):
                     left=0,
                     top=0,
                 )
-        iteration = max(iterations_getting_shown)
         if caption:
+            iteration = max(iterations_getting_shown)
             frame.caption(
                 '{:08d}'.format(iteration),
                 font=wand.font.Font(
@@ -99,14 +106,19 @@ def create_gif(dirs, outfile, caption):
                     color=wand.color.Color('#0C0687')
                 )
             )
-        gif.sequence.append(frame)
+        frames.append(frame)
+    return frames
 
-    for i in range(num_frames):
-        with gif.sequence[i] as frame:
-            frame.delay = 10
+def write_img_sequence(sequence, outdir):
+    return False
+
+def write_gif(sequence, outfile, delay = 10):
+    gif = wand.image.Image()
+    gif.sequence = sequence
+    for frame in gif.sequence:
+        frame.delay = delay
     gif.type = 'optimize'
     gif.save(filename=outfile)
-
 
 def get_and_merge_images(dirs, best_auc, outfile, iteration=None):
     image = None
