@@ -5,6 +5,7 @@ import re
 import numpy as np
 from PIL import Image
 import wand.image
+import wand.sequence
 
 
 def main():
@@ -13,9 +14,10 @@ def main():
     parser.add_argument('--all', action='store_true')
     parser.add_argument('--final', action='store_true')
     parser.add_argument('--best-auc', action='store_true')
-    parser.add_argument('--seq-dir', type=String, "Generate an image sequence and save it to the provided directory")
-    parser.add_argument('--gif', action='store_true', "Generate an image sequence and save it as an animated GIF")
-    parser.add_argument('--gif-delay', type=int, "GIF frame delay in hundredths of a second", default=10)
+    parser.add_argument('--img-seq', help='Generate an image sequence and save it to the provided directory')
+    parser.add_argument('--gif', action='store_true', help='Generate an image sequence and save it as an animated GIF')
+    parser.add_argument('--gif-prefix', default='training', help='The prefix used for the output GIF filename')
+    parser.add_argument('--gif-delay', default=10, type=int, help='GIF frame delay in hundredths of a second')
     parser.add_argument('--no-caption-gif-with-iterations', action='store_false')
     parser.add_argument('--composite-at-iteration', type=int, default=None)
 
@@ -27,7 +29,7 @@ def main():
           ' in the filename being the only number preceded by "_"'
           ' and followed by "_" or ".".')
 
-    if not (args.final or args.best_auc or args.gif or args.all or args.composite_at_iteration):
+    if not (args.final or args.best_auc or args.img_seq or args.gif or args.all or args.composite_at_iteration):
         parser.print_help()
     if args.final or args.all:
         print('\nFor final predictions, using images:')
@@ -44,21 +46,22 @@ def main():
             iteration=args.composite_at_iteration
         )
 
-    if args.seq_dir or args.gif or args.all:
-        sequence = create_sequence(dirs, args.no_caption_gif_with_iterations)
+    animation = None
+    if args.img_seq or args.gif or args.all:
+        animation = create_animation(dirs, args.no_caption_gif_with_iterations)
 
-    if args.seq_dir:
-        write_img_sequence(sequence, args.seq_dir)
+    if args.img_seq:
+        write_img_sequence(animation, args.img_seq)
 
     if args.gif or args.all:
-        print('\nFor training .gif, using images:')
         if args.no_caption_gif_with_iterations:
-            filename = 'training_captioned.gif'
+            filename = args.gif_prefix + '_captioned.gif'
         else:
-            filename = 'training.gif'
-        write_gif(sequence, os.path.join(args.dir, filename), args.gif_delay)
+            filename = args.gif_prefix + '.gif'
+        write_gif(animation, os.path.join(args.dir, filename), args.gif_delay)
 
-def create_sequence(dirs, caption):
+
+def create_animation(dirs, caption):
     filenames_in_each_dir = []
     for d in dirs:
         names = os.listdir(os.path.join(d, 'predictions'))
@@ -72,7 +75,7 @@ def create_sequence(dirs, caption):
 
     max_number_of_images = max([len(i) for i in filenames_in_each_dir])
     num_frames = max_number_of_images
-    frames = []
+    animation = wand.image.Image()
     for i in range(num_frames):
         frame = None
         iterations_getting_shown = []
@@ -93,7 +96,7 @@ def create_sequence(dirs, caption):
                 frame.composite_channel(
                     'all_channels',
                     partial_frame,
-                    'add',
+                    'modulus_add',
                     left=0,
                     top=0,
                 )
@@ -106,19 +109,27 @@ def create_sequence(dirs, caption):
                     color=wand.color.Color('#0C0687')
                 )
             )
-        frames.append(frame)
-    return frames
+        animation.sequence.append(frame)
+    return animation
 
-def write_img_sequence(sequence, outdir):
-    return False
 
-def write_gif(sequence, outfile, delay = 10):
-    gif = wand.image.Image()
-    gif.sequence = sequence
+def write_img_sequence(animation, outdir):
+    print('\nWriting training image sequence to', outdir)
+    prefix = os.path.join(outdir, "sequence_")
+    images = animation.sequence
+    for i in range(len(images)):
+        outfile = prefix + str(i) + ".png"
+        wand.image.Image(images[i]).save(filename=outfile)
+
+
+def write_gif(animation, outfile, delay=10):
+    print('\nWriting training gif to', outfile)
+    gif = animation
     for frame in gif.sequence:
         frame.delay = delay
     gif.type = 'optimize'
     gif.save(filename=outfile)
+
 
 def get_and_merge_images(dirs, best_auc, outfile, iteration=None):
     image = None

@@ -20,9 +20,12 @@ out/
 *.egg-info
 .vscode
 env/
+venv/
 tmp/
 
 Pipfile*
 test/
 
 inkid/data/Volume.html
+
+.idea/
