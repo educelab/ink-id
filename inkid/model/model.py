@@ -10,7 +10,7 @@ import inkid.ops
 import inkid.metrics
 
 
-class EvalCheckpointSaverListener(tf.train.CheckpointSaverListener):
+class EvalCheckpointSaverListener(tf.estimator.CheckpointSaverListener):
     """Run some logic every time a checkpoint is saved.
 
     This is a bit of a Trojan horse that allows us to run evaluations,
