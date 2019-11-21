@@ -142,13 +142,6 @@ def main():
     parser.add('--skip-batches', metavar='n', type=int, default=0)
     parser.add('--training-shuffle-seed', metavar='n', type=int, default=random.randint(0,10000))
 
-    # Profiling
-    parser.add('--profile-dir-name', metavar='path', default=None,
-               help='dirname to dump TensorFlow profile '
-               '(no profile produced if not defined)')
-    parser.add('--profile-start-and-end-steps', metavar='n', nargs=2, default=[10, 90],
-               help='start and end steps (and dump step) for profiling')
-
     # Logging/metadata
     parser.add('--eval-metrics-to-write', metavar='metric', nargs='*',
                default=[
@@ -401,41 +394,6 @@ def main():
     # and also after training.
     try:
         with ExitStack() as stack:
-            # Only do profiling if user provided a profile file path
-            # https://stackoverflow.com/questions/27803059/conditional-with-statement-in-python?utm_medium=organic&utm_source=google_rich_qa&utm_campaign=google_rich_qa
-            if args.profile_dir_name is not None:
-                print('Enabling TensorFlow profiling...')
-                pctx = stack.enter_context(
-                    tf.contrib.tfprof.ProfileContext(
-                        'tmp',
-                        trace_steps=range(
-                            args.profile_start_and_end_steps[0],
-                            args.profile_start_and_end_steps[1]
-                        ),
-                        dump_steps=[args.profile_start_and_end_steps[1]]
-                    )
-                )
-
-                opts = tf.profiler.ProfileOptionBuilder.time_and_memory()
-                opts2 = tf.profiler.ProfileOptionBuilder.trainable_variables_parameter()
-                builder = tf.profiler.ProfileOptionBuilder
-                opts3 = builder(builder.time_and_memory()).order_by('micros').build()
-                pctx.add_auto_profiling(
-                    'op',
-                    opts,
-                    [args.profile_start_and_end_steps[0], args.profile_start_and_end_steps[1]]
-                )
-                pctx.add_auto_profiling(
-                    'scope',
-                    opts2,
-                    [args.profile_start_and_end_steps[0], args.profile_start_and_end_steps[1]]
-                )
-                pctx.add_auto_profiling(
-                    'op',
-                    opts3,
-                    [args.profile_start_and_end_steps[0], args.profile_start_and_end_steps[1]]
-                )
-
             # Only train if the training region set group is not empty
             if len(regions._region_groups['training']) > 0 and not args.skip_training:
                 estimator.train(
