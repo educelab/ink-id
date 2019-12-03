@@ -106,10 +106,14 @@ def main():
     parser.add('--length-in-each-direction', metavar='n', type=int,
                help='length of voxel vector in each direction along normal')
 
-    # Data organization/augmentation
+    # Data organization/augmentation/stratification
     parser.add('--jitter-max', metavar='n', type=int)
     parser.add('--augmentation', action='store_true', dest='augmentation')
     parser.add('--no-augmentation', action='store_false', dest='augmentation')
+    parser.add('--oversampling', metavar='n', type=float, default=None,
+                help='desired fraction of positives')
+    parser.add('--undersampling', metavar='n', type=float, default=None,
+                help='desired fraction of positives')
 
     # Network architecture
     parser.add('--learning-rate', metavar='n', type=float)
@@ -376,6 +380,8 @@ def main():
         restrict_to_surface=True,
         epochs=args.training_epochs,
         skip_batches=args.skip_batches,
+        undersampling_ink_ratio=args.undersampling,
+        oversampling_ink_ratio=args.oversampling,
     )
     evaluation_input_fn = regions.create_tf_input_fn(
         region_groups=['evaluation'],
@@ -386,6 +392,8 @@ def main():
         perform_shuffle=True,
         shuffle_seed=0,  # We want the eval set to be the same each time
         restrict_to_surface=True,
+        undersampling_ink_ratio=None, 
+        oversampling_ink_ratio=None,
     )
     prediction_input_fn = regions.create_tf_input_fn(
         region_groups=['prediction'],
@@ -395,6 +403,8 @@ def main():
         perform_shuffle=False,
         restrict_to_surface=True,
         grid_spacing=args.prediction_grid_spacing,
+        undersampling_ink_ratio=None,
+        oversampling_ink_ratio=None,
     )
 
     # Run the training process. Predictions are run during training
@@ -471,6 +481,8 @@ def main():
                 perform_shuffle=False,
                 restrict_to_surface=True,
                 grid_spacing=args.prediction_grid_spacing,
+                undersampling_ink_ratio=None,
+                oversampling_ink_ratio=None,
             )
 
             if args.label_type == 'ink_classes':
