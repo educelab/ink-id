@@ -2,6 +2,7 @@ import json
 import multiprocessing
 import os
 import sys
+import random
 
 from jsmin import jsmin
 import numpy as np
@@ -141,7 +142,9 @@ class RegionSet:
                            probability_of_selection=None,
                            premade_points_generator=None,
                            threads=multiprocessing.cpu_count(),
-                           skip_batches=None):
+                           skip_batches=None,
+                           oversampling_ink_ratio=None,
+                           undersampling_ink_ratio=None):
         """Generate Tensorflow input_fn function for the model/network.
 
         A Tensorflow Estimator requires an input_fn to be passed to
@@ -177,6 +180,8 @@ class RegionSet:
                         shuffle_seed=shuffle_seed,
                         grid_spacing=grid_spacing,
                         probability_of_selection=probability_of_selection,
+                        undersampling_ink_ratio=undersampling_ink_ratio,
+                        oversampling_ink_ratio=oversampling_ink_ratio,
                     ),
                     (tf.int64),
                 )
@@ -228,7 +233,9 @@ class RegionSet:
                              restrict_to_surface=False,
                              perform_shuffle=False, shuffle_seed=None,
                              grid_spacing=None,
-                             probability_of_selection=None):
+                             probability_of_selection=None,
+                             undersampling_ink_ratio=None,
+                             oversampling_ink_ratio=None):
         """Return a numpy array of region_ids and points.
 
         Used as the initial input to a Dataset, which will later map
@@ -241,14 +248,64 @@ class RegionSet:
         print('Fetching points for region groups: {}... '
               .format(region_groups), end='')
         sys.stdout.flush()
+        
         points = []
+        fetched_points = []
+        positive_points = []
+        negative_points = []
+
         for region_group in region_groups:
             for region_id in self._region_groups[region_group]:
-                points += self._regions[region_id].get_points(
+                fetched_points += self._regions[region_id].get_points(
                     restrict_to_surface=restrict_to_surface,
                     grid_spacing=grid_spacing,
                     probability_of_selection=probability_of_selection
                 )
+        
+        """ Split the points into two lists based on their labels"""
+
+        for point in fetched_points:
+            if np.array_equal(self.point_to_ink_classes_label(point),
+                                    np.asarray([0.0, 1.0], np.float32)):
+                positive_points.append(point)
+            else:
+                negative_points.append(point)
+
+        """ 
+        For the given ink ratio,
+        Undersampling: reduces the number of negative points for the positive 
+            points available.
+        Oversampling: repeats the positive points in order to achieve the 
+            desired ratio for the given number of negative points.
+        If neither understampling nor oversampling is chosen, all the 
+            available points are used without balancing classes.
+
+        undersampling_ink_ratio: float (default=None)
+        oversampling_ink_ratio: float  (default=None)
+        """ 
+
+        if undersampling_ink_ratio:
+            negative_ratio = 1.0-undersampling_ink_ratio
+
+            negatives_needed = int(len(positive_points)*
+                                    negative_ratio/undersampling_ink_ratio)
+            points = positive_points + random.choices(negative_points,
+                                        k=negatives_needed)  
+
+        elif oversampling_ink_ratio:
+            negative_ratio = 1.0-oversampling_ink_ratio
+
+            positives_needed = int(len(negative_points)*
+                                    oversampling_ink_ratio/negative_ratio)
+            positive_reps = 1 if positives_needed < len(positive_points) else \
+                                int(positives_needed/len(positive_points))
+            extended_positive_points = np.repeat(np.array(positive_points),
+                    positive_reps, axis=0).tolist()
+            points = extended_positive_points + negative_points 
+
+        else: 
+            points = positive_points + negative_points
+
         points = np.array(points)
         print('done ({} points)'.format(len(points)))
         if perform_shuffle:
