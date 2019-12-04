@@ -119,41 +119,41 @@ class Subvolume3dcnnModel:
 
         self._no_batch_norm = no_batch_norm
 
-        # To save some space below, this creates a tf.layers.Conv3D
+        # To save some space below, this creates a tf.compat.v1.layers.Conv3D
         # that is still missing the 'filters' argument, so it can be
         # called multiple times below but we only need to specify
         # 'filters' since the other arguments are the same for each
         # convolutional layer.
         convolution_layer = partial(
-            tf.layers.Conv3D,
+            tf.compat.v1.layers.Conv3D,
             kernel_size=[3, 3, 3],
             strides=(2, 2, 2),
             padding='valid',
             data_format='channels_last',
             dilation_rate=(1, 1, 1),
             activation=tf.nn.relu,
-            kernel_initializer=tf.contrib.layers.xavier_initializer(),
+            kernel_initializer=tf.initializers.GlorotUniform(),
             bias_initializer=tf.zeros_initializer(),
         )
 
         self.conv1 = convolution_layer(strides=(1, 1, 1), filters=filters[0])
-        self.batch_norm1 = tf.layers.BatchNormalization(
+        self.batch_norm1 = tf.compat.v1.layers.BatchNormalization(
             scale=False, axis=4, momentum=batch_norm_momentum)
 
         self.conv2 = convolution_layer(filters=filters[1])
-        self.batch_norm2 = tf.layers.BatchNormalization(
+        self.batch_norm2 = tf.compat.v1.layers.BatchNormalization(
             scale=False, axis=4, momentum=batch_norm_momentum)
 
         self.conv3 = convolution_layer(filters=filters[2])
-        self.batch_norm3 = tf.layers.BatchNormalization(
+        self.batch_norm3 = tf.compat.v1.layers.BatchNormalization(
             scale=False, axis=4, momentum=batch_norm_momentum)
 
         self.conv4 = convolution_layer(filters=filters[3])
-        self.batch_norm4 = tf.layers.BatchNormalization(
+        self.batch_norm4 = tf.compat.v1.layers.BatchNormalization(
             scale=False, axis=4, momentum=batch_norm_momentum)
 
-        self.fc = tf.layers.Dense(output_neurons)
-        self.dropout = tf.layers.Dropout(drop_rate)
+        self.fc = tf.compat.v1.layers.Dense(output_neurons)
+        self.dropout = tf.compat.v1.layers.Dropout(drop_rate)
 
     def __call__(self, inputs, training):
         """Chain the layers together when this class is 'called'."""
@@ -170,7 +170,7 @@ class Subvolume3dcnnModel:
         y = self.conv4(y)
         if not self._no_batch_norm:
             y = self.batch_norm4(y, training=training)
-        y = tf.layers.flatten(y)
+        y = tf.compat.v1.layers.flatten(y)
         y = self.fc(y)
         y = self.dropout(y, training=training)
 
@@ -181,9 +181,9 @@ class DescriptiveStatisticsModel:
     def __init__(self, num_stats, output_neurons):
         self._input_shape = [-1, num_stats]
 
-        self.layer1 = tf.layers.Dense(20)
-        self.layer2 = tf.layers.Dense(20)
-        self.layer3 = tf.layers.Dense(output_neurons)
+        self.layer1 = tf.compat.v1.layers.Dense(20)
+        self.layer2 = tf.compat.v1.layers.Dense(20)
+        self.layer3 = tf.compat.v1.layers.Dense(output_neurons)
 
     def __call__(self, inputs, training):
         y = tf.reshape(inputs, self._input_shape)
@@ -202,7 +202,7 @@ class VoxelVector1dcnnModel:
         self._input_shape = [-1, length_in_each_direction * 2 + 1, 1]
 
         convolution_layer = partial(
-            tf.layers.Conv1D,
+            tf.compat.v1.layers.Conv1D,
             kernel_size=[3],
             strides=(2),
             padding='valid',
@@ -214,15 +214,15 @@ class VoxelVector1dcnnModel:
         )
 
         self.conv1 = convolution_layer(strides=(1), filters=filters[0])
-        self.batch_norm1 = tf.layers.BatchNormalization(
+        self.batch_norm1 = tf.compat.v1.layers.BatchNormalization(
             scale=False, axis=2, momentum=batch_norm_momentum)
 
         self.conv2 = convolution_layer(filters=filters[1])
-        self.batch_norm2 = tf.layers.BatchNormalization(
+        self.batch_norm2 = tf.compat.v1.layers.BatchNormalization(
             scale=False, axis=2, momentum=batch_norm_momentum)
 
-        self.fc = tf.layers.Dense(output_neurons)
-        self.dropout = tf.layers.Dropout(drop_rate)
+        self.fc = tf.compat.v1.layers.Dense(output_neurons)
+        self.dropout = tf.compat.v1.layers.Dropout(drop_rate)
 
     def __call__(self, inputs, training):
         """Chain the layers together when this class is 'called'."""
@@ -231,7 +231,7 @@ class VoxelVector1dcnnModel:
         y = self.batch_norm1(y, training=training)
         y = self.conv2(y)
         y = self.batch_norm2(y, training=training)
-        y = tf.layers.flatten(y)
+        y = tf.compat.v1.layers.flatten(y)
         y = self.fc(y)
         y = self.dropout(y, training=training)
 
@@ -308,20 +308,20 @@ def ink_classes_model_fn(features, labels, mode, params):
 
     if mode == tf.estimator.ModeKeys.TRAIN:
         if params['adagrad_optimizer']:
-            optimizer = tf.train.AdagradOptimizer(learning_rate=params['learning_rate'])
+            optimizer = tf.compat.v1.train.AdagradOptimizer(learning_rate=params['learning_rate'])
         else:
-            optimizer = tf.train.AdamOptimizer(learning_rate=params['learning_rate'])
+            optimizer = tf.compat.v1.train.AdamOptimizer(learning_rate=params['learning_rate'])
         logits = model(inputs, training=True)
-        loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(
+        loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(
             labels=labels, logits=logits))
 
         epsilon = 1e-5
         predicted = tf.argmax(logits, 1)
         actual = tf.argmax(labels, 1)
-        true_positives = tf.count_nonzero(predicted * actual, dtype=tf.float32)
-        true_negatives = tf.count_nonzero((predicted - 1) * (actual - 1), dtype=tf.float32)
-        false_positives = tf.count_nonzero(predicted * (actual - 1), dtype=tf.float32)
-        false_negatives = tf.count_nonzero((predicted - 1) * actual, dtype=tf.float32)
+        true_positives = tf.math.count_nonzero(predicted * actual, dtype=tf.float32)
+        true_negatives = tf.math.count_nonzero((predicted - 1) * (actual - 1), dtype=tf.float32)
+        false_positives = tf.math.count_nonzero(predicted * (actual - 1), dtype=tf.float32)
+        false_negatives = tf.math.count_nonzero((predicted - 1) * actual, dtype=tf.float32)
         positives = true_positives + false_positives
         negatives = true_negatives + false_negatives
         accuracy = tf.divide(
@@ -373,9 +373,9 @@ def ink_classes_model_fn(features, labels, mode, params):
         # runs.
         # https://github.com/tensorflow/tensorflow/issues/16455
         # https://www.tensorflow.org/api_docs/python/tf/layers/batch_normalization
-        update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
+        update_ops = tf.compat.v1.get_collection(tf.compat.v1.GraphKeys.UPDATE_OPS)
         with tf.control_dependencies(update_ops):
-            train_op = optimizer.minimize(loss, global_step=tf.train.get_global_step())
+            train_op = optimizer.minimize(loss, global_step=tf.compat.v1.train.get_global_step())
 
         return tf.estimator.EstimatorSpec(
             mode=tf.estimator.ModeKeys.TRAIN,
@@ -385,22 +385,22 @@ def ink_classes_model_fn(features, labels, mode, params):
 
     if mode == tf.estimator.ModeKeys.EVAL:
         logits = model(inputs, training=False)
-        loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(
+        loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(
             labels=labels, logits=logits))
 
         return tf.estimator.EstimatorSpec(
             mode=tf.estimator.ModeKeys.EVAL,
             loss=loss,
             eval_metric_ops={
-                'accuracy': tf.metrics.accuracy(
+                'accuracy': tf.compat.v1.metrics.accuracy(
                     labels=tf.argmax(labels, 1),
                     predictions=tf.argmax(logits, 1)
                 ),
-                'precision': tf.metrics.precision(
+                'precision': tf.compat.v1.metrics.precision(
                     labels=tf.argmax(labels, 1),
                     predictions=tf.argmax(logits, 1)
                 ),
-                'recall': tf.metrics.recall(
+                'recall': tf.compat.v1.metrics.recall(
                     labels=tf.argmax(labels, 1),
                     predictions=tf.argmax(logits, 1)
                 ),
@@ -417,7 +417,7 @@ def ink_classes_model_fn(features, labels, mode, params):
                     labels=tf.argmax(labels, 1),
                     predictions=tf.argmax(logits, 1)
                 ),
-                'area_under_roc_curve': tf.metrics.auc(
+                'area_under_roc_curve': tf.compat.v1.metrics.auc(
                     labels=tf.argmax(labels, 1),
                     predictions=tf.nn.softmax(logits)[:, 1],
                 ),
@@ -479,7 +479,7 @@ def rgb_values_model_fn(features, labels, mode, params):
         logits = model(inputs, training=True)
         loss = tf.losses.huber_loss(labels, logits)
 
-        update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
+        update_ops = tf.compat.v1.get_collection(tf.compat.v1.GraphKeys.UPDATE_OPS)
         with tf.control_dependencies(update_ops):
             train_op = optimizer.minimize(loss, global_step=tf.train.get_global_step())
 

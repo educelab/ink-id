@@ -33,8 +33,12 @@ import timeit
 import configargparse
 import git
 import numpy as np
+
+# TODO(pytorch) remove
 from tensorboard.backend.event_processing.event_accumulator import EventAccumulator
 import tensorflow as tf
+
+import torch
 
 import inkid
 
@@ -63,6 +67,7 @@ def main():
                'only one volume in the region set file)')
 
     # Pretrained model
+    # TODO(pytorch) maybe change vocabulary/structure of this dir
     parser.add('--model', metavar='path', default=None,
                help='existing model directory to load checkpoints from')
 
@@ -112,6 +117,7 @@ def main():
     parser.add('--no-augmentation', action='store_false', dest='augmentation')
 
     # Network architecture
+    # TODO(pytorch) make sure these accounted for/changed if needed
     parser.add('--learning-rate', metavar='n', type=float)
     parser.add('--drop-rate', metavar='n', type=float)
     parser.add('--batch-norm-momentum', metavar='n', type=float)
@@ -124,6 +130,7 @@ def main():
     parser.add('--adagrad-optimizer', action='store_true')
 
     # Run configuration
+    # TODO(pytorch) make sure these accounted for/changed if needed
     parser.add('--training-batch-size', metavar='n', type=int)
     parser.add('--training-max-batches', metavar='n', type=int, default=None)
     parser.add('--training-epochs', metavar='n', type=int, default=None)
@@ -143,6 +150,7 @@ def main():
     parser.add('--training-shuffle-seed', metavar='n', type=int, default=random.randint(0,10000))
 
     # Logging/metadata
+    # TODO(pytorch) make sure these accounted for/changed if needed
     parser.add('--eval-metrics-to-write', metavar='metric', nargs='*',
                default=[
                    'area_under_roc_curve',
@@ -177,7 +185,7 @@ def main():
             d_args[prev_arg] = prev_args[prev_arg]
 
         # Calculate number of batches to drop
-        files = os.listdir(prev_dir)
+        files = os.listdir(prev_dir)  # TODO(pytorch) change this structure
         checkpoint_files = list(filter(lambda name: re.search('model\.ckpt-(\d+)\.index', name) is not None, files))
         iterations = [int(re.findall('model\.ckpt-(\d+)\.index', name)[0]) for name in checkpoint_files]
         max_iteration = max(iterations)
@@ -240,6 +248,7 @@ def main():
         region_data['regions']['evaluation'].append(k_region)
 
     regions = inkid.data.RegionSet(region_data)
+
     if args.normalize_volumes:
         print('Normalizing volumes...')
         regions.normalize_volumes()
@@ -308,11 +317,11 @@ def main():
         }
     else:
         tensors_to_log = {}
-    logging_hook = tf.train.LoggingTensorHook(
+    logging_hook = tf.estimator.LoggingTensorHook(
         tensors=tensors_to_log,
         every_n_iter=args.summary_every_n_steps,
     )
-    tf.logging.set_verbosity(tf.logging.INFO)
+    tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.INFO)
 
     # Define the feature inputs to the network
     if args.feature_type == 'subvolume_3dcnn':

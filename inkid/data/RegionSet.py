@@ -372,11 +372,11 @@ class RegionSet:
         """
         def point_to_network_input(region_id_with_point):
             other_feature_names = ['RegionID', 'PPM_XY']
-            other_feature_tensors = tf.py_func(self.point_to_other_feature_tensors,
+            other_feature_tensors = tf.compat.v1.py_func(self.point_to_other_feature_tensors,
                                                [region_id_with_point],
                                                [tf.int64, tf.int64])
             input_feature_name = 'Input'
-            input_feature_tensor = tf.py_func(features_fn,
+            input_feature_tensor = tf.compat.v1.py_func(features_fn,
                                               [region_id_with_point],
                                               tf.float32)
             network_input = dict(zip(other_feature_names, other_feature_tensors))
@@ -385,7 +385,7 @@ class RegionSet:
             if label_fn is None:
                 return network_input
             else:
-                label = tf.py_func(label_fn,
+                label = tf.compat.v1.py_func(label_fn,
                                    [region_id_with_point],
                                    tf.float32)
                 return network_input, label
