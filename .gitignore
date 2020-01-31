@@ -14,7 +14,8 @@ out/
 *.egg-info
 .vscode
 env/
-env-inkid/
+venv/
+env-*/
 tmp/
 
 Pipfile*
@@ -24,3 +25,5 @@ test/
 inkid/data/Volume.html
 *.c
 *.so
+
+.idea/

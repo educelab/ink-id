@@ -118,6 +118,7 @@ class Subvolume3dcnnModel:
             self._input_shape = [-1, subvolume_shape[0], subvolume_shape[1], subvolume_shape[2], 1]
 
         self._no_batch_norm = no_batch_norm
+        self._number_of_layers = len(filters)
 
         # To save some space below, this creates a tf.compat.v1.layers.Conv3D
         # that is still missing the 'filters' argument, so it can be
@@ -128,7 +129,7 @@ class Subvolume3dcnnModel:
             tf.compat.v1.layers.Conv3D,
             kernel_size=[3, 3, 3],
             strides=(2, 2, 2),
-            padding='valid',
+            padding='same',
             data_format='channels_last',
             dilation_rate=(1, 1, 1),
             activation=tf.nn.relu,
@@ -137,10 +138,14 @@ class Subvolume3dcnnModel:
         )
 
         self.conv1 = convolution_layer(strides=(1, 1, 1), filters=filters[0])
+        #self.maxpool1 = tf.layers.MaxPooling3D(pool_size=(2,2,2), strides=(2,2,2))
         self.batch_norm1 = tf.compat.v1.layers.BatchNormalization(
             scale=False, axis=4, momentum=batch_norm_momentum)
 
-        self.conv2 = convolution_layer(filters=filters[1])
+        if self._number_of_layers is 5:
+            self.conv2 = convolution_layer(strides=(1,1,1), filters=filters[1])
+        else:
+            self.conv2 = convolution_layer(filters=filters[1])
         self.batch_norm2 = tf.compat.v1.layers.BatchNormalization(
             scale=False, axis=4, momentum=batch_norm_momentum)
 
@@ -151,6 +156,12 @@ class Subvolume3dcnnModel:
         self.conv4 = convolution_layer(filters=filters[3])
         self.batch_norm4 = tf.compat.v1.layers.BatchNormalization(
             scale=False, axis=4, momentum=batch_norm_momentum)
+
+        if self._number_of_layers is 5:
+            self.conv5 = convolution_layer(filters=filters[4])
+            self.batch_norm5 = tf.compat.v1.layers.BatchNormalization(
+                scale=False, axis=4, momentum=batch_norm_momentum)
+
 
         self.fc = tf.compat.v1.layers.Dense(output_neurons)
         self.dropout = tf.compat.v1.layers.Dropout(drop_rate)
@@ -170,6 +181,10 @@ class Subvolume3dcnnModel:
         y = self.conv4(y)
         if not self._no_batch_norm:
             y = self.batch_norm4(y, training=training)
+        if self._number_of_layers is 5:
+            y = self.conv5(y)
+            if not self._no_batch_norm:
+                y = self.batch_norm5(y, training=training)
         y = tf.compat.v1.layers.flatten(y)
         y = self.fc(y)
         y = self.dropout(y, training=training)
