@@ -21,7 +21,7 @@ setup(
         'matplotlib',
         'Pillow',
         'progressbar2',
-        'wand',
+        'wand>=0.5',
     ],
     ext_modules=cythonize('inkid/data/Volume.pyx', annotate=True),
     include_dirs=[np.get_include()],
