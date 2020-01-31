@@ -1,16 +1,10 @@
-# output that would inflate the repository
+# Job output files
 *.out
-small-fragment-data/
-predictions/
+
 .DS_Store
 feat_cache/
 *__pycache__/
-CarbonSampleNov2016/
-old_output/
-*.npy
 *.pyc
-*.c
-*.so
 *.sif
 
 build/
@@ -20,9 +14,13 @@ out/
 *.egg-info
 .vscode
 env/
+env-inkid/
 tmp/
 
 Pipfile*
 test/
 
+# Cython
 inkid/data/Volume.html
+*.c
+*.so

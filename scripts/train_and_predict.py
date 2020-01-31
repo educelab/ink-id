@@ -33,8 +33,12 @@ import timeit
 import configargparse
 import git
 import numpy as np
+
+# TODO(pytorch) remove
 from tensorboard.backend.event_processing.event_accumulator import EventAccumulator
 import tensorflow as tf
+
+import torch
 
 import inkid
 
@@ -63,6 +67,7 @@ def main():
                'only one volume in the region set file)')
 
     # Pretrained model
+    # TODO(pytorch) maybe change vocabulary/structure of this dir
     parser.add('--model', metavar='path', default=None,
                help='existing model directory to load checkpoints from')
 
@@ -112,6 +117,7 @@ def main():
     parser.add('--no-augmentation', action='store_false', dest='augmentation')
 
     # Network architecture
+    # TODO(pytorch) make sure these accounted for/changed if needed
     parser.add('--learning-rate', metavar='n', type=float)
     parser.add('--drop-rate', metavar='n', type=float)
     parser.add('--batch-norm-momentum', metavar='n', type=float)
@@ -126,6 +132,7 @@ def main():
     parser.add('--decay-rate', metavar='n', type=float, default=None)
 
     # Run configuration
+    # TODO(pytorch) make sure these accounted for/changed if needed
     parser.add('--training-batch-size', metavar='n', type=int)
     parser.add('--training-max-batches', metavar='n', type=int, default=None)
     parser.add('--training-epochs', metavar='n', type=int, default=None)
@@ -144,14 +151,8 @@ def main():
     parser.add('--skip-batches', metavar='n', type=int, default=0)
     parser.add('--training-shuffle-seed', metavar='n', type=int, default=random.randint(0,10000))
 
-    # Profiling
-    parser.add('--profile-dir-name', metavar='path', default=None,
-               help='dirname to dump TensorFlow profile '
-               '(no profile produced if not defined)')
-    parser.add('--profile-start-and-end-steps', metavar='n', nargs=2, default=[10, 90],
-               help='start and end steps (and dump step) for profiling')
-
     # Logging/metadata
+    # TODO(pytorch) make sure these accounted for/changed if needed
     parser.add('--eval-metrics-to-write', metavar='metric', nargs='*',
                default=[
                    'area_under_roc_curve',
@@ -186,7 +187,7 @@ def main():
             d_args[prev_arg] = prev_args[prev_arg]
 
         # Calculate number of batches to drop
-        files = os.listdir(prev_dir)
+        files = os.listdir(prev_dir)  # TODO(pytorch) change this structure
         checkpoint_files = list(filter(lambda name: re.search('model\.ckpt-(\d+)\.index', name) is not None, files))
         iterations = [int(re.findall('model\.ckpt-(\d+)\.index', name)[0]) for name in checkpoint_files]
         max_iteration = max(iterations)
@@ -249,6 +250,7 @@ def main():
         region_data['regions']['evaluation'].append(k_region)
 
     regions = inkid.data.RegionSet(region_data)
+
     if args.normalize_volumes:
         print('Normalizing volumes...')
         regions.normalize_volumes()
@@ -319,11 +321,11 @@ def main():
         }
     else:
         tensors_to_log = {}
-    logging_hook = tf.train.LoggingTensorHook(
+    logging_hook = tf.estimator.LoggingTensorHook(
         tensors=tensors_to_log,
         every_n_iter=args.summary_every_n_steps,
     )
-    tf.logging.set_verbosity(tf.logging.INFO)
+    tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.INFO)
 
     # Define the feature inputs to the network
     if args.feature_type == 'subvolume_3dcnn':
@@ -405,41 +407,6 @@ def main():
     # and also after training.
     try:
         with ExitStack() as stack:
-            # Only do profiling if user provided a profile file path
-            # https://stackoverflow.com/questions/27803059/conditional-with-statement-in-python?utm_medium=organic&utm_source=google_rich_qa&utm_campaign=google_rich_qa
-            if args.profile_dir_name is not None:
-                print('Enabling TensorFlow profiling...')
-                pctx = stack.enter_context(
-                    tf.contrib.tfprof.ProfileContext(
-                        'tmp',
-                        trace_steps=range(
-                            args.profile_start_and_end_steps[0],
-                            args.profile_start_and_end_steps[1]
-                        ),
-                        dump_steps=[args.profile_start_and_end_steps[1]]
-                    )
-                )
-
-                opts = tf.profiler.ProfileOptionBuilder.time_and_memory()
-                opts2 = tf.profiler.ProfileOptionBuilder.trainable_variables_parameter()
-                builder = tf.profiler.ProfileOptionBuilder
-                opts3 = builder(builder.time_and_memory()).order_by('micros').build()
-                pctx.add_auto_profiling(
-                    'op',
-                    opts,
-                    [args.profile_start_and_end_steps[0], args.profile_start_and_end_steps[1]]
-                )
-                pctx.add_auto_profiling(
-                    'scope',
-                    opts2,
-                    [args.profile_start_and_end_steps[0], args.profile_start_and_end_steps[1]]
-                )
-                pctx.add_auto_profiling(
-                    'op',
-                    opts3,
-                    [args.profile_start_and_end_steps[0], args.profile_start_and_end_steps[1]]
-                )
-
             # Only train if the training region set group is not empty
             if len(regions._region_groups['training']) > 0 and not args.skip_training:
                 estimator.train(

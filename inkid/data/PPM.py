@@ -8,8 +8,8 @@ import progressbar
 
 
 class PPM:
-    def __init__(self, path, volume, mask_path, ink_label_path,
-                 rgb_label_path, invert_normal):
+    def __init__(self, path, volume=None, mask_path=None, ink_label_path=None,
+                 rgb_label_path=None, invert_normal=False):
         self._path = path
         self._volume = volume
 
@@ -54,9 +54,7 @@ class PPM:
         if self._rgb_label_path is not None:
             self._rgb_label = np.asarray(Image.open(self._rgb_label_path).convert('RGB'), np.uint8)
 
-        self._invert_normal = False
-        if invert_normal is not None:
-            self._invert_normal = invert_normal
+        self._invert_normal = invert_normal
         if self._invert_normal:
             print('Normals are being inverted for this PPM.')
 
@@ -71,7 +69,7 @@ class PPM:
         width_re = re.compile('^width')
         height_re = re.compile('^height')
         dim_re = re.compile('^dim')
-        ordering_re = re.compile('^ordered')
+        ordered_re = re.compile('^ordered')
         type_re = re.compile('^type')
         version_re = re.compile('^version')
         header_terminator_re = re.compile('^<>$')
@@ -87,8 +85,8 @@ class PPM:
                     height = int(line.split(': ')[1])
                 elif dim_re.match(line):
                     dim = int(line.split(': ')[1])
-                elif ordering_re.match(line):
-                    ordering = line.split(': ')[1].strip() == 'true'
+                elif ordered_re.match(line):
+                    ordered = line.split(': ')[1].strip() == 'true'
                 elif type_re.match(line):
                     val_type = line.split(': ')[1].strip()
                     assert val_type in ['double']
@@ -103,7 +101,7 @@ class PPM:
             'width': width,
             'height': height,
             'dim': dim,
-            'ordering': ordering,
+            'ordered': ordered,
             'type': val_type,
             'version': version
         }
@@ -123,7 +121,7 @@ class PPM:
         self._width = header['width']
         self._height = header['height']
         self._dim = header['dim']
-        self._ordering = header['ordering']
+        self._ordered = header['ordered']
         self._type = header['type']
         self._version = header['version']
 
@@ -262,3 +260,34 @@ class PPM:
                     ),
                 ),
             )
+
+    def scale_down_by(self, scale_factor):
+        self._width //= scale_factor
+        self._height //= scale_factor
+
+        new_data = np.empty((self._height, self._width, self._dim))
+
+        print('Downscaling PPM by factor of {} on all axes...'.format(scale_factor))
+        bar = progressbar.ProgressBar()
+        for y in bar(range(self._height)):
+            for x in range(self._width):
+                for idx in range(self._dim):
+                    new_data[y, x, idx] = self._data[y * scale_factor, x * scale_factor, idx]
+
+        self._data = new_data
+
+    def write(self, filename):
+        with open(filename, 'wb') as f:
+            print('Writing PPM to file {}...'.format(filename))
+            f.write('width: {}\n'.format(self._width).encode('utf-8'))
+            f.write('height: {}\n'.format(self._height).encode('utf-8'))
+            f.write('dim: {}\n'.format(self._dim).encode('utf-8'))
+            f.write('ordered: {}\n'.format('true' if self._ordered else 'false').encode('utf-8'))
+            f.write('type: double\n'.encode('utf-8'))
+            f.write('version: {}\n'.format(self._version).encode('utf-8'))
+            f.write('<>\n'.encode('utf-8'))
+            bar = progressbar.ProgressBar()
+            for y in bar(range(self._height)):
+                for x in range(self._width):
+                    for idx in range(self._dim):
+                        f.write(struct.pack('d', self._data[y, x, idx]))
