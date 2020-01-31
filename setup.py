@@ -12,16 +12,20 @@ setup(
     license='MS-RSL',
     packages=['inkid'],
     install_requires=[
+        'autopep8',
         'configargparse',
         'Cython',
         'gitpython',
         'imageio',
         'jsmin',
-        'mathutils==2.78',
+        'mathutils',
         'matplotlib',
         'Pillow',
         'progressbar2',
-        'wand>=0.5',
+        'pylint',
+        'sphinx',
+        'tensorflow',
+        'wand',
     ],
     ext_modules=cythonize('inkid/data/Volume.pyx', annotate=True),
     include_dirs=[np.get_include()],
@@ -29,10 +33,6 @@ setup(
         'console_scripts': [
             'inkid-train-and-predict = scripts.train_and_predict:main',
         ],
-    },
-    extras_require={
-        'tf': ['tensorflow>=1.5.0'],
-        'tf_gpu': ['tensorflow-gpu>=1.5.0'],
     },
     zip_safe=False,
 )
