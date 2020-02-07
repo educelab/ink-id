@@ -25,6 +25,8 @@ setup(
         'pylint',
         'sphinx',
         'tensorflow',
+        'torch',
+        'torchvision',
         'wand',
     ],
     ext_modules=cythonize('inkid/data/Volume.pyx', annotate=True),

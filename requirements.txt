@@ -22,7 +22,7 @@ h5py==2.10.0
 idna==2.8
 imageio==2.6.1
 imagesize==1.2.0
--e git+git@code.cs.uky.edu:seales-research/ink-id.git@6935a8c3319862bb4aa4fa2fa9e62329e764324c#egg=inkid
+-e git+git@code.cs.uky.edu:seales-research/ink-id.git@caf8b734981e40aba680c8d5819d9c9eafcf28e5#egg=inkid
 isort==4.3.21
 Jinja2==2.11.1
 jsmin==2.2.2
@@ -69,6 +69,8 @@ tensorboard==2.1.0
 tensorflow==2.1.0
 tensorflow-estimator==2.1.0
 termcolor==1.1.0
+torch==1.4.0
+torchvision==0.5.0
 typed-ast==1.4.1
 urllib3==1.25.8
 Wand==0.5.8
