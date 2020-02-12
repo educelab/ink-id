@@ -12,21 +12,26 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('input')
     parser.add_argument('output')
-    parser.add_argument('--scale-factor', type=int, default=2)
+    parser.add_argument('--size-scale-factor', type=int, default=2)
+    parser.add_argument('--coordinate-scale-factor', type=int, default=1)
     args = parser.parse_args()
 
     header = parse_PPM_header(args.input)
     ppm_data = process_PPM_file(args.input, header)
-    scale_factor = args.scale_factor
+    size_scale_factor = args.size_scale_factor
+    coordinate_scale_factor = args.coordinate_scale_factor
     height, width = header['height'], header['width']
-    new_height, new_width = height // scale_factor, width // scale_factor
+    new_height, new_width = height // size_scale_factor, width // size_scale_factor
     resized_data = np.empty((new_height, new_width, 6))
 
     print('Creating new PPM...')
     bar = progressbar.ProgressBar()
     for y in bar(range(new_height)):
         for x in range(new_width):
-            resized_data[y, x] = ppm_data[y * scale_factor, x * scale_factor]
+            resized_data[y, x] = ppm_data[y * size_scale_factor, x * size_scale_factor]
+            resized_data[y, x, 0] /= coordinate_scale_factor
+            resized_data[y, x, 1] /= coordinate_scale_factor
+            resized_data[y, x, 2] /= coordinate_scale_factor
 
     print('Writing new PPM...')
     # Write the header
