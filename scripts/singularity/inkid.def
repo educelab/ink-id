@@ -35,6 +35,15 @@ From: ubuntu:16.04
   # Now install inkid
   pip install --editable /usr/local/dri/ink-id
 
+%runscript
+  if [ $# -lt 1 ]; then
+      echo "Usage: ./container <command>"
+      exit 1
+  fi
+
+  . /usr/local/dri/env-inkid/bin/activate
+  exec "$@"
+
 %help
   This container provides an environment for running inkid.
 
