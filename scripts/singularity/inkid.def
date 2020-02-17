@@ -10,10 +10,8 @@ From: ubuntu:16.04
   /tmp/ink-id /usr/local/dri/ink-id
 
 %post
-  # Give ink-id directories read/write/execute access
-  find /usr/local/dri/ink-id -type d -exec chmod 777 {} +
-  # Give ink-id files read/write access
-  find /usr/local/dri/ink-id -type f -exec chmod 666 {} +
+  # Give read/write access in ink-id (so it can later be edited using a persistent overlay)
+  chmod --recursive a+rw /usr/local/dri/ink-id
   # Basic installs
   apt update
   apt install -y git nano
@@ -29,8 +27,9 @@ From: ubuntu:16.04
   virtualenv --python=python3.7 /usr/local/dri/env-inkid
   # Activate virtualenv
   . /usr/local/dri/env-inkid/bin/activate
-  # Install exact dependenciesfrom requirements file, except inkid itself
+  # Remove locally installed inkid from requirements file, we want to install that separately
   sed -i '/ink-id.git/d' /usr/local/dri/ink-id/requirements.txt
+  # Install the exact versions of all of the dependencies
   pip install --requirement /usr/local/dri/ink-id/requirements.txt
   # Now install inkid
   pip install --editable /usr/local/dri/ink-id
