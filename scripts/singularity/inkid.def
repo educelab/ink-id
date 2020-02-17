@@ -32,4 +32,12 @@ From: ubuntu:16.04
 
 %help
   This container provides an environment for running inkid.
-  # git clone https://code.cs.uky.edu/seales-research/ink-id.git /tmp/ink-id
+
+  Building the container:
+    - Prerequisite: the ink-id git repository must exist at /tmp/ink-id on the host machine before building the container. Https is recommended so that it can be manipulated after container creation using your username and password instead of needing ssh keys on the container: `git clone https://code.cs.uky.edu/seales-research/ink-id.git /tmp/ink-id`
+    - You may check out a different branch or make changes if desired, but this can all be done after the container is created.
+    - Build as usual, for example: sudo singularity build inkid.sif inkid.def
+
+  Usage:
+    - Any script or shell usage should first source the virtualenv: `. /usr/local/dri/env-inkid/bin/activate`
+    - It is possible to use an overlay to allow one to check out another branch, pull recent changes, or make local edits to ink-id code: `mkdir inkid.overlay; sudo singularity shell --overlay inkid.overlay/ inkid.sif`. If the overlay directory is deleted or not specified when using the container, the changes will be gone and the checkout of ink-id built into the container will be present.
