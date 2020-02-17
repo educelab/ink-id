@@ -7,7 +7,7 @@
 Requirements
 ============
 
-Python >=3.4 is required.
+Python >=3.7 is required.
 
 Installation
 ============

@@ -1,0 +1,35 @@
+Bootstrap: library
+From: ubuntu:16.04
+
+%labels
+  MAINTAINER Stephen Parsons <stephen.parsons@uky.edu>, Mami Hayashida <mami.hayashida@uky.edu>
+  VERSION 0.1
+  OS Ubuntu 16.04
+
+%files
+  /tmp/ink-id /usr/local/dri/ink-id
+
+%post
+  apt update
+  apt install -y git nano
+  # Required to make python3.7 available
+  apt install -y software-properties-common
+  add-apt-repository -y ppa:deadsnakes/ppa
+  apt update
+  # Now proceed with the standard installs
+  apt install -y python3.7-dev python3-pip
+  pip3 install --upgrade pip
+  pip install --upgrade virtualenv
+  # Create a virtualenv for this project
+  virtualenv --python=python3.7 /usr/local/dri/env-inkid
+  # Activate virtualenv
+  . /usr/local/dri/env-inkid/bin/activate
+  # Install exact dependencies, do not install inkid itself
+  sed -i '/ink-id.git/d' /usr/local/dri/ink-id/requirements.txt
+  pip install --requirement /usr/local/dri/ink-id/requirements.txt
+  # Now install inkid
+  pip install --editable /usr/local/dri/ink-id
+
+%help
+  This container provides an environment for running inkid.
+  # git clone https://code.cs.uky.edu/seales-research/ink-id.git /tmp/ink-id

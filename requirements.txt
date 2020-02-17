@@ -1,5 +1,6 @@
 absl-py==0.9.0
 alabaster==0.7.12
+appdirs==1.4.3
 astor==0.8.1
 astroid==2.3.3
 autopep8==1.5
@@ -22,7 +23,7 @@ h5py==2.10.0
 idna==2.8
 imageio==2.6.1
 imagesize==1.2.0
--e git+git@code.cs.uky.edu:seales-research/ink-id.git@caf8b734981e40aba680c8d5819d9c9eafcf28e5#egg=inkid
+-e git+git@code.cs.uky.edu:seales-research/ink-id.git@05b06907238626f0d795847b6e0c6ca7eca57fbc#egg=inkid
 isort==4.3.21
 Jinja2==2.11.1
 jsmin==2.2.2
@@ -33,13 +34,14 @@ lazy-object-proxy==1.4.3
 Markdown==3.1.1
 MarkupSafe==1.1.1
 mathutils==2.81.2
-matplotlib==3.1.2
+matplotlib==3.1.3
 mccabe==0.6.1
 numpy==1.18.1
 oauthlib==3.1.0
 opt-einsum==3.1.0
 packaging==20.1
 Pillow==7.0.0
+pipdate==0.3.5
 progressbar2==3.47.0
 protobuf==3.11.2
 pyasn1==0.4.8
