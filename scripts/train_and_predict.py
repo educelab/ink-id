@@ -147,7 +147,6 @@ def main():
     parser.add('--predict-every-n-checkpoints', metavar='n', type=int)
     parser.add('--final-prediction-on-all', action='store_true')
     parser.add('--skip-training', action='store_true')
-    parser.add('--continue-training-from-checkpoint', metavar='path', default=None)
     parser.add('--skip-batches', metavar='n', type=int, default=0)
     parser.add('--training-shuffle-seed', metavar='n', type=int, default=random.randint(0,10000))
 
@@ -169,33 +168,9 @@ def main():
 
     args = parser.parse_args()
 
-    if not args.data and not args.output and not args.continue_training_from_checkpoint:
+    if args.data is None and args.output is None:
         parser.print_help()
         return
-
-    if args.continue_training_from_checkpoint is not None:
-        # Get previous metadata file
-        prev_dir = args.continue_training_from_checkpoint
-        prev_metadata_file = os.path.join(args.continue_training_from_checkpoint, 'metadata.json')
-        with open(prev_metadata_file) as f:
-            prev_metadata = json.load(f)
-
-        # Set all the args to be what they were last time
-        prev_args = prev_metadata['Arguments']
-        d_args = vars(args)
-        for prev_arg in prev_args:
-            d_args[prev_arg] = prev_args[prev_arg]
-
-        # Calculate number of batches to drop
-        files = os.listdir(prev_dir)  # TODO(pytorch) change this structure
-        checkpoint_files = list(filter(lambda name: re.search('model\.ckpt-(\d+)\.index', name) is not None, files))
-        iterations = [int(re.findall('model\.ckpt-(\d+)\.index', name)[0]) for name in checkpoint_files]
-        max_iteration = max(iterations)
-        d_args['skip_batches'] = max_iteration
-        print('Skipping {} batches.'.format(max_iteration))
-
-        # Set this again since it got wiped above
-        d_args['continue_training_from_checkpoint'] = prev_dir
 
     if args.k is None:
         output_path = os.path.join(
@@ -209,9 +184,7 @@ def main():
         )
     os.makedirs(output_path)
 
-    if args.continue_training_from_checkpoint is not None:
-        model_path = prev_dir
-    elif args.model is not None:
+    if args.model is not None:
         model_path = args.model
     else:
         model_path = output_path
