@@ -14,9 +14,11 @@
 # for different values.
 ##SBATCH --array=0-4%2
 
+module load ccs/singularity
+
 # Run the train and predict process, passing all arguments to the script.
 if [ -z "$SLURM_ARRAY_TASK_ID" ]; then
-    time inkid-train-and-predict "$@"
+    singularity run --nv inkid.sif time inkid-train-and-predict "$@"
 else
-    time inkid-train-and-predict "$@" -k $SLURM_ARRAY_TASK_ID
+    singularity run --nv inkid.sif time inkid-train-and-predict "$@" -k $SLURM_ARRAY_TASK_ID
 fi
