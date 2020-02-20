@@ -23,6 +23,7 @@ import datetime
 import functools
 import inspect
 import json
+import multiprocessing
 import os
 import random
 import time
@@ -35,6 +36,8 @@ import numpy as np
 # TODO(PyTorch) remove
 from tensorboard.backend.event_processing.event_accumulator import EventAccumulator
 import tensorflow as tf
+
+from torch.utils.data import DataLoader
 
 import inkid
 
@@ -160,10 +163,13 @@ def main():
 
     args = parser.parse_args()
 
+    # Make sure both input and output are provided
     if args.data is None and args.output is None:
         parser.print_help()
         return
 
+    # If this is one of a k-fold cross-validation job, then append k to the output path
+    # Whether or not that is the case, go ahead and create the output directory
     if args.k is None:
         output_path = os.path.join(
             args.output,
@@ -176,6 +182,7 @@ def main():
         )
     os.makedirs(output_path)
 
+    # Point to preexisting model path if there is one
     if args.model is not None:
         model_path = args.model
     else:
@@ -199,6 +206,7 @@ def main():
     # Transform the input file into region set, can handle JSON or PPM
     region_data = inkid.data.RegionSet.get_data_from_file(args.data)
 
+    # Override the volume slices directory (iff there is only one volume specified anywhere in the region set)
     if args.override_volume_slices_dir is not None:
         volume_dirs_seen = set()
         for ppm in region_data['ppms']:
@@ -209,20 +217,23 @@ def main():
         for ppm in region_data['ppms']:
             region_data['ppms'][ppm]['volume'] = args.override_volume_slices_dir
 
+    # If this is a k-fold cross-validation job, remove kth region from training and put in prediction/validation sets
     if args.k is not None:
         k_region = region_data['regions']['training'].pop(int(args.k))
         region_data['regions']['prediction'].append(k_region)
         region_data['regions']['validation'].append(k_region)
 
+    # Now that we have made all these changes to the region data, create a region set from this data
     regions = inkid.data.RegionSet(region_data)
 
+    # Diagnostic printing
     print('Arguments:\n{}\n'.format(args))
     print('Region Set:\n{}\n'.format(json.dumps(region_data, indent=4, sort_keys=False)))
 
-    # Write metadata to file
+    # Create metadata dict
     metadata = {'Arguments': vars(args), 'Region set': region_data}
 
-    # Add the git hash if there is a repository
+    # Add git hash to metadata if inside a git repository
     try:
         repo = git.Repo(os.path.join(os.path.dirname(inspect.getfile(inkid)), '..'))
         sha = repo.head.object.hexsha
@@ -230,9 +241,11 @@ def main():
     except git.exc.InvalidGitRepositoryError:
         metadata['Git hash'] = 'No git hash available (unable to find valid repository).'
 
+    # Write preliminary metadata to file
     with open(os.path.join(output_path, 'metadata.json'), 'w') as f:
         f.write(json.dumps(metadata, indent=4, sort_keys=False))
 
+    # TODO(PyTorch) remove
     # Save checkpoints every n steps. EvalCheckpointSaverListener
     # (below) runs a validation each time this happens.
     run_config = tf.estimator.RunConfig(
@@ -240,6 +253,7 @@ def main():
         keep_checkpoint_max=None,  # save all checkpoints
     )
 
+    # TODO(PyTorch) remove
     # Create an Estimator with the run configuration, hyperparameters,
     # and model directory specified.
     estimator = tf.estimator.Estimator(
@@ -335,7 +349,10 @@ def main():
         print('Label type not recognized: {}'.format(args.label_type))
         return
 
-    # Define the datasets
+    # Define the datasets TODO left off
+    # dataloaders = {x: DataLoader(image_datasets[x], batch_size=4, shuffle=True, num_workers=multiprocessing.cpu_count())
+    #                for x in ['train', 'validate', 'predict']}
+
     training_input_fn = regions.create_tf_input_fn(
         region_groups=['training'],
         batch_size=args.training_batch_size,
