@@ -27,7 +27,7 @@ def main():
     regions = inkid.data.RegionSet.from_json(args.data)
 
     points = [p for p in regions.get_points_generator(
-        ['training', 'prediction', 'evaluation'],
+        ['training', 'prediction', 'validation'],
         restrict_to_surface=True,
         perform_shuffle=True,
         shuffle_seed=37,

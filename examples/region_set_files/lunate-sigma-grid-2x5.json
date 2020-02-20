@@ -7,7 +7,7 @@
     },
     "regions": {
         "prediction": [],
-        "evaluation": [],
+        "validation": [],
         "training": [
             {
                 "bounds": [

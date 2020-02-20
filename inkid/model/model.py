@@ -13,7 +13,7 @@ import inkid.metrics
 class EvalCheckpointSaverListener(tf.estimator.CheckpointSaverListener):
     """Run some logic every time a checkpoint is saved.
 
-    This is a bit of a Trojan horse that allows us to run evaluations,
+    This is a bit of a Trojan horse that allows us to run validations,
     predictions, or arbitrary logic in the middle of a training
     run. An instance of this class is passed to the estimator when
     .train() is called. We also define in the RunConfig of the
@@ -27,8 +27,8 @@ class EvalCheckpointSaverListener(tf.estimator.CheckpointSaverListener):
     https://stackoverflow.com/a/47043377
 
     """
-    def __init__(self, estimator, eval_input_fn, predict_input_fn,
-                 evaluate_every_n_checkpoints,
+    def __init__(self, estimator, val_input_fn, predict_input_fn,
+                 validate_every_n_checkpoints,
                  predict_every_n_checkpoints, region_set,
                  predictions_dir, label_type):
         """Initialize the listener.
@@ -38,9 +38,9 @@ class EvalCheckpointSaverListener(tf.estimator.CheckpointSaverListener):
 
         """
         self._estimator = estimator
-        self._eval_input_fn = eval_input_fn
+        self._val_input_fn = val_input_fn
         self._predict_input_fn = predict_input_fn
-        self._evaluate_every_n_checkpoints = evaluate_every_n_checkpoints
+        self._validate_every_n_checkpoints = validate_every_n_checkpoints
         self._predict_every_n_checkpoints = predict_every_n_checkpoints
         self._region_set = region_set
         self._predictions_dir = predictions_dir
@@ -54,11 +54,11 @@ class EvalCheckpointSaverListener(tf.estimator.CheckpointSaverListener):
 
         if self._label_type == 'ink_classes':
             best_auc = False
-            if self._total_checkpoints % self._evaluate_every_n_checkpoints == 0:
-                eval_results = self._estimator.evaluate(self._eval_input_fn)
-                if eval_results['area_under_roc_curve'] > self._best_auc:
+            if self._total_checkpoints % self._validate_every_n_checkpoints == 0:
+                val_results = self._estimator.evaluate(self._val_input_fn)
+                if val_results['area_under_roc_curve'] > self._best_auc:
                     best_auc = True
-                    self._best_auc = eval_results['area_under_roc_curve']
+                    self._best_auc = val_results['area_under_roc_curve']
 
             if self._total_checkpoints % self._predict_every_n_checkpoints == 0:
                 predictions = self._estimator.predict(
@@ -85,8 +85,8 @@ class EvalCheckpointSaverListener(tf.estimator.CheckpointSaverListener):
                 self._region_set.reset_predictions()
 
         elif self._label_type == 'rgb_values':
-            if self._total_checkpoints % self._evaluate_every_n_checkpoints == 0:
-                eval_results = self._estimator.evaluate(self._eval_input_fn)
+            if self._total_checkpoints % self._validate_every_n_checkpoints == 0:
+                val_results = self._estimator.evaluate(self._val_input_fn)
 
             if self._total_checkpoints % self._predict_every_n_checkpoints == 0:
                 predictions = self._estimator.predict(
@@ -263,7 +263,7 @@ def ink_classes_model_fn(features, labels, mode, params):
     .predict() are called. In each case the estimator will first check
     the model directory to see if checkpoints have been saved, and
     then it will load the latest checkpoint weights into the
-    graph. This is why it works for us to run an evaluation or
+    graph. This is why it works for us to run a validation or
     prediction in the middle of training, because they are run right
     after checkpoints have been saved. This functionality is all built
     into the Tensorflow Estimator.
@@ -399,7 +399,7 @@ def ink_classes_model_fn(features, labels, mode, params):
         # These three lines are very important despite being a little
         # opaque. Without them, batch normalization does not really
         # work at all, and the model will appear to train successfully
-        # but this will not transfer to any evaluation or prediction
+        # but this will not transfer to any validation or prediction
         # runs.
         # https://github.com/tensorflow/tensorflow/issues/16455
         # https://www.tensorflow.org/api_docs/python/tf/layers/batch_normalization
@@ -421,7 +421,7 @@ def ink_classes_model_fn(features, labels, mode, params):
         return tf.estimator.EstimatorSpec(
             mode=tf.estimator.ModeKeys.EVAL,
             loss=loss,
-            eval_metric_ops={
+            val_metric_ops={
                 'accuracy': tf.compat.v1.metrics.accuracy(
                     labels=tf.argmax(labels, 1),
                     predictions=tf.argmax(logits, 1)

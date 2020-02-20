@@ -44,7 +44,7 @@ def main():
 
     # Get list of points (to be used multiple times)
     points = [p for p in regions.get_points_generator(
-        ['training', 'prediction', 'evaluation'],
+        ['training', 'prediction', 'validation'],
         restrict_to_surface=True,
         perform_shuffle=True,
         shuffle_seed=37,
@@ -106,7 +106,7 @@ def run_speed_test(regions=None, count_zero=None, batch_size=None, method=None,
         total_zero = 0
 
     input_fn = regions.create_tf_input_fn(
-        ['training', 'prediction', 'evaluation'],
+        ['training', 'prediction', 'validation'],
         batch_size,
         functools.partial(
             point_to_subvolume_input,

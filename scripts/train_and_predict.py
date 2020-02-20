@@ -1,8 +1,8 @@
 """Train and predict using subvolumes.
 
 This script will read a RegionSet JSON file and create a RegionSet for
-training, evaluation, and prediction. It will then run the training
-process, evaluating and predicting along the way as defined by the
+training, validation, and prediction. It will then run the training
+process, validating and predicting along the way as defined by the
 RegionSet and the parameters file.
 
 It is possible to pass a model directory to the script, in which case
@@ -14,7 +14,7 @@ k-fold cross validation (and prediction in this case). To do that,
 create a RegionSet of entirely training regions, and then pass an
 index k to this script via the command line argument. It will take the
 kth training region, remove it from the training set, and add it to
-the prediction and evaluation sets for that run.
+the prediction and validation sets for that run.
 
 """
 
@@ -61,7 +61,7 @@ def main():
 
     # Region set modifications
     parser.add('-k', metavar='num', default=None, type=int,
-               help='index of region to use for prediction and evaluation')
+               help='index of region to use for prediction and validation')
     parser.add('--override-volume-slices-dir', metavar='path', default=None,
                help='override directory for all volume slices (only works if there is '
                'only one volume in the region set file)')
@@ -139,11 +139,11 @@ def main():
     parser.add('--prediction-batch-size', metavar='n', type=int)
     parser.add('--prediction-grid-spacing', metavar='n', type=int,
                help='prediction points will be taken from an NxN grid')
-    parser.add('--evaluation-batch-size', metavar='n', type=int)
-    parser.add('--evaluation-max-samples', metavar='n', type=int)
+    parser.add('--validation-batch-size', metavar='n', type=int)
+    parser.add('--validation-max-samples', metavar='n', type=int)
     parser.add('--summary-every-n-steps', metavar='n', type=int)
     parser.add('--save-checkpoint-every-n-steps', metavar='n', type=int)
-    parser.add('--evaluate-every-n-checkpoints', metavar='n', type=int)
+    parser.add('--validate-every-n-checkpoints', metavar='n', type=int)
     parser.add('--predict-every-n-checkpoints', metavar='n', type=int)
     parser.add('--final-prediction-on-all', action='store_true')
     parser.add('--skip-training', action='store_true')
@@ -152,12 +152,12 @@ def main():
 
     # Logging/metadata
     # TODO(pytorch) make sure these accounted for/changed if needed
-    parser.add('--eval-metrics-to-write', metavar='metric', nargs='*',
+    parser.add('--val-metrics-to-write', metavar='metric', nargs='*',
                default=[
                    'area_under_roc_curve',
                    'loss'
                ],
-               help='will try the final value for each of these eval metrics and '
+               help='will try the final value for each of these val metrics and '
                'add it to metadata file.')
 
     # Rclone
@@ -220,7 +220,7 @@ def main():
     if args.k is not None:
         k_region = region_data['regions']['training'].pop(int(args.k))
         region_data['regions']['prediction'].append(k_region)
-        region_data['regions']['evaluation'].append(k_region)
+        region_data['regions']['validation'].append(k_region)
 
     regions = inkid.data.RegionSet(region_data)
 
@@ -249,7 +249,7 @@ def main():
         f.write(json.dumps(metadata, indent=4, sort_keys=False))
 
     # Save checkpoints every n steps. EvalCheckpointSaverListener
-    # (below) runs an evaluation each time this happens.
+    # (below) runs a validation each time this happens.
     run_config = tf.estimator.RunConfig(
         save_checkpoints_steps=args.save_checkpoint_every_n_steps,
         keep_checkpoint_max=None,  # save all checkpoints
@@ -316,26 +316,26 @@ def main():
             augment_subvolume=args.augmentation,
             jitter_max=args.jitter_max,
         )
-        evaluation_features_fn = functools.partial(
+        validation_features_fn = functools.partial(
             point_to_subvolume_input,
             augment_subvolume=False,
             jitter_max=0,
         )
-        prediction_features_fn = evaluation_features_fn
+        prediction_features_fn = validation_features_fn
     elif args.feature_type == 'voxel_vector_1dcnn':
         training_features_fn = functools.partial(
             regions.point_to_voxel_vector_input,
             length_in_each_direction=args.length_in_each_direction,
             out_of_bounds='all_zeros',
         )
-        evaluation_features_fn = training_features_fn
+        validation_features_fn = training_features_fn
         prediction_features_fn = training_features_fn
     elif args.feature_type == 'descriptive_statistics':
         training_features_fn = functools.partial(
             regions.point_to_descriptive_statistics,
             subvolume_shape=args.subvolume_shape,
         )
-        evaluation_features_fn = training_features_fn
+        validation_features_fn = training_features_fn
         prediction_features_fn = training_features_fn
 
     # Define the labels
@@ -356,14 +356,14 @@ def main():
         epochs=args.training_epochs,
         skip_batches=args.skip_batches,
     )
-    evaluation_input_fn = regions.create_tf_input_fn(
-        region_groups=['evaluation'],
-        batch_size=args.evaluation_batch_size,
-        features_fn=evaluation_features_fn,
+    validation_input_fn = regions.create_tf_input_fn(
+        region_groups=['validation'],
+        batch_size=args.validation_batch_size,
+        features_fn=validation_features_fn,
         label_fn=label_fn,
-        max_samples=args.evaluation_max_samples,
+        max_samples=args.validation_max_samples,
         perform_shuffle=True,
-        shuffle_seed=0,  # We want the eval set to be the same each time
+        shuffle_seed=0,  # We want the val set to be the same each time
         restrict_to_surface=True,
     )
     prediction_input_fn = regions.create_tf_input_fn(
@@ -389,9 +389,9 @@ def main():
                     saving_listeners=[
                         inkid.model.EvalCheckpointSaverListener(
                             estimator=estimator,
-                            eval_input_fn=evaluation_input_fn,
+                            val_input_fn=validation_input_fn,
                             predict_input_fn=prediction_input_fn,
-                            evaluate_every_n_checkpoints=args.evaluate_every_n_checkpoints,
+                            validate_every_n_checkpoints=args.validate_every_n_checkpoints,
                             predict_every_n_checkpoints=args.predict_every_n_checkpoints,
                             region_set=regions,
                             predictions_dir=os.path.join(output_path, 'predictions'),
@@ -408,7 +408,7 @@ def main():
         if args.final_prediction_on_all:
             print('Running a final prediction on all regions...')
             final_prediction_input_fn = regions.create_tf_input_fn(
-                region_groups=['prediction', 'training', 'evaluation'],
+                region_groups=['prediction', 'training', 'validation'],
                 batch_size=args.prediction_batch_size,
                 features_fn=prediction_features_fn,
                 label_fn=None,
@@ -469,14 +469,14 @@ def main():
     # Add some final metrics
     metrics = {}
     try:
-        eval_event_acc = EventAccumulator(os.path.join(output_path, 'eval'))
-        eval_event_acc.Reload()
-        for metric in args.eval_metrics_to_write:
-            if metric in eval_event_acc.Tags()['scalars']:
-                metrics[metric] = eval_event_acc.Scalars(metric)[-1].value
+        val_event_acc = EventAccumulator(os.path.join(output_path, 'val'))
+        val_event_acc.Reload()
+        for metric in args.val_metrics_to_write:
+            if metric in val_event_acc.Tags()['scalars']:
+                metrics[metric] = val_event_acc.Scalars(metric)[-1].value
     except:  # NOQA
         pass
-    metadata['Final evaluation metrics'] = metrics
+    metadata['Final validation metrics'] = metrics
 
     with open(os.path.join(output_path, 'metadata.json'), 'w') as f:
         f.write(json.dumps(metadata, indent=4, sort_keys=False))

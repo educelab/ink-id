@@ -55,7 +55,7 @@ class RegionSet:
                     "training": [
                         { "ppm": "ppm" },
                     ],
-                    "evaluation": [],
+                    "validation": [],
                     "prediction": []
                 },
             }
@@ -145,7 +145,7 @@ class RegionSet:
         """Generate Tensorflow input_fn function for the model/network.
 
         A Tensorflow Estimator requires an input_fn to be passed to
-        any call such as .train(), .evaluate() or .predict(). The
+        any call such as .train(), .validate() or .predict(). The
         input_fn should return Tensorflow Dataset iterators over the
         batch features and labels.
 
@@ -340,7 +340,7 @@ class RegionSet:
         This function generates the region_id and PPM (x, y) position
         as values that can be passed to the model function. Elsewhere,
         the program will add to these 1) the actual feature input, 2)
-        a label (if training or evaluating) before passing the full
+        a label (if training or validating) before passing the full
         input into the network/model.
 
         This is done separately from the feature input and any labels

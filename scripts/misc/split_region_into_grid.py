@@ -4,7 +4,7 @@ This expects a RegionSet with one training region. The training region
 will be split into multiple training regions per the grid
 arguments. This can then be used with
 k_fold_validation_and_prediction.py to isolate one of the regions at a
-time to be the predict/evaluate region while the others are used for
+time to be the predict/validate region while the others are used for
 training.
 
 """
@@ -34,7 +34,7 @@ def main():
         data = json.loads(minified)
 
     assert len(data['regions']['training']) == 1
-    assert len(data['regions']['evaluation']) == 0
+    assert len(data['regions']['validation']) == 0
     assert len(data['regions']['prediction']) == 0
 
     bounds = data['regions']['training'][0].get('bounds')

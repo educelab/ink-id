@@ -66,7 +66,7 @@ K-Fold Cross Validation (and Prediction)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 `scripts/train_and_predict.py
-<https://code.vis.uky.edu/seales-research/ink-id/blob/develop/scripts/train_and_predict.py>`_ typically takes a region set file as input and trains on the specified training regions, evaluates on the evaluation regions, and predicts on the prediction regions. However if the ``-k`` argument is passed, the behavior is slightly different. In this case it expects the input region set to have only a set of training regions, with evaluation and prediction being empty. The kth training region will be removed from the training set and added to the evaluation and prediction sets. Example:
+<https://code.vis.uky.edu/seales-research/ink-id/blob/develop/scripts/train_and_predict.py>`_ typically takes a region set file as input and trains on the specified training regions, validates on the validation regions, and predicts on the prediction regions. However if the ``-k`` argument is passed, the behavior is slightly different. In this case it expects the input region set to have only a set of training regions, with validation and prediction being empty. The kth training region will be removed from the training set and added to the validation and prediction sets. Example:
 
 .. code-block:: bash
 
