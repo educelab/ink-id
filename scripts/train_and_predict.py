@@ -25,7 +25,6 @@ import inspect
 import json
 import os
 import random
-import subprocess
 import time
 import timeit
 
@@ -474,37 +473,7 @@ def main():
         f.write(json.dumps(metadata, indent=4, sort_keys=False))
 
     # Transfer via rclone if requested
-    if args.rclone_transfer_remote is not None:
-        folders = []
-        path = os.path.abspath(output_path)
-        while True:
-            path, folder = os.path.split(path)
-            if folder != "":
-                folders.append(folder)
-            else:
-                if path != "":
-                    folders.append(path)
-                break
-        folders.reverse()
-
-        if args.rclone_transfer_remote not in folders:
-            print('Provided rclone transfer remote was not a directory '
-                  'name in the output path, so it is not clear where in the '
-                  'remote to put the files. Transfer canceled.')
-        else:
-            while folders.pop(0) != args.rclone_transfer_remote:
-                continue
-
-            command = [
-                'rclone',
-                'move',
-                '-v',
-                '--delete-empty-src-dirs',
-                output_path,
-                args.rclone_transfer_remote + ':' + os.path.join(*folders)
-            ]
-            print(' '.join(command))
-            subprocess.call(command)
+    inkid.ops.rclone_transfer_to_remote(args.rclone_transfer_remote, output_path)
 
 
 if __name__ == '__main__':

@@ -3,6 +3,7 @@
 import inspect
 import math
 import os
+import subprocess
 
 import numpy as np
 from PIL import Image
@@ -74,3 +75,37 @@ def get_descriptive_statistics(tensor):
         t_median,
         t_var
     ])
+
+
+def rclone_transfer_to_remote(rclone_remote, output_path):
+    if rclone_remote is not None:
+        folders = []
+        path = os.path.abspath(output_path)
+        while True:
+            path, folder = os.path.split(path)
+            if folder != "":
+                folders.append(folder)
+            else:
+                if path != "":
+                    folders.append(path)
+                break
+        folders.reverse()
+
+        if rclone_remote not in folders:
+            print('Provided rclone transfer remote was not a directory '
+                  'name in the output path, so it is not clear where in the '
+                  'remote to put the files. Transfer canceled.')
+        else:
+            while folders.pop(0) != rclone_remote:
+                continue
+
+            command = [
+                'rclone',
+                'move',
+                '-v',
+                '--delete-empty-src-dirs',
+                output_path,
+                rclone_remote + ':' + os.path.join(*folders)
+            ]
+            print(' '.join(command))
+            subprocess.call(command)
