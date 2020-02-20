@@ -25,7 +25,6 @@ import inspect
 import json
 import os
 import random
-import re
 import subprocess
 import time
 import timeit
@@ -34,11 +33,9 @@ import configargparse
 import git
 import numpy as np
 
-# TODO(pytorch) remove
+# TODO(PyTorch) remove
 from tensorboard.backend.event_processing.event_accumulator import EventAccumulator
 import tensorflow as tf
-
-import torch
 
 import inkid
 
@@ -52,119 +49,115 @@ def main():
         default_config_files=[inkid.ops.default_arguments_file()],
     )
     # Needed files
-    parser.add('data', metavar='infile', help='input data file (JSON or PPM)', nargs='?')
-    parser.add('output', metavar='outfile', help='output directory', nargs='?')
+    parser.add_argument('data', metavar='infile', help='input data file (JSON or PPM)', nargs='?')
+    parser.add_argument('output', metavar='outfile', help='output directory', nargs='?')
 
     # Config file
-    parser.add('-c', '--config-file', metavar='path', is_config_file=True,
-               help='file with pre-specified arguments (in addition to pre-loaded defaults)')
+    parser.add_argument('-c', '--config-file', metavar='path', is_config_file=True,
+                        help='file with pre-specified arguments (in addition to pre-loaded defaults)')
 
     # Region set modifications
-    parser.add('-k', metavar='num', default=None, type=int,
-               help='index of region to use for prediction and validation')
-    parser.add('--override-volume-slices-dir', metavar='path', default=None,
-               help='override directory for all volume slices (only works if there is '
-               'only one volume in the region set file)')
+    parser.add_argument('-k', metavar='num', default=None, type=int,
+                        help='index of region to use for prediction and validation')
+    parser.add_argument('--override-volume-slices-dir', metavar='path', default=None,
+                        help='override directory for all volume slices (only works if there is '
+                             'only one volume in the region set file)')
 
-    # Pretrained model
+    # Pre-trained model
     # TODO(pytorch) maybe change vocabulary/structure of this dir
-    parser.add('--model', metavar='path', default=None,
-               help='existing model directory to load checkpoints from')
+    parser.add_argument('--model', metavar='path', default=None,
+                        help='existing model directory to load checkpoints from')
 
     # Method
-    parser.add('--feature-type', metavar='name', default='subvolume_3dcnn',
-               help='type of feature model is built on',
-               choices=[
-                   'subvolume_3dcnn',
-                   'voxel_vector_1dcnn',
-                   'descriptive_statistics',
-               ])
-    parser.add('--label-type', metavar='name', default='ink_classes',
-               help='type of label to train',
-               choices=[
-                   'ink_classes',
-                   'rgb_values',
-               ])
-
-    # Volume
-    parser.add('--normalize-volumes', action='store_true',
-               help='normalize volumes to zero mean and unit variance before training')
+    parser.add_argument('--feature-type', metavar='name', default='subvolume_3dcnn',
+                        help='type of feature model is built on',
+                        choices=[
+                            'subvolume_3dcnn',
+                            'voxel_vector_1dcnn',
+                            'descriptive_statistics',
+                        ])
+    parser.add_argument('--label-type', metavar='name', default='ink_classes',
+                        help='type of label to train',
+                        choices=[
+                            'ink_classes',
+                            'rgb_values',
+                        ])
 
     # Subvolumes
-    parser.add('--subvolume-method', metavar='name', default='nearest_neighbor',
-               help='method for getting subvolumes',
-               choices=[
-                   'nearest_neighbor',
-                   'interpolated',
-                   'snap_to_axis_aligned',
-               ])
-    parser.add('--subvolume-shape', metavar='n', nargs=3, type=int,
-               help='subvolume shape in z y x')
-    parser.add('--pad-to-shape', metavar='n', nargs=3, type=int, default=None,
-               help='pad subvolume with zeros to be of given shape (default no padding)')
-    parser.add('--move-along-normal', metavar='n', type=float,
-               help='number of voxels to move along normal before getting a subvolume')
-    parser.add('--normalize-subvolumes', action='store_true',
-               help='normalize each subvolume to zero mean and unit variance on the fly')
+    parser.add_argument('--subvolume-method', metavar='name', default='nearest_neighbor',
+                        help='method for getting subvolumes',
+                        choices=[
+                            'nearest_neighbor',
+                            'interpolated',
+                            'snap_to_axis_aligned',
+                        ])
+    parser.add_argument('--subvolume-shape', metavar='n', nargs=3, type=int,
+                        help='subvolume shape in z y x')
+    parser.add_argument('--pad-to-shape', metavar='n', nargs=3, type=int, default=None,
+                        help='pad subvolume with zeros to be of given shape (default no padding)')
+    parser.add_argument('--move-along-normal', metavar='n', type=float,
+                        help='number of voxels to move along normal before getting a subvolume')
+    parser.add_argument('--normalize-subvolumes', action='store_true',
+                        help='normalize each subvolume to zero mean and unit variance on the fly')
 
     # Voxel vectors
-    parser.add('--length-in-each-direction', metavar='n', type=int,
-               help='length of voxel vector in each direction along normal')
+    parser.add_argument('--length-in-each-direction', metavar='n', type=int,
+                        help='length of voxel vector in each direction along normal')
 
     # Data organization/augmentation
-    parser.add('--jitter-max', metavar='n', type=int)
-    parser.add('--augmentation', action='store_true', dest='augmentation')
-    parser.add('--no-augmentation', action='store_false', dest='augmentation')
+    parser.add_argument('--jitter-max', metavar='n', type=int)
+    parser.add_argument('--augmentation', action='store_true', dest='augmentation')
+    parser.add_argument('--no-augmentation', action='store_false', dest='augmentation')
 
     # Network architecture
     # TODO(pytorch) make sure these accounted for/changed if needed
-    parser.add('--learning-rate', metavar='n', type=float)
-    parser.add('--drop-rate', metavar='n', type=float)
-    parser.add('--batch-norm-momentum', metavar='n', type=float)
-    parser.add('--no-batch-norm', action='store_true')
-    parser.add('--fbeta-weight', metavar='n', type=float)
-    parser.add('--filter-size', metavar='n', nargs=3, type=int,
-               help='3D convolution filter size')
-    parser.add('--filters', metavar='n', nargs='*', type=int,
-               help='number of filters for each convolution layer')
-    parser.add('--adagrad-optimizer', action='store_true')
-    parser.add('--decay-steps', metavar='n', type=int, default=None)
-    parser.add('--decay-rate', metavar='n', type=float, default=None)
+    parser.add_argument('--learning-rate', metavar='n', type=float)
+    parser.add_argument('--drop-rate', metavar='n', type=float)
+    parser.add_argument('--batch-norm-momentum', metavar='n', type=float)
+    parser.add_argument('--no-batch-norm', action='store_true')
+    parser.add_argument('--fbeta-weight', metavar='n', type=float)
+    parser.add_argument('--filter-size', metavar='n', nargs=3, type=int,
+                        help='3D convolution filter size')
+    parser.add_argument('--filters', metavar='n', nargs='*', type=int,
+                        help='number of filters for each convolution layer')
+    parser.add_argument('--adagrad-optimizer', action='store_true')
+    parser.add_argument('--decay-steps', metavar='n', type=int, default=None)
+    parser.add_argument('--decay-rate', metavar='n', type=float, default=None)
 
     # Run configuration
     # TODO(pytorch) make sure these accounted for/changed if needed
-    parser.add('--training-batch-size', metavar='n', type=int)
-    parser.add('--training-max-batches', metavar='n', type=int, default=None)
-    parser.add('--training-epochs', metavar='n', type=int, default=None)
-    parser.add('--prediction-batch-size', metavar='n', type=int)
-    parser.add('--prediction-grid-spacing', metavar='n', type=int,
-               help='prediction points will be taken from an NxN grid')
-    parser.add('--validation-batch-size', metavar='n', type=int)
-    parser.add('--validation-max-samples', metavar='n', type=int)
-    parser.add('--summary-every-n-steps', metavar='n', type=int)
-    parser.add('--save-checkpoint-every-n-steps', metavar='n', type=int)
-    parser.add('--validate-every-n-checkpoints', metavar='n', type=int)
-    parser.add('--predict-every-n-checkpoints', metavar='n', type=int)
-    parser.add('--final-prediction-on-all', action='store_true')
-    parser.add('--skip-training', action='store_true')
-    parser.add('--skip-batches', metavar='n', type=int, default=0)
-    parser.add('--training-shuffle-seed', metavar='n', type=int, default=random.randint(0,10000))
+    parser.add_argument('--training-batch-size', metavar='n', type=int)
+    parser.add_argument('--training-max-batches', metavar='n', type=int, default=None)
+    parser.add_argument('--training-epochs', metavar='n', type=int, default=None)
+    parser.add_argument('--prediction-batch-size', metavar='n', type=int)
+    parser.add_argument('--prediction-grid-spacing', metavar='n', type=int,
+                        help='prediction points will be taken from an NxN grid')
+    parser.add_argument('--validation-batch-size', metavar='n', type=int)
+    parser.add_argument('--validation-max-samples', metavar='n', type=int)
+    parser.add_argument('--summary-every-n-steps', metavar='n', type=int)
+    parser.add_argument('--save-checkpoint-every-n-steps', metavar='n', type=int)
+    parser.add_argument('--validate-every-n-checkpoints', metavar='n', type=int)
+    parser.add_argument('--predict-every-n-checkpoints', metavar='n', type=int)
+    parser.add_argument('--final-prediction-on-all', action='store_true')
+    parser.add_argument('--skip-training', action='store_true')
+    parser.add_argument('--skip-batches', metavar='n', type=int, default=0)
+    parser.add_argument('--training-shuffle-seed', metavar='n', type=int, default=random.randint(0, 10000))
 
     # Logging/metadata
     # TODO(pytorch) make sure these accounted for/changed if needed
-    parser.add('--val-metrics-to-write', metavar='metric', nargs='*',
-               default=[
-                   'area_under_roc_curve',
-                   'loss'
-               ],
-               help='will try the final value for each of these val metrics and '
-               'add it to metadata file.')
+    parser.add_argument('--val-metrics-to-write', metavar='metric', nargs='*',
+                        default=[
+                            'area_under_roc_curve',
+                            'loss'
+                        ],
+                        help='will try the final value for each of these val metrics and '
+                             'add it to metadata file.')
 
     # Rclone
-    parser.add('--rclone-transfer-remote', metavar='remote', default=None,
-               help='if specified, and if matches the name of one of the directories in '
-               'the output path, transfer the results to that rclone remote into the '
-               'subpath following the remote name')
+    parser.add_argument('--rclone-transfer-remote', metavar='remote', default=None,
+                        help='if specified, and if matches the name of one of the directories in '
+                             'the output path, transfer the results to that rclone remote into the '
+                             'subpath following the remote name')
 
     args = parser.parse_args()
 
@@ -195,7 +188,7 @@ def main():
     file_extension = file_extension.lower()
     if file_extension == '.ppm':
         if args.model is None:
-            print("Pretrained model (--model) required when texturing a .ppm file.")
+            print("Pre-trained model (--model) required when texturing a .ppm file.")
             return
         if args.override_volume_slices_dir is None:
             print("Volume (--override-volume-slices-dir) required when texturing a .ppm file.")
@@ -224,18 +217,11 @@ def main():
 
     regions = inkid.data.RegionSet(region_data)
 
-    if args.normalize_volumes:
-        print('Normalizing volumes...')
-        regions.normalize_volumes()
-        print('done')
-
     print('Arguments:\n{}\n'.format(args))
     print('Region Set:\n{}\n'.format(json.dumps(region_data, indent=4, sort_keys=False)))
 
     # Write metadata to file
-    metadata = {}
-    metadata['Arguments'] = vars(args)
-    metadata['Region set'] = region_data
+    metadata = {'Arguments': vars(args), 'Region set': region_data}
 
     # Add the git hash if there is a repository
     try:
@@ -337,12 +323,18 @@ def main():
         )
         validation_features_fn = training_features_fn
         prediction_features_fn = training_features_fn
+    else:
+        print('Feature type not recognized: {}'.format(args.feature_type))
+        return
 
     # Define the labels
     if args.label_type == 'ink_classes':
         label_fn = regions.point_to_ink_classes_label
     elif args.label_type == 'rgb_values':
         label_fn = regions.point_to_rgb_values_label
+    else:
+        print('Label type not recognized: {}'.format(args.label_type))
+        return
 
     # Define the datasets
     training_input_fn = regions.create_tf_input_fn(
@@ -379,9 +371,9 @@ def main():
     # Run the training process. Predictions are run during training
     # and also after training.
     try:
-        with ExitStack() as stack:
+        with ExitStack():
             # Only train if the training region set group is not empty
-            if len(regions._region_groups['training']) > 0 and not args.skip_training:
+            if len(regions.region_groups['training']) > 0 and not args.skip_training:
                 estimator.train(
                     input_fn=training_input_fn,
                     steps=args.training_max_batches,
@@ -474,7 +466,7 @@ def main():
         for metric in args.val_metrics_to_write:
             if metric in val_event_acc.Tags()['scalars']:
                 metrics[metric] = val_event_acc.Scalars(metric)[-1].value
-    except:  # NOQA
+    except KeyboardInterrupt:
         pass
     metadata['Final validation metrics'] = metrics
 

@@ -6,8 +6,91 @@ import sys
 from jsmin import jsmin
 import numpy as np
 import tensorflow as tf
+from torch.utils.data import Dataset
 
 import inkid
+
+
+class PointsDataset(Dataset):
+    def __init__(self, points):
+        self._points = points
+
+    def __len__(self):
+        return len(self._points)
+
+    def __getitem__(self, idx):
+        return self._points[idx]
+        # TODO transform them first here
+
+
+def point_to_other_feature_tensors(region_id_with_point):
+    """Take a region_id and point, and return some general network inputs.
+
+    Sometimes it is useful to pass some information to the network
+    that is not used as a feature in the actual feedforward
+    processing. For example, when using subvolumes, we can pass
+    the 3D position and orientation to the network, not so that
+    they can be used as features, but so that we can request them
+    back out along with the ink prediction. This is helpful to
+    create predictions that we have other information about beyond
+    just their expected and actual values.
+
+    This function generates the region_id and PPM (x, y) position
+    as values that can be passed to the model function. Elsewhere,
+    the program will add to these 1) the actual feature input, 2)
+    a label (if training or validating) before passing the full
+    input into the network/model.
+
+    This is done separately from the feature input and any labels
+    because the other features and labels are variable depending
+    on what inputs and outputs the user has configured the network
+    for.
+
+    """
+    region_id, x, y = region_id_with_point
+    return region_id, np.asarray((x, y), np.int64)
+
+
+def create_point_to_network_input_function(features_fn, label_fn):
+    """Build (point -> network input) mapping function.
+
+    The user can define their own functions features_fn and
+    label_fn, each of which takes as input a region_id and (x, y)
+    point in that region - and then returns either the network
+    input feature, or the expected label.
+
+    This function then takes those two functions, then builds and
+    returns a function based on them that will take a point as
+    input and will return the network inputs and labels (if there
+    are any).
+
+    The returned function is used to map the Tensorflow Dataset
+    from a set of points in regions to a set of full network
+    inputs with features and labels.
+
+    """
+
+    def point_to_network_input(region_id_with_point):
+        other_feature_names = ['RegionID', 'PPM_XY']
+        other_feature_tensors = tf.compat.v1.py_func(point_to_other_feature_tensors,
+                                                     [region_id_with_point],
+                                                     [tf.int64, tf.int64])
+        input_feature_name = 'Input'
+        input_feature_tensor = tf.compat.v1.py_func(features_fn,
+                                                    [region_id_with_point],
+                                                    tf.float32)
+        network_input = dict(zip(other_feature_names, other_feature_tensors))
+        network_input.update({input_feature_name: input_feature_tensor})
+
+        if label_fn is None:
+            return network_input
+        else:
+            label = tf.compat.v1.py_func(label_fn,
+                                         [region_id_with_point],
+                                         tf.float32)
+            return network_input, label
+
+    return point_to_network_input
 
 
 class RegionSet:
@@ -53,7 +136,7 @@ class RegionSet:
                 },
                 "regions": {
                     "training": [
-                        { "ppm": "ppm" },
+                        {"ppm": "ppm"},
                     ],
                     "validation": [],
                     "prediction": []
@@ -89,10 +172,6 @@ class RegionSet:
                         )
                     )
         return data
-
-    def normalize_volumes(self):
-        for volume_path in self._volumes:
-            self._volumes[volume_path].normalize()
 
     def create_ppm_if_needed(self, ppm_name, ppm_data):
         """Return the ppm from its name and data, creating first if needed.
@@ -159,6 +238,7 @@ class RegionSet:
         to be used as the input_fn for the Tensorflow Estimator.
 
         """
+
         def tf_input_fn():
             # It is also possible to create a Dataset using
             # .from_tensor_slices(), to which you can pass a
@@ -178,16 +258,16 @@ class RegionSet:
                         grid_spacing=grid_spacing,
                         probability_of_selection=probability_of_selection,
                     ),
-                    (tf.int64),
+                    tf.int64,
                 )
             else:
                 dataset = tf.data.Dataset.from_generator(
                     premade_points_generator,
-                    (tf.int64)
+                    tf.int64
                 )
 
             dataset = dataset.map(
-                self.create_point_to_network_input_function(
+                create_point_to_network_input_function(
                     features_fn=features_fn,
                     label_fn=label_fn,
                 ),
@@ -224,18 +304,18 @@ class RegionSet:
 
         return tf_input_fn
 
-    def get_points_generator(self, region_groups,
-                             restrict_to_surface=False,
-                             perform_shuffle=False, shuffle_seed=None,
-                             grid_spacing=None,
-                             probability_of_selection=None):
+    def get_points(self, region_groups,
+                   restrict_to_surface=False,
+                   perform_shuffle=False, shuffle_seed=None,
+                   grid_spacing=None,
+                   probability_of_selection=None):
         """Return a numpy array of region_ids and points.
 
-        Used as the initial input to a Dataset, which will later map
-        these points to network inputs and do other dataset processing
-        such as batching.
+                Used as the initial input to a Dataset, which will later map
+                these points to network inputs and do other dataset processing
+                such as batching.
 
-        """
+                """
         if type(region_groups) == str:
             region_groups = [region_groups]
         print('Fetching points for region groups: {}... '
@@ -255,19 +335,22 @@ class RegionSet:
             print('Shuffling points for region groups: {}... '
                   .format(region_groups), end='')
             sys.stdout.flush()
-            if shuffle_seed is None:
-                np.random.seed()
-            else:
+            if shuffle_seed is not None:
                 np.random.seed(shuffle_seed)
             # Tensorflow Dataset objects also have a .shuffle() method
             # which would be a more natural fit, but it is much slower
             # in practice.
             np.random.shuffle(points)
             print('done')
+        return points
+
+    def get_points_generator(self, **kwargs):
+        points = self.get_points(**kwargs)
 
         def generator():
             for point in points:
                 yield point
+
         return generator
 
     def point_to_descriptive_statistics(self, region_id_with_point,
@@ -325,73 +408,6 @@ class RegionSet:
         region_id, x, y = region_id_with_point
         return self._regions[region_id].ppm.point_to_rgb_values_label((x, y))
 
-    def point_to_other_feature_tensors(self, region_id_with_point):
-        """Take a region_id and point, and return some general network inputs.
-
-        Sometimes it is useful to pass some information to the network
-        that is not used as a feature in the actual feedforward
-        processing. For example, when using subvolumes, we can pass
-        the 3D position and orientation to the network, not so that
-        they can be used as features, but so that we can request them
-        back out along with the ink prediction. This is helpful to
-        create predictions that we have other information about beyond
-        just their expected and actual values.
-
-        This function generates the region_id and PPM (x, y) position
-        as values that can be passed to the model function. Elsewhere,
-        the program will add to these 1) the actual feature input, 2)
-        a label (if training or validating) before passing the full
-        input into the network/model.
-
-        This is done separately from the feature input and any labels
-        because the other features and labels are variable depending
-        on what inputs and outputs the user has configured the network
-        for.
-
-        """
-        region_id, x, y = region_id_with_point
-        return (region_id, np.asarray((x, y), np.int64))
-
-    def create_point_to_network_input_function(self, features_fn, label_fn):
-        """Build (point -> network input) mapping function.
-
-        The user can define their own functions features_fn and
-        label_fn, each of which takes as input a region_id and (x, y)
-        point in that region - and then returns either the network
-        input feature, or the expected label.
-
-        This function then takes those two functions, then builds and
-        returns a function based on them that will take a point as
-        input and will return the network inputs and labels (if there
-        are any).
-
-        The returned function is used to map the Tensorflow Dataset
-        from a set of points in regions to a set of full network
-        inputs with features and labels.
-
-        """
-        def point_to_network_input(region_id_with_point):
-            other_feature_names = ['RegionID', 'PPM_XY']
-            other_feature_tensors = tf.compat.v1.py_func(self.point_to_other_feature_tensors,
-                                               [region_id_with_point],
-                                               [tf.int64, tf.int64])
-            input_feature_name = 'Input'
-            input_feature_tensor = tf.compat.v1.py_func(features_fn,
-                                              [region_id_with_point],
-                                              tf.float32)
-            network_input = dict(zip(other_feature_names, other_feature_tensors))
-            network_input.update({input_feature_name: input_feature_tensor})
-
-            if label_fn is None:
-                return network_input
-            else:
-                label = tf.compat.v1.py_func(label_fn,
-                                   [region_id_with_point],
-                                   tf.float32)
-                return network_input, label
-
-        return point_to_network_input
-
     def reconstruct_prediction_values(self, region_ids, values, ppm_xy_coordinates):
         for region_id, value, ppm_xy in zip(
                 region_ids,
@@ -438,3 +454,7 @@ class RegionSet:
         """Reset all predictions."""
         for region in self._regions:
             region.ppm.reset_predictions()
+
+    @property
+    def region_groups(self):
+        return self._region_groups
