@@ -33,10 +33,6 @@ import configargparse
 import git
 import numpy as np
 
-# TODO(PyTorch) remove
-from tensorboard.backend.event_processing.event_accumulator import EventAccumulator
-import tensorflow as tf
-
 from torch.utils.data import DataLoader
 
 import inkid
@@ -248,248 +244,257 @@ def main():
     # TODO(PyTorch) remove
     # Save checkpoints every n steps. EvalCheckpointSaverListener
     # (below) runs a validation each time this happens.
-    run_config = tf.estimator.RunConfig(
-        save_checkpoints_steps=args.save_checkpoint_every_n_steps,
-        keep_checkpoint_max=None,  # save all checkpoints
-    )
+    # run_config = tf.estimator.RunConfig(
+    #     save_checkpoints_steps=args.save_checkpoint_every_n_steps,
+    #     keep_checkpoint_max=None,  # save all checkpoints
+    # )
 
     # TODO(PyTorch) remove
     # Create an Estimator with the run configuration, hyperparameters,
     # and model directory specified.
-    estimator = tf.estimator.Estimator(
-        model_fn={
-            'ink_classes': inkid.model.ink_classes_model_fn,
-            'rgb_values': inkid.model.rgb_values_model_fn,
-        }[args.label_type],
-        model_dir=model_path,
-        config=run_config,
-        params={
-            'drop_rate': args.drop_rate,
-            'subvolume_shape': args.subvolume_shape,
-            'pad_to_shape': args.pad_to_shape,
-            'length_in_each_direction': args.length_in_each_direction,
-            'batch_norm_momentum': args.batch_norm_momentum,
-            'no_batch_norm': args.no_batch_norm,
-            'filters': args.filters,
-            'learning_rate': args.learning_rate,
-            'fbeta_weight': args.fbeta_weight,
-            'feature_type': args.feature_type,
-            'label_type': args.label_type,
-            'adagrad_optimizer': args.adagrad_optimizer,
-            'decay_steps': args.decay_steps,
-            'decay_rate': args.decay_rate,
-        },
-    )
+    # estimator = tf.estimator.Estimator(
+    #     model_fn={
+    #         'ink_classes': inkid.model.ink_classes_model_fn,
+    #         'rgb_values': inkid.model.rgb_values_model_fn,
+    #     }[args.label_type],
+    #     model_dir=model_path,
+    #     config=run_config,
+    #     params={
+    #         'drop_rate': args.drop_rate,
+    #         'subvolume_shape': args.subvolume_shape,
+    #         'pad_to_shape': args.pad_to_shape,
+    #         'length_in_each_direction': args.length_in_each_direction,
+    #         'batch_norm_momentum': args.batch_norm_momentum,
+    #         'no_batch_norm': args.no_batch_norm,
+    #         'filters': args.filters,
+    #         'learning_rate': args.learning_rate,
+    #         'fbeta_weight': args.fbeta_weight,
+    #         'feature_type': args.feature_type,
+    #         'label_type': args.label_type,
+    #         'adagrad_optimizer': args.adagrad_optimizer,
+    #         'decay_steps': args.decay_steps,
+    #         'decay_rate': args.decay_rate,
+    #     },
+    # )
 
+    # TODO(PyTorch) remove
     # Define tensors to be shown in a "summary" step.
-    if args.label_type == 'ink_classes':
-        tensors_to_log = {
-            'train_accuracy': 'train_accuracy',
-            'train_precision': 'train_precision',
-            'train_recall': 'train_recall',
-            'train_fbeta_score': 'train_fbeta_score',
-            'train_positives': 'train_positives',
-            'train_negatives': 'train_negatives',
-        }
-    else:
-        tensors_to_log = {}
-    logging_hook = tf.estimator.LoggingTensorHook(
-        tensors=tensors_to_log,
-        every_n_iter=args.summary_every_n_steps,
-    )
-    tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.INFO)
+    # if args.label_type == 'ink_classes':
+    #     tensors_to_log = {
+    #         'train_accuracy': 'train_accuracy',
+    #         'train_precision': 'train_precision',
+    #         'train_recall': 'train_recall',
+    #         'train_fbeta_score': 'train_fbeta_score',
+    #         'train_positives': 'train_positives',
+    #         'train_negatives': 'train_negatives',
+    #     }
+    # else:
+    #     tensors_to_log = {}
+    # logging_hook = tf.estimator.LoggingTensorHook(
+    #     tensors=tensors_to_log,
+    #     every_n_iter=args.summary_every_n_steps,
+    # )
+    # tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.INFO)
 
+    # TODO(PyTorch) remove
     # Define the feature inputs to the network
-    if args.feature_type == 'subvolume_3dcnn':
-        point_to_subvolume_input = functools.partial(
-            regions.point_to_subvolume_input,
-            subvolume_shape=args.subvolume_shape,
-            out_of_bounds='all_zeros',
-            move_along_normal=args.move_along_normal,
-            method=args.subvolume_method,
-            normalize=args.normalize_subvolumes,
-            pad_to_shape=args.pad_to_shape,
-        )
-        training_features_fn = functools.partial(
-            point_to_subvolume_input,
-            augment_subvolume=args.augmentation,
-            jitter_max=args.jitter_max,
-        )
-        validation_features_fn = functools.partial(
-            point_to_subvolume_input,
-            augment_subvolume=False,
-            jitter_max=0,
-        )
-        prediction_features_fn = validation_features_fn
-    elif args.feature_type == 'voxel_vector_1dcnn':
-        training_features_fn = functools.partial(
-            regions.point_to_voxel_vector_input,
-            length_in_each_direction=args.length_in_each_direction,
-            out_of_bounds='all_zeros',
-        )
-        validation_features_fn = training_features_fn
-        prediction_features_fn = training_features_fn
-    elif args.feature_type == 'descriptive_statistics':
-        training_features_fn = functools.partial(
-            regions.point_to_descriptive_statistics,
-            subvolume_shape=args.subvolume_shape,
-        )
-        validation_features_fn = training_features_fn
-        prediction_features_fn = training_features_fn
-    else:
-        print('Feature type not recognized: {}'.format(args.feature_type))
-        return
+    # if args.feature_type == 'subvolume_3dcnn':
+    #     point_to_subvolume_input = functools.partial(
+    #         regions.point_to_subvolume_input,
+    #         subvolume_shape=args.subvolume_shape,
+    #         out_of_bounds='all_zeros',
+    #         move_along_normal=args.move_along_normal,
+    #         method=args.subvolume_method,
+    #         normalize=args.normalize_subvolumes,
+    #         pad_to_shape=args.pad_to_shape,
+    #     )
+    #     training_features_fn = functools.partial(
+    #         point_to_subvolume_input,
+    #         augment_subvolume=args.augmentation,
+    #         jitter_max=args.jitter_max,
+    #     )
+    #     validation_features_fn = functools.partial(
+    #         point_to_subvolume_input,
+    #         augment_subvolume=False,
+    #         jitter_max=0,
+    #     )
+    #     prediction_features_fn = validation_features_fn
+    # elif args.feature_type == 'voxel_vector_1dcnn':
+    #     training_features_fn = functools.partial(
+    #         regions.point_to_voxel_vector_input,
+    #         length_in_each_direction=args.length_in_each_direction,
+    #         out_of_bounds='all_zeros',
+    #     )
+    #     validation_features_fn = training_features_fn
+    #     prediction_features_fn = training_features_fn
+    # elif args.feature_type == 'descriptive_statistics':
+    #     training_features_fn = functools.partial(
+    #         regions.point_to_descriptive_statistics,
+    #         subvolume_shape=args.subvolume_shape,
+    #     )
+    #     validation_features_fn = training_features_fn
+    #     prediction_features_fn = training_features_fn
+    # else:
+    #     print('Feature type not recognized: {}'.format(args.feature_type))
+    #     return
 
+    # TODO(PyTorch) replace
     # Define the labels
-    if args.label_type == 'ink_classes':
-        label_fn = regions.point_to_ink_classes_label
-    elif args.label_type == 'rgb_values':
-        label_fn = regions.point_to_rgb_values_label
-    else:
-        print('Label type not recognized: {}'.format(args.label_type))
-        return
+    # if args.label_type == 'ink_classes':
+    #     label_fn = regions.point_to_ink_classes_label
+    # elif args.label_type == 'rgb_values':
+    #     label_fn = regions.point_to_rgb_values_label
+    # else:
+    #     print('Label type not recognized: {}'.format(args.label_type))
+    #     return
 
     # Define the datasets TODO left off
-    # dataloaders = {x: DataLoader(image_datasets[x], batch_size=4, shuffle=True, num_workers=multiprocessing.cpu_count())
+    # loaders = {x: DataLoader(image_datasets[x], batch_size=4, shuffle=True, num_workers=multiprocessing.cpu_count())
     #                for x in ['train', 'validate', 'predict']}
 
-    training_input_fn = regions.create_tf_input_fn(
-        region_groups=['training'],
-        batch_size=args.training_batch_size,
-        features_fn=training_features_fn,
-        label_fn=label_fn,
-        perform_shuffle=True,
-        shuffle_seed=args.training_shuffle_seed,
-        restrict_to_surface=True,
-        epochs=args.training_epochs,
-        skip_batches=args.skip_batches,
-    )
-    validation_input_fn = regions.create_tf_input_fn(
-        region_groups=['validation'],
-        batch_size=args.validation_batch_size,
-        features_fn=validation_features_fn,
-        label_fn=label_fn,
-        max_samples=args.validation_max_samples,
-        perform_shuffle=True,
-        shuffle_seed=0,  # We want the val set to be the same each time
-        restrict_to_surface=True,
-    )
-    prediction_input_fn = regions.create_tf_input_fn(
-        region_groups=['prediction'],
-        batch_size=args.prediction_batch_size,
-        features_fn=prediction_features_fn,
-        label_fn=None,
-        perform_shuffle=False,
-        restrict_to_surface=True,
-        grid_spacing=args.prediction_grid_spacing,
-    )
+    # TODO(PyTorch) replace
+    # training_input_fn = regions.create_tf_input_fn(
+    #     region_groups=['training'],
+    #     batch_size=args.training_batch_size,
+    #     features_fn=training_features_fn,
+    #     label_fn=label_fn,
+    #     perform_shuffle=True,
+    #     shuffle_seed=args.training_shuffle_seed,
+    #     restrict_to_surface=True,
+    #     epochs=args.training_epochs,
+    #     skip_batches=args.skip_batches,
+    # )
+    # validation_input_fn = regions.create_tf_input_fn(
+    #     region_groups=['validation'],
+    #     batch_size=args.validation_batch_size,
+    #     features_fn=validation_features_fn,
+    #     label_fn=label_fn,
+    #     max_samples=args.validation_max_samples,
+    #     perform_shuffle=True,
+    #     shuffle_seed=0,  # We want the val set to be the same each time
+    #     restrict_to_surface=True,
+    # )
+    # prediction_input_fn = regions.create_tf_input_fn(
+    #     region_groups=['prediction'],
+    #     batch_size=args.prediction_batch_size,
+    #     features_fn=prediction_features_fn,
+    #     label_fn=None,
+    #     perform_shuffle=False,
+    #     restrict_to_surface=True,
+    #     grid_spacing=args.prediction_grid_spacing,
+    # )
 
+    # TODO(PyTorch) replace
     # Run the training process. Predictions are run during training
     # and also after training.
-    try:
-        with ExitStack():
-            # Only train if the training region set group is not empty
-            if len(regions.region_groups['training']) > 0 and not args.skip_training:
-                estimator.train(
-                    input_fn=training_input_fn,
-                    steps=args.training_max_batches,
-                    hooks=[logging_hook],
-                    saving_listeners=[
-                        inkid.model.EvalCheckpointSaverListener(
-                            estimator=estimator,
-                            val_input_fn=validation_input_fn,
-                            predict_input_fn=prediction_input_fn,
-                            validate_every_n_checkpoints=args.validate_every_n_checkpoints,
-                            predict_every_n_checkpoints=args.predict_every_n_checkpoints,
-                            region_set=regions,
-                            predictions_dir=os.path.join(output_path, 'predictions'),
-                            label_type=args.label_type,
-                        ),
-                    ],
-                )
+    # try:
+    #     with ExitStack():
+    #         # Only train if the training region set group is not empty
+    #         if len(regions.region_groups['training']) > 0 and not args.skip_training:
+    #             estimator.train(
+    #                 input_fn=training_input_fn,
+    #                 steps=args.training_max_batches,
+    #                 hooks=[logging_hook],
+    #                 saving_listeners=[
+    #                     inkid.model.EvalCheckpointSaverListener(
+    #                         estimator=estimator,
+    #                         val_input_fn=validation_input_fn,
+    #                         predict_input_fn=prediction_input_fn,
+    #                         validate_every_n_checkpoints=args.validate_every_n_checkpoints,
+    #                         predict_every_n_checkpoints=args.predict_every_n_checkpoints,
+    #                         region_set=regions,
+    #                         predictions_dir=os.path.join(output_path, 'predictions'),
+    #                         label_type=args.label_type,
+    #                     ),
+    #                 ],
+    #             )
+    #
+    # # Still attempt final prediction
+    # except KeyboardInterrupt:
+    #     pass
 
-    # Still attempt final prediction
-    except KeyboardInterrupt:
-        pass
-
-    try:
-        if args.final_prediction_on_all:
-            print('Running a final prediction on all regions...')
-            final_prediction_input_fn = regions.create_tf_input_fn(
-                region_groups=['prediction', 'training', 'validation'],
-                batch_size=args.prediction_batch_size,
-                features_fn=prediction_features_fn,
-                label_fn=None,
-                perform_shuffle=False,
-                restrict_to_surface=True,
-                grid_spacing=args.prediction_grid_spacing,
-            )
-
-            if args.label_type == 'ink_classes':
-                predictions = estimator.predict(
-                    final_prediction_input_fn,
-                    predict_keys=[
-                        'region_id',
-                        'ppm_xy',
-                        'probabilities',
-                    ],
-                )
-
-                for prediction in predictions:
-                    regions.reconstruct_predicted_ink_classes(
-                        np.array([prediction['region_id']]),
-                        np.array([prediction['probabilities']]),
-                        np.array([prediction['ppm_xy']]),
-                    )
-
-                regions.save_predictions(os.path.join(output_path, 'predictions'), 'final')
-                regions.reset_predictions()
-
-            elif args.label_type == 'rgb_values':
-                predictions = estimator.predict(
-                    final_prediction_input_fn,
-                    predict_keys=[
-                        'region_id',
-                        'ppm_xy',
-                        'rgb',
-                    ],
-                )
-
-                for prediction in predictions:
-                    regions.reconstruct_predicted_rgb(
-                        np.array([prediction['region_id']]),
-                        np.array([prediction['rgb']]),
-                        np.array([prediction['ppm_xy']]),
-                    )
-
-                regions.save_predictions(os.path.join(output_path, 'predictions'), 'final')
-                regions.reset_predictions()
-
-    # Perform finishing touches even if cut short
-    except KeyboardInterrupt:
-        pass
+    # TODO(PyTorch) replace
+    # Run a final prediction on all regions
+    # try:
+    #     if args.final_prediction_on_all:
+    #         print('Running a final prediction on all regions...')
+    #         final_prediction_input_fn = regions.create_tf_input_fn(
+    #             region_groups=['prediction', 'training', 'validation'],
+    #             batch_size=args.prediction_batch_size,
+    #             features_fn=prediction_features_fn,
+    #             label_fn=None,
+    #             perform_shuffle=False,
+    #             restrict_to_surface=True,
+    #             grid_spacing=args.prediction_grid_spacing,
+    #         )
+    #
+    #         if args.label_type == 'ink_classes':
+    #             predictions = estimator.predict(
+    #                 final_prediction_input_fn,
+    #                 predict_keys=[
+    #                     'region_id',
+    #                     'ppm_xy',
+    #                     'probabilities',
+    #                 ],
+    #             )
+    #
+    #             for prediction in predictions:
+    #                 regions.reconstruct_predicted_ink_classes(
+    #                     np.array([prediction['region_id']]),
+    #                     np.array([prediction['probabilities']]),
+    #                     np.array([prediction['ppm_xy']]),
+    #                 )
+    #
+    #             regions.save_predictions(os.path.join(output_path, 'predictions'), 'final')
+    #             regions.reset_predictions()
+    #
+    #         elif args.label_type == 'rgb_values':
+    #             predictions = estimator.predict(
+    #                 final_prediction_input_fn,
+    #                 predict_keys=[
+    #                     'region_id',
+    #                     'ppm_xy',
+    #                     'rgb',
+    #                 ],
+    #             )
+    #
+    #             for prediction in predictions:
+    #                 regions.reconstruct_predicted_rgb(
+    #                     np.array([prediction['region_id']]),
+    #                     np.array([prediction['rgb']]),
+    #                     np.array([prediction['ppm_xy']]),
+    #                 )
+    #
+    #             regions.save_predictions(os.path.join(output_path, 'predictions'), 'final')
+    #             regions.reset_predictions()
+    #
+    # # Perform finishing touches even if cut short
+    # except KeyboardInterrupt:
+    #     pass
 
     # Add some post-run info to metadata file
     stop = timeit.default_timer()
     metadata['Runtime'] = stop - start
     metadata['Finished at'] = time.strftime('%Y-%m-%d %H:%M:%S')
 
-    # Add some final metrics
-    metrics = {}
-    try:
-        val_event_acc = EventAccumulator(os.path.join(output_path, 'val'))
-        val_event_acc.Reload()
-        for metric in args.val_metrics_to_write:
-            if metric in val_event_acc.Tags()['scalars']:
-                metrics[metric] = val_event_acc.Scalars(metric)[-1].value
-    except KeyboardInterrupt:
-        pass
-    metadata['Final validation metrics'] = metrics
+    # TODO(PyTorch) replace
+    # Add final validation metrics to metadata
+    # metrics = {}
+    # try:
+    #     val_event_acc = EventAccumulator(os.path.join(output_path, 'val'))
+    #     val_event_acc.Reload()
+    #     for metric in args.val_metrics_to_write:
+    #         if metric in val_event_acc.Tags()['scalars']:
+    #             metrics[metric] = val_event_acc.Scalars(metric)[-1].value
+    # except KeyboardInterrupt:
+    #     pass
+    # metadata['Final validation metrics'] = metrics
 
+    # Update metadata file on disk with results after run
     with open(os.path.join(output_path, 'metadata.json'), 'w') as f:
         f.write(json.dumps(metadata, indent=4, sort_keys=False))
 
-    # Transfer via rclone if requested
+    # Transfer results via rclone if requested
     inkid.ops.rclone_transfer_to_remote(args.rclone_transfer_remote, output_path)
 
 
