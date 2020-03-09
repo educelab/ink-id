@@ -103,7 +103,7 @@ def main():
                         help='length of voxel vector in each direction along normal')
 
     # Data organization/augmentation
-    parser.add_argument('--jitter-max', metavar='n', type=int)
+    parser.add_argument('--jitter-max', metavar='n', type=int)  # LEFT OFF
     parser.add_argument('--augmentation', action='store_true', dest='augmentation')
     parser.add_argument('--no-augmentation', action='store_false', dest='augmentation')
 
