@@ -26,6 +26,7 @@ import json
 import multiprocessing
 import os
 import random
+import sys
 import time
 import timeit
 
@@ -103,7 +104,7 @@ def main():
                         help='length of voxel vector in each direction along normal')
 
     # Data organization/augmentation
-    parser.add_argument('--jitter-max', metavar='n', type=int)  # LEFT OFF
+    parser.add_argument('--jitter-max', metavar='n', type=int)
     parser.add_argument('--augmentation', action='store_true', dest='augmentation')
     parser.add_argument('--no-augmentation', action='store_false', dest='augmentation')
 
@@ -227,7 +228,7 @@ def main():
     print('Region Set:\n{}\n'.format(json.dumps(region_data, indent=4, sort_keys=False)))
 
     # Create metadata dict
-    metadata = {'Arguments': vars(args), 'Region set': region_data}
+    metadata = {'Arguments': vars(args), 'Region set': region_data, 'Command': ' '.join(sys.argv)}
 
     # Add git hash to metadata if inside a git repository
     try:
