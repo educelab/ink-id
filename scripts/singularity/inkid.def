@@ -36,6 +36,7 @@ From: ubuntu:16.04
   pip install --requirement /usr/local/dri/ink-id/requirements.txt
   # Now install inkid
   pip install --editable /usr/local/dri/ink-id
+  chmod --recursive a+rw /usr/local/dri/env-inkid
 
 %runscript
   if [ $# -lt 1 ]; then
@@ -57,5 +58,11 @@ From: ubuntu:16.04
   Usage:
     - Any script or shell usage should first source the virtualenv: `. /usr/local/dri/env-inkid/bin/activate`
     - It is possible to use an overlay to allow one to check out another branch, pull recent changes, or make local edits to ink-id code: `dd if=/dev/zero of=inkid.overlay bs=1M count=500 && mkfs.ext3 inkid.overlay; singularity shell --overlay inkid.overlay inkid.sif` (see Singularity documentation on persistent overlays). If the overlay directory is deleted or not specified when using the container, the changes will be gone and the checkout of ink-id built into the container will be present.
+    - It is recommended to use the included `submit.sh` to run a job.
+
+    Example job invocations:
+      - Omega: `sbatch -p <partition> --time=<timelimit> --mem=<memory> --array=1%2 submit.sh /pscratch/seales_uksr/dri-experiments-drive/inkid/data/PHercParisObjet59/PHercParisObjet59.volpkg/working/2rows_All.json /pscratch/seales_uksr/dri-experiments-drive/inkid/results/PHercParisObjet59/<output> --subvolume-shape 48 48 48 --training-epochs 1 --final-prediction-on-all --rclone-transfer-remote dri-experiments-drive`
+      - Test omega (small volume): `sbatch -p <partition> --time=<timelimit> --array=1%2 submit.sh /pscratch/seales_uksr/dri-experiments-drive/inkid/data/PHercParisObjet59/PHercParisObjet59_Test.volpkg/working/22kV_2rows_All.json /pscratch/seales_uksr/dri-experiments-drive/inkid/results/PHercParisObjet59/<output> --subvolume-shape 48 48 48 --training-epochs 1 --final-prediction-on-all --rclone-transfer-remote dri-experiments-drive`
+      - Carbon Phantom Column 2 Theta: `sbatch -p <partition> --time=<timelimit> --mem=<memory> --array=2%2 submit.sh /pscratch/seales_uksr/dri-experiments-drive/inkid/data/CarbonPhantom/CarbonPhantomV3.volpkg/working/2/Col2_k-fold-characters-region-set.json /pscratch/seales_uksr/dri-experiments-drive/inkid/results/CarbonPhantom/<output> --subvolume-shape 34 34 34 --training-epochs 1 --final-prediction-on-all --rclone-transfer-remote dri-experiments-drive`
 
   This container is intended to be built once, and used with many checkouts of inkid code. Only when the dependencies change does the container need rebuilding.

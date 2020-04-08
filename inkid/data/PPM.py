@@ -155,7 +155,7 @@ class PPM:
 
     def get_default_bounds(self):
         """Return the full bounds of the PPM in (x0, y0, x1, y1) format."""
-        return (0, 0, self._width, self._height)
+        return 0, 0, self._width, self._height
 
     def is_on_surface(self, x, y, r=1):
         """Return whether a point is on the surface mask.
