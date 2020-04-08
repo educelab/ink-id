@@ -33,8 +33,7 @@ import timeit
 import configargparse
 import git
 import numpy as np
-
-from torch.utils.data import DataLoader
+import torch
 
 import inkid
 
@@ -125,13 +124,11 @@ def main():
 
     # Run configuration
     # TODO(pytorch) make sure these accounted for/changed if needed
-    parser.add_argument('--training-batch-size', metavar='n', type=int)
+    parser.add_argument('--batch-size', metavar='n', type=int)
     parser.add_argument('--training-max-batches', metavar='n', type=int, default=None)
     parser.add_argument('--training-epochs', metavar='n', type=int, default=None)
-    parser.add_argument('--prediction-batch-size', metavar='n', type=int)
     parser.add_argument('--prediction-grid-spacing', metavar='n', type=int,
                         help='prediction points will be taken from an NxN grid')
-    parser.add_argument('--validation-batch-size', metavar='n', type=int)
     parser.add_argument('--validation-max-samples', metavar='n', type=int)
     parser.add_argument('--summary-every-n-steps', metavar='n', type=int)
     parser.add_argument('--save-checkpoint-every-n-steps', metavar='n', type=int)
@@ -297,91 +294,99 @@ def main():
     # )
     # tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.INFO)
 
-    # TODO(PyTorch) remove
     # Define the feature inputs to the network
-    # if args.feature_type == 'subvolume_3dcnn':
-    #     point_to_subvolume_input = functools.partial(
-    #         regions.point_to_subvolume_input,
-    #         subvolume_shape=args.subvolume_shape,
-    #         out_of_bounds='all_zeros',
-    #         move_along_normal=args.move_along_normal,
-    #         method=args.subvolume_method,
-    #         normalize=args.normalize_subvolumes,
-    #         pad_to_shape=args.pad_to_shape,
-    #     )
-    #     training_features_fn = functools.partial(
-    #         point_to_subvolume_input,
-    #         augment_subvolume=args.augmentation,
-    #         jitter_max=args.jitter_max,
-    #     )
-    #     validation_features_fn = functools.partial(
-    #         point_to_subvolume_input,
-    #         augment_subvolume=False,
-    #         jitter_max=0,
-    #     )
-    #     prediction_features_fn = validation_features_fn
-    # elif args.feature_type == 'voxel_vector_1dcnn':
-    #     training_features_fn = functools.partial(
-    #         regions.point_to_voxel_vector_input,
-    #         length_in_each_direction=args.length_in_each_direction,
-    #         out_of_bounds='all_zeros',
-    #     )
-    #     validation_features_fn = training_features_fn
-    #     prediction_features_fn = training_features_fn
-    # elif args.feature_type == 'descriptive_statistics':
-    #     training_features_fn = functools.partial(
-    #         regions.point_to_descriptive_statistics,
-    #         subvolume_shape=args.subvolume_shape,
-    #     )
-    #     validation_features_fn = training_features_fn
-    #     prediction_features_fn = training_features_fn
-    # else:
-    #     print('Feature type not recognized: {}'.format(args.feature_type))
-    #     return
+    if args.feature_type == 'subvolume_3dcnn':
+        point_to_subvolume_input = functools.partial(
+            regions.point_to_subvolume_input,
+            subvolume_shape=args.subvolume_shape,
+            out_of_bounds='all_zeros',
+            move_along_normal=args.move_along_normal,
+            method=args.subvolume_method,
+            normalize=args.normalize_subvolumes,
+            pad_to_shape=args.pad_to_shape,
+        )
+        training_features_fn = functools.partial(
+            point_to_subvolume_input,
+            augment_subvolume=args.augmentation,
+            jitter_max=args.jitter_max,
+        )
+        validation_features_fn = functools.partial(
+            point_to_subvolume_input,
+            augment_subvolume=False,
+            jitter_max=0,
+        )
+        prediction_features_fn = validation_features_fn
+    elif args.feature_type == 'voxel_vector_1dcnn':
+        training_features_fn = functools.partial(
+            regions.point_to_voxel_vector_input,
+            length_in_each_direction=args.length_in_each_direction,
+            out_of_bounds='all_zeros',
+        )
+        validation_features_fn = training_features_fn
+        prediction_features_fn = training_features_fn
+    elif args.feature_type == 'descriptive_statistics':
+        training_features_fn = functools.partial(
+            regions.point_to_descriptive_statistics,
+            subvolume_shape=args.subvolume_shape,
+        )
+        validation_features_fn = training_features_fn
+        prediction_features_fn = training_features_fn
+    else:
+        print('Feature type not recognized: {}'.format(args.feature_type))
+        return
 
-    # TODO(PyTorch) replace
     # Define the labels
-    # if args.label_type == 'ink_classes':
-    #     label_fn = regions.point_to_ink_classes_label
-    # elif args.label_type == 'rgb_values':
-    #     label_fn = regions.point_to_rgb_values_label
-    # else:
-    #     print('Label type not recognized: {}'.format(args.label_type))
-    #     return
+    if args.label_type == 'ink_classes':
+        label_fn = regions.point_to_ink_classes_label
+    elif args.label_type == 'rgb_values':
+        label_fn = regions.point_to_rgb_values_label
+    else:
+        print('Label type not recognized: {}'.format(args.label_type))
+        return
 
     # Define the datasets TODO left off
-    # loaders = {x: DataLoader(image_datasets[x], batch_size=4, shuffle=True, num_workers=multiprocessing.cpu_count())
-    #                for x in ['train', 'validate', 'predict']}
+    datasets = {
+        'training': inkid.data.PointsDataset(regions, 'training', training_features_fn, label_fn),
+        'validation': inkid.data.PointsDataset(regions, 'validation', validation_features_fn, label_fn),
+        'prediction': inkid.data.PointsDataset(regions, 'prediction', prediction_features_fn,
+                                               grid_spacing=args.prediction_grid_spacing)
+    }
+
+    dataloaders = {
+        'training': torch.utils.data.DataLoader(datasets['training'], batch_size=args.batch_size, shuffle=True,
+                                                num_workers=multiprocessing.cpu_count()),
+        'validation': torch.utils.data.DataLoader(datasets['validation'], batch_size=args.batch_size, shuffle=True,
+                                                  num_workers=multiprocessing.cpu_count()),
+        'prediction': torch.utils.data.DataLoader(datasets['prediction'], batch_size=args.batch_size, shuffle=False,
+                                                  num_workers=multiprocessing.cpu_count())
+    }
 
     # TODO(PyTorch) replace
     # training_input_fn = regions.create_tf_input_fn(
     #     region_groups=['training'],
-    #     batch_size=args.training_batch_size,
+    #     batch_size=args.batch_size,
     #     features_fn=training_features_fn,
     #     label_fn=label_fn,
     #     perform_shuffle=True,
     #     shuffle_seed=args.training_shuffle_seed,
-    #     restrict_to_surface=True,
     #     epochs=args.training_epochs,
     #     skip_batches=args.skip_batches,
     # )
     # validation_input_fn = regions.create_tf_input_fn(
     #     region_groups=['validation'],
-    #     batch_size=args.validation_batch_size,
+    #     batch_size=args.batch_size,
     #     features_fn=validation_features_fn,
     #     label_fn=label_fn,
     #     max_samples=args.validation_max_samples,
     #     perform_shuffle=True,
     #     shuffle_seed=0,  # We want the val set to be the same each time
-    #     restrict_to_surface=True,
     # )
     # prediction_input_fn = regions.create_tf_input_fn(
     #     region_groups=['prediction'],
-    #     batch_size=args.prediction_batch_size,
+    #     batch_size=args.batch_size,
     #     features_fn=prediction_features_fn,
     #     label_fn=None,
     #     perform_shuffle=False,
-    #     restrict_to_surface=True,
     #     grid_spacing=args.prediction_grid_spacing,
     # )
 
@@ -421,7 +426,7 @@ def main():
     #         print('Running a final prediction on all regions...')
     #         final_prediction_input_fn = regions.create_tf_input_fn(
     #             region_groups=['prediction', 'training', 'validation'],
-    #             batch_size=args.prediction_batch_size,
+    #             batch_size=args.batch_size,
     #             features_fn=prediction_features_fn,
     #             label_fn=None,
     #             perform_shuffle=False,

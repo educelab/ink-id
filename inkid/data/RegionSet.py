@@ -6,91 +6,27 @@ import sys
 from jsmin import jsmin
 import numpy as np
 import tensorflow as tf
-from torch.utils.data import Dataset
+import torch
 
 import inkid
 
 
-class PointsDataset(Dataset):
-    def __init__(self, points):
-        self._points = points
+class PointsDataset(torch.utils.data.Dataset):
+    def __init__(self, region_set, region_groups, feature_transform, label_transform=None, grid_spacing=None):
+        self._region_set = region_set
+        self._points = self._region_set.get_points(region_groups, grid_spacing=grid_spacing)
+        self._feature_transform = feature_transform
+        self._label_transform = label_transform
 
     def __len__(self):
         return len(self._points)
 
     def __getitem__(self, idx):
-        return self._points[idx]
-        # TODO transform them first here
-
-
-def point_to_other_feature_tensors(region_id_with_point):
-    """Take a region_id and point, and return some general network inputs.
-
-    Sometimes it is useful to pass some information to the network
-    that is not used as a feature in the actual feedforward
-    processing. For example, when using subvolumes, we can pass
-    the 3D position and orientation to the network, not so that
-    they can be used as features, but so that we can request them
-    back out along with the ink prediction. This is helpful to
-    create predictions that we have other information about beyond
-    just their expected and actual values.
-
-    This function generates the region_id and PPM (x, y) position
-    as values that can be passed to the model function. Elsewhere,
-    the program will add to these 1) the actual feature input, 2)
-    a label (if training or validating) before passing the full
-    input into the network/model.
-
-    This is done separately from the feature input and any labels
-    because the other features and labels are variable depending
-    on what inputs and outputs the user has configured the network
-    for.
-
-    """
-    region_id, x, y = region_id_with_point
-    return region_id, np.asarray((x, y), np.int64)
-
-
-def create_point_to_network_input_function(features_fn, label_fn):
-    """Build (point -> network input) mapping function.
-
-    The user can define their own functions features_fn and
-    label_fn, each of which takes as input a region_id and (x, y)
-    point in that region - and then returns either the network
-    input feature, or the expected label.
-
-    This function then takes those two functions, then builds and
-    returns a function based on them that will take a point as
-    input and will return the network inputs and labels (if there
-    are any).
-
-    The returned function is used to map the Tensorflow Dataset
-    from a set of points in regions to a set of full network
-    inputs with features and labels.
-
-    """
-
-    def point_to_network_input(region_id_with_point):
-        other_feature_names = ['RegionID', 'PPM_XY']
-        other_feature_tensors = tf.compat.v1.py_func(point_to_other_feature_tensors,
-                                                     [region_id_with_point],
-                                                     [tf.int64, tf.int64])
-        input_feature_name = 'Input'
-        input_feature_tensor = tf.compat.v1.py_func(features_fn,
-                                                    [region_id_with_point],
-                                                    tf.float32)
-        network_input = dict(zip(other_feature_names, other_feature_tensors))
-        network_input.update({input_feature_name: input_feature_tensor})
-
-        if label_fn is None:
-            return network_input
+        point = self._points[idx]
+        if self._label_transform is not None:
+            return {'feature': self._feature_transform(point), 'label': self._label_transform(point)}
         else:
-            label = tf.compat.v1.py_func(label_fn,
-                                         [region_id_with_point],
-                                         tf.float32)
-            return network_input, label
-
-    return point_to_network_input
+            {'feature': self._feature_transform(point)}
 
 
 class RegionSet:
@@ -215,7 +151,6 @@ class RegionSet:
                            features_fn, label_fn=None, epochs=None,
                            max_samples=-1, perform_shuffle=None,
                            shuffle_seed=None,
-                           restrict_to_surface=None,
                            grid_spacing=None,
                            probability_of_selection=None,
                            premade_points_generator=None,
@@ -252,7 +187,6 @@ class RegionSet:
                 dataset = tf.data.Dataset.from_generator(
                     self.get_points_generator(
                         region_groups=region_groups,
-                        restrict_to_surface=restrict_to_surface,
                         perform_shuffle=perform_shuffle,
                         shuffle_seed=shuffle_seed,
                         grid_spacing=grid_spacing,
@@ -266,13 +200,13 @@ class RegionSet:
                     tf.int64
                 )
 
-            dataset = dataset.map(
-                create_point_to_network_input_function(
-                    features_fn=features_fn,
-                    label_fn=label_fn,
-                ),
-                num_parallel_calls=threads
-            )
+            # dataset = dataset.map(
+            #     create_point_to_network_input_function(
+            #         features_fn=features_fn,
+            #         label_fn=label_fn,
+            #     ),
+            #     num_parallel_calls=threads
+            # )
 
             # Filter out inputs that are all 0
             if label_fn is None:
@@ -305,7 +239,6 @@ class RegionSet:
         return tf_input_fn
 
     def get_points(self, region_groups,
-                   restrict_to_surface=False,
                    perform_shuffle=False, shuffle_seed=None,
                    grid_spacing=None,
                    probability_of_selection=None):
@@ -325,7 +258,6 @@ class RegionSet:
         for region_group in region_groups:
             for region_id in self._region_groups[region_group]:
                 points += self._regions[region_id].get_points(
-                    restrict_to_surface=restrict_to_surface,
                     grid_spacing=grid_spacing,
                     probability_of_selection=probability_of_selection
                 )
