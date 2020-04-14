@@ -344,22 +344,37 @@ def main():
         print('Label type not recognized: {}'.format(args.label_type))
         return
 
-    # Define the datasets TODO left off
-    datasets = {
-        'training': inkid.data.PointsDataset(regions, 'training', training_features_fn, label_fn),
-        'validation': inkid.data.PointsDataset(regions, 'validation', validation_features_fn, label_fn),
-        'prediction': inkid.data.PointsDataset(regions, 'prediction', prediction_features_fn,
-                                               grid_spacing=args.prediction_grid_spacing)
-    }
+    # Define the datasets
+    train_ds = inkid.data.PointsDataset(regions, 'training', training_features_fn, label_fn),
+    val_ds = inkid.data.PointsDataset(regions, 'validation', validation_features_fn, label_fn),
+    pred_ds = inkid.data.PointsDataset(regions, 'prediction', prediction_features_fn,
+                                       grid_spacing=args.prediction_grid_spacing)
 
-    dataloaders = {
-        'training': torch.utils.data.DataLoader(datasets['training'], batch_size=args.batch_size, shuffle=True,
-                                                num_workers=multiprocessing.cpu_count()),
-        'validation': torch.utils.data.DataLoader(datasets['validation'], batch_size=args.batch_size, shuffle=True,
-                                                  num_workers=multiprocessing.cpu_count()),
-        'prediction': torch.utils.data.DataLoader(datasets['prediction'], batch_size=args.batch_size, shuffle=False,
-                                                  num_workers=multiprocessing.cpu_count())
-    }
+    train_dl = torch.utils.data.DataLoader(train_ds, batch_size=args.batch_size, shuffle=True,
+                                           num_workers=multiprocessing.cpu_count()),
+    val_dl = torch.utils.data.DataLoader(val_ds, batch_size=args.batch_size, shuffle=True,
+                                         num_workers=multiprocessing.cpu_count()),
+    pred_dl = torch.utils.data.DataLoader(pred_ds, batch_size=args.batch_size, shuffle=False,
+                                          num_workers=multiprocessing.cpu_count())
+
+    # TODO change to accept other models
+    # TODO add back/experiment with 5+ layers
+    output_size = 2 if args.label_type == 'ink_classes' else 3
+    model = inkid.model.Subvolume3DcnnModel(args.drop_rate, args.subvolume_shape, args.pad_to_shape,
+                                            args.batch_norm_momentum, args.no_batch_norm, args.filters, output_size)
+    print(model)
+    opt = torch.optim.Adam(model.parameters(), lr=args.learning_rate)
+
+    for epoch in range(args.training_epochs):
+        for xb, yb in train_dl:
+            pred = model(xb)
+            loss = loss_func(pred, yb)
+
+            loss.backward()
+            opt.step()
+            opt.zero_grad()
+
+    print(loss_func(model(xb), yb))
 
     # TODO(PyTorch) replace
     # training_input_fn = regions.create_tf_input_fn(
