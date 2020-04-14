@@ -18,12 +18,9 @@ filter-size = [3, 3, 3]
 filters = [32, 16, 8, 4]
 
 # Run configuration
-training-batch-size = 32
-# training-max-batches = 1000000
+batch-size = 32
 training-epochs = 1
-prediction-batch-size = 32
 prediction-grid-spacing = 4
-validation-batch-size = 32
 validation-max-samples = 5000
 summary-every-n-steps = 100
 save-checkpoint-every-n-steps = 5000
