@@ -136,7 +136,6 @@ def main():
     parser.add_argument('--predict-every-n-checkpoints', metavar='n', type=int)
     parser.add_argument('--final-prediction-on-all', action='store_true')
     parser.add_argument('--skip-training', action='store_true')
-    parser.add_argument('--skip-batches', metavar='n', type=int, default=0)
     parser.add_argument('--training-shuffle-seed', metavar='n', type=int, default=random.randint(0, 10000))
 
     # Logging/metadata
@@ -338,16 +337,18 @@ def main():
     # Define the labels
     if args.label_type == 'ink_classes':
         label_fn = regions.point_to_ink_classes_label
+        output_size = 2
     elif args.label_type == 'rgb_values':
         label_fn = regions.point_to_rgb_values_label
+        output_size = 3
     else:
         print('Label type not recognized: {}'.format(args.label_type))
         return
 
     # Define the datasets
-    train_ds = inkid.data.PointsDataset(regions, 'training', training_features_fn, label_fn),
-    val_ds = inkid.data.PointsDataset(regions, 'validation', validation_features_fn, label_fn),
-    pred_ds = inkid.data.PointsDataset(regions, 'prediction', prediction_features_fn,
+    train_ds = inkid.data.PointsDataset(regions, ['training'], training_features_fn, label_fn),
+    val_ds = inkid.data.PointsDataset(regions, ['validation'], validation_features_fn, label_fn),
+    pred_ds = inkid.data.PointsDataset(regions, ['prediction'], prediction_features_fn,
                                        grid_spacing=args.prediction_grid_spacing)
 
     train_dl = torch.utils.data.DataLoader(train_ds, batch_size=args.batch_size, shuffle=True,
@@ -359,51 +360,23 @@ def main():
 
     # TODO change to accept other models
     # TODO add back/experiment with 5+ layers
-    output_size = 2 if args.label_type == 'ink_classes' else 3
     model = inkid.model.Subvolume3DcnnModel(args.drop_rate, args.subvolume_shape, args.pad_to_shape,
                                             args.batch_norm_momentum, args.no_batch_norm, args.filters, output_size)
     print(model)
+    loss_func = torch.nn.CrossEntropyLoss(reduction='mean')
     opt = torch.optim.Adam(model.parameters(), lr=args.learning_rate)
 
     for epoch in range(args.training_epochs):
         for xb, yb in train_dl:
             pred = model(xb)
             loss = loss_func(pred, yb)
+            print(loss)
 
             loss.backward()
             opt.step()
             opt.zero_grad()
 
     print(loss_func(model(xb), yb))
-
-    # TODO(PyTorch) replace
-    # training_input_fn = regions.create_tf_input_fn(
-    #     region_groups=['training'],
-    #     batch_size=args.batch_size,
-    #     features_fn=training_features_fn,
-    #     label_fn=label_fn,
-    #     perform_shuffle=True,
-    #     shuffle_seed=args.training_shuffle_seed,
-    #     epochs=args.training_epochs,
-    #     skip_batches=args.skip_batches,
-    # )
-    # validation_input_fn = regions.create_tf_input_fn(
-    #     region_groups=['validation'],
-    #     batch_size=args.batch_size,
-    #     features_fn=validation_features_fn,
-    #     label_fn=label_fn,
-    #     max_samples=args.validation_max_samples,
-    #     perform_shuffle=True,
-    #     shuffle_seed=0,  # We want the val set to be the same each time
-    # )
-    # prediction_input_fn = regions.create_tf_input_fn(
-    #     region_groups=['prediction'],
-    #     batch_size=args.batch_size,
-    #     features_fn=prediction_features_fn,
-    #     label_fn=None,
-    #     perform_shuffle=False,
-    #     grid_spacing=args.prediction_grid_spacing,
-    # )
 
     # TODO(PyTorch) replace
     # Run the training process. Predictions are run during training

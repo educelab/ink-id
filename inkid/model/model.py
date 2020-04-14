@@ -125,6 +125,7 @@ class Subvolume3DcnnModel(torch.nn.Module):
         # TODO try leaky ReLU
         # TODO should dropout be elsewhere?
         # TODO look up actual 3D architectures commonly used and try that
+        # TODO some way to indicate to batch norm and dropout if we are training
 
         self.conv1 = torch.nn.Conv3d(in_channels=1, out_channels=filters[0], kernel_size=3, stride=1, padding=0)
         self.batch_norm1 = torch.nn.BatchNorm3d(num_features=filters[0], momentum=batch_norm_momentum)
@@ -169,55 +170,6 @@ class Subvolume3DcnnModel(torch.nn.Module):
 
 
 # def ink_classes_model_fn(features, labels, mode, params):
-#     """Define the model_fn for the Tensorflow Estimator.
-#
-#     Depending on what mode is passed (train, evaluate, or predict)
-#     perform the necessary actions.
-#
-#     The graph is built again every time .train(), .evaluate() or
-#     .predict() are called. In each case the estimator will first check
-#     the model directory to see if checkpoints have been saved, and
-#     then it will load the latest checkpoint weights into the
-#     graph. This is why it works for us to run a validation or
-#     prediction in the middle of training, because they are run right
-#     after checkpoints have been saved. This functionality is all built
-#     into the Tensorflow Estimator.
-#
-#     https://github.com/tensorflow/tensorflow/issues/13895
-#
-#     """
-#     output_neurons = 2
-#
-#     if params['feature_type'] == 'voxel_vector_1dcnn':
-#         model = VoxelVector1dcnnModel(
-#             params['drop_rate'],
-#             params['length_in_each_direction'],
-#             params['batch_norm_momentum'],
-#             params['filters'],
-#             output_neurons,
-#         )
-#     elif params['feature_type'] == 'subvolume_3dcnn':
-#         model = Subvolume3dcnnModel(
-#             params['drop_rate'],
-#             params['subvolume_shape'],
-#             params['pad_to_shape'],
-#             params['batch_norm_momentum'],
-#             params['no_batch_norm'],
-#             params['filters'],
-#             output_neurons,
-#         )
-#     elif params['feature_type'] == 'descriptive_statistics':
-#         model = DescriptiveStatisticsModel(
-#             # Create a dummy array to see how many descriptive
-#             # statistics there will be
-#             len(inkid.ops.get_descriptive_statistics(np.array([0, 1, 2]))),
-#             output_neurons,
-#         )
-#     else:
-#         raise ValueError('Feature type {} was not recognized.'.format(params['feature_type']))
-#
-#     inputs = features['Input']
-#
 #     if mode == tf.estimator.ModeKeys.PREDICT:
 #         logits = model(inputs, training=False)
 #         # Here we specify all of the possible outputs from calling
