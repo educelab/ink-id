@@ -353,10 +353,11 @@ def main():
 
     train_dl = torch.utils.data.DataLoader(train_ds, batch_size=args.batch_size, shuffle=True,
                                            num_workers=multiprocessing.cpu_count()),
-    val_dl = torch.utils.data.DataLoader(val_ds, batch_size=args.batch_size, shuffle=True,
+    val_dl = torch.utils.data.DataLoader(val_ds, batch_size=args.batch_size * 2, shuffle=True,
                                          num_workers=multiprocessing.cpu_count()),
-    pred_dl = torch.utils.data.DataLoader(pred_ds, batch_size=args.batch_size, shuffle=False,
+    pred_dl = torch.utils.data.DataLoader(pred_ds, batch_size=args.batch_size * 2, shuffle=False,
                                           num_workers=multiprocessing.cpu_count())
+    # TODO make sure this doubled batch size works OK
 
     # TODO change to accept other models
     # TODO add back/experiment with 5+ layers
@@ -367,6 +368,7 @@ def main():
     opt = torch.optim.Adam(model.parameters(), lr=args.learning_rate)
 
     for epoch in range(args.training_epochs):
+        model.train()
         for xb, yb in train_dl:
             pred = model(xb)
             loss = loss_func(pred, yb)
@@ -376,7 +378,15 @@ def main():
             opt.step()
             opt.zero_grad()
 
+        model.eval()
+        # Can do evaluation now, batch norm and dropout will behave properly
+        with torch.no_grad():
+            val_loss = sum(loss_func(model(xb), yb) for xb, yb in val_dl) / len(val_dl)
+            print(epoch, val_loss)
+
     print(loss_func(model(xb), yb))
+
+    # TODO convert to torch.tensor()?
 
     # TODO(PyTorch) replace
     # Run the training process. Predictions are run during training

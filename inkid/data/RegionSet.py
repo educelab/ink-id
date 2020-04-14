@@ -24,9 +24,9 @@ class PointsDataset(torch.utils.data.Dataset):
     def __getitem__(self, idx):
         point = self._points[idx]
         if self._label_transform is not None:
-            return {'feature': self._feature_transform(point), 'label': self._label_transform(point)}
+            return self._feature_transform(point), self._label_transform(point)
         else:
-            {'feature': self._feature_transform(point)}
+            return self._feature_transform(point)
 
 
 class RegionSet:
