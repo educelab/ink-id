@@ -1,31 +1,40 @@
-import tensorflow as tf
+import torch
 
 
-def total_positives(labels, predictions):
-    true_positives, true_positives_update_op = tf.compat.v1.metrics.true_positives(labels, predictions)
-    false_positives, false_positives_update_op = tf.compat.v1.metrics.false_positives(labels, predictions)
-    return (
-        true_positives + false_positives,
-        tf.group(true_positives_update_op, false_positives_update_op)
-    )
+# https://gist.github.com/the-bass/cae9f3976866776dea17a5049013258d
+def confusion(prediction, truth):
+    confusion_vector = prediction.max(1)[1].float() / truth.float()
+    # Element-wise division of the 2 tensors returns a new tensor which holds a
+    # unique value for each case:
+    #   1     where prediction and truth are 1 (True Positive)
+    #   inf   where prediction is 1 and truth is 0 (False Positive)
+    #   nan   where prediction and truth are 0 (True Negative)
+    #   0     where prediction is 0 and truth is 1 (False Negative)
+
+    true_positives = torch.sum(confusion_vector == 1).item()
+    false_positives = torch.sum(confusion_vector == float('inf')).item()
+    true_negatives = torch.sum(torch.isnan(confusion_vector)).item()
+    false_negatives = torch.sum(confusion_vector == 0).item()
+
+    return true_positives, false_positives, true_negatives, false_negatives
 
 
-def total_negatives(labels, predictions):
-    true_negatives, true_negatives_update_op = tf.compat.v1.metrics.true_negatives(labels, predictions)
-    false_negatives, false_negatives_update_op = tf.compat.v1.metrics.false_negatives(labels, predictions)
-    return (
-        true_negatives + false_negatives,
-        tf.group(true_negatives_update_op, false_negatives_update_op)
-    )
+def recall(pred, yb):
+    tp, fp, tn, fn = confusion(pred, yb)
+    return 1 if tp + fn == 0 else tp / (tp + fn)
 
 
-# https://stackoverflow.com/a/45654762
-def fbeta_score(labels, predictions, beta=0.3):
-    precision, precision_update_op = tf.compat.v1.metrics.precision(labels, predictions)
-    recall, recall_update_op = tf.compat.v1.metrics.recall(labels, predictions)
+def precision(pred, yb):
+    tp, fp, tn, fn = confusion(pred, yb)
+    return 1 if tp + fp == 0 else tp / (tp + fp)
+
+
+def fbeta(pred, yb, beta=0.3):
+    p, r = precision(pred, yb), recall(pred, yb)
     epsilon = 1e-5
-    score = (1 + beta**2) * tf.divide(
-        (precision * recall),
-        (beta**2 * precision) + recall + epsilon
-    )
-    return (score, tf.group(precision_update_op, recall_update_op))
+    return (1 + beta**2) * (p * r) / (beta**2 * p + r + epsilon)
+
+
+def accuracy(pred, yb):
+    tp, fp, tn, fn = confusion(pred, yb)
+    return (tp + tn) / (tp + fp + tn + fn)

@@ -34,6 +34,7 @@ import configargparse
 import git
 import numpy as np
 import torch
+import torchsummary
 
 import inkid
 
@@ -346,47 +347,69 @@ def main():
         return
 
     # Define the datasets
-    train_ds = inkid.data.PointsDataset(regions, ['training'], training_features_fn, label_fn),
-    val_ds = inkid.data.PointsDataset(regions, ['validation'], validation_features_fn, label_fn),
+    train_ds = inkid.data.PointsDataset(regions, ['training'], training_features_fn, label_fn)
+    val_ds = inkid.data.PointsDataset(regions, ['validation'], validation_features_fn, label_fn)
     pred_ds = inkid.data.PointsDataset(regions, ['prediction'], prediction_features_fn,
                                        grid_spacing=args.prediction_grid_spacing)
 
     train_dl = torch.utils.data.DataLoader(train_ds, batch_size=args.batch_size, shuffle=True,
-                                           num_workers=multiprocessing.cpu_count()),
+                                           num_workers=multiprocessing.cpu_count())
     val_dl = torch.utils.data.DataLoader(val_ds, batch_size=args.batch_size * 2, shuffle=True,
-                                         num_workers=multiprocessing.cpu_count()),
+                                         num_workers=multiprocessing.cpu_count())
     pred_dl = torch.utils.data.DataLoader(pred_ds, batch_size=args.batch_size * 2, shuffle=False,
                                           num_workers=multiprocessing.cpu_count())
-    # TODO make sure this doubled batch size works OK
 
-    # TODO change to accept other models
+    # TODO GPU
     # TODO add back/experiment with 5+ layers
-    model = inkid.model.Subvolume3DcnnModel(args.drop_rate, args.subvolume_shape, args.pad_to_shape,
-                                            args.batch_norm_momentum, args.no_batch_norm, args.filters, output_size)
-    print(model)
-    loss_func = torch.nn.CrossEntropyLoss(reduction='mean')
+    # TODO check data types throughout
+    # Create the model for training
+    if args.feature_type == 'subvolume_3dcnn':
+        model = inkid.model.Subvolume3DcnnModel(args.drop_rate, args.subvolume_shape, args.pad_to_shape,
+                                                args.batch_norm_momentum, args.no_batch_norm, args.filters, output_size)
+    else:
+        print('Feature type: {} does not yet have a PyTorch model.'.format(args.feature_type))
+        return
+    # Print summary of model
+    if args.pad_to_shape:
+        torchsummary.summary(model, input_size=(1,) + tuple(args.pad_to_shape), batch_size=args.batch_size)
+    else:
+        torchsummary.summary(model, input_size=(1,) + tuple(args.subvolume_shape), batch_size=args.batch_size)
+    # Define loss function and optimizer
+    loss_func = torch.nn.CrossEntropyLoss(reduction='mean')  # TODO change with other labels
     opt = torch.optim.Adam(model.parameters(), lr=args.learning_rate)
 
+    # Run training loop
     for epoch in range(args.training_epochs):
-        model.train()
-        for xb, yb in train_dl:
+        model.train()  # Turn on training mode
+        for batch_num, (xb, yb) in enumerate(train_dl):
+            batch_start = time.time()
             pred = model(xb)
+            if args.label_type == 'ink_classes':
+                _, yb = yb.max(1)  # Argmax
             loss = loss_func(pred, yb)
-            print(loss)
 
             loss.backward()
             opt.step()
             opt.zero_grad()
 
-        model.eval()
-        # Can do evaluation now, batch norm and dropout will behave properly
+            batch_end = time.time()
+
+            if args.label_type == 'ink_classes':
+                accuracy = inkid.metrics.accuracy(pred, yb)
+                precision = inkid.metrics.precision(pred, yb)
+                recall = inkid.metrics.recall(pred, yb)
+                fbeta = inkid.metrics.fbeta(pred, yb)
+                print('Batch: {:>3d} Loss: {:6.4g} Accuracy: {:5.2g} Precision: {:5.2g} Recall: {:5.2g} FBeta: {:5.2g}'
+                      ' Seconds: {:5.3g}'
+                      .format(batch_num, loss, accuracy, precision, recall, fbeta, batch_end - batch_start))
+            else:
+                print('Batch: {:>3d} Loss: {:6.4g} Seconds: {:5.2g}'.format(batch_num, loss, batch_end - batch_start))
+
+        # Periodic evaluation on validation set/prediction image
+        model.eval()  # Turn off training mode for batch norm and dropout purposes
         with torch.no_grad():
             val_loss = sum(loss_func(model(xb), yb) for xb, yb in val_dl) / len(val_dl)
             print(epoch, val_loss)
-
-    print(loss_func(model(xb), yb))
-
-    # TODO convert to torch.tensor()?
 
     # TODO(PyTorch) replace
     # Run the training process. Predictions are run during training

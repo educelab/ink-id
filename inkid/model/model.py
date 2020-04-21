@@ -109,37 +109,31 @@ class EvalCheckpointSaverListener(tf.estimator.CheckpointSaverListener):
 class Subvolume3DcnnModel(torch.nn.Module):
     def __init__(self, drop_rate, subvolume_shape, pad_to_shape,
                  batch_norm_momentum, no_batch_norm, filters, output_neurons):
-        super(Subvolume3DcnnModel, self).__init__()
-
-        # TODO deal with change from (N, D, H, W, C) to (N, C, D, H, W)
-        if pad_to_shape is not None:
-            self._input_shape = [-1, pad_to_shape[0], pad_to_shape[1], pad_to_shape[2], 1]
-        else:
-            self._input_shape = [-1, subvolume_shape[0], subvolume_shape[1], subvolume_shape[2], 1]
+        super().__init__()
 
         self._batch_norm = not no_batch_norm
 
         # TODO padding math for 'same' (all layers)
         # TODO add activations below
-        # TODO init weights https://pytorch.org/docs/stable/nn.html#torch.nn.Module.apply, kernel glorotuniform and bias zeros
+        # TODO init https://pytorch.org/docs/stable/nn.html#torch.nn.Module.apply, kernel glorotuniform and bias zeros
         # TODO try leaky ReLU
         # TODO should dropout be elsewhere?
         # TODO look up actual 3D architectures commonly used and try that
         # TODO some way to indicate to batch norm and dropout if we are training
 
-        self.conv1 = torch.nn.Conv3d(in_channels=1, out_channels=filters[0], kernel_size=3, stride=1, padding=0)
+        self.conv1 = torch.nn.Conv3d(in_channels=1, out_channels=filters[0], kernel_size=3, stride=1, padding=1)
         self.batch_norm1 = torch.nn.BatchNorm3d(num_features=filters[0], momentum=batch_norm_momentum)
 
-        self.conv2 = torch.nn.Conv3d(in_channels=1, out_channels=filters[1], kernel_size=3, stride=2, padding=0)
+        self.conv2 = torch.nn.Conv3d(in_channels=filters[0], out_channels=filters[1], kernel_size=3, stride=2, padding=1)
         self.batch_norm2 = torch.nn.BatchNorm3d(num_features=filters[1], momentum=batch_norm_momentum)
 
-        self.conv3 = torch.nn.Conv3d(in_channels=1, out_channels=filters[2], kernel_size=3, stride=2, padding=0)
+        self.conv3 = torch.nn.Conv3d(in_channels=filters[1], out_channels=filters[2], kernel_size=3, stride=2, padding=1)
         self.batch_norm3 = torch.nn.BatchNorm3d(num_features=filters[2], momentum=batch_norm_momentum)
 
-        self.conv4 = torch.nn.Conv3d(in_channels=1, out_channels=filters[3], kernel_size=3, stride=2, padding=0)
+        self.conv4 = torch.nn.Conv3d(in_channels=filters[2], out_channels=filters[3], kernel_size=3, stride=2, padding=1)
         self.batch_norm4 = torch.nn.BatchNorm3d(num_features=filters[3], momentum=batch_norm_momentum)
 
-        self.fc = torch.nn.Linear(filters[3], output_neurons)
+        self.fc = torch.nn.Linear(filters[3] * 216, output_neurons)  # TODO change this input size based on padding
         self.dropout = torch.nn.Dropout(p=drop_rate)
 
         self.relu = torch.nn.ReLU()

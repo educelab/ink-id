@@ -7,6 +7,7 @@ from jsmin import jsmin
 import numpy as np
 import tensorflow as tf
 import torch
+from torchvision import transforms
 
 import inkid
 
@@ -23,10 +24,12 @@ class PointsDataset(torch.utils.data.Dataset):
 
     def __getitem__(self, idx):
         point = self._points[idx]
+        feature = torch.from_numpy(self._feature_transform(point))[None, :, :, :]
         if self._label_transform is not None:
-            return self._feature_transform(point), self._label_transform(point)
+            label = torch.from_numpy(self._label_transform(point))
+            return feature, label
         else:
-            return self._feature_transform(point)
+            return feature
 
 
 class RegionSet:
