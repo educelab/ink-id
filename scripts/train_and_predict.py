@@ -447,8 +447,8 @@ def main():
                         for p_xb, p_points in pred_dl:
                             p_pred = model(p_xb.to(device)).cpu().numpy()
                             p_points = p_points.numpy()
-                            predictions = np.append(predictions, p_pred, axis=0) if predictions else p_pred
-                            points = np.append(points, p_points, axis=0) if points else p_points
+                            predictions = np.append(predictions, p_pred, axis=0) if predictions is not None else p_pred
+                            points = np.append(points, p_points, axis=0) if points is not None else p_points
                             print(len(predictions), len(points))
                     #     for prediction in predictions:
                     #         self._region_set.reconstruct_predicted_ink_classes(
