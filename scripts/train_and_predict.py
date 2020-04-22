@@ -441,6 +441,7 @@ def main():
 
                     # Prediction image
                     total_checkpoints += 1
+                    print('Generating prediction image...')
                     if args.label_type == 'ink_classes':
                         predictions = None
                         points = None
@@ -449,7 +450,7 @@ def main():
                             p_points = p_points.numpy()
                             predictions = np.append(predictions, p_pred, axis=0) if predictions is not None else p_pred
                             points = np.append(points, p_points, axis=0) if points is not None else p_points
-                            print(len(predictions), len(points))
+                            print(points[-1])
                     #     for prediction in predictions:
                     #         self._region_set.reconstruct_predicted_ink_classes(
                     #             np.array([prediction['region_id']]),
