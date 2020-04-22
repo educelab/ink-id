@@ -351,7 +351,7 @@ def main():
     if args.validation_max_samples < len(val_ds):
         val_ds = torch.utils.data.random_split(val_ds, [args.validation_max_samples,
                                                         len(val_ds) - args.validation_max_samples])[0]
-    pred_ds = inkid.data.PointsDataset(regions, ['prediction'], prediction_features_fn, lambda x: x,
+    pred_ds = inkid.data.PointsDataset(regions, ['prediction'], prediction_features_fn, lambda p: p,
                                        grid_spacing=args.prediction_grid_spacing)
 
     train_dl = torch.utils.data.DataLoader(train_ds, batch_size=args.batch_size, shuffle=True,
@@ -446,7 +446,7 @@ def main():
                         predictions = None
                         points = None
                         for p_xb, p_points in pred_dl:
-                            p_pred = model(p_xb.to(device)).cpu().numpy()
+                            p_pred = torch.nn.Softmax(model(p_xb.to(device))).cpu().numpy()
                             p_points = p_points.numpy()
                             predictions = np.append(predictions, p_pred, axis=0) if predictions is not None else p_pred
                             points = np.append(points, p_points, axis=0) if points is not None else p_points
