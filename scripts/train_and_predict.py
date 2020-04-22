@@ -359,6 +359,8 @@ def main():
     pred_dl = torch.utils.data.DataLoader(pred_ds, batch_size=args.batch_size * 2, shuffle=False,
                                           num_workers=multiprocessing.cpu_count())
 
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
     # TODO GPU
     # TODO add back/experiment with 5+ layers
     # TODO check data types throughout
@@ -369,11 +371,12 @@ def main():
     else:
         print('Feature type: {} does not yet have a PyTorch model.'.format(args.feature_type))
         return
+    model = model.to(device)
     # Print summary of model
     if args.pad_to_shape:
-        torchsummary.summary(model, input_size=(1,) + tuple(args.pad_to_shape), batch_size=args.batch_size)
+        torchsummary.summary(model, input_size=(1,) + tuple(args.pad_to_shape), batch_size=args.batch_size, device=device)
     else:
-        torchsummary.summary(model, input_size=(1,) + tuple(args.subvolume_shape), batch_size=args.batch_size)
+        torchsummary.summary(model, input_size=(1,) + tuple(args.subvolume_shape), batch_size=args.batch_size, device=device)
     # Define loss function and optimizer
     loss_func = torch.nn.CrossEntropyLoss(reduction='mean')  # TODO change with other labels
     opt = torch.optim.Adam(model.parameters(), lr=args.learning_rate)
@@ -383,6 +386,8 @@ def main():
         model.train()  # Turn on training mode
         for batch_num, (xb, yb) in enumerate(train_dl):
             batch_start = time.time()
+            xb = xb.to(device)
+            yb = yb.to(device)
             pred = model(xb)
             if args.label_type == 'ink_classes':
                 _, yb = yb.max(1)  # Argmax
