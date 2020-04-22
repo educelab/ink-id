@@ -361,10 +361,6 @@ def main():
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-    # TODO GPU
-    # TODO add back/experiment with 5+ layers
-    # TODO check data types throughout
-    # TODO remove TensorFlow from imports everywhere and requirements, rebuild container without it
     # Create the model for training
     if args.feature_type == 'subvolume_3dcnn':
         model = inkid.model.Subvolume3DcnnModel(args.drop_rate, args.subvolume_shape, args.pad_to_shape,
@@ -427,44 +423,12 @@ def main():
                 losses.clear()
 
             if batch_num % args.save_checkpoint_every_n_batches == 0:
-                # TODO save weights
-                # TODO limit to 5000 samples
                 # Periodic evaluation on validation set/prediction image
                 model.eval()  # Turn off training mode for batch norm and dropout purposes
                 # with torch.no_grad():
-                    # TODO this and prediction image
                     # print('Evaluating on validation set...')
                     # val_loss = sum(loss_func(model(xb.to(device)), yb.to(device)) for xb, yb in val_dl) / len(val_dl)
                     # print(epoch, val_loss)
-
-    # TODO(PyTorch) replace
-    # Run the training process. Predictions are run during training
-    # and also after training.
-    # try:
-    #     with ExitStack():
-    #         # Only train if the training region set group is not empty
-    #         if len(regions.region_groups['training']) > 0 and not args.skip_training:
-    #             estimator.train(
-    #                 input_fn=training_input_fn,
-    #                 steps=args.training_max_batches,
-    #                 hooks=[logging_hook],
-    #                 saving_listeners=[
-    #                     inkid.model.EvalCheckpointSaverListener(
-    #                         estimator=estimator,
-    #                         val_input_fn=validation_input_fn,
-    #                         predict_input_fn=prediction_input_fn,
-    #                         validate_every_n_checkpoints=args.validate_every_n_checkpoints,
-    #                         predict_every_n_checkpoints=args.predict_every_n_checkpoints,
-    #                         region_set=regions,
-    #                         predictions_dir=os.path.join(output_path, 'predictions'),
-    #                         label_type=args.label_type,
-    #                     ),
-    #                 ],
-    #             )
-    #
-    # # Still attempt final prediction
-    # except KeyboardInterrupt:
-    #     pass
 
     # TODO(PyTorch) replace
     # Run a final prediction on all regions
