@@ -430,18 +430,18 @@ def main():
                 model.eval()  # Turn off training mode for batch norm and dropout purposes
                 with torch.no_grad():
                     # Evaluation on validation set
-                    print('Evaluating on validation set...')
+                    print('Evaluating on validation set... ', end='')
                     if args.label_type == 'ink_classes':
                         val_loss = sum(loss_func(model(xb.to(device)), yb.to(device).max(1)[1]) for xb, yb in val_dl) \
                                    / len(val_dl)
                     elif args.label_type == 'rgb_values':
                         val_loss = sum(loss_func(model(xb.to(device)), yb.to(device)) for xb, yb in val_dl) \
                                    / len(val_dl)
-                    print(f'Validation loss: {val_loss}')
+                    print(f'done (loss: {val_loss})')
 
                     # Prediction image
                     total_checkpoints += 1
-                    print('Generating prediction image...')
+                    print('Generating prediction image... ', end='')
                     if args.label_type == 'ink_classes':
                         predictions = None
                         points = None
@@ -455,10 +455,11 @@ def main():
                             regions.reconstruct_predicted_ink_classes(
                                 np.array([region_id]),
                                 np.array([prediction]),
-                                np.array([x, y]),
+                                np.array([[x, y]]),
                             )
                         regions.save_predictions(os.path.join(output_path, 'predictions'), f'{epoch}_{batch_num}')
                         regions.reset_predictions()
+                    print('done')
                     #
                     # elif self._label_type == 'rgb_values':
                     #     if self._total_checkpoints % self._predict_every_n_checkpoints == 0:
