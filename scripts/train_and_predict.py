@@ -359,7 +359,8 @@ def main():
     pred_dl = torch.utils.data.DataLoader(pred_ds, batch_size=args.batch_size * 2, shuffle=False,
                                           num_workers=multiprocessing.cpu_count())
 
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    device_str = "cuda:0" if torch.cuda.is_available() else "cpu"
+    device = torch.device(device_str)
 
     # TODO GPU
     # TODO add back/experiment with 5+ layers
@@ -374,9 +375,9 @@ def main():
     model = model.to(device)
     # Print summary of model
     if args.pad_to_shape:
-        torchsummary.summary(model, input_size=(1,) + tuple(args.pad_to_shape), batch_size=args.batch_size, device=device)
+        torchsummary.summary(model, input_size=(1,) + tuple(args.pad_to_shape), batch_size=args.batch_size, device=device_str)
     else:
-        torchsummary.summary(model, input_size=(1,) + tuple(args.subvolume_shape), batch_size=args.batch_size, device=device)
+        torchsummary.summary(model, input_size=(1,) + tuple(args.subvolume_shape), batch_size=args.batch_size, device=device_str)
     # Define loss function and optimizer
     loss_func = torch.nn.CrossEntropyLoss(reduction='mean')  # TODO change with other labels
     opt = torch.optim.Adam(model.parameters(), lr=args.learning_rate)
