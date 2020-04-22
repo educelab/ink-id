@@ -431,7 +431,12 @@ def main():
                 model.eval()  # Turn off training mode for batch norm and dropout purposes
                 with torch.no_grad():
                     print('Evaluating on validation set...')
-                    val_loss = sum(loss_func(model(xb.to(device)), yb.to(device)) for xb, yb in val_dl) / len(val_dl)
+                    if args.label_type == 'ink_classes':
+                        val_loss = sum(loss_func(model(xb.to(device)), yb.to(device).max(1)[1]) for xb, yb in val_dl) \
+                                   / len(val_dl)
+                    elif args.label_type == 'rgb_values':
+                        val_loss = sum(loss_func(model(xb.to(device)), yb.to(device)) for xb, yb in val_dl) \
+                                   / len(val_dl)
                     print(f'Validation loss: {val_loss}')
 
     # TODO(PyTorch) replace
