@@ -364,6 +364,7 @@ def main():
     # TODO GPU
     # TODO add back/experiment with 5+ layers
     # TODO check data types throughout
+    # TODO remove TensorFlow from imports everywhere and requirements, rebuild container without it
     # Create the model for training
     if args.feature_type == 'subvolume_3dcnn':
         model = inkid.model.Subvolume3DcnnModel(args.drop_rate, args.subvolume_shape, args.pad_to_shape,
@@ -391,7 +392,6 @@ def main():
         model.train()  # Turn on training mode
         total_batches = len(train_dl)
         for batch_num, (xb, yb) in enumerate(train_dl):
-            batch_start = time.time()
             xb = xb.to(device)
             yb = yb.to(device)
             pred = model(xb)
@@ -423,12 +423,14 @@ def main():
 
             if batch_num % args.save_checkpoint_every_n_batches == 0:
                 # TODO save weights
+                # TODO limit to 5000 samples
                 # Periodic evaluation on validation set/prediction image
                 model.eval()  # Turn off training mode for batch norm and dropout purposes
-                with torch.no_grad():
-
-                    val_loss = sum(loss_func(model(xb), yb) for xb, yb in val_dl) / len(val_dl)
-                    print(epoch, val_loss)
+                # with torch.no_grad():
+                    # TODO this and prediction image
+                    # print('Evaluating on validation set...')
+                    # val_loss = sum(loss_func(model(xb.to(device)), yb.to(device)) for xb, yb in val_dl) / len(val_dl)
+                    # print(epoch, val_loss)
 
     # TODO(PyTorch) replace
     # Run the training process. Predictions are run during training
