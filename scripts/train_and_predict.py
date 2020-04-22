@@ -359,8 +359,7 @@ def main():
     pred_dl = torch.utils.data.DataLoader(pred_ds, batch_size=args.batch_size * 2, shuffle=False,
                                           num_workers=multiprocessing.cpu_count())
 
-    device_str = "cuda:0" if torch.cuda.is_available() else "cpu"
-    device = torch.device(device_str)
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
     # TODO GPU
     # TODO add back/experiment with 5+ layers
@@ -374,6 +373,7 @@ def main():
         return
     model = model.to(device)
     # Print summary of model
+    device_str = "cuda" if torch.cuda.is_available() else "cpu"
     if args.pad_to_shape:
         torchsummary.summary(model, input_size=(1,) + tuple(args.pad_to_shape), batch_size=args.batch_size, device=device_str)
     else:
