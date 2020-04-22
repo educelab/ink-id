@@ -416,10 +416,15 @@ def main():
                           ' Seconds: {:5.3g}'
                           .format(batch_num, total_batches, np.mean(losses), np.mean(accuracy), np.mean(precision),
                                   np.mean(recall), np.mean(fbeta), time.time() - last_summary))
+                    accuracy.clear()
+                    precision.clear()
+                    recall.clear()
+                    fbeta.clear()
                 else:
                     print('Batch: {:>3d} Loss: {:6.4g} Seconds: {:5.2g}'.format(batch_num, np.mean(losses),
                                                                                 time.time() - last_summary))
                 last_summary = time.time()
+                losses.clear()
 
             if batch_num % args.save_checkpoint_every_n_batches == 0:
                 # TODO save weights
