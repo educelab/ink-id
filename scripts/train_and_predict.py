@@ -350,7 +350,7 @@ def main():
     train_ds = inkid.data.PointsDataset(regions, ['training'], training_features_fn, label_fn)
     val_ds = inkid.data.PointsDataset(regions, ['validation'], validation_features_fn, label_fn)
     # Only take n samples for validation, not the entire region
-    val_ds = torch.utils.data.random_split(val_ds, args.validation_max_samples)[0]
+    val_ds = torch.utils.data.random_split(val_ds, [args.validation_max_samples])[0]
     pred_ds = inkid.data.PointsDataset(regions, ['prediction'], prediction_features_fn,
                                        grid_spacing=args.prediction_grid_spacing)
 
