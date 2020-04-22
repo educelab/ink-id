@@ -132,9 +132,7 @@ def main():
                         help='prediction points will be taken from an NxN grid')
     parser.add_argument('--validation-max-samples', metavar='n', type=int)
     parser.add_argument('--summary-every-n-batches', metavar='n', type=int)
-    parser.add_argument('--save-checkpoint-every-n-batches', metavar='n', type=int)
-    parser.add_argument('--validate-every-n-checkpoints', metavar='n', type=int)
-    parser.add_argument('--predict-every-n-checkpoints', metavar='n', type=int)
+    parser.add_argument('--checkpoint-every-n-batches', metavar='n', type=int)
     parser.add_argument('--final-prediction-on-all', action='store_true')
     parser.add_argument('--skip-training', action='store_true')
     parser.add_argument('--training-shuffle-seed', metavar='n', type=int, default=random.randint(0, 10000))
@@ -353,7 +351,7 @@ def main():
     if args.validation_max_samples < len(val_ds):
         val_ds = torch.utils.data.random_split(val_ds, [args.validation_max_samples,
                                                         len(val_ds) - args.validation_max_samples])[0]
-    pred_ds = inkid.data.PointsDataset(regions, ['prediction'], prediction_features_fn,
+    pred_ds = inkid.data.PointsDataset(regions, ['prediction'], prediction_features_fn, lambda x: x,
                                        grid_spacing=args.prediction_grid_spacing)
 
     train_dl = torch.utils.data.DataLoader(train_ds, batch_size=args.batch_size, shuffle=True,
@@ -386,6 +384,7 @@ def main():
     losses = []
     accuracy, precision, recall, fbeta = [], [], [], []
     last_summary = time.time()
+    total_checkpoints = 0
 
     # Run training loop
     for epoch in range(args.training_epochs):
@@ -426,10 +425,11 @@ def main():
                 last_summary = time.time()
                 losses.clear()
 
-            if batch_num % args.save_checkpoint_every_n_batches == 0:
+            if batch_num % args.checkpoint_every_n_batches == 0:
                 # Periodic evaluation and prediction
                 model.eval()  # Turn off training mode for batch norm and dropout purposes
                 with torch.no_grad():
+                    # Evaluation on validation set
                     print('Evaluating on validation set...')
                     if args.label_type == 'ink_classes':
                         val_loss = sum(loss_func(model(xb.to(device)), yb.to(device).max(1)[1]) for xb, yb in val_dl) \
@@ -438,6 +438,43 @@ def main():
                         val_loss = sum(loss_func(model(xb.to(device)), yb.to(device)) for xb, yb in val_dl) \
                                    / len(val_dl)
                     print(f'Validation loss: {val_loss}')
+
+                    # Prediction image
+                    total_checkpoints += 1
+                    if args.label_type == 'ink_classes':
+                        predictions = []
+                        points = []
+                        for p_xb, p_points in pred_dl:
+                            predictions.append(model(p_xb.to(device)))
+                            points.append(p_points)
+                            print(len(predictions))
+                    #     for prediction in predictions:
+                    #         self._region_set.reconstruct_predicted_ink_classes(
+                    #             np.array([prediction['region_id']]),
+                    #             np.array([prediction['probabilities']]),
+                    #             np.array([prediction['ppm_xy']]),
+                    #         )
+                    #     self._region_set.save_predictions(self._predictions_dir, f'{epoch}_{batch_num}')
+                    #     self._region_set.reset_predictions()
+                    #
+                    # elif self._label_type == 'rgb_values':
+                    #     if self._total_checkpoints % self._predict_every_n_checkpoints == 0:
+                    #         predictions = self._estimator.predict(
+                    #             self._predict_input_fn,
+                    #             predict_keys=[
+                    #                 'region_id',
+                    #                 'ppm_xy',
+                    #                 'rgb',
+                    #             ],
+                    #         )
+                    #         for prediction in predictions:
+                    #             self._region_set.reconstruct_predicted_rgb(
+                    #                 np.array([prediction['region_id']]),
+                    #                 np.array([prediction['rgb']]),
+                    #                 np.array([prediction['ppm_xy']]),
+                    #             )
+                    #         self._region_set.save_predictions(self._predictions_dir, global_step)
+                    #         self._region_set.reset_predictions()
 
     # TODO(PyTorch) replace
     # Run a final prediction on all regions

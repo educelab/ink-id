@@ -23,6 +23,4 @@ training-epochs = 1
 prediction-grid-spacing = 4
 validation-max-samples = 5000
 summary-every-n-batches = 10
-save-checkpoint-every-n-batches = 5000
-validate-every-n-checkpoints = 1
-predict-every-n-checkpoints = 1
+checkpoint-every-n-batches = 5000

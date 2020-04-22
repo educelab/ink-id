@@ -11,25 +11,8 @@ import inkid.ops
 import inkid.metrics
 
 
-class EvalCheckpointSaverListener(tf.estimator.CheckpointSaverListener):
-    """Run some logic every time a checkpoint is saved.
-
-    This is a bit of a Trojan horse that allows us to run validations,
-    predictions, or arbitrary logic in the middle of a training
-    run. An instance of this class is passed to the estimator when
-    .train() is called. We also define in the RunConfig of the
-    estimator how often we want it to save a checkpoint. So it will
-    save a checkpoint that often, and then the after_save() method
-    below is called. By passing the estimator itself to this class
-    when it is initialized, we can call .evaluate() or .predict() on
-    the estimator from here. Once done, the training process will
-    continue unaware that any of this happened.
-
-    https://stackoverflow.com/a/47043377
-
-    """
-
-    def __init__(self, estimator, val_input_fn, predict_input_fn,
+class PredictionImageMaker():
+    def __init__(self, val_input_fn, predict_input_fn,
                  validate_every_n_checkpoints,
                  predict_every_n_checkpoints, region_set,
                  predictions_dir, label_type):
@@ -112,10 +95,6 @@ class Subvolume3DcnnModel(torch.nn.Module):
         super().__init__()
 
         self._batch_norm = not no_batch_norm
-
-        # TODO padding math for 'same' (all layers)
-        # TODO add activations below
-        # TODO init https://pytorch.org/docs/stable/nn.html#torch.nn.Module.apply, kernel glorotuniform and bias zeros
 
         self.conv1 = torch.nn.Conv3d(in_channels=1, out_channels=filters[0], kernel_size=3, stride=1, padding=1)
         self.batch_norm1 = torch.nn.BatchNorm3d(num_features=filters[0], momentum=batch_norm_momentum)
