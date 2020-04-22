@@ -349,6 +349,8 @@ def main():
     # Define the datasets
     train_ds = inkid.data.PointsDataset(regions, ['training'], training_features_fn, label_fn)
     val_ds = inkid.data.PointsDataset(regions, ['validation'], validation_features_fn, label_fn)
+    # Only take n samples for validation, not the entire region
+    val_ds = torch.utils.data.random_split(val_ds, args.validation_max_samples)[0]
     pred_ds = inkid.data.PointsDataset(regions, ['prediction'], prediction_features_fn,
                                        grid_spacing=args.prediction_grid_spacing)
 
@@ -423,12 +425,12 @@ def main():
                 losses.clear()
 
             if batch_num % args.save_checkpoint_every_n_batches == 0:
-                # Periodic evaluation on validation set/prediction image
+                # Periodic evaluation and prediction
                 model.eval()  # Turn off training mode for batch norm and dropout purposes
-                # with torch.no_grad():
-                    # print('Evaluating on validation set...')
-                    # val_loss = sum(loss_func(model(xb.to(device)), yb.to(device)) for xb, yb in val_dl) / len(val_dl)
-                    # print(epoch, val_loss)
+                with torch.no_grad():
+                    print('Evaluating on validation set...')
+                    val_loss = sum(loss_func(model(xb.to(device)), yb.to(device)) for xb, yb in val_dl) / len(val_dl)
+                    print(f'Validation loss: {val_loss}')
 
     # TODO(PyTorch) replace
     # Run a final prediction on all regions
