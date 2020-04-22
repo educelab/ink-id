@@ -121,6 +121,7 @@ class Subvolume3DcnnModel(torch.nn.Module):
         # TODO look up actual 3D architectures commonly used and try that
         # TODO some way to indicate to batch norm and dropout if we are training
         # TODO remove all old code across files
+        # TODO add AUC metric
 
         self.conv1 = torch.nn.Conv3d(in_channels=1, out_channels=filters[0], kernel_size=3, stride=1, padding=1)
         self.batch_norm1 = torch.nn.BatchNorm3d(num_features=filters[0], momentum=batch_norm_momentum)

@@ -131,8 +131,8 @@ def main():
     parser.add_argument('--prediction-grid-spacing', metavar='n', type=int,
                         help='prediction points will be taken from an NxN grid')
     parser.add_argument('--validation-max-samples', metavar='n', type=int)
-    parser.add_argument('--summary-every-n-steps', metavar='n', type=int)
-    parser.add_argument('--save-checkpoint-every-n-steps', metavar='n', type=int)
+    parser.add_argument('--summary-every-n-batches', metavar='n', type=int)
+    parser.add_argument('--save-checkpoint-every-n-batches', metavar='n', type=int)
     parser.add_argument('--validate-every-n-checkpoints', metavar='n', type=int)
     parser.add_argument('--predict-every-n-checkpoints', metavar='n', type=int)
     parser.add_argument('--final-prediction-on-all', action='store_true')
@@ -382,6 +382,10 @@ def main():
     loss_func = torch.nn.CrossEntropyLoss(reduction='mean')  # TODO change with other labels
     opt = torch.optim.Adam(model.parameters(), lr=args.learning_rate)
 
+    losses = []
+    accuracy, precision, recall, fbeta = [], [], [], []
+    last_summary = time.time()
+
     # Run training loop
     for epoch in range(args.training_epochs):
         model.train()  # Turn on training mode
@@ -394,29 +398,37 @@ def main():
             if args.label_type == 'ink_classes':
                 _, yb = yb.max(1)  # Argmax
             loss = loss_func(pred, yb)
+            losses.append(float(loss))
 
             loss.backward()
             opt.step()
             opt.zero_grad()
 
-            batch_end = time.time()
-
             if args.label_type == 'ink_classes':
-                accuracy = inkid.metrics.accuracy(pred, yb)
-                precision = inkid.metrics.precision(pred, yb)
-                recall = inkid.metrics.recall(pred, yb)
-                fbeta = inkid.metrics.fbeta(pred, yb)
-                print('Batch: {:>5d}/{:<5d} Loss: {:6.4g} Accuracy: {:5.2g} Precision: {:5.2g} Recall: {:5.2g} FBeta: {:5.2g}'
-                      ' Seconds: {:5.3g}'
-                      .format(batch_num, total_batches, loss, accuracy, precision, recall, fbeta, batch_end - batch_start))
-            else:
-                print('Batch: {:>3d} Loss: {:6.4g} Seconds: {:5.2g}'.format(batch_num, loss, batch_end - batch_start))
+                accuracy.append(inkid.metrics.accuracy(pred, yb))
+                precision.append(inkid.metrics.precision(pred, yb))
+                recall.append(inkid.metrics.recall(pred, yb))
+                fbeta.append(inkid.metrics.fbeta(pred, yb))
 
-        # Periodic evaluation on validation set/prediction image
-        model.eval()  # Turn off training mode for batch norm and dropout purposes
-        with torch.no_grad():
-            val_loss = sum(loss_func(model(xb), yb) for xb, yb in val_dl) / len(val_dl)
-            print(epoch, val_loss)
+            if batch_num % args.summary_every_n_batches == 0:
+                if args.label_type == 'ink_classes':
+                    print('Batch: {:>5d}/{:<5d} Loss: {:6.4g} Accuracy: {:5.2g} Precision: {:5.2g} Recall: {:5.2g} FBeta: {:5.2g}'
+                          ' Seconds: {:5.3g}'
+                          .format(batch_num, total_batches, np.mean(losses), np.mean(accuracy), np.mean(precision),
+                                  np.mean(recall), np.mean(fbeta), time.time() - last_summary))
+                else:
+                    print('Batch: {:>3d} Loss: {:6.4g} Seconds: {:5.2g}'.format(batch_num, np.mean(losses),
+                                                                                time.time() - last_summary))
+                last_summary = time.time()
+
+            if batch_num % args.save_checkpoint_every_n_batches == 0:
+                # TODO save weights
+                # Periodic evaluation on validation set/prediction image
+                model.eval()  # Turn off training mode for batch norm and dropout purposes
+                with torch.no_grad():
+
+                    val_loss = sum(loss_func(model(xb), yb) for xb, yb in val_dl) / len(val_dl)
+                    print(epoch, val_loss)
 
     # TODO(PyTorch) replace
     # Run the training process. Predictions are run during training
