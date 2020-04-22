@@ -442,12 +442,12 @@ def main():
                     # Prediction image
                     total_checkpoints += 1
                     if args.label_type == 'ink_classes':
-                        predictions = []
-                        points = []
+                        predictions = np.array([])
+                        points = np.array([])
                         for p_xb, p_points in pred_dl:
-                            predictions.append(model(p_xb.to(device)))
-                            points.append(p_points)
-                            print(len(predictions))
+                            predictions = np.append(predictions, model(p_xb.to(device)).detach().numpy(), axis=0)
+                            points = np.append(points, p_points.numpy(), axis=0)
+                            print(len(predictions), len(points))
                     #     for prediction in predictions:
                     #         self._region_set.reconstruct_predicted_ink_classes(
                     #             np.array([prediction['region_id']]),
