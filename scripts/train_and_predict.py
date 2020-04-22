@@ -385,6 +385,7 @@ def main():
     # Run training loop
     for epoch in range(args.training_epochs):
         model.train()  # Turn on training mode
+        total_batches = len(train_dl)
         for batch_num, (xb, yb) in enumerate(train_dl):
             batch_start = time.time()
             xb = xb.to(device)
@@ -405,9 +406,9 @@ def main():
                 precision = inkid.metrics.precision(pred, yb)
                 recall = inkid.metrics.recall(pred, yb)
                 fbeta = inkid.metrics.fbeta(pred, yb)
-                print('Batch: {:>3d} Loss: {:6.4g} Accuracy: {:5.2g} Precision: {:5.2g} Recall: {:5.2g} FBeta: {:5.2g}'
+                print('Batch: {:>5d}/{:<5d} Loss: {:6.4g} Accuracy: {:5.2g} Precision: {:5.2g} Recall: {:5.2g} FBeta: {:5.2g}'
                       ' Seconds: {:5.3g}'
-                      .format(batch_num, loss, accuracy, precision, recall, fbeta, batch_end - batch_start))
+                      .format(batch_num, total_batches, loss, accuracy, precision, recall, fbeta, batch_end - batch_start))
             else:
                 print('Batch: {:>3d} Loss: {:6.4g} Seconds: {:5.2g}'.format(batch_num, loss, batch_end - batch_start))
 
