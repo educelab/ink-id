@@ -7,7 +7,6 @@ from jsmin import jsmin
 import numpy as np
 import tensorflow as tf
 import torch
-from torchvision import transforms
 
 import inkid
 
