@@ -16,6 +16,7 @@ out/
 env/
 venv/
 env-*/
+.venv/
 tmp/
 
 Pipfile*
