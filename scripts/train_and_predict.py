@@ -460,25 +460,23 @@ def main():
                         regions.save_predictions(os.path.join(output_path, 'predictions'), f'{epoch}_{batch_num}')
                         regions.reset_predictions()
                     elif args.label_type == 'rgb_values':
-                        if self._total_checkpoints % self._predict_every_n_checkpoints == 0:
-                            predictions = self._estimator.predict(
-                                self._predict_input_fn,
-                                predict_keys=[
-                                    'region_id',
-                                    'ppm_xy',
-                                    'rgb',
-                                ],
+                        predictions = None
+                        points = None
+                        for p_xb, p_points in pred_dl:
+                            p_pred = model(p_xb.to(device)).cpu().numpy()
+                            p_points = p_points.numpy()
+                            predictions = np.append(predictions, p_pred, axis=0) if predictions is not None else p_pred
+                            points = np.append(points, p_points, axis=0) if points is not None else p_points
+                        for prediction, point in zip(predictions, points):
+                            region_id, x, y = point
+                            regions.reconstruct_predicted_rgb(
+                                np.array([region_id]),
+                                np.array([prediction]),
+                                np.array([[x, y]]),
                             )
-                            for prediction, point in zip(predictions, points):
-                                regions.reconstruct_predicted_rgb(
-                                    np.array([prediction['region_id']]),
-                                    np.array([prediction['rgb']]),
-                                    np.array([prediction['ppm_xy']]),
-                                )
-                            self._region_set.save_predictions(self._predictions_dir, global_step)
-                            self._region_set.reset_predictions()
+                        regions.save_predictions(os.path.join(output_path, 'predictions'), f'{epoch}_{batch_num}')
+                        regions.reset_predictions()
                     print('done')
-
 
 
     # TODO(PyTorch) replace
