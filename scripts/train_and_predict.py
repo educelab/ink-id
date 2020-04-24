@@ -32,6 +32,8 @@ import configargparse
 import git
 import numpy as np
 import torch
+import torch.nn as nn
+import torch.nn.functional as F
 import torchsummary
 
 import inkid
@@ -167,6 +169,9 @@ def main():
     else:
         model_path = output_path
 
+    # Define directory for prediction images
+    predictions_dir = os.path.join(output_path, 'predictions')
+
     # If input file is a PPM, treat this as a texturing module
     # Skip training, run a prediction on all regions, require trained model, require slices dir
     _, file_extension = os.path.splitext(args.data)
@@ -270,18 +275,20 @@ def main():
         label_fn = regions.point_to_ink_classes_label
         output_size = 2
         metrics = {
-            'loss': torch.nn.CrossEntropyLoss(reduction='mean'),
+            'loss': nn.CrossEntropyLoss(reduction='mean'),
             'accuracy': inkid.metrics.accuracy,
             'precision': inkid.metrics.precision,
             'recall': inkid.metrics.recall,
             'fbeta': inkid.metrics.fbeta
         }
+        reconstruct_fn = regions.reconstruct_predicted_ink_classes
     elif args.label_type == 'rgb_values':
         label_fn = regions.point_to_rgb_values_label
         output_size = 3
         metrics = {
-            'loss': torch.nn.SmoothL1Loss()
+            'loss': nn.SmoothL1Loss(reduction='mean')
         }
+        reconstruct_fn = regions.reconstruct_predicted_rgb
     else:
         print('Label type not recognized: {}'.format(args.label_type))
         return
@@ -330,14 +337,14 @@ def main():
     for epoch in range(args.training_epochs):
         model.train()  # Turn on training mode
         total_batches = len(train_dl)
-        for batch_num, (x_b, y_b) in enumerate(train_dl):
-            x_b = x_b.to(device)
-            y_b = y_b.to(device)
-            pred = model(x_b)
+        for batch_num, (xb, yb) in enumerate(train_dl):
+            xb = xb.to(device)
+            yb = yb.to(device)
+            pred = model(xb)
             if args.label_type == 'ink_classes':
-                _, y_b = y_b.max(1)  # Argmax
+                _, yb = yb.max(1)  # Argmax
             for metric in metrics:
-                metric_results[metric].append(metrics[metric](pred, y_b))
+                metric_results[metric].append(metrics[metric](pred, yb))
 
             metric_results['loss'].backward()
             opt.step()
@@ -358,49 +365,33 @@ def main():
                 with torch.no_grad():
                     # Evaluation on validation set
                     print('Evaluating on validation set... ', end='')
+                    losses = []
                     if args.label_type == 'ink_classes':
-                        val_loss = sum(loss_func(model(xb.to(device)), yb.to(device).max(1)[1]) for xb, yb in val_dl) \
-                                   / len(val_dl)  # TODO LEFT OFF
-                    elif args.label_type == 'rgb_values':
-                        val_loss = sum(loss_func(model(xb.to(device)), yb.to(device)) for xb, yb in val_dl) \
-                                   / len(val_dl)
-                    print(f'done (loss: {val_loss})')
+                        for vxb, vyb in val_dl:
+                            pred = model(vxb.to(device))
+                            vyb = vyb.to(device)
+                            if args.label_type == 'ink_classes':
+                                _, vyb = vyb.max(1)  # Argmax
+                            losses.append(metrics['loss'](pred, vyb))
+                    print(f'done (loss: {sum(losses) / len(losses)})')
 
                     # Prediction image
                     print('Generating prediction image... ', end='')
                     if args.label_type == 'ink_classes':
-                        predictions = None
-                        points = None
-                        for p_xb, p_points in pred_dl:
-                            p_pred = torch.nn.functional.softmax(model(p_xb.to(device)), dim=1).cpu().numpy()
-                            p_points = p_points.numpy()
-                            predictions = np.append(predictions, p_pred, axis=0) if predictions is not None else p_pred
-                            points = np.append(points, p_points, axis=0) if points is not None else p_points
+                        predictions = np.empty(shape=(0, output_size))
+                        points = np.empty(shape=(0, 3))
+                        for pxb, pts in pred_dl:
+                            pred = model(pxb.to(device))
+                            if args.label_type == 'ink_classes':
+                                pred = F.softmax(pred, dim=1)
+                            pred = pred.cpu().numpy()
+                            pts = pts.numpy()
+                            predictions = np.append(predictions, pred, axis=0)
+                            points = np.append(points, pts, axis=0)
                         for prediction, point in zip(predictions, points):
                             region_id, x, y = point
-                            regions.reconstruct_predicted_ink_classes(
-                                np.array([region_id]),
-                                np.array([prediction]),
-                                np.array([[x, y]]),
-                            )
-                        regions.save_predictions(os.path.join(output_path, 'predictions'), f'{epoch}_{batch_num}')
-                        regions.reset_predictions()
-                    elif args.label_type == 'rgb_values':
-                        predictions = None
-                        points = None
-                        for p_xb, p_points in pred_dl:
-                            p_pred = model(p_xb.to(device)).cpu().numpy()
-                            p_points = p_points.numpy()
-                            predictions = np.append(predictions, p_pred, axis=0) if predictions is not None else p_pred
-                            points = np.append(points, p_points, axis=0) if points is not None else p_points
-                        for prediction, point in zip(predictions, points):
-                            region_id, x, y = point
-                            regions.reconstruct_predicted_rgb(
-                                np.array([region_id]),
-                                np.array([prediction]),
-                                np.array([[x, y]]),
-                            )
-                        regions.save_predictions(os.path.join(output_path, 'predictions'), f'{epoch}_{batch_num}')
+                            reconstruct_fn([region_id], [prediction], [[x, y]])
+                        regions.save_predictions(predictions_dir, f'{epoch}_{batch_num}')
                         regions.reset_predictions()
                     print('done')
 
