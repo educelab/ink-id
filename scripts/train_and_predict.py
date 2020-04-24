@@ -18,14 +18,12 @@ the prediction and validation sets for that run.
 
 """
 
-from contextlib import ExitStack
 import datetime
 import functools
 import inspect
 import json
 import multiprocessing
 import os
-import random
 import sys
 import time
 import timeit
@@ -53,7 +51,7 @@ def main():
 
     # Config file
     parser.add_argument('-c', '--config-file', metavar='path', is_config_file=True,
-                        help='file with pre-specified arguments (in addition to pre-loaded defaults)')
+                        help='file of pre-specified arguments (in addition to pre-loaded defaults)')
 
     # Region set modifications
     parser.add_argument('-k', metavar='num', default=None, type=int,
@@ -135,17 +133,6 @@ def main():
     parser.add_argument('--checkpoint-every-n-batches', metavar='n', type=int)
     parser.add_argument('--final-prediction-on-all', action='store_true')
     parser.add_argument('--skip-training', action='store_true')
-    parser.add_argument('--training-shuffle-seed', metavar='n', type=int, default=random.randint(0, 10000))
-
-    # Logging/metadata
-    # TODO(pytorch) make sure these accounted for/changed if needed
-    parser.add_argument('--val-metrics-to-write', metavar='metric', nargs='*',
-                        default=[
-                            'area_under_roc_curve',
-                            'loss'
-                        ],
-                        help='will try the final value for each of these val metrics and '
-                             'add it to metadata file.')
 
     # Rclone
     parser.add_argument('--rclone-transfer-remote', metavar='remote', default=None,
@@ -191,14 +178,14 @@ def main():
         if args.override_volume_slices_dir is None:
             print("Volume (--override-volume-slices-dir) required when texturing a .ppm file.")
             return
-        print("PPM input file provided. Automatically skipping training and running a final prediction on all.")
+        print("PPM input file provided. Skipping training and running final prediction on all.")
         args.skip_training = True
         args.final_prediction_on_all = True
 
     # Transform the input file into region set, can handle JSON or PPM
     region_data = inkid.data.RegionSet.get_data_from_file(args.data)
 
-    # Override the volume slices directory (iff there is only one volume specified anywhere in the region set)
+    # Override volume slices directory (iff only one volume specified in the region set)
     if args.override_volume_slices_dir is not None:
         volume_dirs_seen = set()
         for ppm in region_data['ppms']:
@@ -209,7 +196,7 @@ def main():
         for ppm in region_data['ppms']:
             region_data['ppms'][ppm]['volume'] = args.override_volume_slices_dir
 
-    # If this is a k-fold cross-validation job, remove kth region from training and put in prediction/validation sets
+    # If k-fold job, remove kth region from training and put in prediction/validation sets
     if args.k is not None:
         k_region = region_data['regions']['training'].pop(int(args.k))
         region_data['regions']['prediction'].append(k_region)
@@ -234,63 +221,8 @@ def main():
         metadata['Git hash'] = 'No git hash available (unable to find valid repository).'
 
     # Write preliminary metadata to file
-    with open(os.path.join(output_path, 'metadata.json'), 'w') as f:
-        f.write(json.dumps(metadata, indent=4, sort_keys=False))
-
-    # TODO(PyTorch) remove
-    # Save checkpoints every n steps. EvalCheckpointSaverListener
-    # (below) runs a validation each time this happens.
-    # run_config = tf.estimator.RunConfig(
-    #     save_checkpoints_steps=args.save_checkpoint_every_n_steps,
-    #     keep_checkpoint_max=None,  # save all checkpoints
-    # )
-
-    # TODO(PyTorch) remove
-    # Create an Estimator with the run configuration, hyperparameters,
-    # and model directory specified.
-    # estimator = tf.estimator.Estimator(
-    #     model_fn={
-    #         'ink_classes': inkid.model.ink_classes_model_fn,
-    #         'rgb_values': inkid.model.rgb_values_model_fn,
-    #     }[args.label_type],
-    #     model_dir=model_path,
-    #     config=run_config,
-    #     params={
-    #         'drop_rate': args.drop_rate,
-    #         'subvolume_shape': args.subvolume_shape,
-    #         'pad_to_shape': args.pad_to_shape,
-    #         'length_in_each_direction': args.length_in_each_direction,
-    #         'batch_norm_momentum': args.batch_norm_momentum,
-    #         'no_batch_norm': args.no_batch_norm,
-    #         'filters': args.filters,
-    #         'learning_rate': args.learning_rate,
-    #         'fbeta_weight': args.fbeta_weight,
-    #         'feature_type': args.feature_type,
-    #         'label_type': args.label_type,
-    #         'adagrad_optimizer': args.adagrad_optimizer,
-    #         'decay_steps': args.decay_steps,
-    #         'decay_rate': args.decay_rate,
-    #     },
-    # )
-
-    # TODO(PyTorch) remove
-    # Define tensors to be shown in a "summary" step.
-    # if args.label_type == 'ink_classes':
-    #     tensors_to_log = {
-    #         'train_accuracy': 'train_accuracy',
-    #         'train_precision': 'train_precision',
-    #         'train_recall': 'train_recall',
-    #         'train_fbeta_score': 'train_fbeta_score',
-    #         'train_positives': 'train_positives',
-    #         'train_negatives': 'train_negatives',
-    #     }
-    # else:
-    #     tensors_to_log = {}
-    # logging_hook = tf.estimator.LoggingTensorHook(
-    #     tensors=tensors_to_log,
-    #     every_n_iter=args.summary_every_n_steps,
-    # )
-    # tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.INFO)
+    with open(os.path.join(output_path, 'metadata.json'), 'w') as metadata_file:
+        metadata_file.write(json.dumps(metadata, indent=4, sort_keys=False))
 
     # Define the feature inputs to the network
     if args.feature_type == 'subvolume_3dcnn':
@@ -337,9 +269,19 @@ def main():
     if args.label_type == 'ink_classes':
         label_fn = regions.point_to_ink_classes_label
         output_size = 2
+        metrics = {
+            'loss': torch.nn.CrossEntropyLoss(reduction='mean'),
+            'accuracy': inkid.metrics.accuracy,
+            'precision': inkid.metrics.precision,
+            'recall': inkid.metrics.recall,
+            'fbeta': inkid.metrics.fbeta
+        }
     elif args.label_type == 'rgb_values':
         label_fn = regions.point_to_rgb_values_label
         output_size = 3
+        metrics = {
+            'loss': torch.nn.SmoothL1Loss()
+        }
     else:
         print('Label type not recognized: {}'.format(args.label_type))
         return
@@ -349,8 +291,10 @@ def main():
     val_ds = inkid.data.PointsDataset(regions, ['validation'], validation_features_fn, label_fn)
     # Only take n samples for validation, not the entire region
     if args.validation_max_samples < len(val_ds):
-        val_ds = torch.utils.data.random_split(val_ds, [args.validation_max_samples,
-                                                        len(val_ds) - args.validation_max_samples])[0]
+        val_ds = torch.utils.data.random_split(
+            val_ds,
+            [args.validation_max_samples, len(val_ds) - args.validation_max_samples]
+            )[0]
     pred_ds = inkid.data.PointsDataset(regions, ['prediction'], prediction_features_fn, lambda p: p,
                                        grid_spacing=args.prediction_grid_spacing)
 
@@ -365,65 +309,48 @@ def main():
 
     # Create the model for training
     if args.feature_type == 'subvolume_3dcnn':
-        model = inkid.model.Subvolume3DcnnModel(args.drop_rate, args.subvolume_shape, args.pad_to_shape,
-                                                args.batch_norm_momentum, args.no_batch_norm, args.filters, output_size)
+        model = inkid.model.Subvolume3DcnnModel(
+            args.drop_rate, args.subvolume_shape, args.pad_to_shape,
+            args.batch_norm_momentum, args.no_batch_norm, args.filters, output_size)
     else:
         print('Feature type: {} does not yet have a PyTorch model.'.format(args.feature_type))
         return
     model = model.to(device)
     # Print summary of model
     device_str = "cuda" if torch.cuda.is_available() else "cpu"
-    if args.pad_to_shape:
-        torchsummary.summary(model, input_size=(1,) + tuple(args.pad_to_shape), batch_size=args.batch_size, device=device_str)
-    else:
-        torchsummary.summary(model, input_size=(1,) + tuple(args.subvolume_shape), batch_size=args.batch_size, device=device_str)
-    # Define loss function and optimizer
-    loss_func = torch.nn.CrossEntropyLoss(reduction='mean')  # TODO change with other labels
+    shape = (1,) + tuple(args.pad_to_shape or args.subvolume_shape)
+    torchsummary.summary(model, input_size=shape, batch_size=args.batch_size, device=device_str)
+    # Define optimizer
     opt = torch.optim.Adam(model.parameters(), lr=args.learning_rate)
 
-    losses = []
-    accuracy, precision, recall, fbeta = [], [], [], []
+    metric_results = {metric: [] for metric in metrics}
     last_summary = time.time()
-    total_checkpoints = 0
 
     # Run training loop
     for epoch in range(args.training_epochs):
         model.train()  # Turn on training mode
         total_batches = len(train_dl)
-        for batch_num, (xb, yb) in enumerate(train_dl):
-            xb = xb.to(device)
-            yb = yb.to(device)
-            pred = model(xb)
+        for batch_num, (x_b, y_b) in enumerate(train_dl):
+            x_b = x_b.to(device)
+            y_b = y_b.to(device)
+            pred = model(x_b)
             if args.label_type == 'ink_classes':
-                _, yb = yb.max(1)  # Argmax
-            loss = loss_func(pred, yb)
-            losses.append(float(loss))
+                _, y_b = y_b.max(1)  # Argmax
+            for metric in metrics:
+                metric_results[metric].append(metrics[metric](pred, y_b))
 
-            loss.backward()
+            metric_results['loss'].backward()
             opt.step()
             opt.zero_grad()
 
-            if args.label_type == 'ink_classes':
-                accuracy.append(inkid.metrics.accuracy(pred, yb))
-                precision.append(inkid.metrics.precision(pred, yb))
-                recall.append(inkid.metrics.recall(pred, yb))
-                fbeta.append(inkid.metrics.fbeta(pred, yb))
-
             if batch_num % args.summary_every_n_batches == 0:
-                if args.label_type == 'ink_classes':
-                    print('Batch: {:>5d}/{:<5d} Loss: {:6.4g} Accuracy: {:5.2g} Precision: {:5.2g} Recall: {:5.2g} FBeta: {:5.2g}'
-                          ' Seconds: {:5.3g}'
-                          .format(batch_num, total_batches, np.mean(losses), np.mean(accuracy), np.mean(precision),
-                                  np.mean(recall), np.mean(fbeta), time.time() - last_summary))
-                    accuracy.clear()
-                    precision.clear()
-                    recall.clear()
-                    fbeta.clear()
-                else:
-                    print('Batch: {:>3d} Loss: {:6.4g} Seconds: {:5.2g}'.format(batch_num, np.mean(losses),
-                                                                                time.time() - last_summary))
+                print('Batch: {:>5d}/{:<5d} {} Seconds: {:5.3g}'.format(
+                    batch_num, total_batches,
+                    ' '.join([f'{met}: {np.mean(metric_results[met]):5.2g}' for met in metrics]),
+                    time.time() - last_summary))
+                for metric in metrics:
+                    metric_results[metric].clear()
                 last_summary = time.time()
-                losses.clear()
 
             if batch_num % args.checkpoint_every_n_batches == 0:
                 # Periodic evaluation and prediction
@@ -433,14 +360,13 @@ def main():
                     print('Evaluating on validation set... ', end='')
                     if args.label_type == 'ink_classes':
                         val_loss = sum(loss_func(model(xb.to(device)), yb.to(device).max(1)[1]) for xb, yb in val_dl) \
-                                   / len(val_dl)
+                                   / len(val_dl)  # TODO LEFT OFF
                     elif args.label_type == 'rgb_values':
                         val_loss = sum(loss_func(model(xb.to(device)), yb.to(device)) for xb, yb in val_dl) \
                                    / len(val_dl)
                     print(f'done (loss: {val_loss})')
 
                     # Prediction image
-                    total_checkpoints += 1
                     print('Generating prediction image... ', end='')
                     if args.label_type == 'ink_classes':
                         predictions = None
