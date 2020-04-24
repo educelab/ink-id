@@ -24,7 +24,6 @@ setup(
         'progressbar2',
         'pylint',
         'sphinx',
-        'tensorflow',
         'torch',
         'torchvision',
         'wand',

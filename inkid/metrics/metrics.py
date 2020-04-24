@@ -20,12 +20,12 @@ def confusion(prediction, truth):
 
 
 def recall(pred, yb):
-    tp, fp, tn, fn = confusion(pred, yb)
+    tp, _, _, fn = confusion(pred, yb)
     return 1 if tp + fn == 0 else tp / (tp + fn)
 
 
 def precision(pred, yb):
-    tp, fp, tn, fn = confusion(pred, yb)
+    tp, fp, _, _ = confusion(pred, yb)
     return 1 if tp + fp == 0 else tp / (tp + fp)
 
 

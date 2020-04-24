@@ -1,11 +1,9 @@
 import json
-import multiprocessing
 import os
 import sys
 
 from jsmin import jsmin
 import numpy as np
-import tensorflow as tf
 import torch
 
 import inkid
@@ -102,7 +100,7 @@ class RegionSet:
         """
         for ppm in data['ppms']:
             for key in data['ppms'][ppm]:
-                if type(data['ppms'][ppm][key]) == str:
+                if isinstance(data['ppms'][ppm][key], str):
                     data['ppms'][ppm][key] = os.path.normpath(
                         os.path.join(
                             paths_were_relative_to,
@@ -149,97 +147,6 @@ class RegionSet:
 
         return self._ppms[ppm_name]
 
-    def create_tf_input_fn(self, region_groups, batch_size,
-                           features_fn, label_fn=None, epochs=None,
-                           max_samples=-1, perform_shuffle=None,
-                           shuffle_seed=None,
-                           grid_spacing=None,
-                           probability_of_selection=None,
-                           premade_points_generator=None,
-                           threads=multiprocessing.cpu_count(),
-                           skip_batches=None):
-        """Generate Tensorflow input_fn function for the model/network.
-
-        A Tensorflow Estimator requires an input_fn to be passed to
-        any call such as .train(), .validate() or .predict(). The
-        input_fn should return Tensorflow Dataset iterators over the
-        batch features and labels.
-
-        The user can define their own functions features_fn and
-        label_fn, each of which takes as input a region_id and (x, y)
-        point in that region - and then returns either the network
-        input feature, or the expected label.
-
-        This function then takes those two functions and some
-        parameters for the Dataset, then builds and returns a function
-        to be used as the input_fn for the Tensorflow Estimator.
-
-        """
-
-        def tf_input_fn():
-            # It is also possible to create a Dataset using
-            # .from_tensor_slices(), to which you can pass a
-            # np.array() of the already calculated set of points. For
-            # some reason this saves a lot of information in the
-            # graph.pbtxt file and makes the graph file impossibly
-            # large for Tensorboard to parse it and show you
-            # anything. Using .from_generator() instead does not do
-            # this. Practically they are the same.
-            if premade_points_generator is None:
-                dataset = tf.data.Dataset.from_generator(
-                    self.get_points_generator(
-                        region_groups=region_groups,
-                        perform_shuffle=perform_shuffle,
-                        shuffle_seed=shuffle_seed,
-                        grid_spacing=grid_spacing,
-                        probability_of_selection=probability_of_selection,
-                    ),
-                    tf.int64,
-                )
-            else:
-                dataset = tf.data.Dataset.from_generator(
-                    premade_points_generator,
-                    tf.int64
-                )
-
-            # dataset = dataset.map(
-            #     create_point_to_network_input_function(
-            #         features_fn=features_fn,
-            #         label_fn=label_fn,
-            #     ),
-            #     num_parallel_calls=threads
-            # )
-
-            # Filter out inputs that are all 0
-            if label_fn is None:
-                dataset = dataset.filter(
-                    lambda tensors: tf.not_equal(tf.reduce_sum(tf.abs(tensors['Input'])), 0)
-                )
-            else:
-                dataset = dataset.filter(
-                    lambda tensors, _: tf.not_equal(tf.reduce_sum(tf.abs(tensors['Input'])), 0)
-                )
-
-            if epochs is not None:
-                dataset = dataset.repeat(epochs)
-
-            dataset = dataset.take(max_samples)
-            dataset = dataset.batch(batch_size)
-
-            if skip_batches is not None:
-                dataset = dataset.skip(skip_batches)
-
-            dataset = dataset.prefetch(1)
-
-            if label_fn is None:
-                batch_features = dataset.make_one_shot_iterator().get_next()
-                return batch_features, None
-            else:
-                batch_features, batch_labels = dataset.make_one_shot_iterator().get_next()
-                return batch_features, batch_labels
-
-        return tf_input_fn
-
     def get_points(self, region_groups,
                    perform_shuffle=False, shuffle_seed=None,
                    grid_spacing=None,
@@ -251,7 +158,7 @@ class RegionSet:
                 such as batching.
 
                 """
-        if type(region_groups) == str:
+        if isinstance(region_groups, str):
             region_groups = [region_groups]
         print('Fetching points for region groups: {}... '
               .format(region_groups), end='')
@@ -271,7 +178,7 @@ class RegionSet:
             sys.stdout.flush()
             if shuffle_seed is not None:
                 np.random.seed(shuffle_seed)
-            # Tensorflow Dataset objects also have a .shuffle() method
+            # Dataset objects also have a .shuffle() method
             # which would be a more natural fit, but it is much slower
             # in practice.
             np.random.shuffle(points)
