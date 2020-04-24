@@ -23,7 +23,7 @@ setup(
         'Pillow',
         'progressbar2',
         'pylint',
-        'sklearn',
+        'scikit-learn',
         'sphinx',
         'torch',
         'torchvision',

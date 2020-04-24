@@ -23,9 +23,10 @@ h5py==2.10.0
 idna==2.8
 imageio==2.6.1
 imagesize==1.2.0
--e git+git@code.cs.uky.edu:seales-research/ink-id.git@9cb03cce9fc41aebbf4e7c7d333e24e8336c2cd0#egg=inkid
+-e git+git@code.cs.uky.edu:seales-research/ink-id.git@40d13ed4bd78e2d53c8cca14ebeabff642976ed0#egg=inkid
 isort==4.3.21
 Jinja2==2.11.1
+joblib==0.14.1
 jsmin==2.2.2
 Keras-Applications==1.0.8
 Keras-Preprocessing==1.1.0
@@ -56,6 +57,7 @@ pytz==2019.3
 requests==2.22.0
 requests-oauthlib==1.3.0
 rsa==4.0
+scikit-learn==0.22.2.post1
 scipy==1.4.1
 six==1.14.0
 smmap2==2.0.5
