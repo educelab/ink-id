@@ -279,7 +279,8 @@ def main():
             'accuracy': inkid.metrics.accuracy,
             'precision': inkid.metrics.precision,
             'recall': inkid.metrics.recall,
-            'fbeta': inkid.metrics.fbeta
+            'fbeta': inkid.metrics.fbeta,
+            'auc': inkid.metrics.auc
         }
         reconstruct_fn = regions.reconstruct_predicted_ink_classes
     elif args.label_type == 'rgb_values':

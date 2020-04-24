@@ -1,9 +1,12 @@
+from sklearn.metrics import roc_auc_score
 import torch
 
 
 # https://gist.github.com/the-bass/cae9f3976866776dea17a5049013258d
 def confusion(prediction, truth):
-    confusion_vector = prediction.max(1)[1].float() / truth.float()
+    print(prediction)
+    print(truth)
+    confusion_vector = prediction.max(1)[1].float() / truth.float()  # TODO check this does what I think
     # Element-wise division of the 2 tensors returns a new tensor which holds a
     # unique value for each case:
     #   1     where prediction and truth are 1 (True Positive)
@@ -38,3 +41,7 @@ def fbeta(pred, yb, beta=0.3):
 def accuracy(pred, yb):
     tp, fp, tn, fn = confusion(pred, yb)
     return (tp + tn) / (tp + fp + tn + fn)
+
+
+def auc(pred, yb):
+    return roc_auc_score(yb.numpy(), pred.numpy())
