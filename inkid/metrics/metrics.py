@@ -4,9 +4,8 @@ import torch
 
 # https://gist.github.com/the-bass/cae9f3976866776dea17a5049013258d
 def confusion(prediction, truth):
-    print(prediction)
-    print(truth)
-    confusion_vector = prediction.max(1)[1].float() / truth.float()  # TODO check this does what I think
+    _, prediction = prediction.max(1)  # Argmax
+    confusion_vector = prediction.float() / truth.float()
     # Element-wise division of the 2 tensors returns a new tensor which holds a
     # unique value for each case:
     #   1     where prediction and truth are 1 (True Positive)
@@ -44,4 +43,5 @@ def accuracy(pred, yb):
 
 
 def auc(pred, yb):
-    return roc_auc_score(yb.numpy(), pred.numpy())
+    _, pred = pred.max(1)  # Argmax
+    return roc_auc_score(yb.cpu().numpy(), pred.cpu().numpy())
