@@ -344,20 +344,20 @@ def main():
             pred = model(xb)
             if args.label_type == 'ink_classes':
                 _, yb = yb.max(1)  # Argmax
-            for metric in metrics:
-                metric_results[metric].append(metrics[metric](pred, yb))
+            for metric, fn in metrics.items():
+                metric_results[metric].append(fn(pred, yb))
 
-            metric_results['loss'].backward()
+            metric_results['loss'][-1].backward()
             opt.step()
             opt.zero_grad()
 
             if batch_num % args.summary_every_n_batches == 0:
                 print('Batch: {:>5d}/{:<5d} {} Seconds: {:5.3g}'.format(
                     batch_num, total_batches,
-                    ' '.join([f'{met}: {np.mean(metric_results[met]):5.2g}' for met in metrics]),
+                    ' '.join([k + ': ' + f'{np.mean([float(i) for i in v]):5.2g}' for k, v in metric_results.items()]),
                     time.time() - last_summary))
-                for metric in metrics:
-                    metric_results[metric].clear()
+                for result in metric_results.values():
+                    result.clear()
                 last_summary = time.time()
 
             if batch_num % args.checkpoint_every_n_batches == 0:
