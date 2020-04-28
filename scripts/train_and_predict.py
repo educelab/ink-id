@@ -81,6 +81,8 @@ def main():
                             'ink_classes',
                             'rgb_values',
                         ])
+    parser.add_argument('--label-dim', metavar='n', default=1, 
+                        help='dimensionality of labels', choices=[1, 2])
 
     # Subvolumes
     parser.add_argument('--subvolume-method', metavar='name', default='nearest_neighbor',
@@ -239,6 +241,7 @@ def main():
             method=args.subvolume_method,
             normalize=args.normalize_subvolumes,
             pad_to_shape=args.pad_to_shape,
+            label_dim=args.label_dim
         )
         training_features_fn = functools.partial(
             point_to_subvolume_input,

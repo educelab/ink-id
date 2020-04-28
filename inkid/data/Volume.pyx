@@ -392,7 +392,8 @@ cdef class Volume:
 
     def get_subvolume(self, center, shape, normal, out_of_bounds,
                       move_along_normal, jitter_max,
-                      augment_subvolume, method, normalize, pad_to_shape):
+                      augment_subvolume, method, normalize, pad_to_shape,
+                      label_dim):
         """Get a subvolume from a center point and normal vector.
 
         At the time of writing, this function very closely resembles

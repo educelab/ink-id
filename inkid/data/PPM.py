@@ -202,7 +202,7 @@ class PPM:
                            out_of_bounds=None, move_along_normal=None,
                            jitter_max=None, augment_subvolume=None,
                            method=None, normalize=None,
-                           pad_to_shape=None):
+                           pad_to_shape=None, label_dim=None):
         ppm_x, ppm_y = point
         x, y, z, n_x, n_y, n_z = self.get_point_with_normal(ppm_x, ppm_y)
         return self._volume.get_subvolume(
@@ -216,6 +216,7 @@ class PPM:
             method=method,
             normalize=normalize,
             pad_to_shape=pad_to_shape,
+            label_dim=label_dim
         )
 
     def reconstruct_predicted_ink_classes(self, class_probabilities, ppm_xy):

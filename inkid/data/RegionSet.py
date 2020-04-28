@@ -218,7 +218,8 @@ class RegionSet:
                                  move_along_normal=None,
                                  jitter_max=None,
                                  augment_subvolume=None, method=None,
-                                 normalize=None, pad_to_shape=None):
+                                 normalize=None, pad_to_shape=None,
+                                 label_dim=None):
         """Take a region_id and (x, y) point, and return a subvolume.
 
         First use the PPM (x, y) to find the 3D position and normal
@@ -237,6 +238,7 @@ class RegionSet:
             method=method,
             normalize=normalize,
             pad_to_shape=pad_to_shape,
+            label_dim=label_dim
         )
         return np.asarray(subvolume, np.float32)
 
