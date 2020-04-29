@@ -1,3 +1,5 @@
+import warnings
+
 import numpy as np
 from sklearn.metrics import roc_auc_score
 import torch
@@ -52,4 +54,5 @@ def auc(pred, yb):
 
 
 def metrics_str(metric_results):
-    return ' '.join([k + ': ' + f'{np.nanmean([float(i) for i in v]):5.2g}' for k, v in metric_results.items()])
+    with warnings.catch_warnings():  # Sometimes we will take the mean of all NaNs. This is fine, just return NaN.
+        return ' '.join([k + ': ' + f'{np.nanmean([float(i) for i in v]):5.2g}' for k, v in metric_results.items()])
