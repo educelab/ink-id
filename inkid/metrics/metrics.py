@@ -55,4 +55,5 @@ def auc(pred, yb):
 
 def metrics_str(metric_results):
     with warnings.catch_warnings():  # Sometimes we will take the mean of all NaNs. This is fine, just return NaN.
+        warnings.simplefilter("ignore")
         return ' '.join([k + ': ' + f'{np.nanmean([float(i) for i in v]):5.2g}' for k, v in metric_results.items()])
