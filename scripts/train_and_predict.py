@@ -42,7 +42,6 @@ import inkid
 def perform_validation(model, dataloader, metrics, device, label_type):
     model.eval()  # Turn off training mode for batch norm and dropout purposes
     with torch.no_grad():
-        # Evaluation on validation set
         metric_results = {metric: [] for metric in metrics}
         for xb, yb in dataloader:
             pred = model(xb.to(device))
@@ -72,7 +71,7 @@ def generate_prediction_image(dataloader, model, output_size, label_type, device
     model.train()
     for prediction, point in zip(predictions, points):
         region_id, x, y = point
-        reconstruct_fn([int(region_id)], [prediction], [[x, y]])
+        reconstruct_fn(np.array([region_id]), np.array([prediction]), np.array([[x, y]]))
     region_set.save_predictions(predictions_dir, filename)
     region_set.reset_predictions()
 
