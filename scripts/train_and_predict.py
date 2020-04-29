@@ -39,25 +39,46 @@ import torchsummary
 import inkid
 
 
+def metrics_str(metric_results):
+    return ' '.join([k + ': ' + f'{np.mean([float(i) for i in v]):5.2g}' for k, v in metric_results.items()])
+
+
+def perform_validation(model, dataloader, metrics, device, label_type):
+    model.eval()  # Turn off training mode for batch norm and dropout purposes
+    with torch.no_grad():
+        # Evaluation on validation set
+        metric_results = {metric: [] for metric in metrics}
+        for xb, yb in dataloader:
+            pred = model(xb.to(device))
+            yb = yb.to(device)
+            if label_type == 'ink_classes':
+                _, yb = yb.max(1)  # Argmax
+            for metric, fn in metrics.items():
+                metric_results[metric].append(fn(pred, yb))
+    model.train()
+    return metric_results
+
+
 def generate_prediction_image(dataloader, model, output_size, label_type, device, predictions_dir, filename,
                               reconstruct_fn, region_set):
-    print('Generating prediction image: {}... '.format(filename), end='')
     predictions = np.empty(shape=(0, output_size))
     points = np.empty(shape=(0, 3))
-    for pxb, pts in dataloader:
-        pred = model(pxb.to(device))
-        if label_type == 'ink_classes':
-            pred = F.softmax(pred, dim=1)
-        pred = pred.cpu().numpy()
-        pts = pts.numpy()
-        predictions = np.append(predictions, pred, axis=0)
-        points = np.append(points, pts, axis=0)
+    model.eval()  # Turn off training mode for batch norm and dropout purposes
+    with torch.no_grad():
+        for pxb, pts in dataloader:
+            pred = model(pxb.to(device))
+            if label_type == 'ink_classes':
+                pred = F.softmax(pred, dim=1)
+            pred = pred.cpu().numpy()
+            pts = pts.numpy()
+            predictions = np.append(predictions, pred, axis=0)
+            points = np.append(points, pts, axis=0)
+    model.train()
     for prediction, point in zip(predictions, points):
         region_id, x, y = point
         reconstruct_fn([region_id], [prediction], [[x, y]])
     region_set.save_predictions(predictions_dir, filename)
     region_set.reset_predictions()
-    print('done')
 
 
 def main():
@@ -376,7 +397,7 @@ def main():
                 if batch_num % args.summary_every_n_batches == 0:
                     print('Batch: {:>5d}/{:<5d} {} Seconds: {:5.3g}'.format(
                         batch_num, total_batches,
-                        ' '.join([k + ': ' + f'{np.mean([float(i) for i in v]):5.2g}' for k, v in metric_results.items()]),
+                        metrics_str(metric_results),
                         time.time() - last_summary))
                     for result in metric_results.values():
                         result.clear()
@@ -384,23 +405,15 @@ def main():
 
                 if batch_num % args.checkpoint_every_n_batches == 0:
                     # Periodic evaluation and prediction
-                    model.eval()  # Turn off training mode for batch norm and dropout purposes
-                    with torch.no_grad():
-                        # Evaluation on validation set
-                        print('Evaluating on validation set... ', end='')
-                        losses = []
-                        if args.label_type == 'ink_classes':
-                            for vxb, vyb in val_dl:
-                                pred = model(vxb.to(device))
-                                vyb = vyb.to(device)
-                                if args.label_type == 'ink_classes':
-                                    _, vyb = vyb.max(1)  # Argmax
-                                losses.append(metrics['loss'](pred, vyb))
-                        print(f'done (loss: {sum(losses) / len(losses)})')
+                    print('Evaluating on validation set... ', end='')
+                    val_results = perform_validation(model, val_dl, metrics, device, args.label_type)
+                    print(f'done ({metrics_str(val_results)})')
 
-                        # Prediction image
-                        generate_prediction_image(pred_dl, model, output_size, args.label_type, device,
-                                                  predictions_dir, f'{epoch}_{batch_num}', reconstruct_fn, regions)
+                    # Prediction image
+                    print('Generating prediction image... ', end='')
+                    generate_prediction_image(pred_dl, model, output_size, args.label_type, device,
+                                              predictions_dir, f'{epoch}_{batch_num}', reconstruct_fn, regions)
+                    print('done')
     except KeyboardInterrupt:
         pass
 
@@ -418,18 +431,15 @@ def main():
         except KeyboardInterrupt:
             pass
 
-    # TODO(PyTorch) replace
     # Add final validation metrics to metadata
-    # metrics = {}
-    # try:
-    #     val_event_acc = EventAccumulator(os.path.join(output_path, 'val'))
-    #     val_event_acc.Reload()
-    #     for metric in args.val_metrics_to_write:
-    #         if metric in val_event_acc.Tags()['scalars']:
-    #             metrics[metric] = val_event_acc.Scalars(metric)[-1].value
-    # except KeyboardInterrupt:
-    #     pass
-    # metadata['Final validation metrics'] = metrics
+    metrics = {}
+    try:
+        print('Performing final evaluation on validation set... ', end='')
+        val_results = perform_validation(model, val_dl, metrics, device, args.label_type)
+        metadata['Final validation metrics'] = val_results
+        print(f'done ({metrics_str(val_results)})')
+    except KeyboardInterrupt:
+        pass
 
     # Add some post-run info to metadata file
     stop = timeit.default_timer()
