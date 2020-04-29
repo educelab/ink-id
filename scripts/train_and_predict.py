@@ -41,7 +41,7 @@ import inkid
 
 def generate_prediction_image(dataloader, model, output_size, label_type, device, predictions_dir, filename,
                               reconstruct_fn, region_set):
-    print('Generating prediction image {}... '.format(filename), end='')
+    print('Generating prediction image: {}... '.format(filename), end='')
     predictions = np.empty(shape=(0, output_size))
     points = np.empty(shape=(0, 3))
     for pxb, pts in dataloader:
@@ -356,54 +356,57 @@ def main():
     last_summary = time.time()
 
     # Run training loop
-    for epoch in range(args.training_epochs):
-        model.train()  # Turn on training mode
-        total_batches = len(train_dl)
-        for batch_num, (xb, yb) in enumerate(train_dl):
-            xb = xb.to(device)
-            yb = yb.to(device)
-            pred = model(xb)
-            if args.label_type == 'ink_classes':
-                _, yb = yb.max(1)  # Argmax
-            for metric, fn in metrics.items():
-                metric_results[metric].append(fn(pred, yb))
+    try:
+        for epoch in range(args.training_epochs):
+            model.train()  # Turn on training mode
+            total_batches = len(train_dl)
+            for batch_num, (xb, yb) in enumerate(train_dl):
+                xb = xb.to(device)
+                yb = yb.to(device)
+                pred = model(xb)
+                if args.label_type == 'ink_classes':
+                    _, yb = yb.max(1)  # Argmax
+                for metric, fn in metrics.items():
+                    metric_results[metric].append(fn(pred, yb))
 
-            metric_results['loss'][-1].backward()
-            opt.step()
-            opt.zero_grad()
+                metric_results['loss'][-1].backward()
+                opt.step()
+                opt.zero_grad()
 
-            if batch_num % args.summary_every_n_batches == 0:
-                print('Batch: {:>5d}/{:<5d} {} Seconds: {:5.3g}'.format(
-                    batch_num, total_batches,
-                    ' '.join([k + ': ' + f'{np.mean([float(i) for i in v]):5.2g}' for k, v in metric_results.items()]),
-                    time.time() - last_summary))
-                for result in metric_results.values():
-                    result.clear()
-                last_summary = time.time()
+                if batch_num % args.summary_every_n_batches == 0:
+                    print('Batch: {:>5d}/{:<5d} {} Seconds: {:5.3g}'.format(
+                        batch_num, total_batches,
+                        ' '.join([k + ': ' + f'{np.mean([float(i) for i in v]):5.2g}' for k, v in metric_results.items()]),
+                        time.time() - last_summary))
+                    for result in metric_results.values():
+                        result.clear()
+                    last_summary = time.time()
 
-            if batch_num % args.checkpoint_every_n_batches == 0:
-                # Periodic evaluation and prediction
-                model.eval()  # Turn off training mode for batch norm and dropout purposes
-                with torch.no_grad():
-                    # Evaluation on validation set
-                    print('Evaluating on validation set... ', end='')
-                    losses = []
-                    if args.label_type == 'ink_classes':
-                        for vxb, vyb in val_dl:
-                            pred = model(vxb.to(device))
-                            vyb = vyb.to(device)
-                            if args.label_type == 'ink_classes':
-                                _, vyb = vyb.max(1)  # Argmax
-                            losses.append(metrics['loss'](pred, vyb))
-                    print(f'done (loss: {sum(losses) / len(losses)})')
+                if batch_num % args.checkpoint_every_n_batches == 0:
+                    # Periodic evaluation and prediction
+                    model.eval()  # Turn off training mode for batch norm and dropout purposes
+                    with torch.no_grad():
+                        # Evaluation on validation set
+                        print('Evaluating on validation set... ', end='')
+                        losses = []
+                        if args.label_type == 'ink_classes':
+                            for vxb, vyb in val_dl:
+                                pred = model(vxb.to(device))
+                                vyb = vyb.to(device)
+                                if args.label_type == 'ink_classes':
+                                    _, vyb = vyb.max(1)  # Argmax
+                                losses.append(metrics['loss'](pred, vyb))
+                        print(f'done (loss: {sum(losses) / len(losses)})')
 
-                    # Prediction image
-                    generate_prediction_image(pred_dl, model, output_size, args.label_type, device,
-                                              predictions_dir, f'{epoch}_{batch_num}', reconstruct_fn, regions)
+                        # Prediction image
+                        generate_prediction_image(pred_dl, model, output_size, args.label_type, device,
+                                                  predictions_dir, f'{epoch}_{batch_num}', reconstruct_fn, regions)
+    except KeyboardInterrupt:
+        pass
 
     # Run a final prediction on all regions
-    try:
-        if args.final_prediction_on_all:
+    if args.final_prediction_on_all:
+        try:
             final_pred_ds = inkid.data.PointsDataset(regions, ['prediction', 'training', 'validation'],
                                                      prediction_features_fn, lambda p: p,
                                                      grid_spacing=args.prediction_grid_spacing)
@@ -411,14 +414,9 @@ def main():
                                                         num_workers=multiprocessing.cpu_count())
             generate_prediction_image(final_pred_dl, model, output_size, args.label_type, device,
                                       predictions_dir, 'final', reconstruct_fn, regions)
-    # Perform finishing touches even if cut short
-    except KeyboardInterrupt:
-        pass
-
-    # Add some post-run info to metadata file
-    stop = timeit.default_timer()
-    metadata['Runtime'] = stop - start
-    metadata['Finished at'] = time.strftime('%Y-%m-%d %H:%M:%S')
+        # Perform finishing touches even if cut short
+        except KeyboardInterrupt:
+            pass
 
     # TODO(PyTorch) replace
     # Add final validation metrics to metadata
@@ -432,6 +430,11 @@ def main():
     # except KeyboardInterrupt:
     #     pass
     # metadata['Final validation metrics'] = metrics
+
+    # Add some post-run info to metadata file
+    stop = timeit.default_timer()
+    metadata['Runtime'] = stop - start
+    metadata['Finished at'] = time.strftime('%Y-%m-%d %H:%M:%S')
 
     # Update metadata file on disk with results after run
     with open(os.path.join(output_path, 'metadata.json'), 'w') as f:
