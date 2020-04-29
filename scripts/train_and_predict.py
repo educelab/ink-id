@@ -39,10 +39,6 @@ import torchsummary
 import inkid
 
 
-def metrics_str(metric_results):
-    return ' '.join([k + ': ' + f'{np.nanmean([float(i) for i in v]):5.2g}' for k, v in metric_results.items()])
-
-
 def perform_validation(model, dataloader, metrics, device, label_type):
     model.eval()  # Turn off training mode for batch norm and dropout purposes
     with torch.no_grad():
@@ -397,7 +393,7 @@ def main():
                 if batch_num % args.summary_every_n_batches == 0:
                     print('Batch: {:>5d}/{:<5d} {} Seconds: {:5.3g}'.format(
                         batch_num, total_batches,
-                        metrics_str(metric_results),
+                        inkid.metrics.metrics_str(metric_results),
                         time.time() - last_summary))
                     for result in metric_results.values():
                         result.clear()
@@ -407,7 +403,7 @@ def main():
                     # Periodic evaluation and prediction
                     print('Evaluating on validation set... ', end='')
                     val_results = perform_validation(model, val_dl, metrics, device, args.label_type)
-                    print(f'done ({metrics_str(val_results)})')
+                    print(f'done ({inkid.metrics.metrics_str(val_results)})')
 
                     # Prediction image
                     print('Generating prediction image... ', end='')
@@ -437,7 +433,7 @@ def main():
         print('Performing final evaluation on validation set... ', end='')
         val_results = perform_validation(model, val_dl, metrics, device, args.label_type)
         metadata['Final validation metrics'] = val_results
-        print(f'done ({metrics_str(val_results)})')
+        print(f'done ({inkid.metrics.metrics_str(val_results)})')
     except KeyboardInterrupt:
         pass
 

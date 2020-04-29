@@ -1,3 +1,4 @@
+import numpy as np
 from sklearn.metrics import roc_auc_score
 import torch
 
@@ -48,3 +49,7 @@ def auc(pred, yb):
         return roc_auc_score(yb.cpu().numpy(), pred.cpu().numpy())
     except ValueError:  # If only one class present in yb, ROC AUC not defined
         return float('nan')
+
+
+def metrics_str(metric_results):
+    return ' '.join([k + ': ' + f'{np.nanmean([float(i) for i in v]):5.2g}' for k, v in metric_results.items()])
