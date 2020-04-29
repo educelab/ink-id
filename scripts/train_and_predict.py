@@ -76,7 +76,7 @@ def generate_prediction_image(dataloader, model, output_size, label_type, device
     model.train()
     for prediction, point in zip(predictions, points):
         region_id, x, y = point
-        reconstruct_fn([region_id], [prediction], [[x, y]])
+        reconstruct_fn([int(region_id)], [prediction], [[x, y]])
     region_set.save_predictions(predictions_dir, filename)
     region_set.reset_predictions()
 
