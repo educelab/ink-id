@@ -23,7 +23,7 @@ h5py==2.10.0
 idna==2.8
 imageio==2.6.1
 imagesize==1.2.0
--e git+git@code.cs.uky.edu:seales-research/ink-id.git@40d13ed4bd78e2d53c8cca14ebeabff642976ed0#egg=inkid
+-e git+git@code.cs.uky.edu:seales-research/ink-id.git@f6249b58c3caffb90d76087ed51c41df7a82347d#egg=inkid
 isort==4.3.21
 Jinja2==2.11.1
 joblib==0.14.1

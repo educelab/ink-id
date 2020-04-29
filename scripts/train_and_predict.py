@@ -39,6 +39,27 @@ import torchsummary
 import inkid
 
 
+def generate_prediction_image(dataloader, model, output_size, label_type, device, predictions_dir, filename,
+                              reconstruct_fn, region_set):
+    print('Generating prediction image {}... '.format(filename), end='')
+    predictions = np.empty(shape=(0, output_size))
+    points = np.empty(shape=(0, 3))
+    for pxb, pts in dataloader:
+        pred = model(pxb.to(device))
+        if label_type == 'ink_classes':
+            pred = F.softmax(pred, dim=1)
+        pred = pred.cpu().numpy()
+        pts = pts.numpy()
+        predictions = np.append(predictions, pred, axis=0)
+        points = np.append(points, pts, axis=0)
+    for prediction, point in zip(predictions, points):
+        region_id, x, y = point
+        reconstruct_fn([region_id], [prediction], [[x, y]])
+    region_set.save_predictions(predictions_dir, filename)
+    region_set.reset_predictions()
+    print('done')
+
+
 def main():
     """Run the training and prediction process."""
     start = timeit.default_timer()
@@ -377,84 +398,22 @@ def main():
                     print(f'done (loss: {sum(losses) / len(losses)})')
 
                     # Prediction image
-                    print('Generating prediction image... ', end='')
-                    if args.label_type == 'ink_classes':
-                        predictions = np.empty(shape=(0, output_size))
-                        points = np.empty(shape=(0, 3))
-                        for pxb, pts in pred_dl:
-                            pred = model(pxb.to(device))
-                            if args.label_type == 'ink_classes':
-                                pred = F.softmax(pred, dim=1)
-                            pred = pred.cpu().numpy()
-                            pts = pts.numpy()
-                            predictions = np.append(predictions, pred, axis=0)
-                            points = np.append(points, pts, axis=0)
-                        for prediction, point in zip(predictions, points):
-                            region_id, x, y = point
-                            reconstruct_fn([region_id], [prediction], [[x, y]])
-                        regions.save_predictions(predictions_dir, f'{epoch}_{batch_num}')
-                        regions.reset_predictions()
-                    print('done')
+                    generate_prediction_image(pred_dl, model, output_size, args.label_type, device,
+                                              predictions_dir, f'{epoch}_{batch_num}', reconstruct_fn, regions)
 
-
-    # TODO(PyTorch) replace
     # Run a final prediction on all regions
-    # try:
-    #     if args.final_prediction_on_all:
-    #         print('Running a final prediction on all regions...')
-    #         final_prediction_input_fn = regions.create_tf_input_fn(
-    #             region_groups=['prediction', 'training', 'validation'],
-    #             batch_size=args.batch_size,
-    #             features_fn=prediction_features_fn,
-    #             label_fn=None,
-    #             perform_shuffle=False,
-    #             restrict_to_surface=True,
-    #             grid_spacing=args.prediction_grid_spacing,
-    #         )
-    #
-    #         if args.label_type == 'ink_classes':
-    #             predictions = estimator.predict(
-    #                 final_prediction_input_fn,
-    #                 predict_keys=[
-    #                     'region_id',
-    #                     'ppm_xy',
-    #                     'probabilities',
-    #                 ],
-    #             )
-    #
-    #             for prediction in predictions:
-    #                 regions.reconstruct_predicted_ink_classes(
-    #                     np.array([prediction['region_id']]),
-    #                     np.array([prediction['probabilities']]),
-    #                     np.array([prediction['ppm_xy']]),
-    #                 )
-    #
-    #             regions.save_predictions(os.path.join(output_path, 'predictions'), 'final')
-    #             regions.reset_predictions()
-    #
-    #         elif args.label_type == 'rgb_values':
-    #             predictions = estimator.predict(
-    #                 final_prediction_input_fn,
-    #                 predict_keys=[
-    #                     'region_id',
-    #                     'ppm_xy',
-    #                     'rgb',
-    #                 ],
-    #             )
-    #
-    #             for prediction in predictions:
-    #                 regions.reconstruct_predicted_rgb(
-    #                     np.array([prediction['region_id']]),
-    #                     np.array([prediction['rgb']]),
-    #                     np.array([prediction['ppm_xy']]),
-    #                 )
-    #
-    #             regions.save_predictions(os.path.join(output_path, 'predictions'), 'final')
-    #             regions.reset_predictions()
-    #
-    # # Perform finishing touches even if cut short
-    # except KeyboardInterrupt:
-    #     pass
+    try:
+        if args.final_prediction_on_all:
+            final_pred_ds = inkid.data.PointsDataset(regions, ['prediction', 'training', 'validation'],
+                                                     prediction_features_fn, lambda p: p,
+                                                     grid_spacing=args.prediction_grid_spacing)
+            final_pred_dl = torch.utils.data.DataLoader(final_pred_ds, batch_size=args.batch_size * 2, shuffle=False,
+                                                        num_workers=multiprocessing.cpu_count())
+            generate_prediction_image(final_pred_dl, model, output_size, args.label_type, device,
+                                      predictions_dir, 'final', reconstruct_fn, regions)
+    # Perform finishing touches even if cut short
+    except KeyboardInterrupt:
+        pass
 
     # Add some post-run info to metadata file
     stop = timeit.default_timer()
