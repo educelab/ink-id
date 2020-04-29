@@ -40,28 +40,28 @@ class Subvolume3DcnnModel(torch.nn.Module):
 
         self.conv1 = torch.nn.Conv3d(in_channels=1, out_channels=filters[0],
                                      kernel_size=kernel_sizes[0], stride=strides[0], padding=paddings[0])
-        torch.nn.init.xavier_uniform(self.conv1.weight)
+        torch.nn.init.xavier_uniform_(self.conv1.weight)
         torch.nn.init.zeros_(self.conv1.bias)
         self.batch_norm1 = torch.nn.BatchNorm3d(num_features=filters[0], momentum=batch_norm_momentum)
         shape = conv_output_shape(input_shape, kernel_sizes[0], strides[0], paddings[0])
 
         self.conv2 = torch.nn.Conv3d(in_channels=filters[0], out_channels=filters[1],
                                      kernel_size=kernel_sizes[1], stride=strides[1], padding=paddings[1])
-        torch.nn.init.xavier_uniform(self.conv2.weight)
+        torch.nn.init.xavier_uniform_(self.conv2.weight)
         torch.nn.init.zeros_(self.conv2.bias)
         self.batch_norm2 = torch.nn.BatchNorm3d(num_features=filters[1], momentum=batch_norm_momentum)
         shape = conv_output_shape(shape, kernel_sizes[1], strides[1], paddings[1])
 
         self.conv3 = torch.nn.Conv3d(in_channels=filters[1], out_channels=filters[2],
                                      kernel_size=kernel_sizes[2], stride=strides[2], padding=paddings[2])
-        torch.nn.init.xavier_uniform(self.conv3.weight)
+        torch.nn.init.xavier_uniform_(self.conv3.weight)
         torch.nn.init.zeros_(self.conv3.bias)
         self.batch_norm3 = torch.nn.BatchNorm3d(num_features=filters[2], momentum=batch_norm_momentum)
         shape = conv_output_shape(shape, kernel_sizes[2], strides[2], paddings[2])
 
         self.conv4 = torch.nn.Conv3d(in_channels=filters[2], out_channels=filters[3],
                                      kernel_size=kernel_sizes[3], stride=strides[3], padding=paddings[3])
-        torch.nn.init.xavier_uniform(self.conv4.weight)
+        torch.nn.init.xavier_uniform_(self.conv4.weight)
         torch.nn.init.zeros_(self.conv4.bias)
         self.batch_norm4 = torch.nn.BatchNorm3d(num_features=filters[3], momentum=batch_norm_momentum)
         shape = conv_output_shape(shape, kernel_sizes[3], strides[3], paddings[3])
