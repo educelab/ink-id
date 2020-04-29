@@ -24,6 +24,6 @@ class Region:
                 if random.random() > probability_of_selection:
                     continue
                 if self.ppm.is_on_surface(x, y):
-                        points.append([self._region_id, x, y])
+                    points.append([self._region_id, x, y])
 
         return points
