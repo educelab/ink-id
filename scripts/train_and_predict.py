@@ -40,7 +40,7 @@ import inkid
 
 
 def metrics_str(metric_results):
-    return ' '.join([k + ': ' + f'{np.mean([float(i) for i in v]):5.2g}' for k, v in metric_results.items()])
+    return ' '.join([k + ': ' + f'{np.nanmean([float(i) for i in v]):5.2g}' for k, v in metric_results.items()])
 
 
 def perform_validation(model, dataloader, metrics, device, label_type):
