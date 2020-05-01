@@ -427,7 +427,6 @@ def main():
             pass
 
     # Add final validation metrics to metadata
-    metrics = {}
     try:
         print('Performing final evaluation on validation set... ', end='')
         val_results = perform_validation(model, val_dl, metrics, device, args.label_type)
