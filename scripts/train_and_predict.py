@@ -136,6 +136,10 @@ def main():
     parser.add_argument('--normalize-subvolumes', action='store_true',
                         help='normalize each subvolume to zero mean and unit variance on the fly')
 
+    # Frequency domain transforms for subvolume
+    parser.add_argument('--fft', action='store_true', help='Apply FFT to subvolumes')
+    parser.add_argument('--dwt', metavar='name', default=None, help='Apply specified DWT to subvolumes')
+
     # Voxel vectors
     parser.add_argument('--length-in-each-direction', metavar='n', type=int,
                         help='length of voxel vector in each direction along normal')
@@ -276,6 +280,8 @@ def main():
             method=args.subvolume_method,
             normalize=args.normalize_subvolumes,
             pad_to_shape=args.pad_to_shape,
+            fft=args.fft,
+            dwt=args.dwt,
         )
         training_features_fn = functools.partial(
             point_to_subvolume_input,

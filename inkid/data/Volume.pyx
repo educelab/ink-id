@@ -13,6 +13,7 @@ import numpy as np
 cimport numpy as cnp
 from PIL import Image
 import progressbar
+import pywt
 
 
 cdef BasisVectors get_component_vectors_from_normal(Float3 n):
@@ -392,7 +393,8 @@ cdef class Volume:
 
     def get_subvolume(self, center, shape, normal, out_of_bounds,
                       move_along_normal, jitter_max,
-                      augment_subvolume, method, normalize, pad_to_shape):
+                      augment_subvolume, method, normalize, pad_to_shape,
+                      fft, dwt):
         """Get a subvolume from a center point and normal vector.
 
         At the time of writing, this function very closely resembles
@@ -501,5 +503,13 @@ cdef class Volume:
             assert subvolume.shape == tuple(pad_to_shape)
         else:
             assert subvolume.shape == tuple(shape)
+
+        if fft:
+            subvolume = np.real(np.fft.fftn(subvolume))
+            subvolume = np.log(np.abs(np.fft.fftshift(subvolume)))
+
+        if dwt is not None:
+            coeffs = pywt.wavedecn(subvolume, wavelet=dwt, level=1)
+            subvolume, _ = pywt.coeffs_to_array(coeffs)
 
         return subvolume
