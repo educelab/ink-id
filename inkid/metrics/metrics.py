@@ -53,13 +53,11 @@ def auc(pred, yb):
         return float('nan')
 
 
-def metrics_json(metric_results):
+def metrics_dict(metric_results):
     with warnings.catch_warnings():  # Sometimes we will take the mean of all NaNs. This is fine, just return NaN.
         warnings.simplefilter("ignore")
         return {k: np.nanmean([float(i) for i in v]) for k, v in metric_results.items()}
 
 
 def metrics_str(metric_results):
-    with warnings.catch_warnings():  # Sometimes we will take the mean of all NaNs. This is fine, just return NaN.
-        warnings.simplefilter("ignore")
-        return ' '.join([k + ': ' + f'{v:5.2g}' for k, v in metrics_json(metric_results)])
+    return ' '.join([k + ': ' + f'{v:5.2g}' for k, v in metrics_dict(metric_results).items()])
