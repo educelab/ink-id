@@ -23,7 +23,7 @@ h5py==2.10.0
 idna==2.8
 imageio==2.6.1
 imagesize==1.2.0
--e git+git@code.cs.uky.edu:seales-research/ink-id.git@f6249b58c3caffb90d76087ed51c41df7a82347d#egg=inkid
+-e git+git@code.cs.uky.edu:seales-research/ink-id.git@73e91d4a912ba3a65f1902cbcdabc4e37eb3fca5#egg=inkid
 isort==4.3.21
 Jinja2==2.11.1
 joblib==0.14.1
@@ -54,6 +54,7 @@ pyparsing==2.4.6
 python-dateutil==2.8.1
 python-utils==2.3.0
 pytz==2019.3
+PyWavelets==1.1.1
 requests==2.22.0
 requests-oauthlib==1.3.0
 rsa==4.0

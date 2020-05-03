@@ -23,6 +23,7 @@ setup(
         'Pillow',
         'progressbar2',
         'pylint',
+        'pywavelets',
         'scikit-learn',
         'sphinx',
         'torch',
