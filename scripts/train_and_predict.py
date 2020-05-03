@@ -430,7 +430,7 @@ def main():
     try:
         print('Performing final evaluation on validation set... ', end='')
         val_results = perform_validation(model, val_dl, metrics, device, args.label_type)
-        metadata['Final validation metrics'] = metrics_dict(val_results)
+        metadata['Final validation metrics'] = inkid.metrics.metrics_dict(val_results)
         print(f'done ({inkid.metrics.metrics_str(val_results)})')
     except KeyboardInterrupt:
         pass
