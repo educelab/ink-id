@@ -479,7 +479,15 @@ cdef class Volume:
             rotate_direction = np.random.randint(4)
             subvolume = np.rot90(subvolume, k=rotate_direction, axes=(1, 2))
 
-        if normalize:
+        if fft:
+            subvolume = np.real(np.fft.fftn(subvolume))
+            subvolume = np.log(np.abs(np.fft.fftshift(subvolume)))
+
+        if dwt is not None:
+            coeffs = pywt.wavedecn(subvolume, wavelet=dwt, level=1)
+            subvolume, _ = pywt.coeffs_to_array(coeffs)
+
+        if normalize or fft or dwt is not None:
             subvolume = np.asarray(subvolume, dtype=np.float32)
             subvolume = subvolume - subvolume.mean()
             subvolume = subvolume / subvolume.std()
@@ -503,13 +511,5 @@ cdef class Volume:
             assert subvolume.shape == tuple(pad_to_shape)
         else:
             assert subvolume.shape == tuple(shape)
-
-        if fft:
-            subvolume = np.real(np.fft.fftn(subvolume))
-            subvolume = np.log(np.abs(np.fft.fftshift(subvolume)))
-
-        if dwt is not None:
-            coeffs = pywt.wavedecn(subvolume, wavelet=dwt, level=1)
-            subvolume, _ = pywt.coeffs_to_array(coeffs)
 
         return subvolume
