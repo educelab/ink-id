@@ -481,7 +481,7 @@ cdef class Volume:
 
         if fft:
             subvolume = np.real(np.fft.fftn(subvolume))
-            subvolume = np.log(np.abs(np.fft.fftshift(subvolume)))
+            subvolume = np.log(np.abs(np.fft.fftshift(subvolume)) + 1e-7)
 
         if dwt is not None:
             coeffs = pywt.wavedecn(subvolume, wavelet=dwt, level=1)
