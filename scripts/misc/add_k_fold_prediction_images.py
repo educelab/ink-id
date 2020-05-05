@@ -16,7 +16,7 @@ def main():
     parser.add_argument('--gif', action='store_true', help='Generate an image sequence and save it as an animated GIF')
     parser.add_argument('--gif-prefix', default='training', help='The prefix used for the output GIF filename')
     parser.add_argument('--gif-delay', default=10, type=int, help='GIF frame delay in hundredths of a second')
-    parser.add_argument('--no-caption-gif-with-iterations', action='store_false')
+    parser.add_argument('--caption-gif-with-iterations', action='store_true')
 
     args = parser.parse_args()
     dirs = [os.path.join(args.dir, name) for name in os.listdir(args.dir)
@@ -31,13 +31,13 @@ def main():
     animation = None
     if args.img_seq or args.gif or args.all:
         print('\nCreating animation:')
-        animation = create_animation(dirs, args.no_caption_gif_with_iterations)
+        animation = create_animation(dirs, args.caption_gif_with_iterations)
 
     if args.img_seq:
         write_img_sequence(animation, args.img_seq)
 
     if args.gif or args.all:
-        if args.no_caption_gif_with_iterations:
+        if args.caption_gif_with_iterations:
             filename = args.gif_prefix + '_captioned.gif'
         else:
             filename = args.gif_prefix + '.gif'
