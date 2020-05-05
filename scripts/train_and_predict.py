@@ -208,8 +208,11 @@ def main():
     else:
         model_path = output_path
 
-    # Define directory for prediction images
+    # Define directories for prediction images and checkpoints
     predictions_dir = os.path.join(output_path, 'predictions')
+    os.makedirs(predictions_dir)
+    checkpoints_dir = os.path.join(output_path, 'checkpoints')
+    os.makedirs(checkpoints_dir)
 
     # If input file is a PPM, treat this as a texturing module
     # Skip training, run a prediction on all regions, require trained model, require slices dir
@@ -403,6 +406,14 @@ def main():
                     last_summary = time.time()
 
                 if batch_num % args.checkpoint_every_n_batches == 0:
+                    # Save model checkpoint
+                    torch.save({
+                        'epoch': epoch,
+                        'batch': batch_num,
+                        'model_state_dict': model.state_dict(),
+                        'optimizer_state_dict': opt.state_dict()
+                    }, os.path.join(checkpoints_dir, f'checkpoint_{epoch}_{batch_num}.pt'))
+
                     # Periodic evaluation and prediction
                     print('Evaluating on validation set... ', end='')
                     val_results = perform_validation(model, val_dl, metrics, device, args.label_type)
