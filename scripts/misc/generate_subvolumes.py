@@ -17,6 +17,8 @@ def main():
                         help='number of subvolumes to keep')
     parser.add_argument('--ink', action='store_true', help='Restrict to points on ink areas')
     parser.add_argument('--no-ink', action='store_true', help='Restrict to points not on ink areas')
+    parser.add_argument('--ink-mask', help='Specify a different ink mask from the default in the region JSON',
+                        default=None)
     parser.add_argument('--concat-subvolumes', action='store_true',
                         help='Create one set of slices containing all subvolumes')
     parser.add_argument('--subvolume-method', metavar='name', default='nearest_neighbor',
@@ -43,8 +45,14 @@ def main():
     parser.add_argument('--no-augmentation', action='store_false', dest='augmentation')
     args = parser.parse_args()
 
-    region_set = inkid.data.RegionSet.from_json(args.input)
+    region_data = inkid.data.RegionSet.get_data_from_file(args.input)
     os.makedirs(args.output, exist_ok=True)
+
+    if args.ink_mask is not None:
+        for ppm in region_data['ppms']:
+            region_data['ppms'][ppm]['ink-label'] = args.ink_mask
+
+    region_set = inkid.data.RegionSet(region_data)
 
     point_to_subvolume_input = functools.partial(
         region_set.point_to_subvolume_input,
