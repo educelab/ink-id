@@ -10,9 +10,11 @@ import inkid
 
 
 class PointsDataset(torch.utils.data.Dataset):
-    def __init__(self, region_set, region_groups, feature_transform, label_transform=None, grid_spacing=None):
+    def __init__(self, region_set, region_groups, feature_transform, label_transform=None, grid_spacing=None,
+                 specify_inkness=None):
         self._region_set = region_set
-        self._points = self._region_set.get_points(region_groups, grid_spacing=grid_spacing)
+        self._points = self._region_set.get_points(region_groups, grid_spacing=grid_spacing,
+                                                   specify_inkness=specify_inkness)
         self._feature_transform = feature_transform
         self._label_transform = label_transform
 
@@ -150,7 +152,8 @@ class RegionSet:
     def get_points(self, region_groups,
                    perform_shuffle=False, shuffle_seed=None,
                    grid_spacing=None,
-                   probability_of_selection=None):
+                   probability_of_selection=None,
+                   specify_inkness=None):
         """Return a numpy array of region_ids and points.
 
                 Used as the initial input to a Dataset, which will later map
@@ -168,7 +171,8 @@ class RegionSet:
             for region_id in self._region_groups[region_group]:
                 points += self._regions[region_id].get_points(
                     grid_spacing=grid_spacing,
-                    probability_of_selection=probability_of_selection
+                    probability_of_selection=probability_of_selection,
+                    specify_inkness=specify_inkness
                 )
         points = np.array(points)
         print('done ({} points)'.format(len(points)))

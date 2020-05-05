@@ -168,6 +168,10 @@ class PPM:
         square = self._mask[y-r:y+r+1, x-r:x+r+1]
         return np.size(square) > 0 and np.min(square) != 0
 
+    def is_ink(self, x, y):
+        assert self._ink_label is not None
+        return self._ink_label[y, x] != 0
+
     def get_point_with_normal(self, ppm_x, ppm_y):
         return self._data[ppm_y][ppm_x]
 

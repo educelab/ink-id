@@ -135,8 +135,6 @@ def main():
                         help='number of voxels to move along normal before getting a subvolume')
     parser.add_argument('--normalize-subvolumes', action='store_true',
                         help='normalize each subvolume to zero mean and unit variance on the fly')
-
-    # Frequency domain transforms for subvolume
     parser.add_argument('--fft', action='store_true', help='Apply FFT to subvolumes')
     parser.add_argument('--dwt', metavar='name', default=None, help='Apply specified DWT to subvolumes')
 
