@@ -394,7 +394,7 @@ cdef class Volume:
     def get_subvolume(self, center, shape, normal, out_of_bounds,
                       move_along_normal, jitter_max,
                       augment_subvolume, method, normalize, pad_to_shape,
-                      fft, dwt):
+                      fft, dwt, dwt_channel_subbands):
         """Get a subvolume from a center point and normal vector.
 
         At the time of writing, this function very closely resembles
@@ -485,9 +485,13 @@ cdef class Volume:
 
         if dwt is not None:
             coeffs = pywt.wavedecn(subvolume, wavelet=dwt, level=1)
-            subvolume, _ = pywt.coeffs_to_array(coeffs)
+            if dwt_channel_subbands:
+                subvolume = np.stack((coeffs[0], *coeffs[1].values()), axis=0)
+                return subvolume
+            else:
+                subvolume, _ = pywt.coeffs_to_array(coeffs)
 
-        if normalize or fft or dwt is not None:
+        if normalize or fft:
             subvolume = np.asarray(subvolume, dtype=np.float32)
             subvolume = subvolume - subvolume.mean()
             subvolume = subvolume / subvolume.std()

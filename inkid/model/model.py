@@ -24,7 +24,7 @@ def conv_output_shape(input_shape, kernel_size: Union[int, tuple], stride: Union
 
 class Subvolume3DcnnModel(torch.nn.Module):
     def __init__(self, drop_rate, subvolume_shape, pad_to_shape,
-                 batch_norm_momentum, no_batch_norm, filters, output_neurons):
+                 batch_norm_momentum, no_batch_norm, filters, output_neurons, in_channels):
         super().__init__()
 
         if pad_to_shape is not None:
@@ -33,12 +33,13 @@ class Subvolume3DcnnModel(torch.nn.Module):
             input_shape = subvolume_shape
 
         self._batch_norm = not no_batch_norm
+        self._in_channels = in_channels
 
         paddings = [1, 1, 1, 1]
         kernel_sizes = [3, 3, 3, 3]
         strides = [1, 2, 2, 2]
 
-        self.conv1 = torch.nn.Conv3d(in_channels=1, out_channels=filters[0],
+        self.conv1 = torch.nn.Conv3d(in_channels=in_channels, out_channels=filters[0],
                                      kernel_size=kernel_sizes[0], stride=strides[0], padding=paddings[0])
         torch.nn.init.xavier_uniform_(self.conv1.weight)
         torch.nn.init.zeros_(self.conv1.bias)
@@ -73,6 +74,8 @@ class Subvolume3DcnnModel(torch.nn.Module):
         self.flatten = torch.nn.Flatten()
 
     def forward(self, x):
+        if self._in_channels > 1:
+            x = torch.squeeze(x)
         y = self.conv1(x)
         y = self.relu(y)
         if self._batch_norm:

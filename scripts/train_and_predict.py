@@ -137,6 +137,8 @@ def main():
                         help='normalize each subvolume to zero mean and unit variance on the fly')
     parser.add_argument('--fft', action='store_true', help='Apply FFT to subvolumes')
     parser.add_argument('--dwt', metavar='name', default=None, help='Apply specified DWT to subvolumes')
+    parser.add_argument('--dwt-channel-subbands', action='store_true',
+                        help='Combine DWT subbands into multiple channels of smaller subvolume')
 
     # Voxel vectors
     parser.add_argument('--length-in-each-direction', metavar='n', type=int,
@@ -283,6 +285,7 @@ def main():
             pad_to_shape=args.pad_to_shape,
             fft=args.fft,
             dwt=args.dwt,
+            dwt_channel_subbands=args.dwt_channel_subbands,
         )
         training_features_fn = functools.partial(
             point_to_subvolume_input,
@@ -361,16 +364,21 @@ def main():
 
     # Create the model for training
     if args.feature_type == 'subvolume_3dcnn':
+        in_channels = 1
+        if args.dwt_channel_subbands:
+            in_channels = 8
+            args.subvolume_shape = [i // 2 for i in args.subvolume_shape]
+            args.pad_to_shape = None
         model = inkid.model.Subvolume3DcnnModel(
             args.drop_rate, args.subvolume_shape, args.pad_to_shape,
-            args.batch_norm_momentum, args.no_batch_norm, args.filters, output_size)
+            args.batch_norm_momentum, args.no_batch_norm, args.filters, output_size, in_channels)
     else:
         print('Feature type: {} does not yet have a PyTorch model.'.format(args.feature_type))
         return
     model = model.to(device)
     # Print summary of model
     device_str = "cuda" if torch.cuda.is_available() else "cpu"
-    shape = (1,) + tuple(args.pad_to_shape or args.subvolume_shape)
+    shape = (in_channels,) + tuple(args.pad_to_shape or args.subvolume_shape)
     torchsummary.summary(model, input_size=shape, batch_size=args.batch_size, device=device_str)
     # Define optimizer
     opt = torch.optim.Adam(model.parameters(), lr=args.learning_rate)
