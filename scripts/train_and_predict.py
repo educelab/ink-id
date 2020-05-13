@@ -34,6 +34,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.utils.data import DataLoader, random_split
 import torchsummary
 
 import inkid
@@ -100,7 +101,6 @@ def main():
                              'only one volume in the region set file)')
 
     # Pre-trained model
-    # TODO(pytorch) maybe change vocabulary/structure of this dir
     parser.add_argument('--model', metavar='path', default=None,
                         help='existing model directory to load checkpoints from')
 
@@ -150,7 +150,6 @@ def main():
     parser.add_argument('--no-augmentation', action='store_false', dest='augmentation')
 
     # Network architecture
-    # TODO(pytorch) make sure these accounted for/changed if needed
     parser.add_argument('--learning-rate', metavar='n', type=float)
     parser.add_argument('--drop-rate', metavar='n', type=float)
     parser.add_argument('--batch-norm-momentum', metavar='n', type=float)
@@ -165,7 +164,6 @@ def main():
     parser.add_argument('--decay-rate', metavar='n', type=float, default=None)
 
     # Run configuration
-    # TODO(pytorch) make sure these accounted for/changed if needed
     parser.add_argument('--batch-size', metavar='n', type=int)
     parser.add_argument('--training-max-batches', metavar='n', type=int, default=None)
     parser.add_argument('--training-epochs', metavar='n', type=int, default=None)
@@ -346,19 +344,19 @@ def main():
     val_ds = inkid.data.PointsDataset(regions, ['validation'], validation_features_fn, label_fn)
     # Only take n samples for validation, not the entire region
     if args.validation_max_samples < len(val_ds):
-        val_ds = torch.utils.data.random_split(
+        val_ds = random_split(
             val_ds,
             [args.validation_max_samples, len(val_ds) - args.validation_max_samples]
             )[0]
     pred_ds = inkid.data.PointsDataset(regions, ['prediction'], prediction_features_fn, lambda p: p,
                                        grid_spacing=args.prediction_grid_spacing)
 
-    train_dl = torch.utils.data.DataLoader(train_ds, batch_size=args.batch_size, shuffle=True,
-                                           num_workers=multiprocessing.cpu_count())
-    val_dl = torch.utils.data.DataLoader(val_ds, batch_size=args.batch_size * 2, shuffle=True,
-                                         num_workers=multiprocessing.cpu_count())
-    pred_dl = torch.utils.data.DataLoader(pred_ds, batch_size=args.batch_size * 2, shuffle=False,
-                                          num_workers=multiprocessing.cpu_count())
+    train_dl = DataLoader(train_ds, batch_size=args.batch_size, shuffle=True,
+                          num_workers=multiprocessing.cpu_count())
+    val_dl = DataLoader(val_ds, batch_size=args.batch_size * 2, shuffle=True,
+                        num_workers=multiprocessing.cpu_count())
+    pred_dl = DataLoader(pred_ds, batch_size=args.batch_size * 2, shuffle=False,
+                         num_workers=multiprocessing.cpu_count())
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
@@ -441,8 +439,8 @@ def main():
             final_pred_ds = inkid.data.PointsDataset(regions, ['prediction', 'training', 'validation'],
                                                      prediction_features_fn, lambda p: p,
                                                      grid_spacing=args.prediction_grid_spacing)
-            final_pred_dl = torch.utils.data.DataLoader(final_pred_ds, batch_size=args.batch_size * 2, shuffle=False,
-                                                        num_workers=multiprocessing.cpu_count())
+            final_pred_dl = DataLoader(final_pred_ds, batch_size=args.batch_size * 2, shuffle=False,
+                                       num_workers=multiprocessing.cpu_count())
             generate_prediction_image(final_pred_dl, model, output_size, args.label_type, device,
                                       predictions_dir, 'final', reconstruct_fn, regions)
         # Perform finishing touches even if cut short
