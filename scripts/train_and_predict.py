@@ -34,9 +34,47 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.utils.data import DataLoader, random_split
 import torchsummary
 
 import inkid
+
+
+def perform_validation(model, dataloader, metrics, device, label_type):
+    model.eval()  # Turn off training mode for batch norm and dropout purposes
+    with torch.no_grad():
+        metric_results = {metric: [] for metric in metrics}
+        for xb, yb in dataloader:
+            pred = model(xb.to(device))
+            yb = yb.to(device)
+            if label_type == 'ink_classes':
+                _, yb = yb.max(1)  # Argmax
+            for metric, fn in metrics.items():
+                metric_results[metric].append(fn(pred, yb))
+    model.train()
+    return metric_results
+
+
+def generate_prediction_image(dataloader, model, output_size, label_type, device, predictions_dir, filename,
+                              reconstruct_fn, region_set):
+    predictions = np.empty(shape=(0, output_size))
+    points = np.empty(shape=(0, 3))
+    model.eval()  # Turn off training mode for batch norm and dropout purposes
+    with torch.no_grad():
+        for pxb, pts in dataloader:
+            pred = model(pxb.to(device))
+            if label_type == 'ink_classes':
+                pred = F.softmax(pred, dim=1)
+            pred = pred.cpu().numpy()
+            pts = pts.numpy()
+            predictions = np.append(predictions, pred, axis=0)
+            points = np.append(points, pts, axis=0)
+    model.train()
+    for prediction, point in zip(predictions, points):
+        region_id, x, y = point
+        reconstruct_fn([int(region_id)], [prediction], [[int(x), int(y)]])
+    region_set.save_predictions(predictions_dir, filename)
+    region_set.reset_predictions()
 
 
 def main():
@@ -63,7 +101,6 @@ def main():
                              'only one volume in the region set file)')
 
     # Pre-trained model
-    # TODO(pytorch) maybe change vocabulary/structure of this dir
     parser.add_argument('--model', metavar='path', default=None,
                         help='existing model directory to load checkpoints from')
 
@@ -100,6 +137,10 @@ def main():
                         help='number of voxels to move along normal before getting a subvolume')
     parser.add_argument('--normalize-subvolumes', action='store_true',
                         help='normalize each subvolume to zero mean and unit variance on the fly')
+    parser.add_argument('--fft', action='store_true', help='Apply FFT to subvolumes')
+    parser.add_argument('--dwt', metavar='name', default=None, help='Apply specified DWT to subvolumes')
+    parser.add_argument('--dwt-channel-subbands', action='store_true',
+                        help='Combine DWT subbands into multiple channels of smaller subvolume')
 
     # Voxel vectors
     parser.add_argument('--length-in-each-direction', metavar='n', type=int,
@@ -111,7 +152,6 @@ def main():
     parser.add_argument('--no-augmentation', action='store_false', dest='augmentation')
 
     # Network architecture
-    # TODO(pytorch) make sure these accounted for/changed if needed
     parser.add_argument('--learning-rate', metavar='n', type=float)
     parser.add_argument('--drop-rate', metavar='n', type=float)
     parser.add_argument('--batch-norm-momentum', metavar='n', type=float)
@@ -126,7 +166,6 @@ def main():
     parser.add_argument('--decay-rate', metavar='n', type=float, default=None)
 
     # Run configuration
-    # TODO(pytorch) make sure these accounted for/changed if needed
     parser.add_argument('--batch-size', metavar='n', type=int)
     parser.add_argument('--training-max-batches', metavar='n', type=int, default=None)
     parser.add_argument('--training-epochs', metavar='n', type=int, default=None)
@@ -171,8 +210,11 @@ def main():
     else:
         model_path = output_path
 
-    # Define directory for prediction images
+    # Define directories for prediction images and checkpoints
     predictions_dir = os.path.join(output_path, 'predictions')
+    os.makedirs(predictions_dir)
+    checkpoints_dir = os.path.join(output_path, 'checkpoints')
+    os.makedirs(checkpoints_dir)
 
     # If input file is a PPM, treat this as a texturing module
     # Skip training, run a prediction on all regions, require trained model, require slices dir
@@ -241,7 +283,10 @@ def main():
             method=args.subvolume_method,
             normalize=args.normalize_subvolumes,
             pad_to_shape=args.pad_to_shape,
-            label_dim=args.label_dim
+            label_dim=args.label_dim,
+            fft=args.fft,
+            dwt=args.dwt,
+            dwt_channel_subbands=args.dwt_channel_subbands,
         )
         training_features_fn = functools.partial(
             point_to_subvolume_input,
@@ -302,34 +347,39 @@ def main():
     val_ds = inkid.data.PointsDataset(regions, ['validation'], validation_features_fn, label_fn)
     # Only take n samples for validation, not the entire region
     if args.validation_max_samples < len(val_ds):
-        val_ds = torch.utils.data.random_split(
+        val_ds = random_split(
             val_ds,
             [args.validation_max_samples, len(val_ds) - args.validation_max_samples]
             )[0]
     pred_ds = inkid.data.PointsDataset(regions, ['prediction'], prediction_features_fn, lambda p: p,
                                        grid_spacing=args.prediction_grid_spacing)
 
-    train_dl = torch.utils.data.DataLoader(train_ds, batch_size=args.batch_size, shuffle=True,
-                                           num_workers=multiprocessing.cpu_count())
-    val_dl = torch.utils.data.DataLoader(val_ds, batch_size=args.batch_size * 2, shuffle=True,
-                                         num_workers=multiprocessing.cpu_count())
-    pred_dl = torch.utils.data.DataLoader(pred_ds, batch_size=args.batch_size * 2, shuffle=False,
-                                          num_workers=multiprocessing.cpu_count())
+    train_dl = DataLoader(train_ds, batch_size=args.batch_size, shuffle=True,
+                          num_workers=multiprocessing.cpu_count())
+    val_dl = DataLoader(val_ds, batch_size=args.batch_size * 2, shuffle=True,
+                        num_workers=multiprocessing.cpu_count())
+    pred_dl = DataLoader(pred_ds, batch_size=args.batch_size * 2, shuffle=False,
+                         num_workers=multiprocessing.cpu_count())
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
     # Create the model for training
     if args.feature_type == 'subvolume_3dcnn':
+        in_channels = 1
+        if args.dwt_channel_subbands:
+            in_channels = 8
+            args.subvolume_shape = [i // 2 for i in args.subvolume_shape]
+            args.pad_to_shape = None
         model = inkid.model.Subvolume3DcnnModel(
             args.drop_rate, args.subvolume_shape, args.pad_to_shape,
-            args.batch_norm_momentum, args.no_batch_norm, args.filters, output_size)
+            args.batch_norm_momentum, args.no_batch_norm, args.filters, output_size, in_channels)
     else:
         print('Feature type: {} does not yet have a PyTorch model.'.format(args.feature_type))
         return
     model = model.to(device)
     # Print summary of model
     device_str = "cuda" if torch.cuda.is_available() else "cpu"
-    shape = (1,) + tuple(args.pad_to_shape or args.subvolume_shape)
+    shape = (in_channels,) + tuple(args.pad_to_shape or args.subvolume_shape)
     torchsummary.summary(model, input_size=shape, batch_size=args.batch_size, device=device_str)
     # Define optimizer
     opt = torch.optim.Adam(model.parameters(), lr=args.learning_rate)
@@ -338,144 +388,81 @@ def main():
     last_summary = time.time()
 
     # Run training loop
-    for epoch in range(args.training_epochs):
-        model.train()  # Turn on training mode
-        total_batches = len(train_dl)
-        for batch_num, (xb, yb) in enumerate(train_dl):
-            xb = xb.to(device)
-            yb = yb.to(device)
-            pred = model(xb)
-            if args.label_type == 'ink_classes':
-                _, yb = yb.max(1)  # Argmax
-            for metric, fn in metrics.items():
-                metric_results[metric].append(fn(pred, yb))
+    try:
+        for epoch in range(args.training_epochs):
+            model.train()  # Turn on training mode
+            total_batches = len(train_dl)
+            for batch_num, (xb, yb) in enumerate(train_dl):
+                xb = xb.to(device)
+                yb = yb.to(device)
+                pred = model(xb)
+                if args.label_type == 'ink_classes':
+                    _, yb = yb.max(1)  # Argmax
+                for metric, fn in metrics.items():
+                    metric_results[metric].append(fn(pred, yb))
 
-            metric_results['loss'][-1].backward()
-            opt.step()
-            opt.zero_grad()
+                metric_results['loss'][-1].backward()
+                opt.step()
+                opt.zero_grad()
 
-            if batch_num % args.summary_every_n_batches == 0:
-                print('Batch: {:>5d}/{:<5d} {} Seconds: {:5.3g}'.format(
-                    batch_num, total_batches,
-                    ' '.join([k + ': ' + f'{np.mean([float(i) for i in v]):5.2g}' for k, v in metric_results.items()]),
-                    time.time() - last_summary))
-                for result in metric_results.values():
-                    result.clear()
-                last_summary = time.time()
+                if batch_num % args.summary_every_n_batches == 0:
+                    print('Batch: {:>5d}/{:<5d} {} Seconds: {:5.3g}'.format(
+                        batch_num, total_batches,
+                        inkid.metrics.metrics_str(metric_results),
+                        time.time() - last_summary))
+                    for result in metric_results.values():
+                        result.clear()
+                    last_summary = time.time()
 
-            if batch_num % args.checkpoint_every_n_batches == 0:
-                # Periodic evaluation and prediction
-                model.eval()  # Turn off training mode for batch norm and dropout purposes
-                with torch.no_grad():
-                    # Evaluation on validation set
+                if batch_num % args.checkpoint_every_n_batches == 0:
+                    # Save model checkpoint
+                    torch.save({
+                        'epoch': epoch,
+                        'batch': batch_num,
+                        'model_state_dict': model.state_dict(),
+                        'optimizer_state_dict': opt.state_dict()
+                    }, os.path.join(checkpoints_dir, f'checkpoint_{epoch}_{batch_num}.pt'))
+
+                    # Periodic evaluation and prediction
                     print('Evaluating on validation set... ', end='')
-                    losses = []
-                    if args.label_type == 'ink_classes':
-                        for vxb, vyb in val_dl:
-                            pred = model(vxb.to(device))
-                            vyb = vyb.to(device)
-                            if args.label_type == 'ink_classes':
-                                _, vyb = vyb.max(1)  # Argmax
-                            losses.append(metrics['loss'](pred, vyb))
-                    print(f'done (loss: {sum(losses) / len(losses)})')
+                    val_results = perform_validation(model, val_dl, metrics, device, args.label_type)
+                    print(f'done ({inkid.metrics.metrics_str(val_results)})')
 
                     # Prediction image
                     print('Generating prediction image... ', end='')
-                    if args.label_type == 'ink_classes':
-                        predictions = np.empty(shape=(0, output_size))
-                        points = np.empty(shape=(0, 3))
-                        for pxb, pts in pred_dl:
-                            pred = model(pxb.to(device))
-                            if args.label_type == 'ink_classes':
-                                pred = F.softmax(pred, dim=1)
-                            pred = pred.cpu().numpy()
-                            pts = pts.numpy()
-                            predictions = np.append(predictions, pred, axis=0)
-                            points = np.append(points, pts, axis=0)
-                        for prediction, point in zip(predictions, points):
-                            region_id, x, y = point
-                            reconstruct_fn([region_id], [prediction], [[x, y]])
-                        regions.save_predictions(predictions_dir, f'{epoch}_{batch_num}')
-                        regions.reset_predictions()
+                    generate_prediction_image(pred_dl, model, output_size, args.label_type, device,
+                                              predictions_dir, f'{epoch}_{batch_num}', reconstruct_fn, regions)
                     print('done')
+    except KeyboardInterrupt:
+        pass
 
-
-    # TODO(PyTorch) replace
     # Run a final prediction on all regions
-    # try:
-    #     if args.final_prediction_on_all:
-    #         print('Running a final prediction on all regions...')
-    #         final_prediction_input_fn = regions.create_tf_input_fn(
-    #             region_groups=['prediction', 'training', 'validation'],
-    #             batch_size=args.batch_size,
-    #             features_fn=prediction_features_fn,
-    #             label_fn=None,
-    #             perform_shuffle=False,
-    #             restrict_to_surface=True,
-    #             grid_spacing=args.prediction_grid_spacing,
-    #         )
-    #
-    #         if args.label_type == 'ink_classes':
-    #             predictions = estimator.predict(
-    #                 final_prediction_input_fn,
-    #                 predict_keys=[
-    #                     'region_id',
-    #                     'ppm_xy',
-    #                     'probabilities',
-    #                 ],
-    #             )
-    #
-    #             for prediction in predictions:
-    #                 regions.reconstruct_predicted_ink_classes(
-    #                     np.array([prediction['region_id']]),
-    #                     np.array([prediction['probabilities']]),
-    #                     np.array([prediction['ppm_xy']]),
-    #                 )
-    #
-    #             regions.save_predictions(os.path.join(output_path, 'predictions'), 'final')
-    #             regions.reset_predictions()
-    #
-    #         elif args.label_type == 'rgb_values':
-    #             predictions = estimator.predict(
-    #                 final_prediction_input_fn,
-    #                 predict_keys=[
-    #                     'region_id',
-    #                     'ppm_xy',
-    #                     'rgb',
-    #                 ],
-    #             )
-    #
-    #             for prediction in predictions:
-    #                 regions.reconstruct_predicted_rgb(
-    #                     np.array([prediction['region_id']]),
-    #                     np.array([prediction['rgb']]),
-    #                     np.array([prediction['ppm_xy']]),
-    #                 )
-    #
-    #             regions.save_predictions(os.path.join(output_path, 'predictions'), 'final')
-    #             regions.reset_predictions()
-    #
-    # # Perform finishing touches even if cut short
-    # except KeyboardInterrupt:
-    #     pass
+    if args.final_prediction_on_all:
+        try:
+            final_pred_ds = inkid.data.PointsDataset(regions, ['prediction', 'training', 'validation'],
+                                                     prediction_features_fn, lambda p: p,
+                                                     grid_spacing=args.prediction_grid_spacing)
+            final_pred_dl = DataLoader(final_pred_ds, batch_size=args.batch_size * 2, shuffle=False,
+                                       num_workers=multiprocessing.cpu_count())
+            generate_prediction_image(final_pred_dl, model, output_size, args.label_type, device,
+                                      predictions_dir, 'final', reconstruct_fn, regions)
+        # Perform finishing touches even if cut short
+        except KeyboardInterrupt:
+            pass
+
+    # Add final validation metrics to metadata
+    try:
+        print('Performing final evaluation on validation set... ', end='')
+        val_results = perform_validation(model, val_dl, metrics, device, args.label_type)
+        metadata['Final validation metrics'] = inkid.metrics.metrics_dict(val_results)
+        print(f'done ({inkid.metrics.metrics_str(val_results)})')
+    except KeyboardInterrupt:
+        pass
 
     # Add some post-run info to metadata file
     stop = timeit.default_timer()
     metadata['Runtime'] = stop - start
     metadata['Finished at'] = time.strftime('%Y-%m-%d %H:%M:%S')
-
-    # TODO(PyTorch) replace
-    # Add final validation metrics to metadata
-    # metrics = {}
-    # try:
-    #     val_event_acc = EventAccumulator(os.path.join(output_path, 'val'))
-    #     val_event_acc.Reload()
-    #     for metric in args.val_metrics_to_write:
-    #         if metric in val_event_acc.Tags()['scalars']:
-    #             metrics[metric] = val_event_acc.Scalars(metric)[-1].value
-    # except KeyboardInterrupt:
-    #     pass
-    # metadata['Final validation metrics'] = metrics
 
     # Update metadata file on disk with results after run
     with open(os.path.join(output_path, 'metadata.json'), 'w') as f:

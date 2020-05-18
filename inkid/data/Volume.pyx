@@ -13,6 +13,7 @@ import numpy as np
 cimport numpy as cnp
 from PIL import Image
 import progressbar
+import pywt
 
 
 cdef BasisVectors get_component_vectors_from_normal(Float3 n):
@@ -393,7 +394,7 @@ cdef class Volume:
     def get_subvolume(self, center, shape, normal, out_of_bounds,
                       move_along_normal, jitter_max,
                       augment_subvolume, method, normalize, pad_to_shape,
-                      label_dim):
+                      fft, dwt, dwt_channel_subbands, label_dim):
         """Get a subvolume from a center point and normal vector.
 
         At the time of writing, this function very closely resembles
@@ -478,7 +479,19 @@ cdef class Volume:
             rotate_direction = np.random.randint(4)
             subvolume = np.rot90(subvolume, k=rotate_direction, axes=(1, 2))
 
-        if normalize:
+        if fft:
+            subvolume = np.real(np.fft.fftn(subvolume))
+            subvolume = np.log(np.abs(np.fft.fftshift(subvolume)) + 1e-7)
+
+        if dwt is not None:
+            coeffs = pywt.wavedecn(subvolume, wavelet=dwt, level=1)
+            if dwt_channel_subbands:
+                subvolume = np.stack((coeffs[0], *coeffs[1].values()), axis=0)
+                return subvolume
+            else:
+                subvolume, _ = pywt.coeffs_to_array(coeffs)
+
+        if normalize or fft:
             subvolume = np.asarray(subvolume, dtype=np.float32)
             subvolume = subvolume - subvolume.mean()
             subvolume = subvolume / subvolume.std()

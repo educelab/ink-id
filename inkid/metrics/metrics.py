@@ -1,3 +1,6 @@
+import warnings
+
+import numpy as np
 from sklearn.metrics import roc_auc_score
 import torch
 
@@ -23,12 +26,12 @@ def confusion(prediction, truth):
 
 def recall(pred, yb):
     tp, _, _, fn = confusion(pred, yb)
-    return 1 if tp + fn == 0 else tp / (tp + fn)
+    return float('nan') if tp + fn == 0 else tp / (tp + fn)
 
 
 def precision(pred, yb):
     tp, fp, _, _ = confusion(pred, yb)
-    return 1 if tp + fp == 0 else tp / (tp + fp)
+    return float('nan') if tp + fp == 0 else tp / (tp + fp)
 
 
 def fbeta(pred, yb, beta=0.3):
@@ -44,4 +47,17 @@ def accuracy(pred, yb):
 
 def auc(pred, yb):
     _, pred = pred.max(1)  # Argmax
-    return roc_auc_score(yb.cpu().numpy(), pred.cpu().numpy())
+    try:
+        return roc_auc_score(yb.cpu().numpy(), pred.cpu().numpy())
+    except ValueError:  # If only one class present in yb, ROC AUC not defined
+        return float('nan')
+
+
+def metrics_dict(metric_results):
+    with warnings.catch_warnings():  # Sometimes we will take the mean of all NaNs. This is fine, just return NaN.
+        warnings.simplefilter("ignore")
+        return {k: np.nanmean([float(i) for i in v]) for k, v in metric_results.items()}
+
+
+def metrics_str(metric_results):
+    return ' '.join([k + ': ' + f'{v:5.2g}' for k, v in metrics_dict(metric_results).items()])

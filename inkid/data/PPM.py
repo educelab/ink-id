@@ -168,6 +168,10 @@ class PPM:
         square = self._mask[y-r:y+r+1, x-r:x+r+1]
         return np.size(square) > 0 and np.min(square) != 0
 
+    def is_ink(self, x, y):
+        assert self._ink_label is not None
+        return self._ink_label[y, x] != 0
+
     def get_point_with_normal(self, ppm_x, ppm_y):
         return self._data[ppm_y][ppm_x]
 
@@ -202,7 +206,8 @@ class PPM:
                            out_of_bounds=None, move_along_normal=None,
                            jitter_max=None, augment_subvolume=None,
                            method=None, normalize=None,
-                           pad_to_shape=None, label_dim=None):
+                           pad_to_shape=None,
+                           fft=None, dwt=None, dwt_channel_subbands=None, label_dim=None):
         ppm_x, ppm_y = point
         x, y, z, n_x, n_y, n_z = self.get_point_with_normal(ppm_x, ppm_y)
         return self._volume.get_subvolume(
@@ -216,7 +221,10 @@ class PPM:
             method=method,
             normalize=normalize,
             pad_to_shape=pad_to_shape,
-            label_dim=label_dim
+            label_dim=label_dim,
+            fft=fft,
+            dwt=dwt,
+            dwt_channel_subbands=dwt_channel_subbands,
         )
 
     def reconstruct_predicted_ink_classes(self, class_probabilities, ppm_xy):

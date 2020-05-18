@@ -11,7 +11,7 @@ class Region:
         else:
             self._bounds = self.ppm.get_default_bounds()
 
-    def get_points(self, grid_spacing=None, probability_of_selection=None):
+    def get_points(self, grid_spacing=None, probability_of_selection=None, specify_inkness=None):
         if probability_of_selection is None:
             probability_of_selection = 1.0
         if grid_spacing is None:
@@ -23,7 +23,12 @@ class Region:
             for x in range(x0, x1, grid_spacing):
                 if random.random() > probability_of_selection:
                     continue
+                if specify_inkness is not None:
+                    if specify_inkness and not self.ppm.is_ink(x, y):
+                        continue
+                    elif not specify_inkness and self.ppm.is_ink(x, y):
+                        continue
                 if self.ppm.is_on_surface(x, y):
-                        points.append([self._region_id, x, y])
+                    points.append([self._region_id, x, y])
 
         return points
