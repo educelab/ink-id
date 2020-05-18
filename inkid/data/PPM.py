@@ -207,7 +207,7 @@ class PPM:
                            jitter_max=None, augment_subvolume=None,
                            method=None, normalize=None,
                            pad_to_shape=None,
-                           fft=None, dwt=None, dwt_channel_subbands=None, label_dim=None):
+                           fft=None, dwt=None, dwt_channel_subbands=None, model_3d_to_2d=None):
         ppm_x, ppm_y = point
         x, y, z, n_x, n_y, n_z = self.get_point_with_normal(ppm_x, ppm_y)
         return self._volume.get_subvolume(
@@ -221,7 +221,7 @@ class PPM:
             method=method,
             normalize=normalize,
             pad_to_shape=pad_to_shape,
-            label_dim=label_dim,
+            model_3d_to_2d=model_3d_to_2d,
             fft=fft,
             dwt=dwt,
             dwt_channel_subbands=dwt_channel_subbands,

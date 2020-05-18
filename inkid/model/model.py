@@ -22,9 +22,9 @@ def conv_output_shape(input_shape, kernel_size: Union[int, tuple], stride: Union
                  for d in range(dim))
 
 
-class Subvolume3DcnnModel(torch.nn.Module):
-    def __init__(self, drop_rate, subvolume_shape, pad_to_shape,
-                 batch_norm_momentum, no_batch_norm, filters, output_neurons, in_channels):
+class Subvolume3DcnnEncoder(torch.nn.Module):
+    def __init__(self, subvolume_shape, pad_to_shape,
+                 batch_norm_momentum, no_batch_norm, filters, in_channels):
         super().__init__()
 
         if pad_to_shape is not None:
@@ -34,6 +34,8 @@ class Subvolume3DcnnModel(torch.nn.Module):
 
         self._batch_norm = not no_batch_norm
         self._in_channels = in_channels
+
+        self.relu = torch.nn.ReLU()
 
         paddings = [1, 1, 1, 1]
         kernel_sizes = [3, 3, 3, 3]
@@ -66,12 +68,7 @@ class Subvolume3DcnnModel(torch.nn.Module):
         torch.nn.init.zeros_(self.conv4.bias)
         self.batch_norm4 = torch.nn.BatchNorm3d(num_features=filters[3], momentum=batch_norm_momentum)
         shape = conv_output_shape(shape, kernel_sizes[3], strides[3], paddings[3])
-
-        self.fc = torch.nn.Linear(filters[3] * np.prod(shape), output_neurons)
-        self.dropout = torch.nn.Dropout(p=drop_rate)
-
-        self.relu = torch.nn.ReLU()
-        self.flatten = torch.nn.Flatten()
+        self.output_shape = (filters[3],) + shape
 
     def forward(self, x):
         if self._in_channels > 1:
@@ -92,8 +89,21 @@ class Subvolume3DcnnModel(torch.nn.Module):
         y = self.relu(y)
         if self._batch_norm:
             y = self.batch_norm4(y)
-        y = self.flatten(y)
+
+        return y
+
+class LinearInkDecoder(torch.nn.Module):
+    def __init__(self, drop_rate, input_shape, output_neurons):
+        super().__init__()
+
+        self.fc = torch.nn.Linear(int(np.prod(input_shape)), output_neurons)
+        self.dropout = torch.nn.Dropout(p=drop_rate)
+
+        self.relu = torch.nn.ReLU()
+        self.flatten = torch.nn.Flatten()
+
+    def forward(self, x):
+        y = self.flatten(x)
         y = self.fc(y)
         y = self.dropout(y)
-
         return y

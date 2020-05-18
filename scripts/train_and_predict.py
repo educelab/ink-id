@@ -118,8 +118,9 @@ def main():
                             'ink_classes',
                             'rgb_values',
                         ])
-    parser.add_argument('--label-dim', metavar='n', default=1, 
-                        help='dimensionality of labels', choices=[1, 2])
+    parser.add_argument('--model-3d-to-2d', action='store_true',
+                        help='Use semi-fully convolutional model (which removes a dimension) with 2d labels per '
+                             'subvolume')
 
     # Subvolumes
     parser.add_argument('--subvolume-method', metavar='name', default='nearest_neighbor',
@@ -283,7 +284,7 @@ def main():
             method=args.subvolume_method,
             normalize=args.normalize_subvolumes,
             pad_to_shape=args.pad_to_shape,
-            label_dim=args.label_dim,
+            model_3d_to_2d=args.model_3d_to_2d,
             fft=args.fft,
             dwt=args.dwt,
             dwt_channel_subbands=args.dwt_channel_subbands,
@@ -370,9 +371,10 @@ def main():
             in_channels = 8
             args.subvolume_shape = [i // 2 for i in args.subvolume_shape]
             args.pad_to_shape = None
-        model = inkid.model.Subvolume3DcnnModel(
-            args.drop_rate, args.subvolume_shape, args.pad_to_shape,
-            args.batch_norm_momentum, args.no_batch_norm, args.filters, output_size, in_channels)
+        encoder = inkid.model.Subvolume3DcnnEncoder(args.subvolume_shape, args.pad_to_shape, args.batch_norm_momentum,
+                                                    args.no_batch_norm, args.filters, in_channels)
+        decoder = inkid.model.LinearInkDecoder(args.drop_rate, encoder.output_shape, output_size)
+        model = torch.nn.Sequential(encoder, decoder)
     else:
         print('Feature type: {} does not yet have a PyTorch model.'.format(args.feature_type))
         return
