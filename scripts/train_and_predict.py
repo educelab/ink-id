@@ -40,6 +40,12 @@ import torchsummary
 import inkid
 
 
+def take(dataset, n_samples):
+    if n_samples < len(dataset):
+        dataset = random_split(dataset, [n_samples, len(dataset) - n_samples])[0]
+    return dataset
+
+
 def perform_validation(model, dataloader, metrics, device, label_type):
     model.eval()  # Turn off training mode for batch norm and dropout purposes
     with torch.no_grad():
@@ -157,18 +163,12 @@ def main():
     parser.add_argument('--drop-rate', metavar='n', type=float)
     parser.add_argument('--batch-norm-momentum', metavar='n', type=float)
     parser.add_argument('--no-batch-norm', action='store_true')
-    parser.add_argument('--fbeta-weight', metavar='n', type=float)
-    parser.add_argument('--filter-size', metavar='n', nargs=3, type=int,
-                        help='3D convolution filter size')
     parser.add_argument('--filters', metavar='n', nargs='*', type=int,
                         help='number of filters for each convolution layer')
-    parser.add_argument('--adagrad-optimizer', action='store_true')
-    parser.add_argument('--decay-steps', metavar='n', type=int, default=None)
-    parser.add_argument('--decay-rate', metavar='n', type=float, default=None)
 
     # Run configuration
     parser.add_argument('--batch-size', metavar='n', type=int)
-    parser.add_argument('--training-max-batches', metavar='n', type=int, default=None)
+    parser.add_argument('--training-max-samples', metavar='n', type=int, default=None)
     parser.add_argument('--training-epochs', metavar='n', type=int, default=None)
     parser.add_argument('--prediction-grid-spacing', metavar='n', type=int,
                         help='prediction points will be taken from an NxN grid')
@@ -345,13 +345,12 @@ def main():
 
     # Define the datasets
     train_ds = inkid.data.PointsDataset(regions, ['training'], training_features_fn, label_fn)
+    if args.training_max_samples is not None:
+        train_ds = take(train_ds, args.training_max_samples)
     val_ds = inkid.data.PointsDataset(regions, ['validation'], validation_features_fn, label_fn)
     # Only take n samples for validation, not the entire region
-    if args.validation_max_samples < len(val_ds):
-        val_ds = random_split(
-            val_ds,
-            [args.validation_max_samples, len(val_ds) - args.validation_max_samples]
-            )[0]
+    if args.validation_max_samples is not None:
+        val_ds = take(val_ds, args.validation_max_samples)
     pred_ds = inkid.data.PointsDataset(regions, ['prediction'], prediction_features_fn, lambda p: p,
                                        grid_spacing=args.prediction_grid_spacing)
 
@@ -390,53 +389,54 @@ def main():
     last_summary = time.time()
 
     # Run training loop
-    try:
-        for epoch in range(args.training_epochs):
-            model.train()  # Turn on training mode
-            total_batches = len(train_dl)
-            for batch_num, (xb, yb) in enumerate(train_dl):
-                xb = xb.to(device)
-                yb = yb.to(device)
-                pred = model(xb)
-                if args.label_type == 'ink_classes':
-                    _, yb = yb.max(1)  # Argmax
-                for metric, fn in metrics.items():
-                    metric_results[metric].append(fn(pred, yb))
+    if not args.skip_training:
+        try:
+            for epoch in range(args.training_epochs):
+                model.train()  # Turn on training mode
+                total_batches = len(train_dl)
+                for batch_num, (xb, yb) in enumerate(train_dl):
+                    xb = xb.to(device)
+                    yb = yb.to(device)
+                    pred = model(xb)
+                    if args.label_type == 'ink_classes':
+                        _, yb = yb.max(1)  # Argmax
+                    for metric, fn in metrics.items():
+                        metric_results[metric].append(fn(pred, yb))
 
-                metric_results['loss'][-1].backward()
-                opt.step()
-                opt.zero_grad()
+                    metric_results['loss'][-1].backward()
+                    opt.step()
+                    opt.zero_grad()
 
-                if batch_num % args.summary_every_n_batches == 0:
-                    print('Batch: {:>5d}/{:<5d} {} Seconds: {:5.3g}'.format(
-                        batch_num, total_batches,
-                        inkid.metrics.metrics_str(metric_results),
-                        time.time() - last_summary))
-                    for result in metric_results.values():
-                        result.clear()
-                    last_summary = time.time()
+                    if batch_num % args.summary_every_n_batches == 0:
+                        print('Batch: {:>5d}/{:<5d} {} Seconds: {:5.3g}'.format(
+                            batch_num, total_batches,
+                            inkid.metrics.metrics_str(metric_results),
+                            time.time() - last_summary))
+                        for result in metric_results.values():
+                            result.clear()
+                        last_summary = time.time()
 
-                if batch_num % args.checkpoint_every_n_batches == 0:
-                    # Save model checkpoint
-                    torch.save({
-                        'epoch': epoch,
-                        'batch': batch_num,
-                        'model_state_dict': model.state_dict(),
-                        'optimizer_state_dict': opt.state_dict()
-                    }, os.path.join(checkpoints_dir, f'checkpoint_{epoch}_{batch_num}.pt'))
+                    if batch_num % args.checkpoint_every_n_batches == 0:
+                        # Save model checkpoint
+                        torch.save({
+                            'epoch': epoch,
+                            'batch': batch_num,
+                            'model_state_dict': model.state_dict(),
+                            'optimizer_state_dict': opt.state_dict()
+                        }, os.path.join(checkpoints_dir, f'checkpoint_{epoch}_{batch_num}.pt'))
 
-                    # Periodic evaluation and prediction
-                    print('Evaluating on validation set... ', end='')
-                    val_results = perform_validation(model, val_dl, metrics, device, args.label_type)
-                    print(f'done ({inkid.metrics.metrics_str(val_results)})')
+                        # Periodic evaluation and prediction
+                        print('Evaluating on validation set... ', end='')
+                        val_results = perform_validation(model, val_dl, metrics, device, args.label_type)
+                        print(f'done ({inkid.metrics.metrics_str(val_results)})')
 
-                    # Prediction image
-                    print('Generating prediction image... ', end='')
-                    generate_prediction_image(pred_dl, model, output_size, args.label_type, device,
-                                              predictions_dir, f'{epoch}_{batch_num}', reconstruct_fn, regions)
-                    print('done')
-    except KeyboardInterrupt:
-        pass
+                        # Prediction image
+                        print('Generating prediction image... ', end='')
+                        generate_prediction_image(pred_dl, model, output_size, args.label_type, device,
+                                                  predictions_dir, f'{epoch}_{batch_num}', reconstruct_fn, regions)
+                        print('done')
+        except KeyboardInterrupt:
+            pass
 
     # Run a final prediction on all regions
     if args.final_prediction_on_all:

@@ -13,8 +13,6 @@ augmentation = true
 learning-rate = 0.001
 drop-rate = 0.5
 batch-norm-momentum = 0.9
-fbeta-weight = 0.3
-filter-size = [3, 3, 3]
 filters = [32, 16, 8, 4]
 
 # Run configuration
