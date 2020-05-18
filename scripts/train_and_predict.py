@@ -5,10 +5,6 @@ training, validation, and prediction. It will then run the training
 process, validating and predicting along the way as defined by the
 RegionSet and the parameters file.
 
-It is possible to pass a model directory to the script, in which case
-it will use that model as a starting point rather than random
-initialization.
-
 The optional value k can be passed in order to use this script for
 k-fold cross validation (and prediction in this case). To do that,
 create a RegionSet of entirely training regions, and then pass an
@@ -40,13 +36,15 @@ import torchsummary
 import inkid
 
 
-def take(dataset, n_samples):
+def take_from_dataset(dataset, n_samples):
+    """Take the first n samples from a dataset to reduce the size."""
     if n_samples < len(dataset):
         dataset = random_split(dataset, [n_samples, len(dataset) - n_samples])[0]
     return dataset
 
 
 def perform_validation(model, dataloader, metrics, device, label_type):
+    """Run the validation process using a model and dataloader, and return the results of all metrics."""
     model.eval()  # Turn off training mode for batch norm and dropout purposes
     with torch.no_grad():
         metric_results = {metric: [] for metric in metrics}
@@ -63,6 +61,7 @@ def perform_validation(model, dataloader, metrics, device, label_type):
 
 def generate_prediction_image(dataloader, model, output_size, label_type, device, predictions_dir, filename,
                               reconstruct_fn, region_set):
+    """Helper function to generate a prediction image given a model and dataloader, and save it to a file."""
     predictions = np.empty(shape=(0, output_size))
     points = np.empty(shape=(0, 3))
     model.eval()  # Turn off training mode for batch norm and dropout purposes
@@ -95,7 +94,7 @@ def main():
     parser.add_argument('data', metavar='infile', help='input data file (JSON or PPM)', nargs='?')
     parser.add_argument('output', metavar='outfile', help='output directory', nargs='?')
 
-    # Config file
+    # Config file so the user can have various configs saved for e.g. different scans that are often processed
     parser.add_argument('-c', '--config-file', metavar='path', is_config_file=True,
                         help='file of pre-specified arguments (in addition to pre-loaded defaults)')
 
@@ -255,10 +254,6 @@ def main():
     # Now that we have made all these changes to the region data, create a region set from this data
     regions = inkid.data.RegionSet(region_data)
 
-    # Diagnostic printing
-    print('Arguments:\n{}\n'.format(args))
-    print('Region Set:\n{}\n'.format(json.dumps(region_data, indent=4, sort_keys=False)))
-
     # Create metadata dict
     metadata = {'Arguments': vars(args), 'Region set': region_data, 'Command': ' '.join(sys.argv)}
 
@@ -269,6 +264,9 @@ def main():
         metadata['Git hash'] = repo.git.rev_parse(sha, short=6)
     except git.exc.InvalidGitRepositoryError:
         metadata['Git hash'] = 'No git hash available (unable to find valid repository).'
+
+    # Diagnostic printing
+    print(json.dumps(metadata, indent=4, sort_keys=False))
 
     # Write preliminary metadata to file
     with open(os.path.join(output_path, 'metadata.json'), 'w') as metadata_file:
@@ -346,14 +344,15 @@ def main():
     # Define the datasets
     train_ds = inkid.data.PointsDataset(regions, ['training'], training_features_fn, label_fn)
     if args.training_max_samples is not None:
-        train_ds = take(train_ds, args.training_max_samples)
+        train_ds = take_from_dataset(train_ds, args.training_max_samples)
     val_ds = inkid.data.PointsDataset(regions, ['validation'], validation_features_fn, label_fn)
     # Only take n samples for validation, not the entire region
     if args.validation_max_samples is not None:
-        val_ds = take(val_ds, args.validation_max_samples)
+        val_ds = take_from_dataset(val_ds, args.validation_max_samples)
     pred_ds = inkid.data.PointsDataset(regions, ['prediction'], prediction_features_fn, lambda p: p,
                                        grid_spacing=args.prediction_grid_spacing)
 
+    # Define the dataloaders which implement batching, shuffling, etc.
     train_dl = DataLoader(train_ds, batch_size=args.batch_size, shuffle=True,
                           num_workers=multiprocessing.cpu_count())
     val_dl = DataLoader(val_ds, batch_size=args.batch_size * 2, shuffle=True,
@@ -361,6 +360,7 @@ def main():
     pred_dl = DataLoader(pred_ds, batch_size=args.batch_size * 2, shuffle=False,
                          num_workers=multiprocessing.cpu_count())
 
+    # Specify the compute device for PyTorch purposes
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
     # Create the model for training
@@ -375,7 +375,7 @@ def main():
         decoder = inkid.model.LinearInkDecoder(args.drop_rate, encoder.output_shape, output_size)
         model = torch.nn.Sequential(encoder, decoder)
     else:
-        print('Feature type: {} does not yet have a PyTorch model.'.format(args.feature_type))
+        print('Feature type: {} does not have a model implementation.'.format(args.feature_type))
         return
     model = model.to(device)
     # Print summary of model

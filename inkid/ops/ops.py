@@ -60,7 +60,6 @@ def remap(x, in_min, in_max, out_min, out_max):
 def get_descriptive_statistics(tensor):
     t_min = tensor.min()
     t_max = tensor.max()
-    # t_range = tensor.ptp()
     t_mean = tensor.mean()
     t_std = tensor.std()
     t_median = np.median(tensor)
@@ -69,7 +68,6 @@ def get_descriptive_statistics(tensor):
     return np.array([
         t_min,
         t_max,
-        # t_range,
         t_mean,
         t_std,
         t_median,

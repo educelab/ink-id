@@ -6,7 +6,6 @@ Define the Volume class to represent volumetric data.
 cimport libc.math as math
 import os
 import random
-import sys
 
 import mathutils
 import numpy as np

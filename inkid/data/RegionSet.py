@@ -156,11 +156,11 @@ class RegionSet:
                    specify_inkness=None):
         """Return a numpy array of region_ids and points.
 
-                Used as the initial input to a Dataset, which will later map
-                these points to network inputs and do other dataset processing
-                such as batching.
+        Used as the initial input to a Dataset, which will later map
+        these points to network inputs and do other dataset processing
+        such as batching.
 
-                """
+        """
         if isinstance(region_groups, str):
             region_groups = [region_groups]
         print('Fetching points for region groups: {}... '
