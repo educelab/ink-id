@@ -2,7 +2,7 @@
  ink-id
 ========
 
-``inkid`` is a Python package and collection of scripts for identifying ink in a document via machine learning.
+``inkid`` is a Python package and collection of scripts for identifying ink in volumetric CT data using machine learning.
 
 Requirements
 ============
@@ -15,12 +15,12 @@ Installation
 .. code-block:: bash
 
     $ git clone https://code.cs.uky.edu/seales-research/ink-id.git && cd ink-id
-    $ pip3 install -U virtualenv            # Install virtualenv
-    $ virtualenv -p python3 env-inkid       # Create a new environment named env-inkid
-    $ source env-inkid/bin/activate         # Activate the environment
-    (env-inkid) $ pip install Cython numpy  # Install prerequisites
-    (env-inkid) $ pip install -e .          # Install ink-id and dependencies
-    (env-inkid) $ deactivate                # When finished, deactivate the environment
+    $ pip3 install -U virtualenv        # Install virtualenv
+    $ virtualenv -p python3 .venv       # Create a new environment
+    $ . .venv/bin/activate              # Activate the environment
+    (.venv) $ pip install Cython numpy  # Install prerequisites
+    (.venv) $ pip install -e .          # Install ink-id and dependencies
+    (.venv) $ deactivate                # When finished, deactivate the environment
 
 Usage
 =====
@@ -34,15 +34,20 @@ The package can be used as a Python library:
    params = inkid.ops.load_default_parameters()
    regions = inkid.data.RegionSet.from_json(region_set_filename)
 
-There are also some applications included, for example:
+An application is also included for running a training job with intermediate validation and prediction:
 
 ::
 
    $ inkid-train-and-predict
-   usage: inkid-train-and-predict [-h] input-file output-path [options]
+   usage: inkid-train-and-predict [infile] [outfile] [options]
 
 Examples
 --------
+
+SLURM Jobs
+^^^^^^^^^^
+
+This code is most commonly used in Singularity containers, run as SLURM jobs on a compute cluster. For documentation of this usage, see `here <https://code.cs.uky.edu/seales-research/ink-id/-/blob/develop/scripts/singularity/inkid.def>`_.
 
 Grid Training
 ^^^^^^^^^^^^^
