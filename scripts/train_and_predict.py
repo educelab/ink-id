@@ -62,7 +62,7 @@ def perform_validation(model, dataloader, metrics, device, label_type):
 def generate_prediction_image(dataloader, model, output_size, label_type, device, predictions_dir, filename,
                               reconstruct_fn, region_set):
     """Helper function to generate a prediction image given a model and dataloader, and save it to a file."""
-    predictions = np.empty(shape=(0, output_size))
+    predictions = np.empty(shape=(0, output_size, 0, 0))
     points = np.empty(shape=(0, 3))
     model.eval()  # Turn off training mode for batch norm and dropout purposes
     with torch.no_grad():
@@ -210,6 +210,10 @@ def main():
     else:
         model_path = output_path
 
+    # Automatically increase prediction grid spacing if using 2D labels
+    if args.model_3d_to_2d:
+        args.prediction_grid_spacing = args.subvolume_shape[-1]
+
     # Define directories for prediction images and checkpoints
     predictions_dir = os.path.join(output_path, 'predictions')
     os.makedirs(predictions_dir)
@@ -344,9 +348,6 @@ def main():
     else:
         print('Label type not recognized: {}'.format(args.label_type))
         return
-
-    if args.model_3d_to_2d:
-        args.prediction_grid_spacing = args.subvolume_shape[-1]
 
     # Define the datasets
     train_ds = inkid.data.PointsDataset(regions, ['training'], training_features_fn, label_fn)
