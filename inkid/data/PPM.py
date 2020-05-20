@@ -179,7 +179,7 @@ class PPM:
         assert self._ink_label is not None
         x, y = point
         label = np.stack((np.ones(shape), np.zeros(shape))).astype(np.float32)  # Create array of no-ink labels
-        x_d, y_d = np.array(shape) // 2  # Calculate distance from center to edges of square we are sampling
+        y_d, x_d = np.array(shape) // 2  # Calculate distance from center to edges of square we are sampling
         # Iterate over label indices
         for idx, _ in np.ndenumerate(label):
             _, y_idx, x_idx = idx
@@ -241,7 +241,15 @@ class PPM:
     def reconstruct_prediction_value(self, value, ppm_xy, square_r=2):
         assert len(ppm_xy) == 2
         x, y = ppm_xy
-        self._ink_classes_prediction_image[y-square_r:y+square_r, x-square_r:x+square_r] = value
+        y_d, x_d = value.shape // 2  # Calculate distance from center to edges of square we are writing
+        # Iterate over label indices
+        for idx, _ in np.ndenumerate(value):
+            y_idx, x_idx = idx
+            y_s = y - y_d + y_idx  # Sample point is center minus distance (half edge length) plus label index
+            x_s = x - x_d + x_idx
+            # Bounds check to make sure inside PPM
+            if 0 <= y_s < self._ink_classes_prediction_image[0] and 0 <= x_s < self._ink_classes_prediction_image[1]:
+                self._ink_classes_prediction_image[y_idx, x_idx] = value
 
     def reconstruct_predicted_rgb(self, rgb, ppm_xy, square_r=2):
         assert len(ppm_xy) == 2
