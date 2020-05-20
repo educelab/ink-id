@@ -60,9 +60,9 @@ def perform_validation(model, dataloader, metrics, device, label_type):
 
 
 def generate_prediction_image(dataloader, model, output_size, label_type, device, predictions_dir, filename,
-                              reconstruct_fn, region_set):
+                              reconstruct_fn, region_set, subvolume_shape):
     """Helper function to generate a prediction image given a model and dataloader, and save it to a file."""
-    predictions = np.empty(shape=(0, output_size, 0, 0))
+    predictions = np.empty(shape=(0, output_size, subvolume_shape[2], subvolume_shape[1]))
     points = np.empty(shape=(0, 3))
     model.eval()  # Turn off training mode for batch norm and dropout purposes
     with torch.no_grad():
@@ -444,7 +444,8 @@ def main():
                         # Prediction image
                         print('Generating prediction image... ', end='')
                         generate_prediction_image(pred_dl, model, output_size, args.label_type, device,
-                                                  predictions_dir, f'{epoch}_{batch_num}', reconstruct_fn, regions)
+                                                  predictions_dir, f'{epoch}_{batch_num}', reconstruct_fn, regions,
+                                                  args.subvolume_shape)
                         print('done')
         except KeyboardInterrupt:
             pass
@@ -458,7 +459,7 @@ def main():
             final_pred_dl = DataLoader(final_pred_ds, batch_size=args.batch_size * 2, shuffle=False,
                                        num_workers=multiprocessing.cpu_count())
             generate_prediction_image(final_pred_dl, model, output_size, args.label_type, device,
-                                      predictions_dir, 'final', reconstruct_fn, regions)
+                                      predictions_dir, 'final', reconstruct_fn, regions, args.subvolume_shape)
         # Perform finishing touches even if cut short
         except KeyboardInterrupt:
             pass
