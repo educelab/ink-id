@@ -345,6 +345,9 @@ def main():
         print('Label type not recognized: {}'.format(args.label_type))
         return
 
+    if args.model_3d_to_2d:
+        args.prediction_grid_spacing = args.subvolume_shape[-1]
+
     # Define the datasets
     train_ds = inkid.data.PointsDataset(regions, ['training'], training_features_fn, label_fn)
     if args.training_max_samples is not None:
