@@ -241,7 +241,7 @@ class PPM:
     def reconstruct_prediction_value(self, value, ppm_xy, square_r=2):
         assert len(ppm_xy) == 2
         x, y = ppm_xy
-        y_d, x_d = value.shape // 2  # Calculate distance from center to edges of square we are writing
+        y_d, x_d = np.array(value.shape) // 2  # Calculate distance from center to edges of square we are writing
         # Iterate over label indices
         for idx, _ in np.ndenumerate(value):
             y_idx, x_idx = idx
