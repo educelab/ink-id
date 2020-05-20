@@ -372,7 +372,10 @@ def main():
             args.pad_to_shape = None
         encoder = inkid.model.Subvolume3DcnnEncoder(args.subvolume_shape, args.pad_to_shape, args.batch_norm_momentum,
                                                     args.no_batch_norm, args.filters, in_channels)
-        decoder = inkid.model.LinearInkDecoder(args.drop_rate, encoder.output_shape, output_size)
+        if args.model_3d_to_2d:
+            decoder = inkid.model.ConvolutionalInkDecoder(args.filters, output_size)
+        else:
+            decoder = inkid.model.LinearInkDecoder(args.drop_rate, encoder.output_shape, output_size)
         model = torch.nn.Sequential(encoder, decoder)
     else:
         print('Feature type: {} does not have a model implementation.'.format(args.feature_type))

@@ -92,6 +92,7 @@ class Subvolume3DcnnEncoder(torch.nn.Module):
 
         return y
 
+
 class LinearInkDecoder(torch.nn.Module):
     def __init__(self, drop_rate, input_shape, output_neurons):
         super().__init__()
@@ -106,4 +107,43 @@ class LinearInkDecoder(torch.nn.Module):
         y = self.flatten(x)
         y = self.fc(y)
         y = self.dropout(y)
+        return y
+
+
+class ConvolutionalInkDecoder(torch.nn.Module):
+    def __init__(self, filters, output_channels):
+        super().__init__()
+
+        paddings = [1, 1, 1, 1]
+        out_paddings = [0, 1, 1, 1]
+        kernel_sizes = [3, 3, 3, 3]
+        strides = [1, 2, 2, 2]
+
+        self.leakyReLU = torch.nn.LeakyReLU()
+
+        self.convtranspose1 = torch.nn.ConvTranspose2d(in_channels=filters[3], out_channels=filters[2],
+                                                       kernel_size=kernel_sizes[3], stride=strides[3],
+                                                       padding=paddings[3], output_padding=out_paddings[3])
+        self.convtranspose2 = torch.nn.ConvTranspose2d(in_channels=filters[2], out_channels=filters[1],
+                                                       kernel_size=kernel_sizes[2], stride=strides[2],
+                                                       padding=paddings[2], output_padding=out_paddings[2])
+        self.convtranspose3 = torch.nn.ConvTranspose2d(in_channels=filters[1], out_channels=filters[0],
+                                                       kernel_size=kernel_sizes[1], stride=strides[1],
+                                                       padding=paddings[1], output_padding=out_paddings[1])
+        self.convtranspose4 = torch.nn.ConvTranspose2d(in_channels=filters[0], out_channels=output_channels,
+                                                       kernel_size=kernel_sizes[0], stride=strides[0],
+                                                       padding=paddings[0], output_padding=out_paddings[0])
+
+    def forward(self, x):
+        # From (B, C, D, W, H) sum down to (B, C, W, H)
+        y = torch.sum(x, dim=2)
+        # Transpose convolutions back up to the subvolume size (in 2D)
+        y = self.convtranspose1(y)
+        y = self.leakyReLU(y)
+        y = self.convtranspose2(y)
+        y = self.leakyReLU(y)
+        y = self.convtranspose3(y)
+        y = self.leakyReLU(y)
+        y = self.convtranspose4(y)
+        y = self.leakyReLU(y)
         return y
