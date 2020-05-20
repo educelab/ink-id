@@ -250,7 +250,7 @@ class PPM:
             # Bounds check to make sure inside PPM
             if 0 <= y_s < self._ink_classes_prediction_image.shape[0] \
                     and 0 <= x_s < self._ink_classes_prediction_image.shape[1]:
-                self._ink_classes_prediction_image[y_idx, x_idx] = v
+                self._ink_classes_prediction_image[y_s, x_s] = v
 
     def reconstruct_predicted_rgb(self, rgb, ppm_xy, square_r=2):
         assert len(ppm_xy) == 2
