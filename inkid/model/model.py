@@ -107,6 +107,9 @@ class LinearInkDecoder(torch.nn.Module):
         y = self.flatten(x)
         y = self.fc(y)
         y = self.dropout(y)
+        # Add some dimensions to match the dimensionality of label which is always 2D even if shape is (1, 1)
+        y = torch.unsqueeze(y, 2)
+        y = torch.unsqueeze(y, 3)
         return y
 
 
@@ -135,7 +138,7 @@ class ConvolutionalInkDecoder(torch.nn.Module):
                                                        padding=paddings[0], output_padding=out_paddings[0])
 
     def forward(self, x):
-        # From (B, C, D, W, H) sum down to (B, C, W, H)
+        # Sum collapses from (B, C, D, H, W) down to (B, C, H, W)
         y = torch.sum(x, dim=2)
         # Transpose convolutions back up to the subvolume size (in 2D)
         y = self.convtranspose1(y)

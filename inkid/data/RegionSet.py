@@ -249,14 +249,14 @@ class RegionSet:
         )
         return np.asarray(subvolume, np.float32)
 
-    def point_to_ink_classes_label(self, region_id_with_point):
+    def point_to_ink_classes_label(self, region_id_with_point, shape=(1, 1)):
         """Take a region_id and point, and return the ink classes label."""
         region_id, x, y = region_id_with_point
-        return self._regions[region_id].ppm.point_to_ink_classes_label((x, y))
+        return self._regions[region_id].ppm.point_to_ink_classes_label((x, y), shape=shape)
 
-    def point_to_rgb_values_label(self, region_id_with_point):
+    def point_to_rgb_values_label(self, region_id_with_point, shape=(1, 1)):
         region_id, x, y = region_id_with_point
-        return self._regions[region_id].ppm.point_to_rgb_values_label((x, y))
+        return self._regions[region_id].ppm.point_to_rgb_values_label((x, y), shape=shape)
 
     def reconstruct_prediction_values(self, region_ids, values, ppm_xy_coordinates):
         for region_id, value, ppm_xy in zip(

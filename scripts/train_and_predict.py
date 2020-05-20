@@ -318,8 +318,12 @@ def main():
         return
 
     # Define the labels
+    if args.model_3d_to_2d:
+        label_shape = (args.subvolume_shape[1], args.subvolume_shape[2])
+    else:
+        label_shape = (1, 1)
     if args.label_type == 'ink_classes':
-        label_fn = regions.point_to_ink_classes_label
+        label_fn = functools.partial(regions.point_to_ink_classes_label, shape=label_shape)
         output_size = 2
         metrics = {
             'loss': nn.CrossEntropyLoss(reduction='mean'),
@@ -331,7 +335,7 @@ def main():
         }
         reconstruct_fn = regions.reconstruct_predicted_ink_classes
     elif args.label_type == 'rgb_values':
-        label_fn = regions.point_to_rgb_values_label
+        label_fn = functools.partial(regions.point_to_rgb_values_label, shape=label_shape)
         output_size = 3
         metrics = {
             'loss': nn.SmoothL1Loss(reduction='mean')
