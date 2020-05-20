@@ -243,14 +243,14 @@ class PPM:
         x, y = ppm_xy
         y_d, x_d = np.array(value.shape) // 2  # Calculate distance from center to edges of square we are writing
         # Iterate over label indices
-        for idx, _ in np.ndenumerate(value):
+        for idx, v in np.ndenumerate(value):
             y_idx, x_idx = idx
             y_s = y - y_d + y_idx  # Sample point is center minus distance (half edge length) plus label index
             x_s = x - x_d + x_idx
             # Bounds check to make sure inside PPM
             if 0 <= y_s < self._ink_classes_prediction_image.shape[0] \
                     and 0 <= x_s < self._ink_classes_prediction_image.shape[1]:
-                self._ink_classes_prediction_image[y_idx, x_idx] = value
+                self._ink_classes_prediction_image[y_idx, x_idx] = v
 
     def reconstruct_predicted_rgb(self, rgb, ppm_xy, square_r=2):
         assert len(ppm_xy) == 2
