@@ -22,6 +22,12 @@ Installation
     (.venv) $ pip install -e .          # Install ink-id and dependencies
     (.venv) $ deactivate                # When finished, deactivate the environment
 
+After changes to Cython files (`.pyx` and `.pxd`), those modules must be rebuilt:
+
+.. code-block:: bash
+
+    $ python setup.py build_ext --inplace
+
 Usage
 =====
 
@@ -47,7 +53,7 @@ Examples
 SLURM Jobs
 ^^^^^^^^^^
 
-This code is most commonly used in Singularity containers, run as SLURM jobs on a compute cluster. For documentation of this usage, see `here <https://code.cs.uky.edu/seales-research/ink-id/-/blob/develop/scripts/singularity/inkid.def>`_.
+This code is most commonly used in Singularity containers, run as SLURM jobs on a compute cluster. For documentation of this usage, see the `container .def file <https://code.cs.uky.edu/seales-research/ink-id/-/blob/develop/scripts/singularity/inkid.def>`_.
 
 Grid Training
 ^^^^^^^^^^^^^
