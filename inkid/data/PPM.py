@@ -189,7 +189,7 @@ class PPM:
             if 0 <= y_s < self._ink_label.shape[0] and 0 <= x_s < self._ink_label.shape[1]:
                 if self._ink_label[y_s, x_s] != 0:
                     label[:, y_idx, x_idx] = [0.0, 1.0]  # Mark this "ink"
-        return label[:, ::-1, :].copy()
+        return label
 
     def point_to_rgb_values_label(self, point, shape):
         assert self._rgb_label is not None
