@@ -133,7 +133,6 @@ def main():
                         choices=[
                             'nearest_neighbor',
                             'interpolated',
-                            'snap_to_axis_aligned',
                         ])
     parser.add_argument('--subvolume-shape', metavar='n', nargs=3, type=int,
                         help='subvolume shape in z y x')
@@ -210,9 +209,10 @@ def main():
     else:
         model_path = output_path
 
-    # Automatically increase prediction grid spacing if using 2D labels
+    # Automatically increase prediction grid spacing if using 2D labels, and turn off augmentation
     if args.model_3d_to_2d:
         args.prediction_grid_spacing = args.subvolume_shape[-1]
+        args.augmentation = False
 
     # Define directories for prediction images and checkpoints
     predictions_dir = os.path.join(output_path, 'predictions')

@@ -15,6 +15,34 @@ import progressbar
 import pywt
 
 
+cdef BasisVectors get_basis_from_square(square_corners):
+    top_left, top_right, bottom_left, bottom_right = np.array(square_corners)
+
+    x_vec = (top_right - top_left) + (bottom_right - bottom_left) / 2.0
+    y_vec = (top_left - bottom_left) + (top_right - bottom_right) / 2.0
+    z_vec = np.cross(x_vec, y_vec)
+
+    x_vec = mathutils.Vector(x_vec).normalized()
+    y_vec = mathutils.Vector(y_vec).normalized()
+    z_vec = mathutils.Vector(z_vec).normalized()
+
+    cdef BasisVectors basis
+
+    basis.x.x = x_vec[0]
+    basis.x.y = x_vec[1]
+    basis.x.z = x_vec[2]
+
+    basis.y.x = y_vec[0]
+    basis.y.y = y_vec[1]
+    basis.y.z = y_vec[2]
+
+    basis.z.x = z_vec[0]
+    basis.z.y = z_vec[1]
+    basis.z.z = z_vec[2]
+
+    return basis
+
+
 cdef BasisVectors get_component_vectors_from_normal(Float3 n):
     """Get a subvolume oriented based on a surface normal vector.
 
@@ -337,63 +365,11 @@ cdef class Volume:
                         <int>(volume_point.z + 0.5)
                     )
 
-    cpdef get_subvolume_nearest_neighbor(self, center, shape, normal,
-                                         out_of_bounds):
-        cdef BasisVectors basis
-        cdef Float3 n, c
-        cdef Int3 s
-
-        n.x = normal[0]
-        n.y = normal[1]
-        n.z = normal[2]
-
-        c.x = center[0]
-        c.y = center[1]
-        c.z = center[2]
-
-        s.z = shape[0]
-        s.y = shape[1]
-        s.x = shape[2]
-
-        basis = get_component_vectors_from_normal(n)
-
-        subvolume = np.zeros(shape, dtype=np.uint16)
-
-        self.nearest_neighbor_with_basis_vectors(c, s, basis, subvolume)
-
-        return subvolume
-
-    cpdef get_subvolume_interpolated(self, center, shape, normal,
-                                     out_of_bounds):
-        cdef BasisVectors basis
-        cdef Float3 n, c
-        cdef Int3 s
-
-        n.x = normal[0]
-        n.y = normal[1]
-        n.z = normal[2]
-
-        c.x = center[0]
-        c.y = center[1]
-        c.z = center[2]
-
-        s.z = shape[0]
-        s.y = shape[1]
-        s.x = shape[2]
-
-        basis = get_component_vectors_from_normal(n)
-
-        subvolume = np.zeros(shape, dtype=np.uint16)
-
-        self.interpolated_with_basis_vectors(c, s, basis, subvolume)
-
-        return subvolume
-
 
     def get_subvolume(self, center, shape, normal, out_of_bounds,
                       move_along_normal, jitter_max,
                       augment_subvolume, method, normalize, pad_to_shape,
-                      fft, dwt, dwt_channel_subbands, model_3d_to_2d):
+                      fft, dwt, dwt_channel_subbands, square_corners):
         """Get a subvolume from a center point and normal vector.
 
         At the time of writing, this function very closely resembles
@@ -427,6 +403,9 @@ cdef class Volume:
         assert len(center) == 3
         assert len(shape) == 3
 
+        # TODO if square_corners is not None and not empty, modify basis vectors before calling (and center and normal?)
+        # TODO if empty return zeros?
+
         if normal is None:
             normal = mathutils.Vector((0, 0, 1))
         else:
@@ -445,25 +424,39 @@ cdef class Volume:
         if augment_subvolume is None:
             augment_subvolume = False
 
-        if method is None:
-            method = 'snap_to_axis_aligned'
-        assert method in ['snap_to_axis_aligned', 'interpolated', 'nearest_neighbor']
-        if method == 'snap_to_axis_aligned':
-            method_fn = self.get_subvolume_snap_to_axis_aligned
-        elif method == 'interpolated':
-            method_fn = self.get_subvolume_interpolated
-        elif method == 'nearest_neighbor':
-            method_fn = self.get_subvolume_nearest_neighbor
-
         center = np.array(center)
         center += (move_along_normal + random.randint(-jitter_max, jitter_max)) * normal
 
-        subvolume = method_fn(
-            center,
-            shape,
-            normal,
-            out_of_bounds,
-        )
+        cdef BasisVectors basis
+        cdef Float3 n, c
+        cdef Int3 s
+
+        n.x = normal[0]
+        n.y = normal[1]
+        n.z = normal[2]
+
+        c.x = center[0]
+        c.y = center[1]
+        c.z = center[2]
+
+        s.z = shape[0]
+        s.y = shape[1]
+        s.x = shape[2]
+
+        subvolume = np.zeros(shape, dtype=np.uint16)
+
+        if square_corners is None or len(square_corners) > 0:
+            if square_corners is None:
+                basis = get_component_vectors_from_normal(n)
+            else:
+                basis = get_basis_from_square(square_corners)
+            if method is None:
+                method = 'nearest_neighbor'
+            assert method in ['interpolated', 'nearest_neighbor']
+            if method == 'interpolated':
+                self.interpolated_with_basis_vectors(c, s, basis, subvolume)
+            elif method == 'nearest_neighbor':
+                self.nearest_neighbor_with_basis_vectors(c, s, basis, subvolume)
 
         if augment_subvolume:
             flip_direction = np.random.randint(4)
