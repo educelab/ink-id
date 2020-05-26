@@ -223,13 +223,13 @@ class PPM:
             y_d, x_d = np.array([subvolume_shape[1], subvolume_shape[2]]) // 2
             if 0 <= x - x_d and x + x_d < self._width and 0 <= y - y_d and y + y_d < self._height:
                 # Top left
-                square_corners.append(self.get_point_with_normal(ppm_x - x_d, ppm_y - y_d)[0:2])
+                square_corners.append(self.get_point_with_normal(ppm_x - x_d, ppm_y - y_d)[0:3])
                 # Top right
-                square_corners.append(self.get_point_with_normal(ppm_x + x_d, ppm_y - y_d)[0:2])
+                square_corners.append(self.get_point_with_normal(ppm_x + x_d, ppm_y - y_d)[0:3])
                 # Bottom left
-                square_corners.append(self.get_point_with_normal(ppm_x - x_d, ppm_y + y_d)[0:2])
+                square_corners.append(self.get_point_with_normal(ppm_x - x_d, ppm_y + y_d)[0:3])
                 # Bottom right
-                square_corners.append(self.get_point_with_normal(ppm_x + x_d, ppm_y + y_d)[0:2])
+                square_corners.append(self.get_point_with_normal(ppm_x + x_d, ppm_y + y_d)[0:3])
         return self._volume.get_subvolume(
             (x, y, z),
             subvolume_shape,
