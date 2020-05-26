@@ -126,6 +126,7 @@ def main():
     parser.add_argument('--model-3d-to-2d', action='store_true',
                         help='Use semi-fully convolutional model (which removes a dimension) with 2d labels per '
                              'subvolume')
+    parser.add_argument('--loss', choices=['cross_entropy', 'dice', 'jaccard'])
 
     # Subvolumes
     parser.add_argument('--subvolume-method', metavar='name', default='nearest_neighbor',
