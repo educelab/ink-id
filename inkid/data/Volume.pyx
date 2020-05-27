@@ -19,7 +19,7 @@ cdef BasisVectors get_basis_from_square(square_corners):
     top_left, top_right, bottom_left, bottom_right = np.array(square_corners)
 
     x_vec = ((top_right - top_left) + (bottom_right - bottom_left)) / 2.0
-    y_vec = ((top_left - bottom_left) + (top_right - bottom_right)) / 2.0
+    y_vec = ((top_left - bottom_left) + (top_right - bottom_right)) / -2.0
     z_vec = np.cross(x_vec, y_vec)
 
     x_vec = mathutils.Vector(x_vec.tolist()).normalized()

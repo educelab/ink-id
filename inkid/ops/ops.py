@@ -11,6 +11,14 @@ from PIL import Image
 import inkid
 
 
+def visualize_batch(xb, yb):
+    xb, yb = xb.numpy(), yb.numpy()
+    xb = np.max(np.concatenate(np.squeeze(xb), 1), 0) / 255
+    yb = np.concatenate(yb, 1)[1] * 255
+    img = np.concatenate((xb, yb), 1)
+    Image.fromarray(img).show()
+
+
 def are_coordinates_within(p1, p2, distance):
     """Return if two points would have overlapping boxes.
 
