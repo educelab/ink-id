@@ -331,7 +331,7 @@ def main():
         label_fn = functools.partial(regions.point_to_ink_classes_label, shape=label_shape)
         output_size = 2
         metrics = {
-            'loss': nn.CrossEntropyLoss(reduction='mean'),
+            'loss': nn.CrossEntropyLoss(),
             'accuracy': inkid.metrics.accuracy,
             'precision': inkid.metrics.precision,
             'recall': inkid.metrics.recall,
