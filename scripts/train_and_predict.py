@@ -26,6 +26,7 @@ import timeit
 
 import configargparse
 import git
+import kornia
 import numpy as np
 import torch
 import torch.nn as nn
@@ -126,7 +127,9 @@ def main():
     parser.add_argument('--model-3d-to-2d', action='store_true',
                         help='Use semi-fully convolutional model (which removes a dimension) with 2d labels per '
                              'subvolume')
-    parser.add_argument('--loss', choices=['cross_entropy', 'dice', 'jaccard'])
+    parser.add_argument('--loss', choices=['cross_entropy', 'dice', 'tversky', 'focal'], default='cross_entropy')
+    parser.add_argument('--tversky-loss-alpha', type=float, default=0.5)
+    parser.add_argument('--focal-loss-alpha', type=float, default=0.5)
 
     # Subvolumes
     parser.add_argument('--subvolume-method', metavar='name', default='nearest_neighbor',
@@ -331,7 +334,12 @@ def main():
         label_fn = functools.partial(regions.point_to_ink_classes_label, shape=label_shape)
         output_size = 2
         metrics = {
-            'loss': nn.CrossEntropyLoss(),
+            'loss': {
+                'cross_entropy': nn.CrossEntropyLoss(),
+                'dice': kornia.losses.DiceLoss(),
+                'tversky': kornia.losses.TverskyLoss(alpha=args.tversky_loss_alpha, beta=1 - args.tversky_loss_alpha),
+                'focal': kornia.losses.FocalLoss(alpha=args.focal_loss_alpha),
+            }[args.loss],
             'accuracy': inkid.metrics.accuracy,
             'precision': inkid.metrics.precision,
             'recall': inkid.metrics.recall,
