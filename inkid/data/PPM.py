@@ -292,7 +292,7 @@ class PPM:
             im.save(
                 os.path.join(
                     directory,
-                    '{}_prediction_{}.tif'.format(
+                    '{}_prediction_{}.png'.format(
                         os.path.splitext(os.path.basename(self._path))[0],
                         iteration,
                     ),
