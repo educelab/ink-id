@@ -32,7 +32,7 @@ From: ubuntu:16.04
   # Remove locally installed inkid from requirements file, we want to install that separately
   sed -i '/ink-id.git/d' /usr/local/dri/ink-id/requirements.txt
   # Install the exact versions of all of the dependencies
-  pip install --requirement /usr/local/dri/ink-id/requirements.txt
+  pip install --requirement /usr/local/dri/ink-id/requirements.txt --find-links https://download.pytorch.org/whl/torch_stable.html
   # Now install inkid
   pip install --editable /usr/local/dri/ink-id
   chmod --recursive a+rw /usr/local/dri/ink-id/.venv
