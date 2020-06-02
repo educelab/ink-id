@@ -18,6 +18,7 @@ venv/
 env-*/
 .venv/
 tmp/
+*.overlay
 
 Pipfile*
 test/
