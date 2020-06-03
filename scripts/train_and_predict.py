@@ -379,6 +379,12 @@ def main():
 
     # Specify the compute device for PyTorch purposes
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    print(f'PyTorch device: {device}')
+    if device.type == 'cuda':
+        print('    ' + torch.cuda.get_device_name(0))
+        print('    Memory Allocated:', round(torch.cuda.memory_allocated(0) / 1024 ** 3, 1), 'GB')
+        print('    Memory Cached:   ', round(torch.cuda.memory_cached(0) / 1024 ** 3, 1), 'GB')
+
 
     # Create the model for training
     if args.feature_type == 'subvolume_3dcnn':
