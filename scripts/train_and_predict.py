@@ -18,6 +18,7 @@ import datetime
 import functools
 import inspect
 import json
+import logging
 import multiprocessing
 import os
 import sys
@@ -32,6 +33,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import DataLoader, random_split
+from torch.utils.tensorboard import SummaryWriter
 import torchsummary
 
 import inkid
@@ -196,16 +198,25 @@ def main():
     # If this is one of a k-fold cross-validation job, then append k to the output path
     # Whether or not that is the case, go ahead and create the output directory
     if args.k is None:
-        output_path = os.path.join(
-            args.output,
-            datetime.datetime.today().strftime('%Y-%m-%d_%H.%M.%S')
-        )
+        dir_name = datetime.datetime.today().strftime('%Y-%m-%d_%H.%M.%S')
     else:
-        output_path = os.path.join(
-            args.output,
-            datetime.datetime.today().strftime('%Y-%m-%d_%H.%M.%S') + '_' + str(args.k)
-        )
+        dir_name = datetime.datetime.today().strftime('%Y-%m-%d_%H.%M.%S') + '_' + str(args.k)
+    output_path = os.path.join(args.output, dir_name)
     os.makedirs(output_path)
+
+    # Create TensorBoard writer
+    writer = SummaryWriter(os.path.join(output_path, 'tensorboard'))
+
+    # Configure logging
+    # noinspection PyArgumentList
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s [%(levelname)s] %(message)s',
+        handlers=[
+            logging.FileHandler(os.path.join(output_path, f'{dir_name}.log')),
+            logging.StreamHandler()
+        ]
+    )
 
     # Point to preexisting model path if there is one
     if args.model is not None:
@@ -230,12 +241,12 @@ def main():
     file_extension = file_extension.lower()
     if file_extension == '.ppm':
         if args.model is None:
-            print("Pre-trained model (--model) required when texturing a .ppm file.")
+            logging.error("Pre-trained model (--model) required when texturing a .ppm file.")
             return
         if args.override_volume_slices_dir is None:
-            print("Volume (--override-volume-slices-dir) required when texturing a .ppm file.")
+            logging.error("Volume (--override-volume-slices-dir) required when texturing a .ppm file.")
             return
-        print("PPM input file provided. Skipping training and running final prediction on all.")
+        logging.info("PPM input file provided. Skipping training and running final prediction on all.")
         args.skip_training = True
         args.final_prediction_on_all = True
 
@@ -274,7 +285,7 @@ def main():
         metadata['Git hash'] = 'No git hash available (unable to find valid repository).'
 
     # Diagnostic printing
-    print(json.dumps(metadata, indent=4, sort_keys=False))
+    logging.info('\n' + json.dumps(metadata, indent=4, sort_keys=False))
 
     # Write preliminary metadata to file
     with open(os.path.join(output_path, 'metadata.json'), 'w') as metadata_file:
@@ -322,7 +333,7 @@ def main():
         validation_features_fn = training_features_fn
         prediction_features_fn = training_features_fn
     else:
-        print('Feature type not recognized: {}'.format(args.feature_type))
+        logging.error('Feature type not recognized: {}'.format(args.feature_type))
         return
 
     # Define the labels
@@ -355,7 +366,7 @@ def main():
         }
         reconstruct_fn = regions.reconstruct_predicted_rgb
     else:
-        print('Label type not recognized: {}'.format(args.label_type))
+        logging.error('Label type not recognized: {}'.format(args.label_type))
         return
 
     # Define the datasets
@@ -379,6 +390,11 @@ def main():
 
     # Specify the compute device for PyTorch purposes
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    logging.info(f'PyTorch device: {device}')
+    if device.type == 'cuda':
+        logging.info('    ' + torch.cuda.get_device_name(0))
+        logging.info('    Memory Allocated:', round(torch.cuda.memory_allocated(0) / 1024 ** 3, 1), 'GB')
+        logging.info('    Memory Cached:   ', round(torch.cuda.memory_cached(0) / 1024 ** 3, 1), 'GB')
 
     # Create the model for training
     if args.feature_type == 'subvolume_3dcnn':
@@ -395,13 +411,21 @@ def main():
             decoder = inkid.model.LinearInkDecoder(args.drop_rate, encoder.output_shape, output_size)
         model = torch.nn.Sequential(encoder, decoder)
     else:
-        print('Feature type: {} does not have a model implementation.'.format(args.feature_type))
+        logging.error('Feature type: {} does not have a model implementation.'.format(args.feature_type))
         return
     model = model.to(device)
+    # Show model in TensorBoard
+    try:
+        inputs, _ = iter(train_dl).next()
+        writer.add_graph(model, inputs)
+        writer.flush()
+    except RuntimeError:
+        logging.warning('Unable to add model graph to TensorBoard, skipping this step')
     # Print summary of model
     device_str = "cuda" if torch.cuda.is_available() else "cpu"
     shape = (in_channels,) + tuple(args.pad_to_shape or args.subvolume_shape)
-    torchsummary.summary(model, input_size=shape, batch_size=args.batch_size, device=device_str)
+    summary, _ = torchsummary.summary_string(model, input_size=shape, batch_size=args.batch_size, device=device_str)
+    logging.info('\n' + summary)
     # Define optimizer
     opt = torch.optim.Adam(model.parameters(), lr=args.learning_rate)
 
@@ -428,10 +452,13 @@ def main():
                     opt.zero_grad()
 
                     if batch_num % args.summary_every_n_batches == 0:
-                        print('Batch: {:>5d}/{:<5d} {} Seconds: {:5.3g}'.format(
+                        logging.info('Batch: {:>5d}/{:<5d} {} Seconds: {:5.3g}'.format(
                             batch_num, total_batches,
                             inkid.metrics.metrics_str(metric_results),
                             time.time() - last_summary))
+                        for metric, result in inkid.metrics.metrics_dict(metric_results).items():
+                            writer.add_scalar('train_' + metric, result, epoch * len(train_dl) + batch_num)
+                            writer.flush()
                         for result in metric_results.values():
                             result.clear()
                         last_summary = time.time()
@@ -446,16 +473,19 @@ def main():
                         }, os.path.join(checkpoints_dir, f'checkpoint_{epoch}_{batch_num}.pt'))
 
                         # Periodic evaluation and prediction
-                        print('Evaluating on validation set... ', end='')
+                        logging.info('Evaluating on validation set... ')
                         val_results = perform_validation(model, val_dl, metrics, device, args.label_type)
-                        print(f'done ({inkid.metrics.metrics_str(val_results)})')
+                        for metric, result in inkid.metrics.metrics_dict(val_results).items():
+                            writer.add_scalar('val_' + metric, result, epoch * len(train_dl) + batch_num)
+                            writer.flush()
+                        logging.info(f'done ({inkid.metrics.metrics_str(val_results)})')
 
                         # Prediction image
-                        print('Generating prediction image... ', end='')
+                        logging.info('Generating prediction image... ')
                         generate_prediction_image(pred_dl, model, output_size, args.label_type, device,
                                                   predictions_dir, f'{epoch}_{batch_num}', reconstruct_fn, regions,
                                                   args.subvolume_shape)
-                        print('done')
+                        logging.info('done')
         except KeyboardInterrupt:
             pass
 
@@ -475,10 +505,10 @@ def main():
 
     # Add final validation metrics to metadata
     try:
-        print('Performing final evaluation on validation set... ', end='')
+        logging.info('Performing final evaluation on validation set... ')
         val_results = perform_validation(model, val_dl, metrics, device, args.label_type)
         metadata['Final validation metrics'] = inkid.metrics.metrics_dict(val_results)
-        print(f'done ({inkid.metrics.metrics_str(val_results)})')
+        logging.info(f'done ({inkid.metrics.metrics_str(val_results)})')
     except KeyboardInterrupt:
         pass
 
@@ -493,6 +523,8 @@ def main():
 
     # Transfer results via rclone if requested
     inkid.ops.rclone_transfer_to_remote(args.rclone_transfer_remote, output_path)
+
+    writer.close()
 
 
 if __name__ == '__main__':

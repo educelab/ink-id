@@ -1,6 +1,7 @@
 """Miscellaneous operations used in ink-id."""
 
 import inspect
+import logging
 import math
 import os
 import subprocess
@@ -98,9 +99,9 @@ def rclone_transfer_to_remote(rclone_remote, output_path):
         folders.reverse()
 
         if rclone_remote not in folders:
-            print('Provided rclone transfer remote was not a directory '
-                  'name in the output path, so it is not clear where in the '
-                  'remote to put the files. Transfer canceled.')
+            logging.info('Provided rclone transfer remote was not a directory '
+                         'name in the output path, so it is not clear where in the '
+                         'remote to put the files. Transfer canceled.')
         else:
             while folders.pop(0) != rclone_remote:
                 continue
@@ -113,5 +114,5 @@ def rclone_transfer_to_remote(rclone_remote, output_path):
                 output_path,
                 rclone_remote + ':' + os.path.join(*folders)
             ]
-            print(' '.join(command))
+            logging.info(' '.join(command))
             subprocess.call(command)

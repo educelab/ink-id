@@ -1,3 +1,4 @@
+import logging
 import os
 import re
 import struct
@@ -56,7 +57,7 @@ class PPM:
 
         self._invert_normal = invert_normal
         if self._invert_normal:
-            print('Normals are being inverted for this PPM.')
+            logging.info('Normals are being inverted for this PPM.')
 
         self.process_PPM_file(self._path)
 
@@ -95,7 +96,7 @@ class PPM:
                 elif header_terminator_re.match(line):
                     break
                 else:
-                    print('Warning: PPM header contains unknown line: {}'.format(line.strip()))
+                    logging.warning('PPM header contains unknown line: {}'.format(line.strip()))
 
         return {
             'width': width,
@@ -125,7 +126,7 @@ class PPM:
         self._type = header['type']
         self._version = header['version']
 
-        print(
+        logging.info(
             'Processing PPM data for {} with width {}, height {}, dim {}... '.format(
                 self._path, self._width, self._height, self._dim
             )
@@ -292,7 +293,7 @@ class PPM:
             im.save(
                 os.path.join(
                     directory,
-                    '{}_prediction_{}.tif'.format(
+                    '{}_prediction_{}.png'.format(
                         os.path.splitext(os.path.basename(self._path))[0],
                         iteration,
                     ),
@@ -305,7 +306,7 @@ class PPM:
 
         new_data = np.empty((self._height, self._width, self._dim))
 
-        print('Downscaling PPM by factor of {} on all axes...'.format(scale_factor))
+        logging.info('Downscaling PPM by factor of {} on all axes...'.format(scale_factor))
         bar = progressbar.ProgressBar()
         for y in bar(range(self._height)):
             for x in range(self._width):
@@ -316,7 +317,7 @@ class PPM:
 
     def write(self, filename):
         with open(filename, 'wb') as f:
-            print('Writing PPM to file {}...'.format(filename))
+            logging.info('Writing PPM to file {}...'.format(filename))
             f.write('width: {}\n'.format(self._width).encode('utf-8'))
             f.write('height: {}\n'.format(self._height).encode('utf-8'))
             f.write('dim: {}\n'.format(self._dim).encode('utf-8'))

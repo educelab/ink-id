@@ -4,6 +4,7 @@ Define the Volume class to represent volumetric data.
 """
 
 cimport libc.math as math
+import logging
 import os
 import random
 
@@ -126,14 +127,14 @@ cdef class Volume:
         slice_files.sort()
 
         data = []
-        print('Loading volume slices from {}...'.format(slices_abs_path))
+        logging.info('Loading volume slices from {}...'.format(slices_abs_path))
         bar = progressbar.ProgressBar()
         for slice_file in bar(slice_files):
             data.append(np.array(Image.open(slice_file)))
         print()
         data = np.array(data, dtype=np.uint16)
         self._data_view = data
-        print('Loaded volume {} with shape (z, y, x) = {}'.format(
+        logging.info('Loaded volume {} with shape (z, y, x) = {}'.format(
             slices_abs_path,
             data.shape
         ))
