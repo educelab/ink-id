@@ -407,6 +407,7 @@ def main():
     model = model.to(device)
     inputs, _ = iter(train_dl).next()
     writer.add_graph(model, inputs)
+    writer.flush()
     # Print summary of model
     device_str = "cuda" if torch.cuda.is_available() else "cpu"
     shape = (in_channels,) + tuple(args.pad_to_shape or args.subvolume_shape)
@@ -443,6 +444,7 @@ def main():
                             time.time() - last_summary))
                         for metric, result in inkid.metrics.metrics_dict(metric_results).items():
                             writer.add_scalar('train_' + metric, result, epoch * len(train_dl) + batch_num)
+                            writer.flush()
                         for result in metric_results.values():
                             result.clear()
                         last_summary = time.time()
@@ -461,6 +463,7 @@ def main():
                         val_results = perform_validation(model, val_dl, metrics, device, args.label_type)
                         for metric, result in inkid.metrics.metrics_dict(val_results).items():
                             writer.add_scalar('val_' + metric, result, epoch * len(train_dl) + batch_num)
+                            writer.flush()
                         print(f'done ({inkid.metrics.metrics_str(val_results)})')
 
                         # Prediction image
@@ -506,6 +509,8 @@ def main():
 
     # Transfer results via rclone if requested
     inkid.ops.rclone_transfer_to_remote(args.rclone_transfer_remote, output_path)
+
+    writer.close()
 
 
 if __name__ == '__main__':
