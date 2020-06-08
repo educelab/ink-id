@@ -405,9 +405,13 @@ def main():
         print('Feature type: {} does not have a model implementation.'.format(args.feature_type))
         return
     model = model.to(device)
-    inputs, _ = iter(train_dl).next()
-    writer.add_graph(model, inputs)
-    writer.flush()
+    # Show model in TensorBoard
+    try:
+        inputs, _ = iter(train_dl).next()
+        writer.add_graph(model, inputs)
+        writer.flush()
+    except RuntimeError:
+        print('Unable to add model graph to TensorBoard, skipping this step')
     # Print summary of model
     device_str = "cuda" if torch.cuda.is_available() else "cpu"
     shape = (in_channels,) + tuple(args.pad_to_shape or args.subvolume_shape)
