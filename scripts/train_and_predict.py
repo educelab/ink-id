@@ -32,6 +32,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import DataLoader, random_split
+from torch.utils.tensorboard import SummaryWriter
 import torchsummary
 
 import inkid
@@ -206,6 +207,7 @@ def main():
             datetime.datetime.today().strftime('%Y-%m-%d_%H.%M.%S') + '_' + str(args.k)
         )
     os.makedirs(output_path)
+    writer = SummaryWriter(os.path.join(output_path, 'tensorboard'))
 
     # Point to preexisting model path if there is one
     if args.model is not None:
@@ -403,6 +405,8 @@ def main():
         print('Feature type: {} does not have a model implementation.'.format(args.feature_type))
         return
     model = model.to(device)
+    inputs, _ = iter(train_dl).next()
+    writer.add_graph(model, inputs)
     # Print summary of model
     device_str = "cuda" if torch.cuda.is_available() else "cpu"
     shape = (in_channels,) + tuple(args.pad_to_shape or args.subvolume_shape)
@@ -437,6 +441,8 @@ def main():
                             batch_num, total_batches,
                             inkid.metrics.metrics_str(metric_results),
                             time.time() - last_summary))
+                        for metric, result in inkid.metrics.metrics_dict(metric_results).items():
+                            writer.add_scalar('train_' + metric, result, epoch * len(train_dl) + batch_num)
                         for result in metric_results.values():
                             result.clear()
                         last_summary = time.time()
@@ -453,6 +459,8 @@ def main():
                         # Periodic evaluation and prediction
                         print('Evaluating on validation set... ', end='')
                         val_results = perform_validation(model, val_dl, metrics, device, args.label_type)
+                        for metric, result in inkid.metrics.metrics_dict(val_results).items():
+                            writer.add_scalar('val_' + metric, result, epoch * len(train_dl) + batch_num)
                         print(f'done ({inkid.metrics.metrics_str(val_results)})')
 
                         # Prediction image
