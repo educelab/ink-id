@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 import sys
 
@@ -163,8 +164,8 @@ class RegionSet:
         """
         if isinstance(region_groups, str):
             region_groups = [region_groups]
-        print('Fetching points for region groups: {}... '
-              .format(region_groups), end='')
+        logging.info('Fetching points for region groups: {}... '
+                     .format(region_groups))
         sys.stdout.flush()
         points = []
         for region_group in region_groups:
@@ -175,10 +176,10 @@ class RegionSet:
                     specify_inkness=specify_inkness
                 )
         points = np.array(points)
-        print('done ({} points)'.format(len(points)))
+        logging.info('done ({} points)'.format(len(points)))
         if perform_shuffle:
-            print('Shuffling points for region groups: {}... '
-                  .format(region_groups), end='')
+            logging.info('Shuffling points for region groups: {}... '
+                         .format(region_groups))
             sys.stdout.flush()
             if shuffle_seed is not None:
                 np.random.seed(shuffle_seed)
@@ -186,7 +187,7 @@ class RegionSet:
             # which would be a more natural fit, but it is much slower
             # in practice.
             np.random.shuffle(points)
-            print('done')
+            logging.info('done')
         return points
 
     def get_points_generator(self, **kwargs):
