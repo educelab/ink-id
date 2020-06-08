@@ -203,7 +203,11 @@ def main():
         dir_name = datetime.datetime.today().strftime('%Y-%m-%d_%H.%M.%S') + '_' + str(args.k)
     output_path = os.path.join(args.output, dir_name)
     os.makedirs(output_path)
+
+    # Create TensorBoard writer
     writer = SummaryWriter(os.path.join(output_path, 'tensorboard'))
+
+    # Configure logging
     # noinspection PyArgumentList
     logging.basicConfig(
         level=logging.INFO,
