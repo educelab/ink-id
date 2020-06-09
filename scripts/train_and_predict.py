@@ -89,7 +89,7 @@ def generate_prediction_image(dataloader, model, output_size, label_type, device
                 # Undo flip and rotation
                 if flip:
                     pred = pred.flip(3)
-                pred = pred.rot90(4 - rotation, [2, 3])
+                pred = pred.rot90(-rotation, [2, 3])
                 pred = np.expand_dims(pred.numpy(), axis=0)
                 batch_preds = np.append(batch_preds, pred, axis=0)
                 # TODO visualize to double check augmentations
