@@ -132,6 +132,7 @@ cdef class Volume:
         for slice_file in bar(slice_files):
             data.append(np.array(Image.open(slice_file)))
         print()
+        logging.info('Converting loaded slice images into volume in memory...')
         data = np.array(data, dtype=np.uint16)
         self._data_view = data
         logging.info('Loaded volume {} with shape (z, y, x) = {}'.format(
