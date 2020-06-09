@@ -393,8 +393,8 @@ def main():
     logging.info(f'PyTorch device: {device}')
     if device.type == 'cuda':
         logging.info('    ' + torch.cuda.get_device_name(0))
-        logging.info('    Memory Allocated:', round(torch.cuda.memory_allocated(0) / 1024 ** 3, 1), 'GB')
-        logging.info('    Memory Cached:   ', round(torch.cuda.memory_cached(0) / 1024 ** 3, 1), 'GB')
+        logging.info(f'    Memory Allocated: {round(torch.cuda.memory_allocated(0) / 1024 ** 3, 1)} GB')
+        logging.info(f'    Memory Cached:    {round(torch.cuda.memory_cached(0) / 1024 ** 3, 1)} GB')
 
     # Create the model for training
     if args.feature_type == 'subvolume_3dcnn':
