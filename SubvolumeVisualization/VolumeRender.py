@@ -152,7 +152,7 @@ class Plotly3D(VolumeRender):
     
         '''
         # This may be  necessary for orca to work
-        #pio.orca.config.executable = '/home/mhaya2/anaconda3/envs/vis/bin/orca'
+        #pio.orca.config.executable = '{path to orca--perhaps inside conda env}'
         #pio.orca.config.use_xvfb = True
         #pio.orca.config.save()
     
