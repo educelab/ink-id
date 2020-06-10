@@ -78,10 +78,10 @@ def generate_prediction_image(dataloader, model, output_size, label_type, device
             for rotation, flip in itertools.product(rotations, flips):
                 # Example pxb.shape = [64, 1, 48, 48, 48] (BxCxDxHxW)
                 # Augment via rotation and flip
-                pxb = pxb.rot90(rotation, [3, 4])
+                aug_pxb = pxb.rot90(rotation, [3, 4])
                 if flip:
-                    pxb = pxb.flip(4)
-                pred = model(pxb.to(device))
+                    aug_pxb = aug_pxb.flip(4)
+                pred = model(aug_pxb.to(device))
                 if label_type == 'ink_classes':
                     pred = F.softmax(pred, dim=1)
                 pred = pred.cpu()
