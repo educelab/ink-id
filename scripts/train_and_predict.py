@@ -17,6 +17,7 @@ the prediction and validation sets for that run.
 import datetime
 import functools
 import inspect
+import itertools
 import json
 import logging
 import multiprocessing
@@ -63,19 +64,40 @@ def perform_validation(model, dataloader, metrics, device, label_type):
 
 
 def generate_prediction_image(dataloader, model, output_size, label_type, device, predictions_dir, filename,
-                              reconstruct_fn, region_set, subvolume_shape):
+                              reconstruct_fn, region_set, label_shape):
     """Helper function to generate a prediction image given a model and dataloader, and save it to a file."""
-    predictions = np.empty(shape=(0, output_size, subvolume_shape[2], subvolume_shape[1]))
+    predictions = np.empty(shape=(0, output_size, label_shape[0], label_shape[1]))
     points = np.empty(shape=(0, 3))
     model.eval()  # Turn off training mode for batch norm and dropout purposes
     with torch.no_grad():
         for pxb, pts in dataloader:
-            pred = model(pxb.to(device))
-            if label_type == 'ink_classes':
-                pred = F.softmax(pred, dim=1)
-            pred = pred.cpu().numpy()
+            # Smooth predictions via augmentation. Augment each subvolume 8-fold via rotations and flips
+            rotations = range(4)
+            flips = [False, True]
+            batch_preds = np.zeros((0, pxb.shape[0], output_size, label_shape[0], label_shape[1]))
+            for rotation, flip in itertools.product(rotations, flips):
+                # Example pxb.shape = [64, 1, 48, 48, 48] (BxCxDxHxW)
+                # Augment via rotation and flip
+                aug_pxb = pxb.rot90(rotation, [3, 4])
+                if flip:
+                    aug_pxb = aug_pxb.flip(4)
+                pred = model(aug_pxb.to(device))
+                if label_type == 'ink_classes':
+                    pred = F.softmax(pred, dim=1)
+                pred = pred.cpu()
+                # Example pred.shape = [64, 2, 48, 48] (BxCxHxW)
+                # Undo flip and rotation
+                if flip:
+                    pred = pred.flip(3)
+                pred = pred.rot90(-rotation, [2, 3])
+                pred = np.expand_dims(pred.numpy(), axis=0)
+                batch_preds = np.append(batch_preds, pred, axis=0)
+                # TODO visualize to double check augmentations
+            # Average predictions after augmentation
+            batch_pred = batch_preds.mean(0)
             pts = pts.numpy()
-            predictions = np.append(predictions, pred, axis=0)
+            # Add averaged predictions to list
+            predictions = np.append(predictions, batch_pred, axis=0)
             points = np.append(points, pts, axis=0)
     model.train()
     for prediction, point in zip(predictions, points):
@@ -484,7 +506,7 @@ def main():
                         logging.info('Generating prediction image... ')
                         generate_prediction_image(pred_dl, model, output_size, args.label_type, device,
                                                   predictions_dir, f'{epoch}_{batch_num}', reconstruct_fn, regions,
-                                                  args.subvolume_shape)
+                                                  label_shape)
                         logging.info('done')
         except KeyboardInterrupt:
             pass
@@ -498,7 +520,7 @@ def main():
             final_pred_dl = DataLoader(final_pred_ds, batch_size=args.batch_size * 2, shuffle=False,
                                        num_workers=multiprocessing.cpu_count())
             generate_prediction_image(final_pred_dl, model, output_size, args.label_type, device,
-                                      predictions_dir, 'final', reconstruct_fn, regions, args.subvolume_shape)
+                                      predictions_dir, 'final', reconstruct_fn, regions, label_shape)
         # Perform finishing touches even if cut short
         except KeyboardInterrupt:
             pass
