@@ -26,7 +26,7 @@ def main():
         parser.print_help()
     if args.final or args.all:
         print('\nFor final predictions, using images:')
-        get_and_merge_images(dirs, os.path.join(args.dir, 'final.tif'))
+        get_and_merge_images(dirs, os.path.join(args.dir, 'final.png'))
 
     animation = None
     if args.img_seq or args.gif or args.all:
