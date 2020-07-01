@@ -64,7 +64,7 @@ def perform_validation(model, dataloader, metrics, device, label_type):
 
 
 def generate_prediction_image(dataloader, model, output_size, label_type, device, predictions_dir, filename,
-                              reconstruct_fn, region_set, label_shape):
+                              reconstruct_fn, region_set, label_shape, prediction_averaging):
     """Helper function to generate a prediction image given a model and dataloader, and save it to a file."""
     predictions = np.empty(shape=(0, output_size, label_shape[0], label_shape[1]))
     points = np.empty(shape=(0, 3))
@@ -72,8 +72,12 @@ def generate_prediction_image(dataloader, model, output_size, label_type, device
     with torch.no_grad():
         for pxb, pts in dataloader:
             # Smooth predictions via augmentation. Augment each subvolume 8-fold via rotations and flips
-            rotations = range(4)
-            flips = [False, True]
+            if prediction_averaging:
+                rotations = range(4)
+                flips = [False, True]
+            else:
+                rotations = [0]
+                flips = [False]
             batch_preds = np.zeros((0, pxb.shape[0], output_size, label_shape[0], label_shape[1]))
             for rotation, flip in itertools.product(rotations, flips):
                 # Example pxb.shape = [64, 1, 48, 48, 48] (BxCxDxHxW)
@@ -198,6 +202,8 @@ def main():
     parser.add_argument('--training-epochs', metavar='n', type=int, default=None)
     parser.add_argument('--prediction-grid-spacing', metavar='n', type=int,
                         help='prediction points will be taken from an NxN grid')
+    parser.add_argument('--prediction-averaging', action='store_true',
+                        help='Average multiple predictions based on rotated and flipped input subvolumes')
     parser.add_argument('--validation-max-samples', metavar='n', type=int)
     parser.add_argument('--summary-every-n-batches', metavar='n', type=int)
     parser.add_argument('--checkpoint-every-n-batches', metavar='n', type=int)
@@ -506,7 +512,7 @@ def main():
                         logging.info('Generating prediction image... ')
                         generate_prediction_image(pred_dl, model, output_size, args.label_type, device,
                                                   predictions_dir, f'{epoch}_{batch_num}', reconstruct_fn, regions,
-                                                  label_shape)
+                                                  label_shape, args.prediction_averaging)
                         logging.info('done')
         except KeyboardInterrupt:
             pass
@@ -520,7 +526,8 @@ def main():
             final_pred_dl = DataLoader(final_pred_ds, batch_size=args.batch_size * 2, shuffle=False,
                                        num_workers=multiprocessing.cpu_count())
             generate_prediction_image(final_pred_dl, model, output_size, args.label_type, device,
-                                      predictions_dir, 'final', reconstruct_fn, regions, label_shape)
+                                      predictions_dir, 'final', reconstruct_fn, regions, label_shape,
+                                      args.prediction_averaging)
         # Perform finishing touches even if cut short
         except KeyboardInterrupt:
             pass
