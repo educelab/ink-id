@@ -64,9 +64,13 @@ def perform_validation(model, dataloader, metrics, device, label_type):
 
 
 def generate_prediction_image(dataloader, model, output_size, label_type, device, predictions_dir, filename,
-                              reconstruct_fn, region_set, label_shape, prediction_averaging):
+                              reconstruct_fn, region_set, label_shape, prediction_averaging, grid_spacing):
     """Helper function to generate a prediction image given a model and dataloader, and save it to a file."""
-    predictions = np.empty(shape=(0, output_size, label_shape[0], label_shape[1]))
+    if label_shape == (1, 1):
+        pred_shape = (grid_spacing, grid_spacing)
+    else:
+        pred_shape = label_shape
+    predictions = np.empty(shape=(0, output_size, pred_shape[0], pred_shape[1]))
     points = np.empty(shape=(0, 3))
     model.eval()  # Turn off training mode for batch norm and dropout purposes
     with torch.no_grad():
@@ -78,7 +82,7 @@ def generate_prediction_image(dataloader, model, output_size, label_type, device
             else:
                 rotations = [0]
                 flips = [False]
-            batch_preds = np.zeros((0, pxb.shape[0], output_size, label_shape[0], label_shape[1]))
+            batch_preds = np.zeros((0, pxb.shape[0], output_size, pred_shape[0], pred_shape[1]))
             for rotation, flip in itertools.product(rotations, flips):
                 # Example pxb.shape = [64, 1, 48, 48, 48] (BxCxDxHxW)
                 # Augment via rotation and flip
@@ -95,12 +99,17 @@ def generate_prediction_image(dataloader, model, output_size, label_type, device
                     pred = pred.flip(3)
                 pred = pred.rot90(-rotation, [2, 3])
                 pred = np.expand_dims(pred.numpy(), axis=0)
+                # Example pred.shape = [1, 64, 2, 48, 48] (BxCxHxW)
+                # Repeat prediction to fill grid square so prediction image is not single pixels in sea of blackness
+                if label_shape == (1, 1):
+                    pred = np.repeat(pred, repeats=grid_spacing, axis=3)
+                    pred = np.repeat(pred, repeats=grid_spacing, axis=4)
+                # Save this augmentation to the batch totals
                 batch_preds = np.append(batch_preds, pred, axis=0)
-                # TODO visualize to double check augmentations
-            # Average predictions after augmentation
+            # Average over batch of predictions after augmentation
             batch_pred = batch_preds.mean(0)
             pts = pts.numpy()
-            # Add averaged predictions to list
+            # Add batch of predictions to list
             predictions = np.append(predictions, batch_pred, axis=0)
             points = np.append(points, pts, axis=0)
     model.train()
@@ -512,7 +521,7 @@ def main():
                         logging.info('Generating prediction image... ')
                         generate_prediction_image(pred_dl, model, output_size, args.label_type, device,
                                                   predictions_dir, f'{epoch}_{batch_num}', reconstruct_fn, regions,
-                                                  label_shape, args.prediction_averaging)
+                                                  label_shape, args.prediction_averaging, args.prediction_grid_spacing)
                         logging.info('done')
         except KeyboardInterrupt:
             pass
@@ -527,7 +536,7 @@ def main():
                                        num_workers=multiprocessing.cpu_count())
             generate_prediction_image(final_pred_dl, model, output_size, args.label_type, device,
                                       predictions_dir, 'final', reconstruct_fn, regions, label_shape,
-                                      args.prediction_averaging)
+                                      args.prediction_averaging, args.prediction_grid_spacing)
         # Perform finishing touches even if cut short
         except KeyboardInterrupt:
             pass

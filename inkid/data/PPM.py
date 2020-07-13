@@ -252,7 +252,7 @@ class PPM:
         intensity = class_probabilities[1] * np.iinfo(np.uint16).max
         self.reconstruct_prediction_value(intensity, ppm_xy)
 
-    def reconstruct_prediction_value(self, value, ppm_xy, square_r=2):
+    def reconstruct_prediction_value(self, value, ppm_xy):
         assert len(ppm_xy) == 2
         x, y = ppm_xy
         y_d, x_d = np.array(value.shape) // 2  # Calculate distance from center to edges of square we are writing
