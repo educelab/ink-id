@@ -427,8 +427,11 @@ def main():
     # Print summary of model
     device_str = "cuda" if torch.cuda.is_available() else "cpu"
     shape = (in_channels,) + tuple(args.pad_to_shape or args.subvolume_shape)
-    summary, _ = torchsummary.summary_string(model, input_size=shape, batch_size=args.batch_size, device=device_str)
-    logging.info('\n' + summary)
+    try:
+        summary, _ = torchsummary.summary_string(model, input_size=shape, batch_size=args.batch_size, device=device_str)
+        logging.info('\n' + summary)
+    except AttributeError:
+        logging.warning('Torchsummary needs specific version from requirements.txt to work as used in this script')
     # Define optimizer
     opt = torch.optim.Adam(model.parameters(), lr=args.learning_rate)
 
