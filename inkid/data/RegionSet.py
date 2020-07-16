@@ -259,16 +259,6 @@ class RegionSet:
         region_id, x, y = region_id_with_point
         return self._regions[region_id].ppm.point_to_rgb_values_label((x, y), shape=shape)
 
-    def reconstruct_prediction_values(self, region_ids, values, ppm_xy_coordinates):
-        for region_id, value, ppm_xy in zip(
-                region_ids,
-                values,
-                ppm_xy_coordinates):
-            self._regions[region_id].ppm.reconstruct_prediction_value(
-                value,
-                ppm_xy
-            )
-
     def reconstruct_predicted_rgb(self, region_ids, rgbs, ppm_xy_coordinates):
         assert len(region_ids) == len(rgbs) == len(ppm_xy_coordinates)
         for region_id, rgb, ppm_xy in zip(

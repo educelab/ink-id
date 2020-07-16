@@ -195,9 +195,17 @@ class PPM:
     def point_to_rgb_values_label(self, point, shape):
         assert self._rgb_label is not None
         x, y = point
-        label = self._rgb_label[y, x]
-        assert len(label) == 3
-        return np.asarray(label, np.float32)
+        label = np.zeros((3,) + shape).astype(np.float32)
+        y_d, x_d = np.array(shape) // 2  # Calculate distance from center to edges of square we are sampling
+        # Iterate over label indices
+        for idx, _ in np.ndenumerate(label):
+            _, y_idx, x_idx = idx
+            y_s = y - y_d + y_idx  # Sample point is center minus distance (half edge length) plus label index
+            x_s = x - x_d + x_idx
+            # Bounds check to make sure inside PPM
+            if 0 <= y_s < self._rgb_label.shape[0] and 0 <= x_s < self._rgb_label.shape[1]:
+                label[:, y_idx, x_idx] = self._rgb_label[y_s, x_s]
+        return label
 
     def point_to_voxel_vector(self, point, length_in_each_direction,
                               out_of_bounds=None):
@@ -249,12 +257,9 @@ class PPM:
         )
 
     def reconstruct_predicted_ink_classes(self, class_probabilities, ppm_xy):
-        intensity = class_probabilities[1] * np.iinfo(np.uint16).max
-        self.reconstruct_prediction_value(intensity, ppm_xy)
-
-    def reconstruct_prediction_value(self, value, ppm_xy):
         assert len(ppm_xy) == 2
         x, y = ppm_xy
+        value = class_probabilities[1] * np.iinfo(np.uint16).max  # Convert ink class probability to image intensity
         y_d, x_d = np.array(value.shape) // 2  # Calculate distance from center to edges of square we are writing
         # Iterate over label indices
         for idx, v in np.ndenumerate(value):
@@ -266,13 +271,21 @@ class PPM:
                     and 0 <= x_s < self._ink_classes_prediction_image.shape[1]:
                 self._ink_classes_prediction_image[y_s, x_s] = v
 
-    def reconstruct_predicted_rgb(self, rgb, ppm_xy, square_r=2):
+    def reconstruct_predicted_rgb(self, rgb, ppm_xy):
         assert len(ppm_xy) == 2
-        assert len(rgb) == 3
         x, y = ppm_xy
-        # Restrict value to uint8 range
-        rgb = [max(min(np.iinfo(np.uint8).max, int(val)), 0) for val in rgb]
-        self._rgb_values_prediction_image[y-square_r:y+square_r, x-square_r:x+square_r] = rgb
+        value = np.clip(rgb, 0, np.iinfo(np.uint8).max)  # Restrict value to uint8 range
+        y_d, x_d = np.array(value.shape)[1:] // 2  # Calculate distance from center to edges of square we are writing
+        # Iterate over label indices
+        for idx in np.ndindex(value.shape[1:]):
+            y_idx, x_idx = idx
+            v = value[:, y_idx, x_idx]
+            y_s = y - y_d + y_idx  # Sample point is center minus distance (half edge length) plus label index
+            x_s = x - x_d + x_idx
+            # Bounds check to make sure inside PPM
+            if 0 <= y_s < self._rgb_values_prediction_image.shape[0] \
+                    and 0 <= x_s < self._rgb_values_prediction_image.shape[1]:
+                self._rgb_values_prediction_image[y_s, x_s] = v
 
     def reset_predictions(self):
         if self._ink_label is not None:
