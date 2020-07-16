@@ -28,7 +28,7 @@ setup(
         'scikit-learn',
         'sphinx',
         'tensorboard',
-        'torch',
+        'torch==1.5.0',
         'torch-summary',
         'wand',
     ],
