@@ -143,10 +143,6 @@ def main():
                         help='override directory for all volume slices (only works if there is '
                              'only one volume in the region set file)')
 
-    # Pre-trained model
-    parser.add_argument('--model', metavar='path', default=None,
-                        help='existing model directory to load checkpoints from')
-
     # Method
     parser.add_argument('--feature-type', metavar='name', default='subvolume_3dcnn',
                         help='type of feature model is built on',
@@ -237,12 +233,6 @@ def main():
             logging.StreamHandler()
         ]
     )
-
-    # Point to preexisting model path if there is one
-    if args.model is not None:
-        model_path = args.model
-    else:
-        model_path = output_path
 
     # Automatically increase prediction grid spacing if using 2D labels, and turn off augmentation
     if args.model_3d_to_2d:
