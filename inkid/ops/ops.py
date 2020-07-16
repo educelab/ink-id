@@ -8,6 +8,7 @@ import subprocess
 
 import numpy as np
 from PIL import Image
+from torch.utils.data import random_split
 
 import inkid
 
@@ -39,6 +40,13 @@ def visualize_batch(xb, yb):
     yb = np.concatenate(yb, 1)[1] * 255
     img = np.concatenate((xb, yb), 1)
     Image.fromarray(img).show()
+
+
+def take_from_dataset(dataset, n_samples):
+    """Take the first n samples from a dataset to reduce the size."""
+    if n_samples < len(dataset):
+        dataset = random_split(dataset, [n_samples, len(dataset) - n_samples])[0]
+    return dataset
 
 
 def are_coordinates_within(p1, p2, distance):

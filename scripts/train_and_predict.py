@@ -33,18 +33,11 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.utils.data import DataLoader, random_split
+from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 import torchsummary
 
 import inkid
-
-
-def take_from_dataset(dataset, n_samples):
-    """Take the first n samples from a dataset to reduce the size."""
-    if n_samples < len(dataset):
-        dataset = random_split(dataset, [n_samples, len(dataset) - n_samples])[0]
-    return dataset
 
 
 def perform_validation(model, dataloader, metrics, device, label_type):
@@ -382,11 +375,11 @@ def main():
     # Define the datasets
     train_ds = inkid.data.PointsDataset(regions, ['training'], training_features_fn, label_fn)
     if args.training_max_samples is not None:
-        train_ds = take_from_dataset(train_ds, args.training_max_samples)
+        train_ds = inkid.ops.take_from_dataset(train_ds, args.training_max_samples)
     val_ds = inkid.data.PointsDataset(regions, ['validation'], validation_features_fn, label_fn)
     # Only take n samples for validation, not the entire region
     if args.validation_max_samples is not None:
-        val_ds = take_from_dataset(val_ds, args.validation_max_samples)
+        val_ds = inkid.ops.take_from_dataset(val_ds, args.validation_max_samples)
     pred_ds = inkid.data.PointsDataset(regions, ['prediction'], prediction_features_fn, lambda p: p,
                                        grid_spacing=args.prediction_grid_spacing)
 
