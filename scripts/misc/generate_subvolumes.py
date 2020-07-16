@@ -21,23 +21,7 @@ def main():
                         default=None)
     parser.add_argument('--concat-subvolumes', action='store_true',
                         help='Create one set of slices containing all subvolumes')
-    parser.add_argument('--subvolume-method', metavar='name', default='nearest_neighbor',
-                        help='method for getting subvolumes',
-                        choices=[
-                            'nearest_neighbor',
-                            'interpolated',
-                            'snap_to_axis_aligned',
-                        ])
-    parser.add_argument('--subvolume-shape', metavar='n', nargs=3, type=int, default=[48, 48, 48],
-                        help='subvolume shape in z y x')
-    parser.add_argument('--pad-to-shape', metavar='n', nargs=3, type=int, default=None,
-                        help='pad subvolume with zeros to be of given shape (default no padding)')
-    parser.add_argument('--move-along-normal', metavar='n', type=float,
-                        help='number of voxels to move along normal before getting a subvolume')
-    parser.add_argument('--normalize-subvolumes', action='store_true',
-                        help='normalize each subvolume to zero mean and unit variance on the fly')
-    parser.add_argument('--fft', action='store_true', help='Apply FFT to subvolumes')
-    parser.add_argument('--dwt', metavar='name', default=None, help='Apply specified DWT to subvolumes')
+    inkid.ops.add_subvolume_args(parser)
 
     # Data organization/augmentation
     parser.add_argument('--jitter-max', metavar='n', type=int)

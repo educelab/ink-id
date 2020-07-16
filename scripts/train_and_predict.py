@@ -169,24 +169,7 @@ def main():
     parser.add_argument('--focal-loss-alpha', type=float, default=0.5)
 
     # Subvolumes
-    parser.add_argument('--subvolume-method', metavar='name', default='nearest_neighbor',
-                        help='method for getting subvolumes',
-                        choices=[
-                            'nearest_neighbor',
-                            'interpolated',
-                        ])
-    parser.add_argument('--subvolume-shape', metavar='n', nargs=3, type=int,
-                        help='subvolume shape in z y x')
-    parser.add_argument('--pad-to-shape', metavar='n', nargs=3, type=int, default=None,
-                        help='pad subvolume with zeros to be of given shape (default no padding)')
-    parser.add_argument('--move-along-normal', metavar='n', type=float,
-                        help='number of voxels to move along normal before getting a subvolume')
-    parser.add_argument('--normalize-subvolumes', action='store_true',
-                        help='normalize each subvolume to zero mean and unit variance on the fly')
-    parser.add_argument('--fft', action='store_true', help='Apply FFT to subvolumes')
-    parser.add_argument('--dwt', metavar='name', default=None, help='Apply specified DWT to subvolumes')
-    parser.add_argument('--dwt-channel-subbands', action='store_true',
-                        help='Combine DWT subbands into multiple channels of smaller subvolume')
+    inkid.ops.add_subvolume_args(parser)
 
     # Voxel vectors
     parser.add_argument('--length-in-each-direction', metavar='n', type=int,
