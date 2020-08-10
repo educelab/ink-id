@@ -54,10 +54,12 @@ class RegionSet:
                 self._region_groups[region_group].append(len(self._regions))
                 self._regions.append(region)
 
-        ppm_names = [os.path.splitext(ppm['path'])[1] for ppm in data['ppms'].values()]
+        ppm_names = [os.path.basename(ppm['path']) for ppm in data['ppms'].values()]
         for p in ppm_names:
             if ppm_names.count(p) > 1:
-                logging.error(f'Multiple PPMs with filename {p}, please use unique filenames.')
+                err = f'Multiple PPMs with filename {p}, please use unique filenames.'
+                logging.error(err)
+                raise ValueError(err)
 
     @classmethod
     def from_json(cls, filename):
