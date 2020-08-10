@@ -287,6 +287,12 @@ def main():
     except git.exc.InvalidGitRepositoryError:
         metadata['Git hash'] = 'No git hash available (unable to find valid repository).'
 
+    # Add SLURM info if it exists
+    if 'SLURM_JOB_ID' in os.environ:
+        metadata['SLURM Job ID'] = os.getenv('SLURM_JOB_ID')
+    if 'SLURM_JOB_NAME' in os.environ:
+        metadata['SLURM Job Name'] = os.getenv('SLURM_JOB_NAME')
+
     # Diagnostic printing
     logging.info('\n' + json.dumps(metadata, indent=4, sort_keys=False))
 
