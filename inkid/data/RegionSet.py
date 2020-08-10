@@ -54,6 +54,11 @@ class RegionSet:
                 self._region_groups[region_group].append(len(self._regions))
                 self._regions.append(region)
 
+        ppm_names = [os.path.split(ppm['path'])[1] for ppm in self._ppms]
+        for p in ppm_names:
+            if ppm_names.count(p) > 1:
+                logging.error(f'Multiple PPMs with filename {p}, please use unique filenames.')
+
     @classmethod
     def from_json(cls, filename):
         """Initialize a RegionSet from a JSON filename."""
