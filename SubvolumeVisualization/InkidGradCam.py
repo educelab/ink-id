@@ -1,4 +1,3 @@
-import .VolumeRender as VolR
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -8,8 +7,10 @@ import numpy as np
 from pathlib import Path
 from PIL import Image
 import re
+import os
+import plotly.graph_objects as go
 
-class ModifiedCNN:
+class HookedCNN:
     '''
     Creates a 3D CNN with a pre-trained model  and hooks to be used by GradCam
     '''
@@ -62,7 +63,7 @@ class ModifiedCNN:
         self.model.load_state_dict(torch.load(self.trained_model, 
                                 map_location=torch.device('cpu')), strict=False)
         self.model.eval()
-     
+
 
 class InkidGradCam:
     '''
@@ -74,14 +75,14 @@ class InkidGradCam:
         Name of the input directory containing *.tif files
     output_dir: str
         Name of the output directory where generated images will be saved.
+    encoder:
+    decoder:
+    saved_model:
+    model:
     subvolume: numpy.ndarray
         3D array representing an Inkid subvolume.
     prediction: int
         0 or 1
-    gradients: numpy.ndarray
-        3D array representing gradient values at the last CNN layer
-    activation: numpy.ndarray
-        3D array representing activation values at the last CNN layer
     heatmap: torch tensor
         3D tensor representing "heat" distribution
 
@@ -92,10 +93,9 @@ class InkidGradCam:
         To be used when input_dir, rather than subvolume, is given.
     load_model(encoder, decoder, saved_model):
         Loads the saved model into the CNN architecture.
-    create_hooks(?):
-        Create backward and forward hooks for the last layer of CNN.
-    generate_heatmap(model):
-        Generates a 3d tensor representing "heat" distibution.
+    print_model()
+    push_subvolume_through()
+    calculate_heatmap():
     visualize_heatmap():
         Generates a Plotly rendition of the 3D heatmap.
     animate_heatmap():
@@ -130,6 +130,8 @@ class InkidGradCam:
         if output_dir[-1] is '/':
             output_dir = output_dir[:-1]
 
+        self.output_dir = output_dir
+
         # Must have either input_dir or subvolume
         if not input_dir and not subvolume:
             print("must provide either input_dir(path for a directory with image \
@@ -151,12 +153,13 @@ class InkidGradCam:
         self.decoder = decoder
         self.saved_model = saved_model
 
-        # Placeholder for model, prediction
+        # Placeholder for model, prediction, heatmap
         self.model = None
         self.prediction = None
+        self.heatmap = None
 
         def load_model(self):
-            self.model = ModifiedCNN(self.encoder, self.decoder, self.saved_model)
+            self.model = HookedCNN(self.encoder, self.decoder, self.saved_model)
             self.model.load_model()
 
         def print_nodel(self):
@@ -186,34 +189,101 @@ class InkidGradCam:
             
             # normalize the heatmap
             self.heatmap /= torch.max(heatmap)
-            #self.heatmap[0][0] 
 
         def visualize_heatmap(self):
+            if not os.path.exists(self.output_dir):
+                os.mkdir(self.output_dir)
+
+            X, Y, Z = np.mgrid[0:12:, 0:12, 0:12]
+            values = self.heatmap
+            
+            gradient_map = go.Figure(data=go.Volume(
+                x=X.flatten(),
+                y=Y.flatten(),
+                z=Z.flatten(),
+                value=values.flatten(),
+                isomin=0.1,
+                isomax=1.0,
+                opacity=0.2, # needs to be small to see through all surfaces
+                surface_count=8, # needs to be a large number for good volume rendering
+                colorscale = 'rainbow'
+                ))
+            
+            gradient_map.update_layout(showlegend=False)
+            
+            gradient_map.write_image(f"{self.output_dir}/gradient_map.png")
+           
 
         def animate_heatmap(self):
+            # TODO
 
         def visalize_subvolume(self):
             '''
             Generates a Plotly rendition of the input subvolume.
             '''
+            subvol = torch.squeeze(self.subvolume)
+            
+            X, Y, Z = np.mgrid[0:48, 0:48, 0:48]
+
+
+            subvolume_map = go.Figure(data=go.Volume(
+                x=X.flatten(),
+                y=Y.flatten(),
+                z=Z.flatten(),
+                value=subvol.flatten(),
+                isomin=0.1,
+                isomax=torch.max(subvol).item()*0.9,
+                opacity=0.3, # needs to be small to see through all surfaces
+                surface_count=8, # needs to be a large number for good volume rendering
+                colorscale = 'Greys'
+                ))
+            
+            subvolume_map.update_layout(showlegend=False)
+            subvolume_map.write_image(f"{selfoutput_dir}/subvolume_map.png")
+
         def superimposed_heatmap(self):
+            gradient_img = cv2.imread(f'{self.output_dir}/gradient_map.png')
+            subvolume_img = cv2.imread(f'{self.output_dir}/subvolume_map.png')
+            
+            superimposed_img = cv2.addWeighted(gradient_img, 0.35, subvolume_img, 0.65, 0)
+            cv2.imwrite(f'{self.output_dir}/superimposed.png', superimposed_img)            
             
         
         def load_data(self):
-        '''
-        A helper function that loads data from an input directory containing 
-        *.tif files.
-        Returns:
-            numpy.ndarray
-        '''
+            '''
+            A helper function that loads data from an input directory containing 
+            *.tif files.
+            Returns:
+                numpy.ndarray
+            '''
+    
+            dataset = Path(self.input_dir)
+            files = list(dataset.glob('*.tif'))
+            files.sort(key=lambda f: int(re.sub(r'[^0-9]*', "", str(f))))
+        
+            subvolume = []
+            for f in files:
+                i = Image.open(f)
+                subvolume.append(np.array(Image.open(f), dtype=np.float32))
+        
+            return np.array(subvolume)
 
-        dataset = Path(self.input_dir)
-        files = list(dataset.glob('*.tif'))
-        files.sort(key=lambda f: int(re.sub(r'[^0-9]*', "", str(f))))
+        def get_prediction():
+            # TODO
+            pass
+
+        def get_gradients():
+            # TODO
+            pass
+
+        def get_activations():
+            # TODO
+            pass
     
-        subvolume = []
-        for f in files:
-            i = Image.open(f)
-            subvolume.append(np.array(Image.open(f), dtype=np.float32))
-    
-        return np.array(subvolume)
+        def get_heatmap():
+            # TODO
+            pass
+
+        def get_model():
+            # TODO
+
