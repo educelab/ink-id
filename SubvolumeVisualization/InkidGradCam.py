@@ -71,20 +71,15 @@ class InkidGradCam:
     
     Attributes
     ----------
-    input_dir: str
-        Name of the input directory containing *.tif files
-    output_dir: str
-        Name of the output directory where generated images will be saved.
+    input_dir(str):  Name of the input directory containing *.tif files
+    output_dir(str): Name of the output directory where generated images will be saved.
     encoder:
     decoder:
     saved_model:
     model:
-    subvolume: numpy.ndarray
-        3D array representing an Inkid subvolume.
-    prediction: int
-        0 or 1
-    heatmap: torch tensor
-        3D tensor representing "heat" distribution
+    subvolume (numpy.ndarray): 3D array representing an Inkid subvolume.
+    prediction(int): 0 or 1
+    heatmap(torch tensor): 3D tensor representing "heat" distribution
 
     Methods
     -------
