@@ -49,7 +49,7 @@ class PPM:
 
         self._ink_label = None
         if self._ink_label_path is not None:
-            self._ink_label = np.asarray(Image.open(self._ink_label_path), np.uint16)
+            self._ink_label = np.asarray(Image.open(self._ink_label_path).convert('LA'), np.uint16)
 
         self._rgb_label = None
         if self._rgb_label_path is not None:
