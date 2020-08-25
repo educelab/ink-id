@@ -17,7 +17,7 @@ from datetime import datetime
 from tqdm import tqdm
 
 
-class VolumeRender:
+class VolumeRenderer:
     '''
     Superclass for the two following inherited classes.
    
@@ -89,9 +89,9 @@ class VolumeRender:
         return np.array(subvolume)
 
 
-class Plotly3D(VolumeRender):
+class Plotly3D(VolumeRenderer):
     def __init__(self, output_dir, input_dir=None, subvolume=None): 
-        VolumeRender.__init__(self, output_dir, input_dir, subvolume)
+        VolumeRenderer.__init__(self, output_dir, input_dir, subvolume)
         self.log['graph']='plotly'
 
     def setup_graph(self, field='attenuation', min_val=0, max_val=None, 
@@ -318,10 +318,10 @@ class Plotly3D(VolumeRender):
             json.dump(self.log, outfile, indent=2)
         
 
-class yt3D(VolumeRender):
+class yt3D(VolumeRenderer):
     def __init__(self, output_dir, input_dir=None, subvolume=None): 
 
-        VolumeRender.__init__(self, output_dir, input_dir, subvolume)
+        VolumeRenderer.__init__(self, output_dir, input_dir, subvolume)
         self.log['graph']='yt'
 
 
