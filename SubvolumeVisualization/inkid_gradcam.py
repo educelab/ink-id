@@ -152,7 +152,7 @@ class InkidGradCam:
         pooled_gradients = torch.mean(self.__gradients, dim=[0,2,3,4])
 
         # weight the channels by corresponding gradients
-        for i in range(pooled_gradients.size()[0]): # should be 8
+        for i in range(pooled_gradients.size()[0]): 
             self.__activations[:, i, :, :, :] *= pooled_gradients[i]
 
         # average the channels of the activations
