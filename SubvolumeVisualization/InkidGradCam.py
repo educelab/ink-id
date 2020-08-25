@@ -45,7 +45,7 @@ class InkidGradCam:
                                       the subvolume.
         '''
 
-        # Strip the trailing '/'
+        # Strip the trailing '/' from the output_dir path
         if output_dir[-1] is '/':
             output_dir = output_dir[:-1]
 
@@ -70,35 +70,49 @@ class InkidGradCam:
         # add two more axes
         self.subvolume = self.subvolume[np.newaxis, np.newaxis, ...]
 
+        # CNN attributes
         self.encoder = encoder
         self.decoder = decoder
         self.saved_model = saved_model
         
-        # Place holder for the 3DCNN model with hooks
+        # Placeholders for the 3DCNN model with hooks
         self.__net = None
         self.__activations = None
         self.__gradients = None
 
-        # Placeholder for prediction, heatmap
+        # Placeholders for prediction, heatmap
         self.prediction = None
         self.heatmap = None
 
 
     def print_encoder(self):
+        '''
+        For retrieving names of CNN layers (for registering hooks)
+        '''
         for name, module in self.encoder.named_children():
             print(name, ": ", module)
 
+
     def register_hooks(self, layer_name='conv4'):
-        # layer is the name of the child module inside the encoder
-        # retried from print_encoder)
-        
+        '''
+        Registers forward and backward hooks on a given layer.
+        Input:
+        layer_name(str): name of the child module inside the encoder
+                         (can be obtained through self.print_encoder() method)
+        '''
 
         def save_activations(module, input, output):
+            '''
+            Method to be used for the forward hook
+            '''
             #print('input size:', input[0].size(), '    <---- activations')
             self.__activations = input[0]
 
 
         def save_gradients(module, grad_input, grad_output):
+            '''
+            Method to be used for the backward hook.
+            '''
             #print('grad_input size:', grad_input[0].size(), '    <---- gradients' )
             self.__gradients = grad_input[0]
 
@@ -111,18 +125,21 @@ class InkidGradCam:
                 module.register_backward_hook(save_gradients)
                 break
 
-        #self.__net[0].layer.register_forward_hook(save_activations)
-        #self.__net[0].layer.register_backward_hook(save_gradients)
-
 
 
     def load_model(self):
+        '''
+        Loads the given pre-trained model (.pt file) to set the weights.
+        '''
         self.__net.load_state_dict(torch.load(self.saved_model, 
                         map_location=torch.device('cpu')), strict=False)
         self.__net.eval()
 
 
-    def print_nodel(self):
+    def print_model(self):
+        '''
+        Prints the whole architecture.
+        '''
         for param_tensor in self.__net.state_dict():
             print(param_tensor, "\t", self.__net.state_dict()[param_tensor].size())
  
@@ -133,12 +150,6 @@ class InkidGradCam:
         self.__net(self.subvolume)[:, self.prediction, :, :].backward()
         
 
-        #### This should be unnecessary
-        #self.activations = self.__net.activations
-        #self.gradients = self.__net.gradients
-
-
-    def calculate_heatmap(self):
         pooled_gradients = torch.mean(self.__gradients, dim=[0,2,3,4])
 
         # weight the channels by corresponding gradients
@@ -153,6 +164,7 @@ class InkidGradCam:
         
         # normalize the heatmap
         self.heatmap = heatmap/torch.max(heatmap)
+
 
     def visualize_heatmap(self):
         if not os.path.exists(self.output_dir):
@@ -187,7 +199,7 @@ class InkidGradCam:
        
 
     def animate_heatmap(self):
-        # TODO
+        # TODO?
         pass
 
 
@@ -216,13 +228,19 @@ class InkidGradCam:
         subvolume_map.update_layout(showlegend=False)
         subvolume_map.write_image(f"{self.output_dir}/subvolume_map.png")
 
+
     def superimposed_heatmap(self):
+        '''
+        Quick and dirty way of superimpsing the two images (gradient and 
+        subvolume maps).
+        '''
         gradient_img = cv2.imread(f'{self.output_dir}/gradient_map.png')
         subvolume_img = cv2.imread(f'{self.output_dir}/subvolume_map.png')
         
         superimposed_img = cv2.addWeighted(gradient_img, 0.35, subvolume_img, 0.65, 0)
         cv2.imwrite(f'{self.output_dir}/superimposed.png', superimposed_img)            
         
+
     
     def load_data(self):
         '''
@@ -243,23 +261,19 @@ class InkidGradCam:
     
         return np.array(subvolume)
 
-    def get_prediction():
-        # TODO
-        pass
 
-    def get_gradients():
-        # TODO
-        pass
+    def get_prediction(self):
+        # 0: no ink
+        # 1: ink
+        return self.prediction
 
-    def get_activations():
-        # TODO
-        pass
+    def get_gradients(self):
+        return self.__gradients
 
-    def get_heatmap():
-        # TODO
-        pass
+    def get_activations(self):
+        return self.__activations        
 
-    def get_model():
-        # TODO
-        pass
+    def get_heatmap(self):
+        return self.heatmap
+
 
