@@ -126,8 +126,7 @@ class InkidGradCam:
                 break
 
 
-
-    def load_model(self):
+    def load_pretrained_weights(self):
         '''
         Loads the given pre-trained model (.pt file) to set the weights.
         '''
@@ -136,9 +135,9 @@ class InkidGradCam:
         self.__net.eval()
 
 
-    def print_model(self):
+    def print_final_model(self):
         '''
-        Prints the whole architecture.
+        Prints the whole architecture.  Must be called after self.register_hooks
         '''
         for param_tensor in self.__net.state_dict():
             print(param_tensor, "\t", self.__net.state_dict()[param_tensor].size())
@@ -267,11 +266,14 @@ class InkidGradCam:
         # 1: ink
         return self.prediction
 
+
     def get_gradients(self):
         return self.__gradients
 
+
     def get_activations(self):
         return self.__activations        
+
 
     def get_heatmap(self):
         return self.heatmap
