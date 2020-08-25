@@ -157,7 +157,14 @@ class InkidGradCam:
         if not os.path.exists(self.output_dir):
             os.mkdir(self.output_dir)
 
-        X, Y, Z = np.mgrid[0:12:, 0:12, 0:12]
+        # This may be  necessary for orca to work
+        #pio.orca.config.executable = '{path to orca--perhaps inside conda env}'
+        #pio.orca.config.use_xvfb = True
+        #pio.orca.config.save()
+
+        
+        cube_size = self.heatmap.size()[0]
+        X, Y, Z = np.mgrid[0:cube_size:, 0:cube_size, 0:cube_size]
 
         values = self.heatmap
         
@@ -175,7 +182,7 @@ class InkidGradCam:
         
         gradient_map.update_layout(showlegend=False)
         
-        gradient_map.write_image(f"{self.output_dir}/gradient_map.png")
+        gradient_map.write_image(f"{self.output_dir}/gradcam_heatmap.png")
        
 
     def animate_heatmap(self):
