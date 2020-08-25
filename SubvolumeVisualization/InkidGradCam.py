@@ -9,6 +9,7 @@ from PIL import Image
 import re
 import os
 import plotly.graph_objects as go
+import cv2
 
 
 class InkidGradCam:
@@ -182,7 +183,7 @@ class InkidGradCam:
         
         gradient_map.update_layout(showlegend=False)
         
-        gradient_map.write_image(f"{self.output_dir}/gradcam_heatmap.png")
+        gradient_map.write_image(f"{self.output_dir}/gradient_map.png")
        
 
     def animate_heatmap(self):
@@ -190,13 +191,14 @@ class InkidGradCam:
         pass
 
 
-    def visalize_subvolume(self):
+    def visualize_subvolume(self):
         '''
         Generates a Plotly rendition of the input subvolume.
         '''
+
         subvol = torch.squeeze(self.subvolume)
-        
-        X, Y, Z = np.mgrid[0:48, 0:48, 0:48]
+        cube_size = subvol.size()[0]        
+        X, Y, Z = np.mgrid[0:cube_size, 0:cube_size, 0:cube_size]
 
 
         subvolume_map = go.Figure(data=go.Volume(
@@ -212,7 +214,7 @@ class InkidGradCam:
             ))
         
         subvolume_map.update_layout(showlegend=False)
-        subvolume_map.write_image(f"{selfoutput_dir}/subvolume_map.png")
+        subvolume_map.write_image(f"{self.output_dir}/subvolume_map.png")
 
     def superimposed_heatmap(self):
         gradient_img = cv2.imread(f'{self.output_dir}/gradient_map.png')
