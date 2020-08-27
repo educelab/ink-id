@@ -72,19 +72,24 @@ class ResponseArgs:
     """Class for storing a response from a VC Volume Server."""
     volpkg: str
     volume: str
+    extent_x: int
+    extent_y: int
+    extent_z: int
     size: int
 
     @staticmethod
     def struct_format():
         """Return the format to convert this object into a C-style struct."""
-        return f"{VOLPKG_SZ}s{VOLUME_SZ}sI"
+        return f"{VOLPKG_SZ}s{VOLUME_SZ}s4I"
 
     @classmethod
     def from_struct(cls, struct_data):
         """Create an object from a C-style struct."""
-        (volpkg, volume, size) = struct.unpack(
+        (volpkg, volume, extent_x, extent_y, extent_z, size) = struct.unpack(
             cls.struct_format(), struct_data)
-        return cls(volpkg=volpkg.rstrip(b'\0').decode(), volume=volume.rstrip(b'\0').decode(), size=size)
+        return cls(volpkg=volpkg.rstrip(b'\0').decode(),
+                   volume=volume.rstrip(b'\0').decode(), extent_x=extent_x,
+                   extent_y=extent_y, extent_z=extent_z, size=size)
 
 
 def get_subvolumes(requests: typing.List[RequestArgs],
