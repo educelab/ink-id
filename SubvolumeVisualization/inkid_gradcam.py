@@ -32,8 +32,7 @@ class InkidGradCam:
     TODO:
     '''
 
-    def __init__(self, output_dir, encoder, decoder, saved_model, input_dir=None, 
-                 subvolume=None):
+    def __init__(self, output_dir, encoder, decoder, saved_model):
         '''
         Input:
             output_dir(str):
@@ -51,30 +50,16 @@ class InkidGradCam:
 
         self.output_dir = output_dir
 
-        # Must have either input_dir or subvolume
-        if not input_dir and not subvolume:
-            print("must provide either input_dir(path for a directory with image \
-                  slices) or subvolume (3D numpy array)")
-
-        # If input_dir is given, create a subvolume matrix.
-        if input_dir:
-            # Strip the trailing '/'
-            self.input_dir = input_dir[:-1] if input_dir[-1] is '/' else input_dir
-
-            self.subvolume = torch.from_numpy(self.load_data())
-
-        else:
-            self.input_dir = None
-            self.subvolume = torch.from_numpy(subvolume)
-
-        # add two more axes
-        self.subvolume = self.subvolume[np.newaxis, np.newaxis, ...]
 
         # CNN attributes
         self.encoder = encoder
         self.decoder = decoder
         self.saved_model = saved_model
         
+        # Placeholders for subvolume and input
+        self.subvolume = None
+        self.input_dir = None
+
         # Placeholders for the 3DCNN model with hooks
         self.__net = None
         self.__activations = None
@@ -126,10 +111,7 @@ class InkidGradCam:
                 break
 
 
-    def load_pretrained_weights(self):
-        '''
-        Loads the given pre-trained model (.pt file) to set the weights.
-        '''
+        # Load the given pre-trained model (.pt file) to set the weights.
         self.__net.load_state_dict(torch.load(self.saved_model, 
                         map_location=torch.device('cpu')), strict=False)
         self.__net.eval()
@@ -143,7 +125,34 @@ class InkidGradCam:
             print(param_tensor, "\t", self.__net.state_dict()[param_tensor].size())
  
 
-    def push_subvolume_through(self):
+    def push_subvolume_through(self, input_dir=None, subvolume=None):
+        '''
+        Pushes the subvolume through the model 
+        Inputs:
+        Returns:
+            heatmap
+        '''
+        # First, process the subvolume data 
+        ## Must have either input_dir or subvolume
+        if not input_dir and not subvolume:
+            print("must provide either input_dir(path for a directory with image \
+                  slices) or subvolume (3D numpy array)")
+
+        ## If input_dir is given, create a subvolume matrix.
+        if input_dir:
+            # Strip the trailing '/'
+            self.input_dir = input_dir[:-1] if input_dir[-1] is '/' else input_dir
+
+            self.subvolume = torch.from_numpy(self.load_data())
+
+        else:
+            self.input_dir = None
+            self.subvolume = torch.from_numpy(subvolume)
+
+        ## add two more axes
+        self.subvolume = self.subvolume[np.newaxis, np.newaxis, ...]
+
+        # Second, push the subvolume through
         self.prediction = self.__net(self.subvolume).argmax(dim=1).item()
 
         self.__net(self.subvolume)[:, self.prediction, :, :].backward()
@@ -163,6 +172,67 @@ class InkidGradCam:
         
         # normalize the heatmap
         self.heatmap = heatmap/torch.max(heatmap)
+
+
+    def save_images(self, heatmap=True, subvolume=True, superimposed=True):
+        if not os.path.exists(self.output_dir):
+            os.mkdir(self.output_dir)
+
+        # This may be  necessary for orca to work
+        #pio.orca.config.executable = '{path to orca--perhaps inside conda env}'
+        #pio.orca.config.use_xvfb = True
+        #pio.orca.config.save()
+
+        if heatmap:
+            cube_size = self.heatmap.size()[0]
+            X, Y, Z = np.mgrid[0:cube_size:, 0:cube_size, 0:cube_size]
+
+            values = self.heatmap
+            
+            gradient_map = go.Figure(data=go.Volume(
+                x=X.flatten(),
+                y=Y.flatten(),
+                z=Z.flatten(),
+                value=values.flatten(),
+                isomin=0.1,
+                isomax=1.0,
+                opacity=0.2, # needs to be small to see through all surfaces
+                surface_count=8, # needs to be a large number for good volume rendering
+                colorscale = 'rainbow'
+                ))
+            
+            gradient_map.update_layout(showlegend=False)
+            
+            gradient_map.write_image(f"{self.output_dir}/gradient_map.png")
+            
+
+        if subvolume:
+            subvol = torch.squeeze(self.subvolume)
+            cube_size = subvol.size()[0]        
+            X, Y, Z = np.mgrid[0:cube_size, 0:cube_size, 0:cube_size]
+
+
+            subvolume_map = go.Figure(data=go.Volume(
+                x=X.flatten(),
+                y=Y.flatten(),
+                z=Z.flatten(),
+                value=subvol.flatten(),
+                isomin=0.1,
+                isomax=torch.max(subvol).item()*0.9,
+                opacity=0.3, # needs to be small to see through all surfaces
+                surface_count=8, # needs to be a large number for good volume rendering
+                colorscale = 'Greys'
+                ))
+            
+            subvolume_map.update_layout(showlegend=False)
+            subvolume_map.write_image(f"{self.output_dir}/subvolume_map.png")
+
+        if superimposed:
+            gradient_img = cv2.imread(f'{self.output_dir}/gradient_map.png')
+            subvolume_img = cv2.imread(f'{self.output_dir}/subvolume_map.png')
+            
+            superimposed_img = cv2.addWeighted(gradient_img, 0.35, subvolume_img, 0.65, 0)
+            cv2.imwrite(f'{self.output_dir}/superimposed.png', superimposed_img)            
 
 
     def visualize_heatmap(self):
@@ -228,7 +298,7 @@ class InkidGradCam:
         subvolume_map.write_image(f"{self.output_dir}/subvolume_map.png")
 
 
-    def superimposed_heatmap(self):
+    def visualize_superimposed_image(self):
         '''
         Quick and dirty way of superimpsing the two images (gradient and 
         subvolume maps).
