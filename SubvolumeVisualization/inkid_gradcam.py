@@ -15,13 +15,10 @@ from datetime import datetime
 
 class InkidGradCam:
     '''
-    3D GradCam. Current implementation for inkid subvolumes. To make it more
-    universal, a few details will have to be modified.
+    3D GradCam. Current implementation for inkid subvolumes. 
     
     Attributes
     ----------
-    output_dir(str): 
-        Name of the output directory where generated images will be saved.
     encoder(torch.nn.Module): 
         CNN layers
     decoder(torch.nn.Module): 
@@ -30,6 +27,8 @@ class InkidGradCam:
         Pre-trained model with weights. Typically a .pt file
     subvolume(torch.Tensor): 
         5D tensor created when a subvolume is given
+    output_dir(str): 
+        Name of the output directory where generated images will be saved.
     input_dir(str): 
         Name of the input directory if given
     __net(torch.nn.Sequential): 
@@ -228,7 +227,13 @@ class InkidGradCam:
 
 
     def save_images(self, heatmap=True, subvolume=True, superimposed=True):
-
+        '''
+        Saves 3 types of images in the output directory.
+        Inputs:
+            heatmap(bool): image will be saved when set to True.
+            subvolume(bool):  (same as above)
+            superimposed(bool):  (same as above)
+        '''
 
         # This may be  necessary for orca to work
         #pio.orca.config.executable = '{path to orca--perhaps inside conda env}'
