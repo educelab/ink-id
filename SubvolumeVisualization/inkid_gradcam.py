@@ -11,7 +11,7 @@ import re
 import os
 import plotly.graph_objects as go
 import cv2
-
+from datetime import datetime
 
 class InkidGradCam:
     '''
@@ -20,29 +20,49 @@ class InkidGradCam:
     
     Attributes
     ----------
-    output_dir(str): Name of the output directory where generated images will be saved.
-    encoder(torch.nn.Module): CNN layers
-    decoder(torch.nn.Module): Fully-connected layers
-    pretrained_model(.pt file): pre-trained model with weights
-    subvolume(torch.Tensor): 5D tensor created when a subvolume is given
-    input_dir(str): Name of the input directory if given
-    __net(torch.nn.Sequential): container for encoder and decoder modules
-    __activations(torch.Tensor): 5D tensor of activations obtained through forward hook
-    __gradients(torch.Tensor): 5D tensor of activations obtained through backward hook
-    prediction(int): 0 (no ink) or 1 (ink)
-    heatmap(torch.Tensor): 3D tensor representing "heat" distribution
-    log(dict): Log for metadata
+    output_dir(str): 
+        Name of the output directory where generated images will be saved.
+    encoder(torch.nn.Module): 
+        CNN layers
+    decoder(torch.nn.Module): 
+        Fully-connected layers
+    pretrained_model(str): 
+        Pre-trained model with weights. Typically a .pt file
+    subvolume(torch.Tensor): 
+        5D tensor created when a subvolume is given
+    input_dir(str): 
+        Name of the input directory if given
+    __net(torch.nn.Sequential): 
+        Container for encoder and decoder modules
+    __activations(torch.Tensor): 
+        5D tensor of activations obtained through forward hook
+    __gradients(torch.Tensor): 
+        5D tensor of activations obtained through backward hook
+    prediction(int): 
+        0 (no ink) or 1 (ink)
+    heatmap(torch.Tensor): 
+        3D tensor representing "heat" distribution
+    log(dict): 
+        Log for metadata
 
     Methods
     -------
     print_encoder():
+        Prints CNN layers in the encoder
     register_hooks(layer_name):
+        Creates foward and backward hooks on the given layer_name
     print_final_model():
-    push_subvolume_through(input_dir, subvolume):
-    save_images(heatmap, subvolume, superimposed):
-    animate_heatmap(): TODO?
-    save_metadata(): dumps metadata in a json file and saves it in the output_dir
-    load_data():
+        Prints the model with hooks
+    push_subvolume_through(output_dir, input_dir, subvolume): 
+        Pushes subvolume through the model with hooks
+    save_images(heatmap, subvolume, superimposed): 
+        Saves png images
+    animate_heatmap(): 
+        TODO?
+    __save_metadata(output_dir): 
+        Write JSON log and saves it in the output_dir
+    __load_data(): 
+        Loads subvolume data from a directory containing *.tif files
     get_prediction():
     get_gradients():
     get_activations():
@@ -55,9 +75,6 @@ class InkidGradCam:
             encoder:
             decoder:
             pretrained_model(str): path to the .pt file
-            input_dir(str): directory path where input *.tif files are found.
-            subvolume(numpy.ndarray): Alternatively, numpy 3D array representing
-                                      the subvolume.
         '''
 
 
@@ -86,7 +103,6 @@ class InkidGradCam:
         self.log['decoder'] = str(self.decoder.__class__.__name__)
         self.log['pretrained_model'] = self.pretrained_model
 
-        self.timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
 
 
     def print_encoder(self):
@@ -147,11 +163,17 @@ class InkidGradCam:
  
 
 
-    def push_subvolume_through(self, input_dir=None, subvolume=None):
+    def push_subvolume_through(self, output_dir, input_dir=None, subvolume=None):
         '''
         Pushes the subvolume through the model 
         Inputs:
+            input_dir(str): directory path where input *.tif files are found.
+            subvolume(numpy.ndarray): Alternatively, numpy 3D array representing
+                                      the subvolume.
         '''
+        # Record the time
+        self.timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+
         # First, process the subvolume data 
         ## Must have either input_dir or subvolume
         if not input_dir and not subvolume:
@@ -163,7 +185,7 @@ class InkidGradCam:
             # Strip the trailing '/'
             self.input_dir = input_dir[:-1] if input_dir[-1] is '/' else input_dir
 
-            self.subvolume = torch.from_numpy(self.load_data())
+            self.subvolume = torch.from_numpy(self.__load_data())
             self.log['input_dir'] = self.input_dir 
 
         else:
@@ -198,21 +220,15 @@ class InkidGradCam:
         ### normalize the heatmap
         self.heatmap = heatmap/torch.max(heatmap)
 
+        # Save the metadata
+        self.__save_metadata(output_dir)
+        
         return self.heatmap
 
 
 
-    def save_images(self, output_dir, heatmap=True, subvolume=True, superimposed=True):
+    def save_images(self, heatmap=True, subvolume=True, superimposed=True):
 
-        # Strip the trailing '/' from the output_dir path
-        if output_dir[-1] is '/':
-            output_dir = output_dir[:-1]
-
-        self.output_dir = output_dir
-        self.log['output_dir'] = self.output_dir
-
-        if not os.path.exists(self.output_dir):
-            os.mkdir(self.output_dir)
 
         # This may be  necessary for orca to work
         #pio.orca.config.executable = '{path to orca--perhaps inside conda env}'
@@ -270,23 +286,32 @@ class InkidGradCam:
             superimposed_img = cv2.addWeighted(gradient_img, 0.35, subvolume_img, 0.65, 0)
             cv2.imwrite(f'{self.output_dir}/superimposed.png', superimposed_img)            
 
-        self.save_metadata
 
     def animate_heatmap(self):
         # TODO?
         pass
 
 
-    def save_metadata(self):
+    def __save_metadata(self, output_dir):
         '''
         Helper function for saving metadata (called within save_images())
         '''
+
+        # Strip the trailing '/' from the output_dir path
+        if output_dir[-1] is '/':
+            output_dir = output_dir[:-1]
+
+        self.output_dir = output_dir
+        self.log['output_dir'] = self.output_dir
+
+        if not os.path.exists(self.output_dir):
+            os.mkdir(self.output_dir)
 
         with open(f"{self.output_dir}/{self.timestamp}.json", "w") as outfile: 
             json.dump(self.log, outfile, indent=2)
     
 
-    def load_data(self):
+    def __load_data(self):
         '''
         A helper function that loads data from an input directory containing 
         *.tif files.
