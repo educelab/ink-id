@@ -36,7 +36,7 @@ class VolumeRenderer:
             output_dir = output_dir[:-1]
 
         # Must have either input_dir or subvolume
-        if not input_dir and not subvolume:
+        if not input_dir and not subvolume.any():
             print("must provide either input_dir(path for a directory with image \
                   slices) or subvolume (3D numpy array)")
     
