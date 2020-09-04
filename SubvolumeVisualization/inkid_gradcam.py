@@ -213,11 +213,12 @@ class InkidGradCam:
 
         heatmap = torch.mean(self.__activations, dim=1).squeeze()
 
-        ### (we are not insterested in negative values)
-        heatmap = np.maximum(heatmap.detach(), 0)
+        ### Discard negative values we are not interested in and convert to 
+        ### a numpy array.
+        heatmap = np.maximum(heatmap.detach().numpy(), 0)
         
         ### normalize the heatmap
-        self.heatmap = heatmap/torch.max(heatmap)
+        self.heatmap = heatmap/heatmap.max()
 
         # Save the metadata
         self.__save_metadata(output_dir)
@@ -312,7 +313,7 @@ class InkidGradCam:
         if not os.path.exists(self.output_dir):
             os.mkdir(self.output_dir)
 
-        with open(f"{self.output_dir}/{self.timestamp}.json", "w") as outfile: 
+        with open(f"{self.output_dir}/{self.timestamp}_gradcam.json", "w") as outfile: 
             json.dump(self.log, outfile, indent=2)
     
 
