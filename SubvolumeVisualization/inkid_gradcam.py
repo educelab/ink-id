@@ -215,10 +215,10 @@ class InkidGradCam:
 
         ### Discard negative values we are not interested in and convert to 
         ### a numpy array.
-        heatmap = np.maximum(heatmap.detach().numpy(), 0)
+        heatmap = np.maximum(heatmap.detach(), 0)
         
         ### normalize the heatmap
-        self.heatmap = heatmap/heatmap.max()
+        self.heatmap = heatmap/torch.max(heatmap)
 
         # Save the metadata
         self.__save_metadata(output_dir)

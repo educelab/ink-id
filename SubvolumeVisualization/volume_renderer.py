@@ -85,7 +85,7 @@ class VolumeRenderer:
         for f in files:
             i = Image.open(f)
             subvolume.append(np.array(Image.open(f), dtype=np.float32))
-    
+  
         return np.array(subvolume)
 
 
