@@ -64,14 +64,55 @@ pio.write_image(fig, file="test.png")
 * .mp4 files
 
 ## Common Usage
+```
+# For plotly rendition
+testcase = volumerenderer.Plotly3D(output_dir, input_dir)
+fig = testcase.setup_graph()
 
+## save static image files
+testcase.test_image(fig, [args])
+
+## save an animated file
+testcase.animated_full_rotation(fig, [args])
+
+# For Yt rendition
+testcase = volumerenderer.yt3D(output_dir, input_dir)
+scene = testcase.setup_graph()
+
+## save static image files
+testcase.save_image(scene)
+
+## save an animated file
+testcase.animated_full_rotation(scene, n_steps=120)
+```
 
 # inkid_gradcam.py
+This script is an implementation of 3D Grad-CAM loosely based on the 2D version shown in [Ulyanin: Implementing Grad-CAM in PyTorch](https://medium.com/@stepanulyanin/implementing-grad-cam-in-pytorch-ea0937c31e82)  The original Grad-CAM paper is found [here](https://arxiv.org/abs/1610.02391)
+
 ## Requirements
+If visualization is desired, Plotly (see above for more information) must be installed.
 
 ## Input Data
+* CNN architecture: the current implementation assumes encoder (for CNN layers) and decoder (for densely connected layers)
+* Pre-trained model: a saved model containing pre-trained weights. Typically a .pt file
+* Subvolume data: must be either a 3D numpy array or a directory containing .tif files.
 
 ## Output Data
+Heatmap as a 3D numpy array. Can be visualized using Plotly.  
 
 ## Common Usage
+```
+testcase = InkidGradCam(encoder, decoder, pretrained_model)
 
+# If encoder layer names are unknown
+testcase.print_encoder()
+
+# Register hooks
+testcase.register_hooks(layer_name='layer')
+
+# Push subvolume through
+heatmap = testcase.push_subvolume_through(output_dir, input_dir)
+
+# If quick visualization is desired
+testcase.save_images()
+```
