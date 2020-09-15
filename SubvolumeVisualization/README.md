@@ -7,7 +7,7 @@ human recognizable way.
 * inkid_gradcam.py: Given a CNN model, pre-trained weights, and a subvolume data, produces a 3D rendered image of GradCam.
 * test_volumerenderer.py: a simple test script for testing volume_renderer.py
 * test_gradcam.py: a simple test script for testing inkid_gradcam.py
-* test_combined.py: a simple test script for using inkid_gradcamp.py to producea heatmap and test_volumerenderer.py to visualize it in various ways.
+* test_combined.py: a simple test script for using inkid_gradcam.py to produce heatmap and test_volumerenderer.py to visualize it in various ways.
 
 # volume_render.py 
 
@@ -65,7 +65,7 @@ pio.write_image(fig, file="test.png")
 
 ## Common Usage
 ```
-# For plotly rendition
+# For Plotly rendition
 testcase = volumerenderer.Plotly3D(output_dir, input_dir)
 fig = testcase.setup_graph()
 
