@@ -25,6 +25,7 @@ setup(
         'progressbar2',
         'pylint',
         'pywavelets',
+        'scikit-image',
         'scikit-learn',
         'sphinx',
         'tensorboard',

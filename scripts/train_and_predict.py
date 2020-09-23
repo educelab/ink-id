@@ -149,6 +149,8 @@ def main():
                         choices=[
                             'ink_classes',
                             'rgb_values',
+                            'hsv_values',
+                            'lab_values'
                         ])
     parser.add_argument('--model-3d-to-2d', action='store_true',
                         help='Use semi-fully convolutional model (which removes a dimension) with 2d labels per '
@@ -367,13 +369,21 @@ def main():
             'auc': inkid.metrics.auc
         }
         reconstruct_fn = regions.reconstruct_predicted_ink_classes
-    elif args.label_type == 'rgb_values':
-        label_fn = functools.partial(regions.point_to_rgb_values_label, shape=label_shape)
+    elif args.label_type in ['rgb_values', 'hsv_values', 'lab_values']:
+        if args.label_type == 'rgb_values':
+            color_space = inkid.data.ColorSpace.RGB
+        elif args.label_type == 'hsv_values':
+            color_space = inkid.data.ColorSpace.HSV
+        elif args.label_type == 'lab_values':
+            color_space = inkid.data.ColorSpace.LAB
+        else:
+            color_space = inkid.data.ColorSpace.RGB
+        label_fn = functools.partial(regions.point_to_color_values_label, shape=label_shape, color_space=color_space)
         output_size = 3
         metrics = {
             'loss': nn.SmoothL1Loss(reduction='mean')
         }
-        reconstruct_fn = regions.reconstruct_predicted_rgb
+        reconstruct_fn = functools.partial(regions.reconstruct_predicted_color, color_space=color_space)
     else:
         logging.error('Label type not recognized: {}'.format(args.label_type))
         return

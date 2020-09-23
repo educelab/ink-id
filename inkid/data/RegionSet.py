@@ -262,19 +262,20 @@ class RegionSet:
         region_id, x, y = region_id_with_point
         return self._regions[region_id].ppm.point_to_ink_classes_label((x, y), shape=shape)
 
-    def point_to_rgb_values_label(self, region_id_with_point, shape=(1, 1)):
+    def point_to_color_values_label(self, region_id_with_point, shape=(1, 1), color_space=inkid.data.ColorSpace.RGB):
         region_id, x, y = region_id_with_point
-        return self._regions[region_id].ppm.point_to_rgb_values_label((x, y), shape=shape)
+        return self._regions[region_id].ppm.point_to_color_values_label((x, y), shape=shape, color_space=color_space)
 
-    def reconstruct_predicted_rgb(self, region_ids, rgbs, ppm_xy_coordinates):
+    def reconstruct_predicted_color(self, region_ids, rgbs, ppm_xy_coordinates, color_space=inkid.data.ColorSpace.RGB):
         assert len(region_ids) == len(rgbs) == len(ppm_xy_coordinates)
         for region_id, rgb, ppm_xy in zip(
                 region_ids,
                 rgbs,
                 ppm_xy_coordinates):
-            self._regions[region_id].ppm.reconstruct_predicted_rgb(
+            self._regions[region_id].ppm.reconstruct_predicted_color(
                 rgb,
-                ppm_xy
+                ppm_xy,
+                color_space=color_space
             )
 
     def reconstruct_predicted_ink_classes(self, region_ids, probabilities, ppm_xy_coordinates):

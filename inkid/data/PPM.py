@@ -2,10 +2,18 @@ import logging
 import os
 import re
 import struct
+from enum import Enum, auto
 
 import numpy as np
 from PIL import Image
 import progressbar
+from skimage import color
+
+
+class ColorSpace(Enum):
+    RGB = auto()
+    HSV = auto()
+    LAB = auto()
 
 
 class PPM:
@@ -192,7 +200,7 @@ class PPM:
                     label[:, y_idx, x_idx] = [0.0, 1.0]  # Mark this "ink"
         return label
 
-    def point_to_rgb_values_label(self, point, shape):
+    def point_to_color_values_label(self, point, shape, color_space: ColorSpace = ColorSpace.RGB):
         assert self._rgb_label is not None
         x, y = point
         label = np.zeros((3,) + shape).astype(np.float32)
@@ -204,7 +212,13 @@ class PPM:
             x_s = x - x_d + x_idx
             # Bounds check to make sure inside PPM
             if 0 <= y_s < self._rgb_label.shape[0] and 0 <= x_s < self._rgb_label.shape[1]:
-                label[:, y_idx, x_idx] = self._rgb_label[y_s, x_s]
+                rgb = self._rgb_label[y_s, x_s]
+                if color_space is ColorSpace.RGB:
+                    label[:, y_idx, x_idx] = rgb
+                elif color_space is ColorSpace.HSV:
+                    label[:, y_idx, x_idx] = color.rgb2hsv(rgb)
+                elif color_space is ColorSpace.LAB:
+                    label[:, y_idx, x_idx] = color.rgb2lab(rgb)
         return label
 
     def point_to_voxel_vector(self, point, length_in_each_direction,
@@ -271,10 +285,9 @@ class PPM:
                     and 0 <= x_s < self._ink_classes_prediction_image.shape[1]:
                 self._ink_classes_prediction_image[y_s, x_s] = v
 
-    def reconstruct_predicted_rgb(self, rgb, ppm_xy):
+    def reconstruct_predicted_color(self, value, ppm_xy, color_space: ColorSpace = ColorSpace.RGB):
         assert len(ppm_xy) == 2
         x, y = ppm_xy
-        value = np.clip(rgb, 0, np.iinfo(np.uint8).max)  # Restrict value to uint8 range
         y_d, x_d = np.array(value.shape)[1:] // 2  # Calculate distance from center to edges of square we are writing
         # Iterate over label indices
         for idx in np.ndindex(value.shape[1:]):
@@ -285,7 +298,12 @@ class PPM:
             # Bounds check to make sure inside PPM
             if 0 <= y_s < self._rgb_values_prediction_image.shape[0] \
                     and 0 <= x_s < self._rgb_values_prediction_image.shape[1]:
-                self._rgb_values_prediction_image[y_s, x_s] = v
+                if color_space is ColorSpace.HSV:
+                    v = color.hsv2rgb(v)
+                elif color_space is ColorSpace.LAB:
+                    v = color.lab2rgb(v)
+                # Restrict value to uint8 range
+                self._rgb_values_prediction_image[y_s, x_s] = np.clip(v, 0, np.iinfo(np.uint8).max)
 
     def reset_predictions(self):
         if self._ink_label is not None:

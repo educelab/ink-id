@@ -14,7 +14,7 @@ out/
 *.egg-info
 .vscode
 env/
-venv/
+**/venv/
 env-*/
 .venv/
 tmp/
