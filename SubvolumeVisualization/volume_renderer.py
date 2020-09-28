@@ -113,14 +113,16 @@ class Plotly3D(VolumeRenderer):
         X, Y, Z = np.mgrid[0:self.subvolume[field].shape[0], 
                 0:self.subvolume[field].shape[1], 
                 0:self.subvolume[field].shape[2]]
-    
+   
+        maxval = max_val if max_val else np.amax(self.subvolume[field])
+
         fig = go.Figure(data=go.Volume(
             x=X.flatten(),
             y=Y.flatten(),
             z=Z.flatten(),
             value=self.subvolume[field].flatten(),
             isomin=min_val,
-            isomax= max_val if max_val else np.amax(self.subvolume[field]),
+            isomax=maxval, 
             opacity=opacity,
             surface_count=surface_count,
             colorscale= colorscale,
@@ -129,7 +131,7 @@ class Plotly3D(VolumeRenderer):
 
         self.log['field']=field
         self.log['min_val']=min_val
-        self.log['max_val']=max_val
+        self.log['max_val']=maxval
         self.log['opacity']=opacity
         self.log['surface_count']=surface_count
         self.log['colorscale']=colorscale
@@ -156,6 +158,7 @@ class Plotly3D(VolumeRenderer):
         #pio.orca.config.use_xvfb = True
         #pio.orca.config.save()
     
+
         # Adjust the camera position and display orientation
         camera = dict(
             up=dict(x=up_cfg[0], y=up_cfg[1], z=up_cfg[2]) if up_cfg else dict(x=0, y=0, z=1),
@@ -177,9 +180,9 @@ class Plotly3D(VolumeRenderer):
         pio.write_image(fig, f'{self.output_dir}/{filename}')
     
         self.log['output file']=filename
-        self.log['up_cfg']=up_cfg
-        self.log['center_cfg']=center_cfg
-        self.log['eye_cfg']=eye_cfg
+        self.log['up_cfg']=up_cfg if up_cfg else (0,0,1)
+        self.log['center_cfg']=center_cfg if center_cfg else (0,0,0)
+        self.log['eye_cfg']=eye_cfg if eye_cfg else (2.5, 2.5, 2.5)
         
         with open(f"{self.output_dir}/{timestamp}.json", "w") as outfile: 
             json.dump(self.log, outfile, indent=2)

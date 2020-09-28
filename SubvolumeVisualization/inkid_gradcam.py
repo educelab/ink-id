@@ -198,6 +198,8 @@ class InkidGradCam:
 
         # Second, push the subvolume through
         self.prediction = self.__net(self.subvolume).argmax(dim=1).item()
+        self.log['prediction'] = self.prediction
+        print("Prediction is: ", self.prediction)
 
         self.__net(self.subvolume)[:, self.prediction, :, :].backward()
 
@@ -310,8 +312,8 @@ class InkidGradCam:
         self.output_dir = output_dir
         self.log['output_dir'] = self.output_dir
 
-        if not os.path.exists(self.output_dir):
-            os.mkdir(self.output_dir)
+        # If output_dir does not exist, create one
+        Path(self.output_dir).mkdir(parents=True, exist_ok=True)
 
         with open(f"{self.output_dir}/{self.timestamp}_gradcam.json", "w") as outfile: 
             json.dump(self.log, outfile, indent=2)
