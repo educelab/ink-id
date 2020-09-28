@@ -21,7 +21,8 @@ class RequestHdr:
     def struct_format():
         """Return the format to convert this object into a C-style struct."""
         # The 0I at the end is to align the overall struct to 4-bytes.
-        return "IBB0I"
+        # The 3x is for 3 bytes of padding in the protocol.
+        return "IB3xB0I"
 
     def to_struct(self):
         """Convert this object into a C-style struct."""
