@@ -147,7 +147,7 @@ class InkidGradCam:
 
         # Load the given pre-trained model (.pt file) to set the weights.
         self.__net.load_state_dict(torch.load(self.pretrained_model, 
-                        map_location=torch.device('cpu')), strict=False)
+                        map_location=torch.device('cpu'))['model_state_dict'], strict=False)
         self.__net.eval()
 
         self.log['hook_layer'] = layer_name 
@@ -197,7 +197,9 @@ class InkidGradCam:
 
 
         # Second, push the subvolume through
-        self.prediction = self.__net(self.subvolume).argmax(dim=1).item()
+        output = self.__net(self.subvolume)
+        print("Output: ", output)
+        self.prediction = output.argmax(dim=1).item()
         self.log['prediction'] = self.prediction
         print("Prediction is: ", self.prediction)
 
