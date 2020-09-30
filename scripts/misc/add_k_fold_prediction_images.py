@@ -6,6 +6,25 @@ import numpy as np
 from PIL import Image
 import wand.image
 
+'''
+TODO
+- Check whether in single run or k-fold run
+- Create results grid with row for each PPM and column for each job. Column at the end for the label image
+- Can render this grid once static (final images) and once as animated gif showing training process
+- Can render additional versions with different color maps (if relevant) elsewhere
+- Similarly can try rendering versions with different contrast/brightness options (this should probably live elsewhere)
+- Can bound the prediction/validation region in red
+- What happens if some regions not used for training? Should be fine...
+- Can add UKY/Educe logos/info
+- Scale markers
+- Subvolume size markers
+- Could have folder with individual images, or just put those in their normal place in results
+- Automatically render tensorboard plots into this, optionally
+- Make this run as a function call at the end of the job itself (along with rclone). Last job can detect it is the last
+one and do those things instead of all uploading and then running this separately.
+- Gif hold on last frame
+'''
+
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
