@@ -8,6 +8,7 @@ import numpy as np
 import torch
 
 import inkid
+from . import ColorSpace
 
 
 class PointsDataset(torch.utils.data.Dataset):
@@ -262,11 +263,11 @@ class RegionSet:
         region_id, x, y = region_id_with_point
         return self._regions[region_id].ppm.point_to_ink_classes_label((x, y), shape=shape)
 
-    def point_to_color_values_label(self, region_id_with_point, shape=(1, 1), color_space=inkid.data.ColorSpace.RGB):
+    def point_to_color_values_label(self, region_id_with_point, shape=(1, 1), color_space=ColorSpace.RGB):
         region_id, x, y = region_id_with_point
         return self._regions[region_id].ppm.point_to_color_values_label((x, y), shape=shape, color_space=color_space)
 
-    def reconstruct_predicted_color(self, region_ids, rgbs, ppm_xy_coordinates, color_space=inkid.data.ColorSpace.RGB):
+    def reconstruct_predicted_color(self, region_ids, rgbs, ppm_xy_coordinates, color_space=ColorSpace.RGB):
         assert len(region_ids) == len(rgbs) == len(ppm_xy_coordinates)
         for region_id, rgb, ppm_xy in zip(
                 region_ids,
