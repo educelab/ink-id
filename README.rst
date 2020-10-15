@@ -24,7 +24,7 @@ Installation
     (.venv) $ pip install -e .          # Install ink-id and dependencies
     (.venv) $ deactivate                # When finished, deactivate the environment
 
-After changes to Cython files (`.pyx` and `.pxd`), those modules must be rebuilt:
+After changes to Cython files (``.pyx`` and ``.pxd``), those modules must be rebuilt:
 
 .. code-block:: bash
 
@@ -55,15 +55,15 @@ Examples
 SLURM Jobs
 ^^^^^^^^^^
 
-This code is most commonly used in Singularity containers, run as SLURM jobs on a compute cluster. For documentation of this usage, see the `scripts/singularity/inkid.def`.
+This code is most commonly used in Singularity containers, run as SLURM jobs on a compute cluster. For documentation of this usage, see ``scripts/singularity/inkid.def``.
 
 Grid Training
 ^^^^^^^^^^^^^
 
 To perform grid training, create a RegionSet JSON file for the PPM with only one training region (with no bounds, meaning it will default to the full size of the PPM). For example:
-`examples/region-set-files/lunate-sigma-one-region.json`.
+``examples/region-set-files/lunate-sigma-one-region.json``.
 
-Then use `scripts/misc/split_region_into_grid.py` to split this into a grid of the desired shape. Example:
+Then use ```scripts/misc/split_region_into_grid.py`` to split this into a grid of the desired shape. Example:
 
 .. code-block:: bash
 
@@ -78,7 +78,7 @@ Then use this region set for standard k-fold cross validation and prediction.
 K-Fold Cross Validation (and Prediction)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-`scripts/train_and_predict.py` typically takes a region set file as input and trains on the specified training regions, validates on the validation regions, and predicts on the prediction regions. However if the ``-k`` argument is passed, the behavior is slightly different. In this case it expects the input region set to have only a set of training regions, with validation and prediction being empty. The kth training region will be removed from the training set and added to the validation and prediction sets. Example:
+``scripts/train_and_predict.py`` typically takes a region set file as input and trains on the specified training regions, validates on the validation regions, and predicts on the prediction regions. However if the ``-k`` argument is passed, the behavior is slightly different. In this case it expects the input region set to have only a set of training regions, with validation and prediction being empty. The kth training region will be removed from the training set and added to the validation and prediction sets. Example:
 
 .. code-block:: bash
 
@@ -107,4 +107,4 @@ and document code based on the `Google Python Style Guide standards <https://goo
 License
 =======
 
-This package is licensed under the GNU General Public License (GPLv3) - see `LICENSE` for details.
+This package is licensed under the GNU General Public License (GPLv3) - see ``LICENSE`` for details.
