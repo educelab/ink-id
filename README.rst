@@ -106,4 +106,4 @@ and document code based on the `Google Python Style Guide standards <https://goo
 License
 =======
 
-This package is licensed under the Microsoft Reference Source License (MS-RSL) - see `LICENSE <https://code.cs.uky.edu/seales-research/ink-id/blob/develop/LICENSE>`_ for details.
+This package is licensed under the GNU General Public License (GPLv3) - see `LICENSE <https://code.cs.uky.edu/seales-research/ink-id/blob/develop/LICENSE>`_ for details.
