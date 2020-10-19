@@ -17,3 +17,8 @@ if [ -z "$SLURM_ARRAY_TASK_ID" ]; then
 else
     time singularity run --nv --overlay inkid.overlay inkid.sif inkid-train-and-predict "$@" -k $SLURM_ARRAY_TASK_ID
 fi
+
+sbatch --dependency afterany:"$SLURM_JOB_ID" -A col_seales_uksr --mail-type=END --job-name=inkid_summary --output=out/inkid_summary_%A_%a.out \
+  singularity run --overlay inkid.overlay inkid.sif inkid-summary "$2" --all
+
+# TODO rclone

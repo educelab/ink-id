@@ -41,6 +41,7 @@ setup(
     entry_points={
         'console_scripts': [
             'inkid-train-and-predict = scripts.train_and_predict:main',
+            'inkid-summary = scripts.misc.add_k_fold_prediction_images:main',
         ],
     },
     zip_safe=False,
