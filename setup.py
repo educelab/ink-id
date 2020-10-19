@@ -1,7 +1,12 @@
-from setuptools import setup
+from setuptools import Extension, setup
 
 from Cython.Build import cythonize
 import numpy as np
+
+extensions = [
+    Extension('inkid.data.Volume', ['inkid/data/Volume.c'],
+              annotate=True, include_dirs=[np.get_include()]),
+]
 
 setup(
     name='inkid',
@@ -32,8 +37,7 @@ setup(
         'torch-summary',
         'wand',
     ],
-    ext_modules=cythonize('inkid/data/Volume.pyx', annotate=True),
-    include_dirs=[np.get_include()],
+    ext_modules=cythonize(extensions),
     entry_points={
         'console_scripts': [
             'inkid-train-and-predict = scripts.train_and_predict:main',
