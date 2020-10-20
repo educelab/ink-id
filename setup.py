@@ -4,8 +4,8 @@ from Cython.Build import cythonize
 import numpy as np
 
 extensions = [
-    Extension('inkid.data.Volume', ['inkid/data/Volume.c'],
-              annotate=True, include_dirs=[np.get_include()]),
+    Extension('inkid.data.Volume', ['inkid/data/Volume.pyx'],
+              include_dirs=[np.get_include()]),
 ]
 
 setup(
@@ -37,10 +37,11 @@ setup(
         'torch-summary',
         'wand',
     ],
-    ext_modules=cythonize(extensions),
+    ext_modules=cythonize(extensions, annotate=True),
     entry_points={
         'console_scripts': [
             'inkid-train-and-predict = scripts.train_and_predict:main',
+            'inkid-summary = scripts.misc.add_k_fold_prediction_images:main',
         ],
     },
     zip_safe=False,

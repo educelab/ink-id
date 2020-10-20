@@ -6,6 +6,8 @@ import numpy as np
 from PIL import Image
 import wand.image
 
+import inkid
+
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
@@ -17,6 +19,10 @@ def main():
     parser.add_argument('--gif-prefix', default='training', help='The prefix used for the output GIF filename')
     parser.add_argument('--gif-delay', default=10, type=int, help='GIF frame delay in hundredths of a second')
     parser.add_argument('--caption-gif-with-iterations', action='store_true')
+    parser.add_argument('--rclone-transfer-remote', metavar='remote', default=None,
+                        help='if specified, and if matches the name of one of the directories in '
+                             'the output path, transfer the results to that rclone remote into the '
+                             'subpath following the remote name')
 
     args = parser.parse_args()
     dirs = [os.path.join(args.dir, name) for name in os.listdir(args.dir)
@@ -42,6 +48,9 @@ def main():
         else:
             filename = args.gif_prefix + '.gif'
         write_gif(animation, os.path.join(args.dir, filename), args.gif_delay)
+
+    # Transfer results via rclone if requested
+    inkid.ops.rclone_transfer_to_remote(args.rclone_transfer_remote, args.dir)
 
 
 def create_animation(dirs, caption):
