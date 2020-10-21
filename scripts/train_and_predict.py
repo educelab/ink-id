@@ -390,12 +390,16 @@ def main():
                                        grid_spacing=args.prediction_grid_spacing)
 
     # Define the dataloaders which implement batching, shuffling, etc.
-    train_dl = DataLoader(train_ds, batch_size=args.batch_size, shuffle=True,
-                          num_workers=multiprocessing.cpu_count())
-    val_dl = DataLoader(val_ds, batch_size=args.batch_size * 2, shuffle=True,
-                        num_workers=multiprocessing.cpu_count())
-    pred_dl = DataLoader(pred_ds, batch_size=args.batch_size * 2, shuffle=False,
-                         num_workers=multiprocessing.cpu_count())
+    train_dl, val_dl, pred_dl = None, None, None
+    if len(train_ds) > 0:
+        train_dl = DataLoader(train_ds, batch_size=args.batch_size, shuffle=True,
+                              num_workers=multiprocessing.cpu_count())
+    if len(val_ds) > 0:
+        val_dl = DataLoader(val_ds, batch_size=args.batch_size * 2, shuffle=True,
+                            num_workers=multiprocessing.cpu_count())
+    if len(pred_ds) > 0:
+        pred_dl = DataLoader(pred_ds, batch_size=args.batch_size * 2, shuffle=False,
+                             num_workers=multiprocessing.cpu_count())
 
     # Specify the compute device for PyTorch purposes
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -425,9 +429,10 @@ def main():
     model = model.to(device)
     # Show model in TensorBoard
     try:
-        inputs, _ = iter(train_dl).next()
-        writer.add_graph(model, inputs)
-        writer.flush()
+        if train_dl is not None:
+            inputs, _ = iter(train_dl).next()
+            writer.add_graph(model, inputs)
+            writer.flush()
     except RuntimeError:
         logging.warning('Unable to add model graph to TensorBoard, skipping this step')
     # Print summary of model
@@ -442,7 +447,7 @@ def main():
     last_summary = time.time()
 
     # Run training loop
-    if not args.skip_training:
+    if train_dl is not None and not args.skip_training:
         try:
             for epoch in range(args.training_epochs):
                 model.train()  # Turn on training mode
@@ -482,19 +487,25 @@ def main():
                         }, os.path.join(checkpoints_dir, f'checkpoint_{epoch}_{batch_num}.pt'))
 
                         # Periodic evaluation and prediction
-                        logging.info('Evaluating on validation set... ')
-                        val_results = perform_validation(model, val_dl, metrics, device, args.label_type)
-                        for metric, result in inkid.metrics.metrics_dict(val_results).items():
-                            writer.add_scalar('val_' + metric, result, epoch * len(train_dl) + batch_num)
-                            writer.flush()
-                        logging.info(f'done ({inkid.metrics.metrics_str(val_results)})')
+                        if val_dl is not None:
+                            logging.info('Evaluating on validation set... ')
+                            val_results = perform_validation(model, val_dl, metrics, device, args.label_type)
+                            for metric, result in inkid.metrics.metrics_dict(val_results).items():
+                                writer.add_scalar('val_' + metric, result, epoch * len(train_dl) + batch_num)
+                                writer.flush()
+                            logging.info(f'done ({inkid.metrics.metrics_str(val_results)})')
+                        else:
+                            logging.info('Empty validation set, skipping validation.')
 
                         # Prediction image
-                        logging.info('Generating prediction image... ')
-                        generate_prediction_image(pred_dl, model, output_size, args.label_type, device,
-                                                  predictions_dir, f'{epoch}_{batch_num}', reconstruct_fn, regions,
-                                                  label_shape, args.prediction_averaging, args.prediction_grid_spacing)
-                        logging.info('done')
+                        if pred_dl is not None:
+                            logging.info('Generating prediction image... ')
+                            generate_prediction_image(pred_dl, model, output_size, args.label_type, device,
+                                                      predictions_dir, f'{epoch}_{batch_num}', reconstruct_fn, regions,
+                                                      label_shape, args.prediction_averaging, args.prediction_grid_spacing)
+                            logging.info('done')
+                        else:
+                            logging.info('Empty prediction set, skipping prediction image generation.')
         except KeyboardInterrupt:
             pass
 
@@ -515,10 +526,13 @@ def main():
 
     # Add final validation metrics to metadata
     try:
-        logging.info('Performing final evaluation on validation set... ')
-        val_results = perform_validation(model, val_dl, metrics, device, args.label_type)
-        metadata['Final validation metrics'] = inkid.metrics.metrics_dict(val_results)
-        logging.info(f'done ({inkid.metrics.metrics_str(val_results)})')
+        if val_dl is not None:
+            logging.info('Performing final evaluation on validation set... ')
+            val_results = perform_validation(model, val_dl, metrics, device, args.label_type)
+            metadata['Final validation metrics'] = inkid.metrics.metrics_dict(val_results)
+            logging.info(f'done ({inkid.metrics.metrics_str(val_results)})')
+        else:
+            logging.info('Empty validation set, skipping final validation.')
     except KeyboardInterrupt:
         pass
 
