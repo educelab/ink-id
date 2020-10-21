@@ -515,11 +515,12 @@ def main():
             final_pred_ds = inkid.data.PointsDataset(regions, ['prediction', 'training', 'validation'],
                                                      prediction_features_fn, lambda p: p,
                                                      grid_spacing=args.prediction_grid_spacing)
-            final_pred_dl = DataLoader(final_pred_ds, batch_size=args.batch_size * 2, shuffle=False,
-                                       num_workers=multiprocessing.cpu_count())
-            generate_prediction_image(final_pred_dl, model, output_size, args.label_type, device,
-                                      predictions_dir, 'final', reconstruct_fn, regions, label_shape,
-                                      args.prediction_averaging, args.prediction_grid_spacing)
+            if len(final_pred_ds) > 0:
+                final_pred_dl = DataLoader(final_pred_ds, batch_size=args.batch_size * 2, shuffle=False,
+                                           num_workers=multiprocessing.cpu_count())
+                generate_prediction_image(final_pred_dl, model, output_size, args.label_type, device,
+                                          predictions_dir, 'final', reconstruct_fn, regions, label_shape,
+                                          args.prediction_averaging, args.prediction_grid_spacing)
         # Perform finishing touches even if cut short
         except KeyboardInterrupt:
             pass
