@@ -78,6 +78,8 @@ def create_animation(dirs, caption):
         filenames_in_each_dir.append(names)
 
     max_number_of_images = max([len(i) for i in filenames_in_each_dir])
+    if max_number_of_images == 0:
+        return None
     num_frames = max_number_of_images
     animation = wand.image.Image()
     for i in range(num_frames):
