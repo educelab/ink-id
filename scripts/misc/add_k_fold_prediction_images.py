@@ -85,7 +85,7 @@ def create_animation(dirs, caption):
         iterations_getting_shown = []
         for d in filenames_in_each_dir:
             if len(d) == 0:
-                continue
+                return None
             filename = d[i] if i < len(d) else d[-1]
             iterations_getting_shown.append(
                 [int(v) for v in re.findall('_(\d+)_(\d+)[\._]', os.path.basename(filename))[0]]
@@ -106,8 +106,6 @@ def create_animation(dirs, caption):
                     left=0,
                     top=0,
                 )
-        if frame is None:
-            return None
         if caption:
             epoch, batch = iterations_getting_shown[-1]
             frame.caption(
