@@ -41,15 +41,15 @@ class RequestArgs:
     sampling_r_x: float
     sampling_r_y: float
     sampling_r_z: float
-    axis_x_x: float = 1.0
-    axis_x_y: float = 0.0
-    axis_x_z: float = 0.0
-    axis_y_x: float = 0.0
-    axis_y_y: float = 1.0
-    axis_y_z: float = 0.0
-    axis_z_x: float = 0.0
-    axis_z_y: float = 0.0
-    axis_z_z: float = 1.0
+    basis_0_x: float = 1.0
+    basis_0_y: float = 0.0
+    basis_0_z: float = 0.0
+    basis_1_x: float = 0.0
+    basis_1_y: float = 1.0
+    basis_1_z: float = 0.0
+    basis_2_x: float = 0.0
+    basis_2_y: float = 0.0
+    basis_2_z: float = 1.0
     sampling_interval: float = 1.0
 
     @staticmethod
@@ -61,9 +61,9 @@ class RequestArgs:
         """Convert this object into a C-style struct."""
         return struct.pack(self.struct_format(), str.encode(self.volpkg), str.encode(self.volume),
                            self.center_x, self.center_y, self.center_z,
-                           self.axis_x_x, self.axis_x_y, self.axis_x_z,
-                           self.axis_y_x, self.axis_y_y, self.axis_y_z,
-                           self.axis_z_x, self.axis_z_y, self.axis_z_z,
+                           self.basis_0_x, self.basis_0_y, self.basis_0_z,
+                           self.basis_1_x, self.basis_1_y, self.basis_1_z,
+                           self.basis_2_x, self.basis_2_y, self.basis_2_z,
                            self.sampling_r_x, self.sampling_r_y, self.sampling_r_z,
                            self.sampling_interval)
 
