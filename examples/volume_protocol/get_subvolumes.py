@@ -3,8 +3,8 @@ from PIL import Image
 from inkid.volumes.volume_protocol import RequestArgs, get_subvolumes
 import sys
 
-remote_host = sys.argv[1] if (len(sys.argv) > 1 and len(sys.argv[1] > 0)) else "127.0.0.1"
-remote_port = int(sys.argv[2]) if (len(sys.argv) > 2 and len(sys.argv[2] > 0)) else 8087
+remote_host = sys.argv[1] if (len(sys.argv) > 1 and len(sys.argv[1]) > 0) else "127.0.0.1"
+remote_port = int(sys.argv[2]) if (len(sys.argv) > 2 and len(sys.argv[2]) > 0) else 8087
 
 request = RequestArgs(volpkg="PHercParis Objet 59", volume="20190910132130",
                       center_x=152.5, center_y=485.0, center_z=605.0,
