@@ -1,11 +1,15 @@
 """Example of getting subvolumes from a Volume Server."""
 from PIL import Image
 from inkid.volumes.volume_protocol import RequestArgs, get_subvolumes
+import sys
+
+remote_host = sys.argv[1] if len(sys.argv) > 1 else "127.0.0.1"
+remote_port = int(sys.argv[2]) if len(sys.argv) > 2 else 8087
 
 request = RequestArgs(volpkg="PHercParis Objet 59", volume="20190910132130",
                       center_x=152.5, center_y=485.0, center_z=605.0,
                       sampling_r_x=152.5, sampling_r_y=485.0, sampling_r_z=1.0)
-subvolumes = get_subvolumes([request], server=("127.0.0.1", 8087))
+subvolumes = get_subvolumes([request], server=(remote_host, remote_port))
 for args, data in subvolumes:
     print(f"Got back a subvolume: {args}")
     # The data is a list of 16-bit unsigned intensity values, but 8-bit values
