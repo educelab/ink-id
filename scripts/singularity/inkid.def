@@ -17,6 +17,8 @@ From: ubuntu:16.04
   # Store git credentials for up to an hour (in overlay, not container) for convenience
   git config --global credential.helper cache
   git config --global credential.helper 'cache --timeout=3600'
+  # For summary image script
+  apt install -y libmagickwand-dev
   # Required to make python3.7 available
   apt install -y software-properties-common
   add-apt-repository -y ppa:deadsnakes/ppa
@@ -59,11 +61,12 @@ From: ubuntu:16.04
 
   Preparing for use:
     - Then get the container ready for use, for example:
-      `scp inkid.sif lcc:~`
+      `scp inkid.sif *.sh lcc:~`
       `ssh lcc`
       `module load ccs/singularity`
       `rm inkid.overlay && dd if=/dev/zero of=inkid.overlay bs=1M count=500 && mkfs.ext3 inkid.overlay  # Create a new overlay for the new container`
       `singularity shell --overlay inkid.overlay inkid.sif  # If you want to get into the container and make any changes to the code, or checkout another branch`
+      `rclone copy -uv inkid.sif dri-experiments-drive:singularity-containers`
 
   Usage:
     - Any script or shell usage should first source the virtualenv: `. /usr/local/dri/ink-id/.venv/bin/activate`
