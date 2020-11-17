@@ -2,8 +2,8 @@
 
 #SBATCH -A col_seales_uksr
 #SBATCH --mail-type=END
-#SBATCH --job-name=inkid_summary
-#SBATCH --output=out/inkid_summary_%A.out
+#SBATCH --job-name=inkid_rclone_upload
+#SBATCH --output=out/inkid_rclone_upload_%A.out
 #SBATCH --partition=HAS24M128_M
 #SBATCH --time=1-00:00:00
 
@@ -12,4 +12,4 @@
 
 module load ccs/singularity
 
-time singularity run --overlay inkid.overlay inkid.sif inkid-summary "$1" --all
+time singularity run --overlay inkid.overlay inkid.sif inkid-rclone-upload "$1"
