@@ -1,11 +1,17 @@
 import argparse
+import json
 import os
 import re
 
+from humanize import naturalsize
+import imageio
+import numpy as np
+from PIL import Image
+import pygifsicle
 from tqdm import tqdm
-import wand.image
 
 import inkid
+
 
 # TODO handle epochs in filenames
 
@@ -30,96 +36,38 @@ def get_prediction_image(iteration, k_fold_dir, ppm):
     filename = ppm + '_prediction_0_' + str(iteration) + '.png'
     full_filename = os.path.join(k_fold_dir, 'predictions', filename)
     if os.path.isfile(full_filename):
-        return wand.image.Image(filename=full_filename)
+        return Image.open(full_filename)
     else:
         return None
 
 
-def build_frame(iteration, k_fold_dirs, ppms, caption_with_iteration):
-    img_cols = []
-    for d in k_fold_dirs:
-        new_col = []
-        for ppm in ppms:
-            img = get_prediction_image(iteration, d, ppm)
-            new_col.append(img)
-        img_cols.append(new_col)
-    col_width = max([img.width for img in img_cols[0] if img is not None])
-    print(col_width)
-    # TODO blank frame
-    # TODO fill in frame
+def build_frame(iteration, k_fold_dirs, ppms, caption_with_iteration, max_size):
+    col_width = max([ppm['size'][0] for ppm in ppms.values()])
+    row_heights = [ppm['size'][1] for ppm in ppms.values()]
+    width = col_width * (len(k_fold_dirs) + 1)
+    height = sum(row_heights)
+    frame = Image.new('RGB', (width, height))
+    # One column at a time
+    for k, k_fold_dir in enumerate(k_fold_dirs):
+        # Make each row of this column
+        for ppm_i, ppm in enumerate(ppms.values()):
+            ppm_path = os.path.splitext(os.path.basename(ppm['path']))[0]
+            img = get_prediction_image(iteration, k_fold_dir, ppm_path)
+            if img is not None:
+                offset = (k * col_width, sum(row_heights[:ppm_i]))
+                frame.paste(img, offset)
     # TODO add label column
-    # TODO return frame
+    # Downsize image while keeping aspect ratio
+    frame.thumbnail(max_size, Image.BICUBIC)
+    return frame
 
 
-def main():
-    parser = argparse.ArgumentParser(description=__doc__)
-    # Input directory with job output
-    parser.add_argument('dir', metavar='path', help='input directory')
-    # Image generation options
-    parser.add_argument('--img-seq', help='Generate an image sequence and save it to the provided directory')
-    parser.add_argument('--gif-delay', default=10, type=int, help='GIF frame delay in hundredths of a second')
-    parser.add_argument('--caption-gif-with-iterations', action='store_true')
-    # Rclone upload options
-    parser.add_argument('--rclone-transfer-remote', metavar='remote', default=None,
-                        help='if specified, and if matches the name of one of the directories in '
-                             'the output path, transfer the results to that rclone remote into the '
-                             'sub-path following the remote name')
-    args = parser.parse_args()
 
-    # Get list of directories (not files) in given parent dir
-    k_fold_dirs = [os.path.join(args.dir, name) for name in os.listdir(args.dir)
-            if os.path.isdir(os.path.join(args.dir, name))]
-    k_fold_dirs = sorted(k_fold_dirs, key=k_from_dir)
-    print('Found job directories:')
-    for d in k_fold_dirs:
-        print(f'\t{d}')
-
-    # Get list of all PPMs and iterations encountered
-    encountered_ppms = set()
-    encountered_iterations = set()
-    for k_fold_dir in k_fold_dirs:
-        pred_dir = os.path.join(k_fold_dir, 'predictions')
-        if os.path.isdir(pred_dir):
-            # Get all filenames in that directory
-            names = os.listdir(pred_dir)
-            # Filter out those that do not match the desired name format
-            names = list(filter(lambda name: re.match('.*_prediction_', name), names))
-            for name in names:
-                # Extract the ppm name from each
-                ppm = re.search('(.*)_prediction_', name).group(1)
-                encountered_ppms.add(ppm)
-                # Extract iteration name from each
-                if re.match('.*_prediction_\d+_(\d+)', name):
-                    iteration = re.search('.*_prediction_\d+_(\d+)', name).group(1)
-                    encountered_iterations.add(int(iteration))
-    print('\nFound PPMs:')
-    for ppm in encountered_ppms:
-        print(f'\t{ppm}')
-    encountered_iterations = sorted(list(encountered_iterations))
-
-    # Generate training animation
-    print('\nCreating animation:')
-    animation = create_animation(k_fold_dirs, encountered_iterations,
-                                 encountered_ppms, args.caption_gif_with_iterations)
-
-    # TODO generate final frame and save to image
-
-    # Write to image sequence
-    if args.img_seq:
-        write_img_sequence(animation, args.img_seq)
-
-    # Write to gif
-    write_gif(animation, os.path.join(args.dir, 'training.gif'), args.gif_delay)
-
-    # Transfer results via rclone if requested
-    inkid.ops.rclone_transfer_to_remote(args.rclone_transfer_remote, args.dir)
-
-
-def create_animation(k_fold_dirs, iterations, ppms, caption_with_iteration):
-    animation = wand.image.Image()
+def create_animation(k_fold_dirs, iterations, ppms, caption_with_iteration, max_size):
+    animation = []
     for iteration in tqdm(iterations):
-        frame = build_frame(iteration, k_fold_dirs, ppms, caption_with_iteration)
-        # animation.sequence.append(frame)
+        frame = build_frame(iteration, k_fold_dirs, ppms, caption_with_iteration, max_size)
+        animation.append(frame)
     return animation
 
 
@@ -179,25 +127,28 @@ def create_animation(k_fold_dirs, iterations, ppms, caption_with_iteration):
 
 
 def write_img_sequence(animation, outdir):
-    if len(animation.sequence) == 0:
+    if len(animation) == 0:
         return
     print('\nWriting training image sequence to', outdir)
     prefix = os.path.join(outdir, "sequence_")
-    images = animation.sequence
-    for i in range(len(images)):
+    for i, img in enumerate(animation):
         outfile = prefix + str(i) + ".png"
-        wand.image.Image(images[i]).save(filename=outfile)
+        img.save(outfile)
 
 
 def write_gif(animation, outfile, delay=10):
-    if len(animation.sequence) == 0:
+    if len(animation) == 0:
         return
     print('\nWriting training gif to', outfile)
-    gif = animation
-    for frame in gif.sequence:
-        frame.delay = delay
-    gif.type = 'optimize'
-    gif.save(filename=outfile)
+    with imageio.get_writer(outfile, mode='I') as writer:
+        for img in tqdm(animation):
+            writer.append_data(np.array(img))
+    prev_size = os.path.getsize(outfile)
+    print('\nOptimizing .gif file', outfile)
+    pygifsicle.optimize(outfile)
+    new_size = os.path.getsize(outfile)
+    reduction = (prev_size - new_size) / prev_size * 100
+    print(f'Size reduced {reduction:.2f}% from {naturalsize(prev_size)} to {naturalsize(new_size)}')
 
 #
 # def get_and_merge_images(k_fold_dirs, outfile):
@@ -221,6 +172,91 @@ def write_gif(animation, outfile, delay=10):
 #     if image is not None:
 #         image = Image.fromarray(image)
 #         image.save(outfile)
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    # Input directory with job output
+    parser.add_argument('dir', metavar='path', help='input directory')
+    # Image generation options
+    parser.add_argument('--img-seq', default=None,
+                        help='Generate an image sequence and save it to the provided directory')
+    parser.add_argument('--gif-delay', default=10, type=int, help='GIF frame delay in hundredths of a second')
+    parser.add_argument('--caption-gif-with-iterations', action='store_true')
+    parser.add_argument('--max-size', type=int, nargs=2, default=[1920, 1080])
+    # Rclone upload options
+    parser.add_argument('--rclone-transfer-remote', metavar='remote', default=None,
+                        help = 'if specified, and if matches the name of one of the directories in '
+                        'the output path, transfer the results to that rclone remote into the '
+                        'sub-path following the remote name')
+    args = parser.parse_args()
+
+    # Get list of directories (not files) in given parent dir
+    k_fold_dirs = [os.path.join(args.dir, name) for name in os.listdir(args.dir)
+            if os.path.isdir(os.path.join(args.dir, name))]
+    k_fold_dirs = sorted(k_fold_dirs, key=k_from_dir)
+    print('Found job directories:')
+    for d in k_fold_dirs:
+        print(f'\t{d}')
+
+    # Get PPM data, and list of all iterations encountered across jobs (some might have more than others)
+    encountered_iterations = set()
+    metadata_file_used = None
+    ppms_from_metadata = None
+    # Iterate through k_fold dirs
+    for k_fold_dir in k_fold_dirs:
+        # If this is the first one, get metadata.json and read the PPM information
+        if metadata_file_used is None:
+            metadata_file_used = os.path.join(k_fold_dir, 'metadata.json')
+            with open(metadata_file_used) as f:
+                ppms_from_metadata = json.loads(f.read())['Region set']['ppms']
+
+        # Look in predictions directory to get all iterations from prediction images
+        pred_dir = os.path.join(k_fold_dir, 'predictions')
+        if os.path.isdir(pred_dir):
+            # Get all filenames in that directory
+            names = os.listdir(pred_dir)
+            # Filter out those that do not match the desired name format
+            names = list(filter(lambda name: re.match('.*_prediction_', name), names))
+            for name in names:
+                # Get PPM filename from image filename
+                ppm_filename = re.search('(.*)_prediction_', name).group(1)
+                # Note PPM size based on image size. Would get this from the PPM file
+                # headers, but those are not necessarily on the machine this script is run on.
+                for ppm in ppms_from_metadata.values():
+                    # Locate correct PPM in the metadata
+                    if os.path.splitext(os.path.basename(ppm['path']))[0] == ppm_filename:
+                        # Only add size information if we haven't already
+                        if 'size' not in ppm:
+                            image_path = os.path.join(pred_dir, name)
+                            ppm['size'] = Image.open(image_path).size
+                # Extract iteration name from each image
+                if re.match('.*_prediction_\d+_(\d+)', name):
+                    iteration = re.search('.*_prediction_\d+_(\d+)', name).group(1)
+                    encountered_iterations.add(int(iteration))
+    print(f'\nFound PPMs from {metadata_file_used}:')
+    for ppm in ppms_from_metadata.keys():
+        print(f'\t{ppm} {ppms_from_metadata[ppm]["size"]}')
+
+    encountered_iterations = sorted(list(encountered_iterations))
+
+    # Generate training animation
+    print('\nCreating animation:')
+    animation = create_animation(k_fold_dirs, encountered_iterations,
+                                 ppms_from_metadata, args.caption_gif_with_iterations,
+                                 args.max_size)
+
+    # TODO generate final frame and save to image
+
+    # Write to image sequence
+    if args.img_seq is not None:
+        write_img_sequence(animation, args.img_seq)
+
+    # Write to gif
+    write_gif(animation, os.path.join(args.dir, 'training.gif'), args.gif_delay)
+
+    # Transfer results via rclone if requested
+    inkid.ops.rclone_transfer_to_remote(args.rclone_transfer_remote, args.dir)
 
 
 if __name__ == '__main__':

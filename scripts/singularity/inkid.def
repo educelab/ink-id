@@ -17,8 +17,6 @@ From: ubuntu:16.04
   # Store git credentials for up to an hour (in overlay, not container) for convenience
   git config --global credential.helper cache
   git config --global credential.helper 'cache --timeout=3600'
-  # For summary image script
-  apt install -y libmagickwand-dev
   # Required to make python3.7 available
   apt install -y software-properties-common
   add-apt-repository -y ppa:deadsnakes/ppa
