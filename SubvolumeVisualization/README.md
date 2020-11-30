@@ -108,7 +108,7 @@ If visualization is desired, Plotly (see above for more information) must be ins
 
 ## Common Usage
 ```
-testcase = InkidGradCam(encoder, decoder, pretrained_model)
+testcase = InkidGradCam(encoder, decoder, path_to_pretrained_model)
 
 # If encoder layer names are unknown
 testcase.print_encoder()
@@ -117,7 +117,7 @@ testcase.print_encoder()
 testcase.register_hooks(layer_name='layer')
 
 # Push subvolume through
-heatmap = testcase.push_subvolume_through(output_dir, input_dir)
+testcase.push_subvolume_through(output_dir, reverse=True, input_dir=input_dir_path)
 
 # If quick visualization is desired
 testcase.save_images()
