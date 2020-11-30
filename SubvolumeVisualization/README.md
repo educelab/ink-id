@@ -98,7 +98,13 @@ If visualization is desired, Plotly (see above for more information) must be ins
 * Subvolume data: must be either a 3D numpy array or a directory containing .tif files.
 
 ## Output Data
-Heatmap as a 3D numpy array. Can be visualized using Plotly.  
+* heatmap (3D numpy array)
+* (optional) reverse_heatmap (3D numpy array)
+* gradcam.png
+* (optional) reverse_gradcam.png
+* (optional) gradcam_subvol.png
+* (optional) gradcam_superimposed.png
+
 
 ## Common Usage
 ```

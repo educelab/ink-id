@@ -92,9 +92,10 @@ class InkidGradCam:
         self.__activations = None
         self.__gradients = None
 
-        # Placeholders for prediction, heatmap
+        # Placeholders for prediction, heatmap, reverse_heatmap
         self.prediction = None
         self.heatmap = None
+        self.reverse_heatmap = None
 
         # A JSON log will be produced for each output file
         self.log = {}
@@ -162,7 +163,7 @@ class InkidGradCam:
  
 
 
-    def push_subvolume_through(self, output_dir, input_dir=None, subvolume=None):
+    def push_subvolume_through(self, output_dir, reverse=False, input_dir=None, subvolume=None):
         '''
         Pushes the subvolume through the model 
         Inputs:
@@ -203,6 +204,12 @@ class InkidGradCam:
         self.log['prediction'] = self.prediction
         print("Prediction is: ", self.prediction)
 
+
+        # Record the non-predicted side for possible later use
+        __rejection = abs(self.prediction-1)
+
+
+        # Backpropagate!
         self.__net(self.subvolume)[:, self.prediction, :, :].backward()
 
 
@@ -227,15 +234,45 @@ class InkidGradCam:
         # Save the metadata
         self.__save_metadata(output_dir)
         
-        return self.heatmap
+
+        if reverse:
+
+            ### Calculate the rejection heatmap in a similar manner
+            self.__net(self.subvolume)[:, __rejection, :, :].backward()
+
+
+            ## Expression 1 in the paper: 
+            pooled_gradients = torch.mean(self.__gradients, dim=[0,2,3,4])
+            
+            
+            ## Espression 2 in the paper: 
+            for i in range(pooled_gradients.size()[0]): 
+                self.__activations[:, i, :, :, :] *= pooled_gradients[i]
+
+            __reverse_heatmap = torch.mean(self.__activations, dim=1).squeeze()
+
+            ### Discard negative values 
+            __reverse_heatmap = np.maximum(__reverse_heatmap.detach(), 0)
+            
+            ### normalize the heatmap
+            self.reverse_heatmap = __reverse_heatmap/torch.max(__reverse_heatmap)
+
+            
+            return (self.heatmap, self.reverse_heatmap)
+
+
+        else:  # if no reverse map is desired
+            return (self.heatmap, None)
 
 
 
-    def save_images(self, heatmap=True, subvolume=True, superimposed=True):
+    def save_images(self, heatmap=True, reverse_heatmap=True, 
+                    subvolume=False, superimposed=False):
         '''
         Saves 3 types of images in the output directory.
         Inputs:
             heatmap(bool): image will be saved when set to True.
+            reverse_heatmap(bool): (same as above)
             subvolume(bool):  (same as above)
             superimposed(bool):  (same as above)
         '''
@@ -265,10 +302,31 @@ class InkidGradCam:
             
             gradient_map.update_layout(showlegend=False)
             
-            gradient_map.write_image(f"{self.output_dir}/gradient_map.png")
+            gradient_map.write_image(f"{self.output_dir}/gradcam.png")
             
+        if reverse_heatmap:
+            cube_size = self.reverse_heatmap.size()[0]
+            X, Y, Z = np.mgrid[0:cube_size:, 0:cube_size, 0:cube_size]
 
-        if subvolume:
+            reverse_values = self.reverse_heatmap
+            
+            gradient_map = go.Figure(data=go.Volume(
+                x=X.flatten(),
+                y=Y.flatten(),
+                z=Z.flatten(),
+                value=reverse_values.flatten(),
+                isomin=0.1,
+                isomax=1.0,
+                opacity=0.2, # needs to be small to see through all surfaces
+                surface_count=8, # needs to be a large number for good volume rendering
+                colorscale = 'rainbow'
+                ))
+            
+            gradient_map.update_layout(showlegend=False)
+            gradient_map.write_image(f"{self.output_dir}/reverse_gradcam.png")
+
+
+        if subvolume or superimposed:
             subvol = torch.squeeze(self.subvolume)
             cube_size = subvol.size()[0]        
             X, Y, Z = np.mgrid[0:cube_size, 0:cube_size, 0:cube_size]
@@ -287,14 +345,16 @@ class InkidGradCam:
                 ))
             
             subvolume_map.update_layout(showlegend=False)
-            subvolume_map.write_image(f"{self.output_dir}/subvolume_map.png")
+            subvolume_map.write_image(f"{self.output_dir}/gradcam_subvol.png")
 
-        if superimposed:
-            gradient_img = cv2.imread(f'{self.output_dir}/gradient_map.png')
-            subvolume_img = cv2.imread(f'{self.output_dir}/subvolume_map.png')
-            
-            superimposed_img = cv2.addWeighted(gradient_img, 0.35, subvolume_img, 0.65, 0)
-            cv2.imwrite(f'{self.output_dir}/superimposed.png', superimposed_img)            
+
+            if superimposed:
+                gradient_img = cv2.imread(f'{self.output_dir}/gradcam.png')
+                subvolume_img = cv2.imread(f'{self.output_dir}/gradcam_subvol.png')
+                
+                superimposed_img = cv2.addWeighted(gradient_img, 0.35, subvolume_img, 0.65, 0)
+                cv2.imwrite(f'{self.output_dir}/gradcam_superimposed.png', superimposed_img)            
+
 
 
     def animate_heatmap(self):
