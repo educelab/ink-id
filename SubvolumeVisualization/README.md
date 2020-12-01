@@ -3,6 +3,7 @@ The directory holds Python scripts for visualizing each subvolume data in a
 human recognizable way. 
 
 # Contents
+TODO: Needs revision
 * volume_renderer.py: produces 3D volume rendered images of subvolume.
 * inkid_gradcam.py: Given a CNN model, pre-trained weights, and a subvolume data, produces a 3D rendered image of GradCam.
 * test_volumerenderer.py: a simple test script for testing volume_renderer.py
@@ -67,10 +68,10 @@ pio.write_image(fig, file="test.png")
 ```
 # For Plotly rendition
 testcase = volumerenderer.Plotly3D(output_dir, input_dir)
-fig = testcase.setup_graph()
+fig = testcase.setup_graph(max_val=35000, colorscale='Rainbow(default)'|'Greys')
 
 ## save static image files
-testcase.test_image(fig, [args])
+testcase.save_image(fig, [args])
 
 ## save an animated file
 testcase.animated_full_rotation(fig, [args])

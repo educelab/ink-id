@@ -139,7 +139,7 @@ class Plotly3D(VolumeRenderer):
         return fig
 
 
-    def test_image(self, fig, filename=None,
+    def save_image(self, fig, filename=None,
                    up_cfg=None, center_cfg=None, eye_cfg=None, title=None):
         '''
         Save plotly figure in a given in a given directory
@@ -174,8 +174,10 @@ class Plotly3D(VolumeRenderer):
         # TODO: add more figure update options
     
         # Save file
+
+        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+
         if not filename:
-            timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
             filename = f'{timestamp}.png'
         pio.write_image(fig, f'{self.output_dir}/{filename}')
     
@@ -188,8 +190,8 @@ class Plotly3D(VolumeRenderer):
             json.dump(self.log, outfile, indent=2)
 
     def animated_full_rotation(self, fig, 
-                            rotate_angle=10, transition_angle=10, camera_distance=2.5, 
-                            title=None, fps=30, filename=None):
+                            rotate_angle=20, transition_angle=20, camera_distance=2.5, 
+                            title=None, fps=10, filename=None):
         '''
         Saves animated version of 360 rotation along x, y, z axes. 
         Input:
@@ -293,8 +295,9 @@ class Plotly3D(VolumeRenderer):
         img_array = []
         
         # Create an animated mp4 file and save
+        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+        
         if not filename:
-            timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
             filename = f'{timestamp}.mp4'
 
         for image in self.images:
@@ -417,8 +420,8 @@ class yt3D(VolumeRenderer):
         scene.camera.resolution = (np.array((1080, 1080)) * render_scale).astype(int)
         
         # Save file
+        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
         if not filename:
-            timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
             filename = f'{timestamp}.png'
 
         scene.save(f'{self.output_dir}/{filename}', sigma_clip=2.5)
@@ -426,7 +429,7 @@ class yt3D(VolumeRenderer):
         with open(f"{self.output_dir}/{timestamp}.json", "w") as outfile: 
             json.dump(self.log, outfile, indent=2)
 
-    def animated_full_rotation(self, scene, axes=[1,1,1], n_steps=360, fps=30, 
+    def animated_full_rotation(self, scene, axes=[1,1,1], n_steps=120, fps=10, 
                                filename=None):
         '''
         Save an mp4 file showing rotated yt 3D rendering images.
@@ -462,8 +465,8 @@ class yt3D(VolumeRenderer):
                 images.append(im)
 
         # Save file
+        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
         if not filename:
-            timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
             filename = f'{timestamp}.mp4'
         
         def sigma_clip(img: np.ndarray, s: float) -> np.ndarray:
