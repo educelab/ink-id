@@ -5,7 +5,7 @@ Results/
 SavedWeights/
 SingleSubvolumeSamples/
 __pycache__
-copy_model.py/
+copy_model.py
 localTestFiles/
 nohup.out
 vis.yml
