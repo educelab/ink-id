@@ -1,0 +1,126 @@
+{% extends "template.html" %}
+{% block content %}
+<section class="" id="title">
+  <div class="container-fluid">
+    <h1>Overview</h1>
+  </div>
+</section>
+
+<!-- Cards section -->
+<section id="card-section">
+    <h2>Subvolumes</h2>
+  <div class="container-fluid subvol-entry">
+    <h4>Subvolume ID # 123456789098767</h4>
+    <a href="#" class="btn btn-primary btn-animate">Metadata</a>
+
+      <div class="card-group">
+        <div class="card subvol-img-card">
+          <img class="card-img-top" src="/static/images/plotly-gray.png" alt="plotly-gray">
+          <div class="card-body">
+            <h5 class="card-title">Subvolume (plotly-gray)</h5>
+            <p class="card-text">plotly-gray</p>
+            <a href="#" class="btn btn-primary btn-animate">Animate</a>
+          </div>
+        </div>
+          <div class="card subvol-img-card">
+            <img class="card-img-top" src="/static/images/plotly-color.png" alt="plotly-color">
+            <div class="card-body">
+              <h5 class="card-title">Subvolume (plotly-color)</h5>
+              <p class="card-text">plotly-color</p>
+              <a href="#" class="btn btn-primary btn-animate">Animate</a>
+            </div>
+        </div>
+        <div class="card subvol-img-card">
+          <img class="card-img-top" src="/static/images/yt-color.png" alt="yt-color">
+          <div class="card-body">
+            <h5 class="card-title">Subvolume (yt-color)</h5>
+            <p class="card-text">yt-color</p>
+            <a href="#" class="btn btn-primary btn-animate">Animate</a>
+          </div>
+        </div>
+
+        <div class="card subvol-img-card">
+          <img class="card-img-top" src="/static/images/gradcam.png" alt="gradcam">
+          <div class="card-body">
+            <h5 class="card-title">Gradcam</h5>
+            <p class="card-text">gradcam true</p>
+          </div>
+        </div>
+        <div class="card subvol-img-card">
+          <img class="card-img-top" src="/static/images/reverse-gradcam.png" alt="reverse-gradcam">
+          <div class="card-body">
+            <h5 class="card-title">Gradcam False</h5>
+            <p class="card-text">gradcam false</p>
+          </div>
+        </div>
+        <div class="card subvol-img-card">
+          <img class="card-img-top" src="" alt="blank">
+          <div class="card-body">
+            <h5 class="card-title">Metadata</h5>
+            <p class="card-text"></p>
+            <a href="#" class="btn btn-primary btn-animate">Metadata</a>
+          </div>
+        </div>
+      </div>
+  </div>
+
+  <!-- Cards section (copy of above)-->
+    <div class="container-fluid subvol-entry">
+      <h4>Subvolume ID # 123456789098767</h4>
+      <a href="#" class="btn btn-primary btn-animate">Metadata</a>
+
+        <div class="card-group">
+          <div class="card subvol-img-card">
+            <img class="card-img-top" src="/static/images/plotly-gray.png" alt="plotly-gray">
+            <div class="card-body">
+              <h5 class="card-title">Subvolume (plotly-gray)</h5>
+              <p class="card-text">plotly-gray</p>
+              <a href="#" class="btn btn-primary btn-animate">Animate</a>
+            </div>
+          </div>
+            <div class="card subvol-img-card">
+              <img class="card-img-top" src="/static/images/plotly-color.png" alt="plotly-color">
+              <div class="card-body">
+                <h5 class="card-title">Subvolume (plotly-color)</h5>
+                <p class="card-text">plotly-color</p>
+                <a href="#" class="btn btn-primary btn-animate">Animate</a>
+              </div>
+          </div>
+          <div class="card subvol-img-card">
+            <img class="card-img-top" src="/static/images/yt-color.png" alt="yt-color">
+            <div class="card-body">
+              <h5 class="card-title">Subvolume (yt-color)</h5>
+              <p class="card-text">yt-color</p>
+              <a href="#" class="btn btn-primary btn-animate">Animate</a>
+            </div>
+          </div>
+
+          <div class="card subvol-img-card">
+            <img class="card-img-top" src="/static/images/gradcam.png" alt="gradcam">
+            <div class="card-body">
+              <h5 class="card-title">Gradcam</h5>
+              <p class="card-text">gradcam true</p>
+            </div>
+          </div>
+          <div class="card subvol-img-card">
+            <img class="card-img-top" src="/static/images/reverse-gradcam.png" alt="reverse-gradcam">
+            <div class="card-body">
+              <h5 class="card-title">Gradcam False</h5>
+              <p class="card-text">gradcam false</p>
+            </div>
+          </div>
+          <div class="card subvol-img-card">
+            <img class="card-img-top" src="" alt="blank">
+            <div class="card-body">
+              <h5 class="card-title">Metadata</h5>
+              <p class="card-text"></p>
+              <a href="#" class="btn btn-primary btn-animate">Metadata</a>
+            </div>
+          </div>
+        </div>
+    </div>
+
+  {% block footer %}
+  {{super()}}
+  {% endblock %}
+{% endblock %}

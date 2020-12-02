@@ -1,0 +1,148 @@
+{% extends "template.html" %}
+{% block content %}
+<section class="" id="title">
+  <div class="container-fluid">
+    <h1>Filter Images</h1>
+  </div>
+</section>
+
+<body>
+
+  <!-- Selector Form -->
+  <form>
+    <div class="container-fluid">
+      <div class="form-group col-8">
+        <label for="dataset">Dataset</label>
+        <select class="form-control" id="datasetSelection">
+          <option>
+            CarbonPhantom
+          </option>
+        </select> <label for="group">Group</label> 
+	<select class="form-control" id="groupSelection">
+          <option>
+            All
+          </option>
+          <option>
+            Interpolated
+          </option>
+          <option>
+            NearestNeighbor
+          </option>
+        </select> <label for="column">Column</label> 
+	<select class="form-control" id="columnSelection">
+          <option>
+            All
+          </option>
+          <option>
+            Col2
+          </option>
+          <option>
+            Col6
+          </option>
+        </select> <label for="ground truth">Ground
+        Truth</label> <select class="form-control" id="truthSelection">
+          <option>
+            All
+          </option>
+          <option>
+            CarbonInkIndividual
+          </option>
+          <option>
+            NoInkIndividual
+          </option>
+          <option>
+            IronGallIndividual
+          </option>
+        </select> <label for="prediction">Prediction (valid only for gradcam images)</label> 
+	<select class="form-control" id="predictionSelection">
+          <option>
+            All
+          </option>
+          <option>
+            ink
+          </option>
+          <option>
+            no_ink
+          </option>
+        </select> <label for="image type">Image Type</label> 
+	<select class="form-control" id="imageSelection">
+          <option>
+            All
+          </option>
+          <option>
+            gradcam
+          </option>
+          <option>
+            gradcam_false
+          </option>
+          <option>
+            subvolume_color
+          </option>
+          <option>
+            subvolume_gray
+          </option>
+        </select>
+      </div>
+    </div>
+  </form>
+  
+  <!-- Load images button -->
+  <button type="button" class="btn btn-secondary" id="loadButton">Load
+  Images</button>
+  <section id="selectors">
+    <div class="container-fluid"></div>
+    <h3>Selection</h3>
+    <ul>
+      <li id="selection1">Dataset:</li>
+      <li id="selection2">Group:</li>
+      <li id="selection3">Column:</li>
+      <li id="selection4">Ground Truth:</li>
+      <li id="selection5">Prediction:</li>
+      <li id="selection6">Image Type:</li>
+    </ul>
+  </section>
+  
+  <!-- Gallery -->
+  <section id="subvolumes">
+    <div class="container-fluid">
+      <div class="row text-center text-lg-left" id="gallery">
+        <!--
+        <div class="col-lg-3 col-md-4 col-6">
+          <div class="card gallery-card" style="">
+            <a target="_blank" href="/static/images/plotly_test.png" class="d-block mb-2 h-100">
+            <img class="card-img-top" src="/static/images/plotly_test.png" alt="Card image cap">
+          </a>
+              <a target="_blank" href="/static/texts/metadata1.json" class="">
+                <p class="card-text text-center">path/to/file</p>
+              </a>
+          </div>
+        </div>
+-->
+        <!-- ghost image -->
+        <div class="col-lg-3 col-md-4 col-6" id="shadowBlock" style=
+        "display: none !important;">
+          <div class="card gallery-card" style="">
+            <a target="_blank" href="/static/images/plotly_test.png"
+            class="d-block mb-2 h-100" id="popup-image"><img class=
+            "card-img-top" src="/static/images/plotly_test.png" alt=
+            "Card image cap" id="thumbnail-image"></a> <a target=
+            "_blank" href="/static/texts/metadata1.json" class="" id=
+            "metadata-json">
+            <p class="card-text text-center" id="metadata-path">
+            path/to/file</p></a>
+          </div>
+        </div><!-- end of ghost image -->
+      </div>
+    </div>
+
+  {% block footer %}
+	<script src="/static/js/filter.js" charset="utf-8">                        
+	</script> 
+  {% endblock %}
+{% endblock %}
+
+
+
+</body>
+</html>
+

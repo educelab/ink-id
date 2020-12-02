@@ -1,0 +1,43 @@
+body {
+  margin: 10px;
+  padding-left: 2%;
+  background-color: pink;
+}
+
+.container-fluid{
+  margin: 10px auto;
+  padding: 5px;
+}
+
+.subvol-entry{
+  background-color: white;
+}
+.subvol-card{
+  margin-bottom: 5%;
+}
+
+.card-group{
+  margin: 3% 3%;
+}
+.card-deck{
+  margin: 3% 3%;
+}
+.subvol-img-card {
+  text-align: center;
+}
+
+.thumbnail-img {
+  width:150px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  padding: 5px;
+  margin: 2px;
+}
+
+.img-thumbnail:hover {
+  box-shadow: 0 0 2px 1px rgba(0, 140, 186, 0.5);
+}
+
+.subvolImage {
+  text-align: center;
+}
