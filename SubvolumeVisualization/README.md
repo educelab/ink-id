@@ -10,6 +10,38 @@ TODO: Needs revision
 * test_gradcam.py: a simple test script for testing inkid_gradcam.py
 * test_combined.py: a simple test script for using inkid_gradcam.py to produce heatmap and test_volumerenderer.py to visualize it in various ways.
 
+# Filename Organization (for display filtering)
+## For subvolume images 
+```
+{dataset}-{group}-{column}-{truth}-{sample num}-{image-type}.png
+```
+example: `dCarbonPhantom-gInterpolated-c6-tNoink-s3-iPlotlymono.png`
+
+(Everything up to sample-num is given)
+
+## For gradcam images
+```
+{dataset}-{group}-{column}-{truth}-{sample num}-{pretrained model}-{prediction}-{image-type}.png
+```
+example: `dCarbonPhantom-gInterpolated-c6-tNoink-s3-w13434_36000-p0-iGradcamReverse.png`
+
+(everything up to pretrained-model is given
+
+### Current options for each name-part
+```
+{
+	dataset:["CarbonPhantom"],
+	group: ["Interpolated", "NearestNeighbor"]
+	column: int
+	truth: ["Ink", "NoInk","IronGall"],
+	sample num: int
+	image-type: ["Plotlymono", "Plotlycolor", "Plotlymono360", "Plotlycolor360",
+							 "Ytcolor", "Ytcolor360", "Gradcam", "GradcamReverse"]
+	pretrained-model: int(id)_int(steps)
+	prediction: int(0 or 1)
+}
+```
+
 # volume_render.py 
 
 ## Requirements

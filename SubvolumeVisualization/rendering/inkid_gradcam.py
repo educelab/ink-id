@@ -68,12 +68,13 @@ class InkidGradCam:
 
     '''
 
-    def __init__(self, encoder, decoder, pretrained_model):
+    def __init__(self, encoder, decoder, pretrained_model, comments=None):
         '''
         Input:
             encoder:
             decoder:
             pretrained_model(str): path to the .pt file
+            comments(str): comments that will be added to the metadata.json file
         '''
 
 
@@ -85,7 +86,6 @@ class InkidGradCam:
         # Placeholders for subvolume and input
         self.subvolume = None
         self.input_dir = None
-        self.output_dir = None
 
         # Placeholders for the 3DCNN model with hooks
         self.__net = None
@@ -102,7 +102,9 @@ class InkidGradCam:
         self.log['encoder'] = str(self.encoder.__class__.__name__)
         self.log['decoder'] = str(self.decoder.__class__.__name__)
         self.log['pretrained_model'] = self.pretrained_model
-
+        
+        if comments:
+            self.log['comments'] = comments
 
 
     def print_encoder(self):
@@ -163,7 +165,7 @@ class InkidGradCam:
  
 
 
-    def push_subvolume_through(self, output_dir, reverse=False, input_dir=None, subvolume=None):
+    def push_subvolume_through(self, reverse=False, input_dir=None, subvolume=None):
         '''
         Pushes the subvolume through the model 
         Inputs:
@@ -231,8 +233,6 @@ class InkidGradCam:
         ### normalize the heatmap
         self.heatmap = heatmap/torch.max(heatmap)
 
-        # Save the metadata
-        self.__save_metadata(output_dir)
         
 
         if reverse:
@@ -266,8 +266,8 @@ class InkidGradCam:
 
 
 
-    def save_images(self, heatmap=True, reverse_heatmap=True, 
-                    subvolume=False, superimposed=False):
+    def save_images(self, output_dir, heatmap=True, reverse_heatmap=True, 
+                    subvolume=False, superimposed=False, filename="result"):
         '''
         Saves 3 types of images in the output directory.
         Inputs:
@@ -275,12 +275,23 @@ class InkidGradCam:
             reverse_heatmap(bool): (same as above)
             subvolume(bool):  (same as above)
             superimposed(bool):  (same as above)
+            filename(str): filename stem to which "{pretrained-model}-{prediction}
+                           -{imagetype}.png" will be appended.
         '''
 
         # This may be  necessary for orca to work
         #pio.orca.config.executable = '{path to orca--perhaps inside conda env}'
         #pio.orca.config.use_xvfb = True
         #pio.orca.config.save()
+        
+        # Strip the trailing '/' from the output_dir path
+        if output_dir[-1] is '/':
+            output_dir = output_dir[:-1]
+
+        self.log['output_dir'] = output_dir
+
+        # If output_dir does not exist, create one
+        Path(output_dir).mkdir(parents=True, exist_ok=True)
 
         if heatmap:
             cube_size = self.heatmap.size()[0]
@@ -302,7 +313,12 @@ class InkidGradCam:
             
             gradient_map.update_layout(showlegend=False)
             
-            gradient_map.write_image(f"{self.output_dir}/gradcam.png")
+            # Create an imagefile with an appropriate name
+            imagefile = f'{filename}-p{self.prediction}-iGradcam'
+            gradient_map.write_image(f"{output_dir}/{imagefile}.png")
+        
+            # Save the metadata
+            self.__save_metadata(output_dir, filename=imagefile)
             
         if reverse_heatmap:
             cube_size = self.reverse_heatmap.size()[0]
@@ -323,7 +339,13 @@ class InkidGradCam:
                 ))
             
             gradient_map.update_layout(showlegend=False)
-            gradient_map.write_image(f"{self.output_dir}/reverse_gradcam.png")
+
+            # Create an imagefile with an appropriate name
+            imagefile = f'{filename}-p{self.prediction}-iGradcamReverse'
+            gradient_map.write_image(f"{output_dir}/{imagefile}.png")
+        
+            # Save the metadata
+            self.__save_metadata(output_dir, filename=imagefile)
 
 
         if subvolume or superimposed:
@@ -345,39 +367,38 @@ class InkidGradCam:
                 ))
             
             subvolume_map.update_layout(showlegend=False)
-            subvolume_map.write_image(f"{self.output_dir}/gradcam_subvol.png")
 
+            # Create an imagefile with an appropriate name
+            imagefile = f'{filename}-p{self.prediction}-iSimpleSubvolume'
+            gradient_map.write_image(f"{output_dir}/{imagefile}.png")
+        
+            # Save the metadata
+            self.__save_metadata(output_dir, filename=imagefile)
 
             if superimposed:
-                gradient_img = cv2.imread(f'{self.output_dir}/gradcam.png')
-                subvolume_img = cv2.imread(f'{self.output_dir}/gradcam_subvol.png')
+                gradient_img = cv2.imread(f'{output_dir}/{filename}-p{self.prediction}-iGradCam.png')
+                subvolume_img = cv2.imread(f'{output_dir}/{filename}-p{self.prediction}-iSimpleSubvolume.png')
                 
                 superimposed_img = cv2.addWeighted(gradient_img, 0.35, subvolume_img, 0.65, 0)
-                cv2.imwrite(f'{self.output_dir}/gradcam_superimposed.png', superimposed_img)            
 
+                # Create an imagefile with an appropriate name
+                imagefile = f'{filename}-p{self.predictino}-iSuperimposed'
+                cv2.imwrite(f'{output_dir}/{imagefile}.png', superimposed_img)            
 
+                # Save the metadata
+                self.__save_metadata(output_dir, filename=imagefile)
 
     def animate_heatmap(self):
         # TODO?
         pass
 
 
-    def __save_metadata(self, output_dir):
+    def __save_metadata(self, output_dir, filename="gradcam-result"):
         '''
         Helper function for saving metadata (called within save_images())
         '''
 
-        # Strip the trailing '/' from the output_dir path
-        if output_dir[-1] is '/':
-            output_dir = output_dir[:-1]
-
-        self.output_dir = output_dir
-        self.log['output_dir'] = self.output_dir
-
-        # If output_dir does not exist, create one
-        Path(self.output_dir).mkdir(parents=True, exist_ok=True)
-
-        with open(f"{self.output_dir}/{self.timestamp}_gradcam.json", "w") as outfile: 
+        with open(f"{output_dir}/{filename}.json", "w") as outfile: 
             json.dump(self.log, outfile, indent=2)
     
 
