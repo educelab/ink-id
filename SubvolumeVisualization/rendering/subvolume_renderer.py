@@ -338,7 +338,7 @@ class yt3D(VolumeRenderer):
         self.log['graph']='yt'
 
 
-    def setup_graph(self, output_dir, filename="colorbar", field='attenuation', atten_min_intensity=10000, 
+    def setup_graph(self, output_dir, filename="legend", field='attenuation', atten_min_intensity=10000, 
                     atten_max_intensity=35000, scale=10.0, colormap='gist_rainbow', 
                     trans_min_intensity=2.5, trans_max_intensity=17.5, 
                     trans_midpoint=10.35):
@@ -403,7 +403,7 @@ class yt3D(VolumeRenderer):
             tfh.tf.map_to_colormap(mi=midpoint, ma=tf_max_intensity, colormap='RAINBOW_r')
         
         # Create an imagefile with an appropriate name
-        imagefile = f'{filename}-iYtcolorbar'
+        imagefile = f'{filename}-iYtlegend'
         
         #Save the colorbar image 
         tfh.plot(fn=f'{output_dir}/{imagefile}.png')

@@ -33,7 +33,7 @@ example: `dCarbonPhantom-gInterpolated-c6-tNoink-s3-w13434_36000-p0-iGradcamReve
 	sample num(s): int
 	image-type(i): ["Plotlymono", "Plotlycolor", "Plotlymono360", "Plotlycolor360",
 						   "Ytcolor", "Ytcolor360", "Gradcam", 
-						   "GradcamReverse", "Ytcolorbar",
+						   "GradcamReverse", "Ytlegend",
 						   "SimpleSubvolume", "Superimposed"]
 	pretrained-model(w): int(id)_int(steps)
 	prediction(p): int(0 or 1)
