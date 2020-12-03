@@ -23,17 +23,13 @@ class VolumeRenderer:
    
     '''
 
-    def __init__(self, output_dir, input_dir=None, subvolume=None):
+    def __init__(self, input_dir=None, subvolume=None, comments=None):
         '''
         Input:
-            output_dir(str): output directory
             input_dir(str): directory path without the trailing '/'
             subvolume(numpy.ndarray):
         '''
 
-        # Strip the trailing '/'
-        if output_dir[-1] is '/':
-            output_dir = output_dir[:-1]
 
         # Must have either input_dir or subvolume
         if not input_dir and not subvolume.any():
@@ -57,16 +53,16 @@ class VolumeRenderer:
 
         self.subvolume = {'attenuation': subvolume, 'transform': subvolume_fft}
         self.voxel_size_um = 12.0
-        self.output_dir = output_dir
 
-        Path(self.output_dir).mkdir(parents=True, exist_ok=True)
 
         self.images = []
 
         # A JSON log will be produced for each output file
         self.log = {}
         self.log['input_data']=input_dir
-        self.log['output_dir']=output_dir
+
+        if comments:
+            self.log['comments']=comments
 
 
     def load_data(self, input_dir):
@@ -90,8 +86,8 @@ class VolumeRenderer:
 
 
 class Plotly3D(VolumeRenderer):
-    def __init__(self, output_dir, input_dir=None, subvolume=None): 
-        VolumeRenderer.__init__(self, output_dir, input_dir, subvolume)
+    def __init__(self, input_dir=None, subvolume=None, comments=None): 
+        VolumeRenderer.__init__(self, input_dir, subvolume, comments)
         self.log['graph']='plotly'
 
     def setup_graph(self, field='attenuation', min_val=0, max_val=None, 
@@ -139,12 +135,13 @@ class Plotly3D(VolumeRenderer):
         return fig
 
 
-    def save_image(self, fig, filename=None,
+    def save_image(self, fig, output_dir, filename="result",
                    up_cfg=None, center_cfg=None, eye_cfg=None, title=None):
         '''
         Save plotly figure in a given in a given directory
         Input:
             fig(plotly.graph_objs._figure.Figure): 
+            output_dir(str): 
             filename(str): file name to be given to the image for saving.
             up_cfg(tuple): for camera
             center_cfg(tuple): for camera
@@ -158,6 +155,10 @@ class Plotly3D(VolumeRenderer):
         #pio.orca.config.use_xvfb = True
         #pio.orca.config.save()
     
+        # Strip the trailing '/'
+        if output_dir[-1] is '/':
+            output_dir = output_dir[:-1]
+        Path(output_dir).mkdir(parents=True, exist_ok=True)
 
         # Adjust the camera position and display orientation
         camera = dict(
@@ -173,23 +174,24 @@ class Plotly3D(VolumeRenderer):
     
         # TODO: add more figure update options
     
-        # Save file
-
-        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-
-        if not filename:
-            filename = f'{timestamp}.png'
-        pio.write_image(fig, f'{self.output_dir}/{filename}')
+        # Create an imagefile with an appropriate name
+        if self.log['colorscale'] == 'Greys':
+            imagefile = f'{filename}-iPlotlymono'
+        else:
+            imagefile = f'{filename}-iPlotlycolor'
     
-        self.log['output file']=filename
+
+        pio.write_image(fig, f'{output_dir}/{imagefile}.png')
+    
+        self.log['output file']=f'{imagefile}.png'
         self.log['up_cfg']=up_cfg if up_cfg else (0,0,1)
         self.log['center_cfg']=center_cfg if center_cfg else (0,0,0)
         self.log['eye_cfg']=eye_cfg if eye_cfg else (2.5, 2.5, 2.5)
         
-        with open(f"{self.output_dir}/{timestamp}.json", "w") as outfile: 
+        with open(f"{output_dir}/{imagefile}.json", "w") as outfile: 
             json.dump(self.log, outfile, indent=2)
 
-    def animated_full_rotation(self, fig, 
+    def animated_full_rotation(self, fig, output_dir, 
                             rotate_angle=20, transition_angle=20, camera_distance=2.5, 
                             title=None, fps=10, filename=None):
         '''
@@ -205,6 +207,10 @@ class Plotly3D(VolumeRenderer):
         '''
 
         title = title if title else self.input_dir
+        # Strip the trailing '/'
+        if output_dir[-1] is '/':
+            output_dir = output_dir[:-1]
+        Path(output_dir).mkdir(parents=True, exist_ok=True)
 
         # x-axis
         for angle in range(0, 361, rotate_angle):
@@ -294,11 +300,12 @@ class Plotly3D(VolumeRenderer):
     
         img_array = []
         
-        # Create an animated mp4 file and save
-        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+        # Create an imagefile with an appropriate name
+        if self.log['colorscale'] == 'Greys':
+            imagefile = f'{filename}-iPlotlymono360'
+        else:
+            imagefile = f'{filename}-iPlotlycolor360'
         
-        if not filename:
-            filename = f'{timestamp}.mp4'
 
         for image in self.images:
             nparr = np.frombuffer(image, np.uint8)
@@ -308,30 +315,30 @@ class Plotly3D(VolumeRenderer):
             img_array.append(img)
         
         fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-        out = cv2.VideoWriter(f'{self.output_dir}/{filename}', fourcc, fps, size)
+        out = cv2.VideoWriter(f'{output_dir}/{imagefile}', fourcc, fps, size)
          
         for i in range(len(img_array)):
             out.write(img_array[i])
         out.release()
         
-        self.log['mp4 file']=filename
+        self.log['mp4 file']=f'{imagefile}.mp4'
         self.log['rotate_angle'] = rotate_angle
         self.log['transition_angle']=transition_angle
         self.log['camera distance'] = camera_distance
         self.log['fps']=fps
     
-        with open(f"{self.output_dir}/{timestamp}.json", "w") as outfile: 
+        with open(f"{output_dir}/{imagefile}.json", "w") as outfile: 
             json.dump(self.log, outfile, indent=2)
         
 
 class yt3D(VolumeRenderer):
-    def __init__(self, output_dir, input_dir=None, subvolume=None): 
+    def __init__(self, input_dir=None, subvolume=None, comments=None): 
 
-        VolumeRenderer.__init__(self, output_dir, input_dir, subvolume)
+        VolumeRenderer.__init__(self, input_dir, subvolume, comments)
         self.log['graph']='yt'
 
 
-    def setup_graph(self, field='attenuation', atten_min_intensity=10000, 
+    def setup_graph(self, output_dir, filename="colorbar", field='attenuation', atten_min_intensity=10000, 
                     atten_max_intensity=35000, scale=10.0, colormap='gist_rainbow', 
                     trans_min_intensity=2.5, trans_max_intensity=17.5, 
                     trans_midpoint=10.35):
@@ -395,9 +402,11 @@ class yt3D(VolumeRenderer):
             tfh.tf.map_to_colormap(mi=tf_min_intensity, ma=midpoint, colormap='RAINBOW')
             tfh.tf.map_to_colormap(mi=midpoint, ma=tf_max_intensity, colormap='RAINBOW_r')
         
+        # Create an imagefile with an appropriate name
+        imagefile = f'{filename}-iYtcolorbar'
         
         #Save the colorbar image 
-        tfh.plot(fn=f'{self.output_dir}/yt_colorbar.png')
+        tfh.plot(fn=f'{output_dir}/{imagefile}.png')
 
         self.log['field']=field
         self.log['atten_min_intensity']=atten_min_intensity
@@ -410,27 +419,30 @@ class yt3D(VolumeRenderer):
 
         return sc
 
-    def save_image(self, scene, filename=None):
+    def save_image(self, scene, output_dir, filename="result"):
         '''
         Save a yt test image, 
         Input:
             scene(yt.visualization.volume_rendering.scene.Scene):
         '''
+        # Strip the trailing '/'
+        if output_dir[-1] is '/':
+            output_dir = output_dir[:-1]
+        Path(output_dir).mkdir(parents=True, exist_ok=True)
+        
         render_scale = 0.5
         scene.camera.resolution = (np.array((1080, 1080)) * render_scale).astype(int)
         
         # Save file
-        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-        if not filename:
-            filename = f'{timestamp}.png'
+        imagefile = f'{filename}-iYtcolor'
+        
+        scene.save(f'{output_dir}/{imagefile}.png', sigma_clip=2.5)
 
-        scene.save(f'{self.output_dir}/{filename}', sigma_clip=2.5)
-
-        with open(f"{self.output_dir}/{timestamp}.json", "w") as outfile: 
+        with open(f"{output_dir}/{imagefile}.json", "w") as outfile: 
             json.dump(self.log, outfile, indent=2)
 
-    def animated_full_rotation(self, scene, axes=[1,1,1], n_steps=120, fps=10, 
-                               filename=None):
+    def animated_full_rotation(self, scene, output_dir, axes=[1,1,1], n_steps=120, fps=10, 
+                               filename="result"):
         '''
         Save an mp4 file showing rotated yt 3D rendering images.
         Input: 
@@ -440,6 +452,10 @@ class yt3D(VolumeRenderer):
             fps(int): 
         Output: None
         '''
+        # Strip the trailing '/'
+        if output_dir[-1] is '/':
+            output_dir = output_dir[:-1]
+        Path(output_dir).mkdir(parents=True, exist_ok=True)
 
         render_scale = 0.5
         scene.camera.resolution = (np.array((1080, 1080)) * render_scale).astype(int)
@@ -465,9 +481,7 @@ class yt3D(VolumeRenderer):
                 images.append(im)
 
         # Save file
-        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-        if not filename:
-            filename = f'{timestamp}.mp4'
+        imagefile = f'{filename}-iYtcolor360'
         
         def sigma_clip(img: np.ndarray, s: float) -> np.ndarray:
             nz = img[:, :, :3][img[:, :, :3].nonzero()]
@@ -479,7 +493,7 @@ class yt3D(VolumeRenderer):
 
         fourcc = cv2.VideoWriter_fourcc(*'mp4v')
         size = (images[0].shape[1], images[0].shape[0])
-        out = cv2.VideoWriter(f'{self.output_dir}/{filename}', fourcc, fps, size)
+        out = cv2.VideoWriter(f'{output_dir}/{imagefile}', fourcc, fps, size)
         out.set(cv2.VIDEOWRITER_PROP_QUALITY, 100.0)
         for im in tqdm(images):
             im = sigma_clip(im, 2.5)
@@ -490,10 +504,10 @@ class yt3D(VolumeRenderer):
             out.write(frame)
         out.release()
 
-        self.log['mp4 file']=filename
+        self.log['mp4 file']=f'{imagefile}.mp4'
         self.log['n_steps']=n_steps
         self.log['fps']=fps
         
-        with open(f"{self.output_dir}/{timestamp}.json", "w") as outfile: 
+        with open(f"{output_dir}/{imagefile}.json", "w") as outfile: 
             json.dump(self.log, outfile, indent=2)
 
