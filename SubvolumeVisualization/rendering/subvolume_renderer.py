@@ -166,7 +166,7 @@ class Plotly3D(VolumeRenderer):
             center=dict(x=center_cfg[0], y=center_cfg[1], z=center_cfg[2]) if center_cfg 
                         else dict(x=0, y=0, z=0),
             eye=dict(x=eye_cfg[0], y=eye_cfg[1], z=eye_cfg[2]) if eye_cfg 
-                    else dict(x=2.5, y=2.5, z=2.5),
+                    else dict(x=1.25, y=1.25, z=1.25),
         )
     
         fig.update_layout(scene_camera=camera, scene_dragmode='orbit', 
@@ -186,13 +186,14 @@ class Plotly3D(VolumeRenderer):
         self.log['output file']=f'{imagefile}.png'
         self.log['up_cfg']=up_cfg if up_cfg else (0,0,1)
         self.log['center_cfg']=center_cfg if center_cfg else (0,0,0)
-        self.log['eye_cfg']=eye_cfg if eye_cfg else (2.5, 2.5, 2.5)
+        self.log['eye_cfg']=eye_cfg if eye_cfg else (1.25, 1.25, 1.25)
+        
         
         with open(f"{output_dir}/{imagefile}.json", "w") as outfile: 
             json.dump(self.log, outfile, indent=2)
 
     def animated_full_rotation(self, fig, output_dir, 
-                            rotate_angle=20, transition_angle=20, camera_distance=2.5, 
+                            rotate_angle=20, transition_angle=20, camera_distance=1.25, 
                             title=None, fps=10, filename=None):
         '''
         Saves animated version of 360 rotation along x, y, z axes. 
