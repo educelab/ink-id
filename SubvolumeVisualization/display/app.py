@@ -39,7 +39,7 @@ def get_paths():
                   col_sel, truth_sel, prediction_sel, image_sel)
 
     
-    return_value = fp.retrieve_images(root_dir='/home/mhaya2/3d-utilities/SubvolumeVisualization/Results/1203/',
+    return_value = fp.retrieve_images(root_dir='static/images/results',
                                       dataset_sel=dataset_sel, 
                                       group_sel=group_sel,
                                       col_sel=col_sel,
@@ -47,7 +47,12 @@ def get_paths():
                                       prediction_sel=prediction_sel,
                                       image_sel=image_sel)
 
-    logging.debug("Returned Json is (app.py): %s", return_value)
+    # add '/' to each path
+    for path in return_value['paths']:
+        path['image'] = '/' + path['image']
+        path['metadata'] = '/' +path['metadata']
+
+    logging.debug("Returned Json is (app.py): %s", json.dumps(return_value))
 
 
-    return(return_value)
+    return(json.dumps(return_value))

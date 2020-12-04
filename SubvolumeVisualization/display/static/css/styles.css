@@ -41,3 +41,8 @@ body {
 .subvolImage {
   text-align: center;
 }
+
+/* filter.html */
+.gallery-card {
+  margin-bottom: 8px;
+}
