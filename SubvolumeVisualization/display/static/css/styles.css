@@ -46,3 +46,11 @@ body {
 .gallery-card {
   margin-bottom: 8px;
 }
+
+#table-models {
+  background-color: #BCE6EB;
+}
+
+#slurm-script {
+  font-size: 12px;
+}

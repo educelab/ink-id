@@ -34,9 +34,11 @@ def get_paths():
     truth_sel = None if json_request['truth'] == "All" else json_request['truth']
     prediction_sel = None if json_request['prediction'] == "All" else json_request['prediction']
     image_sel = None if json_request['imagetype'] == "All" else json_request['imagetype']
+    model_sel = None if json_request['model'] == "All" else json_request['model']
 
-    logging.debug("Input values: %s, %s, %s, %s, %s, %s", dataset_sel, group_sel,
-                  col_sel, truth_sel, prediction_sel, image_sel)
+    logging.debug("Input values: %s, %s, %s, %s, %s, %s, %s", 
+                  dataset_sel, group_sel, col_sel, truth_sel, prediction_sel, 
+                  image_sel, model_sel)
 
     
     return_value = fp.retrieve_images(root_dir='static/images/results',
@@ -45,7 +47,8 @@ def get_paths():
                                       col_sel=col_sel,
                                       truth_sel=truth_sel,
                                       prediction_sel=prediction_sel,
-                                      image_sel=image_sel)
+                                      image_sel=image_sel,
+                                      model_sel=model_sel)
 
     # add '/' to each path
     for path in return_value['paths']:

@@ -314,7 +314,7 @@ class InkidGradCam:
             gradient_map.update_layout(showlegend=False)
             
             # Create an imagefile with an appropriate name
-            imagefile = f'{filename}-p{self.prediction}-iGradcam'
+            imagefile = f'{filename}-p{self.prediction}-iGradcamDefault'
             gradient_map.write_image(f"{output_dir}/{imagefile}.png")
         
             # Save the metadata
@@ -376,7 +376,7 @@ class InkidGradCam:
             self.__save_metadata(output_dir, filename=imagefile)
 
             if superimposed:
-                gradient_img = cv2.imread(f'{output_dir}/{filename}-p{self.prediction}-iGradCam.png')
+                gradient_img = cv2.imread(f'{output_dir}/{filename}-p{self.prediction}-iGradCamDefault.png')
                 subvolume_img = cv2.imread(f'{output_dir}/{filename}-p{self.prediction}-iSimpleSubvolume.png')
                 
                 superimposed_img = cv2.addWeighted(gradient_img, 0.35, subvolume_img, 0.65, 0)

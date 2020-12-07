@@ -10,8 +10,9 @@ $("#loadButton").click(function(){
   var selectedGroup = $("#groupSelection").val();
   var selectedColumn = $("#columnSelection").val();
   var selectedTruth = $("#truthSelection").val();
-  var selectedPrediction = $("#predictionSelection").val();
   var selectedImagetype = $("#imageSelection").val()
+  var selectedPrediction = $("#predictionSelection").val();
+  var selectedModel = $("#modelSelection").val();
 
   //console.log(selectedDataset);
   //console.log(selectedTruth);
@@ -19,15 +20,16 @@ $("#loadButton").click(function(){
   //console.log(selectedImageset);
 
   // Delete the previous selection
-  $("#selection1 #selection2 #selection3 #selection4 #selection5 #selection6").empty();
+  $("#selection1 #selection2 #selection3 #selection4 #selection5 #selection6 #selection7").empty();
 
   // Display the current selection
   $("#selection1").text("Dataset: " + selectedDataset);
   $("#selection2").text("Group: " + selectedGroup);
   $("#selection3").text("Column: " + selectedColumn);
   $("#selection4").text("Truth: " + selectedTruth);
-  $("#selection5").text("Predition: " + selectedPrediction);
-  $("#selection6").text("Image Type:" + selectedImagetype);
+  $("#selection5").text("Image Type:" + selectedImagetype);
+  $("#selection6").text("Prediction: " + selectedPrediction);
+  $("#selection7").text("Model: " + selectedModel);
 
 
 
@@ -49,7 +51,8 @@ $("#loadButton").click(function(){
 			"column": selectedColumn,
 			"truth": selectedTruth,
 		    "prediction": selectedPrediction,
-		    "imagetype": selectedImagetype};
+		    "imagetype": selectedImagetype,
+			"model": selectedModel};
 
   /*
   var selections = '{"dataset": "sampleDataset", "truth": "NoInk"}';

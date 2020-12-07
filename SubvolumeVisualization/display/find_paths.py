@@ -8,7 +8,7 @@ logging.basicConfig(level=logging.DEBUG)
 #logging.basicConfig(level=logging.WARNING)
 #logging.basicConfig(level=logging.ERROR)
 
-##########  StringFilter Function #####
+#####  StringFilter Function #####
 
 def stringfilter(candidate, filter_string):
     return True if filter_string in candidate else False
@@ -17,15 +17,18 @@ def stringfilter(candidate, filter_string):
 def retrieve_images(#root_dir='/home/mhaya2/3d-utilities/SubvolumeVisualization/Results',
                     root_dir=".",
                     dataset_sel=None, group_sel=None, col_sel=None, 
-                    truth_sel=None, prediction_sel=None, image_sel=None):
+                    truth_sel=None, prediction_sel=None, model_sel=None, 
+                    image_sel=None):
 
     '''
     dataset_sel: "CarbonPhantom"
     group_sel: "Interpolated" "NearestNeighbor"
     col_sel: "Col2" "Col6"
     truth_sel: "CarbonInk" "NoInk" "IronGall"
+    model_sel: "1254552_360000" 
     prediction_sel = "ink" "no_ink"
-    image_sel: "Plotlymono" "Plotlycolor" "Ytcolor" "Gradcam" "GradcamReverse" "SimpleSubvolume", "Superimposed"  
+    image_sel: "Plotlymono" "Plotlycolor" "Ytcolor" "GradcamDefault" "GradcamReverse" 
+                "SimpleSubvolume", "Superimposed"  
     '''
 
     logging.debug("Input root_dir: %s", root_dir)
@@ -90,6 +93,14 @@ def retrieve_images(#root_dir='/home/mhaya2/3d-utilities/SubvolumeVisualization/
     logging.debug("truth_filtered: %s", truth_filtered)
     logging.debug("truth_filtered size: %d", len(truth_filtered))
     
+    #### Model Filter ####
+    if model_sel:
+        model_filtered = list(filter(lambda x: stringfilter(x, 'm' +model_sel), truth_filtered))
+    else:
+        model_filtered = truth_filtered
+    
+    logging.debug("model_filtered: %s", model_filtered)
+    logging.debug("model_filtered size: %d", len(model_filtered))
     
     #### Prediction Filter ####
     prediction_ink = []
@@ -97,9 +108,9 @@ def retrieve_images(#root_dir='/home/mhaya2/3d-utilities/SubvolumeVisualization/
     
     if prediction_sel:
         pred = '0' if prediction_sel=="no_ink" else '1'
-        pred_filtered = list(filter(lambda x: stringfilter(x, 'p'+pred), truth_filtered))
+        pred_filtered = list(filter(lambda x: stringfilter(x, 'p'+pred), model_filtered))
     else:
-        pred_filtered = truth_filtered
+        pred_filtered = model_filtered
     
     logging.info("pred_filtered: %s", pred_filtered)
     logging.info("pred_filtered size: %d", len(pred_filtered))
