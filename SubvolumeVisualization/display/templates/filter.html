@@ -1,10 +1,5 @@
 {% extends "template.html" %}
 {% block content %}
-<section class="" id="title">
-  <div class="container-fluid">
-    <h1>Filter Images</h1>
-  </div>
-</section>
 
 	<!-- Table of Models -->
 	<h2>Saved Models</h2>
@@ -61,7 +56,7 @@
 	<!-- Selector Form -->
   <form>
     <div class="container-fluid">
-		 <h2>Filter Search</h2>
+		 <h2>Search</h2>
       <div class="form-group col-8">
         <label for="dataset">Dataset</label>
         <select class="form-control" id="datasetSelection">
@@ -141,7 +136,7 @@
           	  no_ink
           	</option>
 					</select>
-        <label for="model">Saved Model (weights -- valid only for gradcam images)</label> 
+        <label for="model">Saved Model (valid only for gradcam images)</label> 
 					<select class="form-control" id="modelSelection">
           	<option>
           	  All
@@ -156,7 +151,7 @@
           	  1252444_200000
           	</option>
           	<option>
-          	  1254447_200000
+          	  1252447_200000
           	</option>
           	<option>
           	  1254548_360000
@@ -172,18 +167,6 @@
   <!-- Load images button -->
   <button type="button" class="btn btn-secondary" id="loadButton">Load
   Images</button>
-  <section id="selectors">
-    <div class="container-fluid"></div>
-    <h3>Selection</h3>
-    <ul>
-      <li id="selection1">Dataset:</li>
-      <li id="selection2">Group:</li>
-      <li id="selection3">Column:</li>
-      <li id="selection4">Ground Truth:</li>
-      <li id="selection5">Prediction:</li>
-      <li id="selection6">Image Type:</li>
-    </ul>
-  </section>
   
   <!-- Gallery -->
   <section id="subvolumes">
