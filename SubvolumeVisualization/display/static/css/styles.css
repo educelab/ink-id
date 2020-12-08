@@ -9,6 +9,7 @@ body {
   padding: 5px;
 }
 
+/****** overview.html ******/
 .subvol-entry{
   background-color: white;
 }
@@ -25,6 +26,10 @@ body {
 .subvol-img-card {
   text-align: center;
 }
+.btn-animate {
+  margin: 5px;
+}
+
 
 .thumbnail-img {
   width:150px;
@@ -42,7 +47,7 @@ body {
   text-align: center;
 }
 
-/* filter.html */
+/****** filter.html ******/
 .gallery-card {
   margin-bottom: 8px;
 }
