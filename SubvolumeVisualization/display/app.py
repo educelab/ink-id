@@ -1,27 +1,82 @@
-from flask import Flask, render_template, request, json, jsonify
+from flask import Flask, render_template, request, json, jsonify, redirect, url_for, session, flash
+from functools import wraps
+from datetime import timedelta
+import configparser
 import logging
 import find_paths as fp
 
-# Logging config
+# Logging 
 logging.basicConfig(level=logging.DEBUG)
 #logging.basicConfig(level=logging.INFO)
 #logging.basicConfig(level=logging.WARNING)
 #logging.basicConfig(level=logging.ERROR)
 
+config = configparser.ConfigParser()
+config_file = 'display.conf'
+config.read(config_file)
+
+
 app = Flask(__name__)
 
+app.secret_key = config['AUTHENTICATION']['AppPassword']
+
+@app.before_request
+def make_session_permanent():
+    session.permanent = True
+    app.permanent_session_lifetime = timedelta(minutes=5)
+
+
+# login required decorator
+def login_required(f):
+    @wraps(f)
+    def wrap(*args, **kwargs):
+        if 'logged_in' in session:
+            return f(*args, **kwargs)
+        else:
+            flash('You need to login first.')
+            return redirect(url_for('login'))
+    return wrap
+
+# Route for handling the login page logic
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    error = None
+    if request.method == 'POST':
+        saved_username = config['AUTHENTICATION']['username'] 
+        saved_password = config['AUTHENTICATION']['password']
+
+        logging.debug("saved username: %s", saved_username)
+        logging.debug("saved password: %s", saved_password)
+        logging.debug("username received: %s", request.form['username'])
+        logging.debug("password received: %s", request.form['password'])
+
+        if request.form['username'] !=  saved_username or request.form['password'] != saved_password:
+            error = 'Invalid Credentials. Please try again.'
+        else:
+            session['logged_in'] = True
+            return redirect(url_for('index'))
+    return render_template('login.html', error=error)
+
+@app.route('/logout')
+@login_required
+def logout():
+    session.pop('logged_in', None)
+    return redirect(url_for('login'))
 
 @app.route('/')
+@login_required
 def index():
     return render_template('index.html', title="Home")
 
 @app.route('/overview')
+@login_required
 def overview():
-    return render_template('overview.html', title="Overview")
+    return render_template('overview.html', title="Viewer")
 
 @app.route('/filter')
+@login_required
 def filter():
-    return render_template('filter.html', title="Filter")
+    return render_template('filter.html', title="Gallery")
 
 @app.route('/imagePaths', methods=['POST'])
 def get_paths():
