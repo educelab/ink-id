@@ -51,7 +51,7 @@ jQuery(document).ready(function($) {
 	  */ 
 				
 	  $.ajax({
-		url: '/imagePaths',
+		url: '/filter',
 		data: JSON.stringify(selections),
 		contentType: 'application/json',
 		dataType: 'json',
