@@ -68,10 +68,10 @@ def logout():
 def index():
     return render_template('index.html', title="Home")
 
-@app.route('/overview')
+@app.route('/viewer')
 @login_required
-def overview():
-    return render_template('overview.html', title="Viewer")
+def viewer():
+    return render_template('viewer.html', title="Viewer")
 
 @app.route('/filter')
 @login_required
