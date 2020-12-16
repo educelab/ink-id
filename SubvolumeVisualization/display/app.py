@@ -68,9 +68,35 @@ def logout():
 def index():
     return render_template('index.html', title="Home")
 
-@app.route('/viewer')
+@app.route('/viewer', methods=['GET', 'POST'])
 @login_required
 def viewer():
+    if request.method == 'POST':
+     
+        # TODO: call another function in find_paths.py
+        
+        dummy_values = {
+            "subvolumes": [
+                {
+                "plotlymonoImg": "/static/images/plotly-gray.png",
+                "plotlycolorImg": "static/images/plotly-color.png",
+                "ytcolorImg": "/static/images/yt-color.png",
+                "gradcamImg": "/static/images/gradcam.png",
+                "gradcamrevImg": "/static/images/reverse-gradcam.png"
+                },
+                {
+                "plotlymonoImg": "/static/images/plotly-gray.png",
+                "plotlycolorImg": "static/images/plotly-color.png",
+                "ytcolorImg": "/static/images/yt-color.png",
+                "gradcamImg": "/static/images/gradcam.png",
+                "gradcamrevImg": "/static/images/reverse-gradcam.png"
+                }
+            ]
+        }
+
+        return(dummy_values) 
+
+
     return render_template('viewer.html', title="Viewer")
 
 @app.route('/filter', methods=['GET', 'POST'])

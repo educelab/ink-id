@@ -85,7 +85,7 @@
 							8
           	</option>
 					</select>
-				<label for="model">Saved Model (valid only for gradcam images)</label>
+				<label for="model">Saved Model</label>
 					<select class="form-control" id="modelSelection">
           	<option>
           	  1252440_235000
@@ -126,7 +126,8 @@
 			<div class="row">
       <div class="col-lg-2 col-md-3 col-4">
         <div class="card subvol-img-card">
-          <img class="card-img-top" src="/static/images/plotly-gray.png" alt="plotly-gray">
+				<a target="_blank" href="/static/images/plotly-gray.png" class="d-block mb-2 h-100" id="popup-image">
+          <img class="card-img-top" src="/static/images/plotly-gray.png" alt="plotly-gray"></a>
           <div class="card-body">
             <h5 class="card-title">Subvolume (plotly-gray)</h5>
             <p class="card-text">plotly-gray</p>
@@ -182,68 +183,75 @@
 			</div>
   </div>
 
-  <div class="container-fluid subvol-entry">
-    <h5>ID: CarbonPhantom/NearestNeighbor/Col6/NoInk/Sample0</h5>
-			<div class="row">
-      <div class="col-lg-2 col-md-3 col-4">
-        <div class="card subvol-img-card">
-          <img class="card-img-top" src="/static/images/plotly-gray.png" alt="plotly-gray">
-          <div class="card-body">
-            <h5 class="card-title">Subvolume (plotly-gray)</h5>
-            <p class="card-text">plotly-gray</p>
-            <a href="#" class="btn btn-primary btn-animate">Animate</a>
-    				<a href="#" class="btn btn-primary btn-animate">Metadata</a>
-          </div>
-        </div>
-			</div>
-      <div class="col-lg-2 col-md-3 col-4">
-        <div class="card subvol-img-card">
-            <img class="card-img-top" src="/static/images/plotly-color.png" alt="plotly-color">
-            <div class="card-body">
-              <h5 class="card-title">Subvolume (plotly-color)</h5>
-              <p class="card-text">plotly-color</p>
-              <a href="#" class="btn btn-primary btn-animate">Animate</a>
-    					<a href="#" class="btn btn-primary btn-animate">Metadata</a>
-            </div>
-        </div>
-			</div>
-      <div class="col-lg-2 col-md-3 col-4">
-        <div class="card subvol-img-card">
-          <img class="card-img-top" src="/static/images/yt-color.png" alt="yt-color">
-          <div class="card-body">
-            <h5 class="card-title">Subvolume (yt-color)</h5>
-            <p class="card-text">yt-color</p>
-            <a href="#" class="btn btn-primary btn-animate">Animate</a>
-    				<a href="#" class="btn btn-primary btn-animate">Metadata</a>
-          </div>
-        </div>
-			</div>
-      <div class="col-lg-2 col-md-3 col-4">
-        <div class="card subvol-img-card">
-          <img class="card-img-top" src="/static/images/gradcam.png" alt="gradcam">
-          <div class="card-body">
-            <h5 class="card-title">Gradcam</h5>
-            <p class="card-text">gradcam true</p>
-    				<a href="#" class="btn btn-primary btn-animate">Metadata</a>
-    				<a href="#" class="btn btn-primary btn-animate">Metadata</a>
-          </div>
-        </div>
-			</div>
-      <div class="col-lg-2 col-md-3 col-4">
-        <div class="card subvol-img-card">
-          <img class="card-img-top" src="/static/images/reverse-gradcam.png" alt="reverse-gradcam">
-          <div class="card-body">
-            <h5 class="card-title">Gradcam False</h5>
-            <p class="card-text">gradcam false</p>
-    				<a href="#" class="btn btn-primary btn-animate">Metadata</a>
-    				<a href="#" class="btn btn-primary btn-animate">Metadata</a>
-          </div>
-        </div>
-      </div>
-			</div>
-  </div>
 
-  {% block footer %}
+<!-- Viewer results section -->
+<section id="subvolume-cards">
+	<div class="container-fluid" id="viewer-collection">
+			<!-- Ghost Entry  -->
+			<div class="container-fluid subvol-entry" id="shadowViewerEntry" 
+				style="display: none !important;">
+			  <h5>ID: CarbonPhantom/NearestNeighbor/Col6/NoInk/Sample0</h5>
+					<div class="row">
+			    	<div class="col-lg-2 col-md-3 col-4">
+			    	  <div class="card subvol-img-card"> 
+			    	    <img class="card-img-top" id="plotlymono-img" src="/static/images/plotly-gray.png" alt="plotlymono">
+			    	    <div class="card-body">
+			    	      <h5 class="card-title">Subvolume (plotly-mono)</h5>
+			    	      <p class="card-text">plotly-mono</p>
+			    	      <a href="#" class="btn btn-primary btn-animate">Animate</a>
+			  					<a href="#" class="btn btn-primary btn-animate">Metadata</a>
+			    	    </div>
+			    	  </div>
+						</div>
+			    	<div class="col-lg-2 col-md-3 col-4">
+			    	  <div class="card subvol-img-card">
+			    	      <img class="card-img-top" id="plotlycolor-img" src="/static/images/plotly-color.png" alt="plotly-color">
+			    	      <div class="card-body">
+			    	        <h5 class="card-title">Subvolume (plotly-color)</h5>
+			    	        <p class="card-text">plotly-color</p>
+			    	        <a href="#" class="btn btn-primary btn-animate">Animate</a>
+			  						<a href="#" class="btn btn-primary btn-animate">Metadata</a>
+			    	      </div>
+			    	  </div>
+						</div>
+			    	<div class="col-lg-2 col-md-3 col-4">
+			    	  <div class="card subvol-img-card">
+			    	    <img class="card-img-top" id="ytcolor-img" src="/static/images/yt-color.png" alt="yt-color">
+			    	    <div class="card-body">
+			    	      <h5 class="card-title">Subvolume (yt-color)</h5>
+			    	      <p class="card-text">yt-color</p>
+			    	      <a href="#" class="btn btn-primary btn-animate">Animate</a>
+			  					<a href="#" class="btn btn-primary btn-animate">Metadata</a>
+			    	    </div>
+			    	  </div>
+						</div>
+			    	<div class="col-lg-2 col-md-3 col-4">
+			    	  <div class="card subvol-img-card">
+			    	    <img class="card-img-top" id="gradcam-img" src="/static/images/gradcam.png" alt="gradcam">
+			    	    <div class="card-body">
+			    	      <h5 class="card-title">Gradcam</h5>
+			    	      <p class="card-text">gradcam true</p>
+			  					<a href="#" class="btn btn-primary btn-animate">Animate</a>
+			  					<a href="#" class="btn btn-primary btn-animate">Metadata</a>
+			    	    </div>
+			    	  </div>
+						</div>
+			    	<div class="col-lg-2 col-md-3 col-4">
+			    	  <div class="card subvol-img-card">
+			    	    <img class="card-img-top" id="gradcamrev-img" src="/static/images/reverse-gradcam.png" alt="reverse-gradcam">
+			    	    <div class="card-body">
+			    	      <h5 class="card-title">Gradcam False</h5>
+			    	      <p class="card-text">gradcam false</p>
+			  					<a href="#" class="btn btn-primary btn-animate">Animate</a>
+			  					<a href="#" class="btn btn-primary btn-animate">Metadata</a>
+			    	    </div>
+			    	  </div>
+			    	</div>
+					</div>
+			</div>
+	</div>
+{% endblock %}
+
+{% block footer %}
 		<script src="/static/js/viewer.js" charset="utf-8"> </script>
-  {% endblock %}
 {% endblock %}
