@@ -1,9 +1,6 @@
 {% extends "template.html" %}
 {% block content %}
 
-<div class="alert alert-warning" role="alert">
-  Still a static template. 
-</div>
 	<!-- Selector Form -->
   <form>
     <div class="container-fluid">
@@ -188,6 +185,10 @@
 -->
 
 <!-- Viewer results section -->
+<div class="alert alert-warning" role="alert">
+  Animate function yet to be implemented. 
+</div>
+
 <section id="subvolume-cards">
 	<div class="container-fluid" id="viewer-collection">
 			<!-- Ghost Entry  -->
@@ -197,51 +198,61 @@
 					<div class="row">
 			    	<div class="col-lg-2 col-md-3 col-4">
 			    	  <div class="card subvol-img-card"> 
-			    	    <img class="card-img-top" id="plotlymono-img" src="/static/images/plotly-gray.png" alt="plotlymono">
+								<a target="_blank" href="/static/images/plotly-gray.png" class="d-block mb-2 h-100" id="plotlymono-popup">	
+									<img class="card-img-top" id="plotlymono-img" src="/static/images/plotly-gray.png" alt="plotlymono">
+								</a>
 			    	    <div class="card-body">
 			    	      <h5 class="card-title">Subvolume (plotly-mono)</h5>
 			    	      <a href="#" class="btn btn-primary btn-animate">Animate</a>
-			  					<a href="#" class="btn btn-primary btn-animate">Metadata</a>
+			  					<a target="_blank" href="#" class="btn btn-primary btn-animate" id="plotlymono-metadata">Metadata</a>
 			    	    </div>
 			    	  </div>
 						</div>
 			    	<div class="col-lg-2 col-md-3 col-4">
 			    	  <div class="card subvol-img-card">
+								<a target="_blank" href="/static/images/plotly-gray.png" class="d-block mb-2 h-100" id="plotlycolor-popup">	
 			    	      <img class="card-img-top" id="plotlycolor-img" src="/static/images/plotly-color.png" alt="plotly-color">
+								</a>	
 			    	      <div class="card-body">
 			    	        <h5 class="card-title">Subvolume (plotly-color)</h5>
 			    	        <a href="#" class="btn btn-primary btn-animate">Animate</a>
-			  						<a href="#" class="btn btn-primary btn-animate">Metadata</a>
+			  						<a target="_blank" href="#" class="btn btn-primary btn-animate" id="plotlycolor-metadata">Metadata</a>
 			    	      </div>
 			    	  </div>
 						</div>
 			    	<div class="col-lg-2 col-md-3 col-4">
 			    	  <div class="card subvol-img-card">
-			    	    <img class="card-img-top" id="ytcolor-img" src="/static/images/yt-color.png" alt="yt-color">
-			    	    <div class="card-body">
+								<a target="_blank" href="/static/images/plotly-gray.png" class="d-block mb-2 h-100" id="ytcolor-popup">	
+			    	    	<img class="card-img-top" id="ytcolor-img" src="/static/images/yt-color.png" alt="yt-color">
+			    	    </a>
+								<div class="card-body">
 			    	      <h5 class="card-title">Subvolume (yt-color)</h5>
 			    	      <a href="#" class="btn btn-primary btn-animate">Animate</a>
-			  					<a href="#" class="btn btn-primary btn-animate">Metadata</a>
+			  					<a target="_blank" href="#" class="btn btn-primary btn-animate" id="ytcolor-metadata">Metadata</a>
 			    	    </div>
 			    	  </div>
 						</div>
 			    	<div class="col-lg-2 col-md-3 col-4">
 			    	  <div class="card subvol-img-card">
-			    	    <img class="card-img-top" id="gradcam-img" src="/static/images/gradcam.png" alt="gradcam">
+								<a target="_blank" href="/static/images/plotly-gray.png" class="d-block mb-2 h-100" id="gradcam-popup">	
+			    	    	<img class="card-img-top" id="gradcam-img" src="/static/images/gradcam.png" alt="gradcam">
+								</a>
 			    	    <div class="card-body">
 			    	      <h5 class="card-title">Gradcam</h5>
 			  					<a href="#" class="btn btn-primary btn-animate">Animate</a>
-			  					<a href="#" class="btn btn-primary btn-animate">Metadata</a>
+			  					<a target="_blank" href="#" class="btn btn-primary btn-animate" id="gradcam-metadata">Metadata</a>
 			    	    </div>
 			    	  </div>
 						</div>
 			    	<div class="col-lg-2 col-md-3 col-4">
 			    	  <div class="card subvol-img-card">
-			    	    <img class="card-img-top" id="gradcamrev-img" src="/static/images/reverse-gradcam.png" alt="reverse-gradcam">
+								<a target="_blank" href="/static/images/plotly-gray.png" class="d-block mb-2 h-100" id="gradcamrev-popup">	
+			    	    	<img class="card-img-top" id="gradcamrev-img" src="/static/images/reverse-gradcam.png" alt="reverse-gradcam">
+								</a>
 			    	    <div class="card-body">
 			    	      <h5 class="card-title">Gradcam False</h5>
 			  					<a href="#" class="btn btn-primary btn-animate">Animate</a>
-			  					<a href="#" class="btn btn-primary btn-animate">Metadata</a>
+			  					<a target="_blank" href="#" class="btn btn-primary btn-animate" id="gradcamrev-metadata">Metadata</a>
 			    	    </div>
 			    	  </div>
 			    	</div>

@@ -53,19 +53,38 @@ jQuery(document).ready(function($) {
 	
 					var subvolumeID = JSON.stringify(subvolume.name);
 					var plotlymono_img = JSON.stringify(subvolume.plotlymonoImg);
+					var plotlymono_meta = JSON.stringify(subvolume.plotlymonoMeta);
 					var plotlycolor_img = JSON.stringify(subvolume.plotlycolorImg);
+					var plotlycolor_meta = JSON.stringify(subvolume.plotlycolorMeta);  
 					var ytcolor_img = JSON.stringify(subvolume.ytcolorImg);
+					var ytcolor_meta = JSON.stringify(subvolume.ytcolorMeta);
 					var gradcam_img = JSON.stringify(subvolume.gradcamDefaultImg);
+					var gradcam_meta = JSON.stringify(subvolume.gradcamDefaultMeta);
 					var gradcamrev_img = JSON.stringify(subvolume.gradcamReverseImg);
+					var gradcamrev_meta = JSON.stringify(subvolume.gradcamReverseMeta);
 	
 	
 					block_copy.attr("style", "display: block !important;");
 					block_copy.find('#subvolTitle').text(subvolumeID); 
+					block_copy.find('#plotlymono-popup').attr("href", plotlymono_img.replace(/\"/g, ""));
 					block_copy.find('#plotlymono-img').attr("src", plotlymono_img.replace(/\"/g, ""));
+					block_copy.find('#plotlymono-metadata').attr("href", plotlymono_meta.replace(/\"/g, ""));
+
+					block_copy.find('#plotlycolor-popup').attr("href",plotlycolor_img.replace(/\"/g, ""));
 					block_copy.find('#plotlycolor-img').attr("src", plotlycolor_img.replace(/\"/g, ""));
+					block_copy.find('#plotlycolor-metadata').attr("href", plotlycolor_meta.replace(/\"/g, ""));
+					
+					block_copy.find('#ytcolor-popup').attr("href", ytcolor_img.replace(/\"/g, ""));
 					block_copy.find('#ytcolor-img').attr("src", ytcolor_img.replace(/\"/g, ""));
+					block_copy.find('#ytcolor-metadata').attr("href", ytcolor_meta.replace(/\"/g, ""));
+					
+					block_copy.find('#gradcam-popup').attr("href", gradcam_img.replace(/\"/g, ""));
 					block_copy.find('#gradcam-img').attr("src", gradcam_img.replace(/\"/g, ""));
+					block_copy.find('#gradcam-metadata').attr("href", gradcam_meta.replace(/\"/g, ""));
+					
+					block_copy.find('#gradcamrev-popup').attr("href",gradcamrev_img.replace(/\"/g, ""));
 					block_copy.find('#gradcamrev-img').attr("src", gradcamrev_img.replace(/\"/g, ""));
+					block_copy.find('#gradcamrev-metadata').attr("href", gradcamrev_meta.replace(/\"/g, ""));
 
 					
 					viewer_blocks.push(block_copy);

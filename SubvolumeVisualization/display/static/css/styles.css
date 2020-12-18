@@ -1,7 +1,7 @@
 body {
   margin: 10px;
   padding-left: 2%;
-  background-color: pink;
+  background-color: #F9F7CF;
 }
 
 .container-fluid{
@@ -11,7 +11,7 @@ body {
 
 /****** overview.html ******/
 .subvol-entry{
-  background-color: white;
+  background-color: #F2DCBB;
 }
 .subvol-card{
   margin-bottom: 5%;
@@ -53,7 +53,7 @@ body {
 }
 
 #table-models {
-  background-color: #BCE6EB;
+  background-color: #F2DCBB;
 }
 
 #slurm-script {
