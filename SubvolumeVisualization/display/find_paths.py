@@ -1,6 +1,7 @@
 import os
 import json
 import logging
+import glob
 
 # Logging config
 logging.basicConfig(level=logging.DEBUG)
@@ -12,6 +13,47 @@ logging.basicConfig(level=logging.DEBUG)
 
 def stringfilter(candidate, filter_string):
     return True if filter_string in candidate else False
+
+def get_viewer_sets(datasets, groups, columns, truths,samples, model, root_dir='.'):
+    '''
+    For the viewer page. 
+    '''
+    substrings =[]
+
+    for dataset in datasets:
+        for group in groups:
+            for column in columns:
+                for truth in truths:
+                    for sample in samples:
+                        substrings.append(
+                            'd'+dataset+'-g'+group+'-c'+column[-1]+'-t'+truth+'-s'+sample)
+    
+    logging.debug("substrings: %s", substrings)
+
+    subvolume_paths =[]
+
+    for substring in substrings:
+        subvolume={}
+        prefix = root_dir + '/**/'+substring
+
+        subvolume['name']=substring
+        subvolume['plotlymonoImg']=glob.glob(prefix+'-iPlotlymono.png', recursive=True)[0]
+        subvolume['plotlymonoMeta']=glob.glob(prefix+'-iPlotlymono.json', recursive=True)[0]
+        subvolume['plotlycolorImg']=glob.glob(prefix+'-iPlotlycolor.png', recursive=True)[0]
+        subvolume['plotlycolorMeta']=glob.glob(prefix+'-iPlotlycolor.json', recursive=True)[0]
+        subvolume['ytcolorImg']=glob.glob(prefix+'-iYtcolor.png', recursive=True)[0]
+        subvolume['ytcolorMeta']=glob.glob(prefix+'-iYtcolor.json', recursive=True)[0]
+        subvolume['gradcamDefaultImg']=glob.glob(prefix+'-m'+model+'*-iGradcamDefault.png', recursive=True)[0]
+        subvolume['gradcamDefaultMeta']=glob.glob(prefix+'-m'+model+'*-iGradcamDefault.json', recursive=True)[0]
+        subvolume['gradcamReverseImg']=glob.glob(prefix+'-m'+model+'*-iGradcamReverse.png', recursive=True)[0]
+        subvolume['gradcamReverseMeta']=glob.glob(prefix+'-m'+model+'*-iGradcamReverse.json', recursive=True)[0]
+        
+        subvolume_paths.append(subvolume)
+
+    logging.debug("final subvolume_paths: %s", subvolume_paths)
+
+    return(dict(subvolumes=subvolume_paths))
+
 
 
 def retrieve_images(#root_dir='/home/mhaya2/3d-utilities/SubvolumeVisualization/Results',

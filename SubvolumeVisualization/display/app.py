@@ -72,29 +72,58 @@ def index():
 @login_required
 def viewer():
     if request.method == 'POST':
-     
-        # TODO: call another function in find_paths.py
-        
-        dummy_values = {
-            "subvolumes": [
-                {
-                "plotlymonoImg": "/static/images/plotly-gray.png",
-                "plotlycolorImg": "static/images/plotly-color.png",
-                "ytcolorImg": "/static/images/yt-color.png",
-                "gradcamImg": "/static/images/gradcam.png",
-                "gradcamrevImg": "/static/images/reverse-gradcam.png"
-                },
-                {
-                "plotlymonoImg": "/static/images/plotly-gray.png",
-                "plotlycolorImg": "static/images/plotly-color.png",
-                "ytcolorImg": "/static/images/yt-color.png",
-                "gradcamImg": "/static/images/gradcam.png",
-                "gradcamrevImg": "/static/images/reverse-gradcam.png"
-                }
-            ]
-        }
 
-        return(dummy_values) 
+        json_request = request.json
+
+        choices = {
+            "datasets":["CarbonPhantom"],
+	    "groups": ["Interpolated", "NearestNeighbor"],
+	    "columns": ["Col2", "Col6"],
+	    "truths": ["CarbonInk", "NoInk","IronGall"],
+	    "samples": ["0", "1", "2", "3", "4", "5", "6", "7","8"]
+        }    
+
+        # Converting All to actual values
+        dataset_sel = [d for d in choices["datasets"]] if json_request['dataset']=="All" \
+                    else [json_request['dataset']] 
+        group_sel = [g for g in choices["groups"]] if json_request['group'] == "All" \
+                    else [json_request['group']]
+        col_sel = [c for c in choices["columns"]] if json_request['column'] == "All" \
+                    else [json_request['column']]
+        truth_sel = [t for t in choices["truths"]] if json_request['truth'] == "All" \
+                    else [json_request['truth']]
+        sample_sel = [s for s in choices["samples"]] if json_request['sample'] == "All" \
+                    else [json_request['sample']]
+        model_sel = json_request['model']
+
+        #logging.debug("dataset_sel: %s", dataset_sel)
+        #logging.debug("group_sel: %s", group_sel)
+        #logging.debug("col_sel: %s", col_sel)
+        #logging.debug("truth_sel: %s", truth_sel)
+        #logging.debug("sample_sel: %s", sample_sel)
+        #logging.debug("model_sel: %s", model_sel)
+
+        
+        return_value = fp.get_viewer_sets(
+                        datasets=dataset_sel,
+                        groups=group_sel,
+                        columns=col_sel,
+                        truths=truth_sel,
+                        samples=sample_sel,
+                        model=model_sel,
+                        root_dir='static/images/results'
+                        )
+
+        # add '/' to each path
+        for subvolume in return_value['subvolumes']:
+            for key in subvolume:
+                if key != "name":
+                    subvolume[key] = '/'+subvolume[key]
+
+        logging.debug("Modified result is: %s", json.dumps(return_value))
+
+
+        return(json.dumps(return_value)) 
 
 
     return render_template('viewer.html', title="Viewer")
@@ -141,39 +170,3 @@ def filter():
     return render_template('filter.html', title="Gallery")
   
 
-#@app.route('/imagePaths', methods=['POST'])
-#def get_paths():
-#
-#    json_request = request.json
-#
-#    dataset_sel = json_request['dataset'] 
-#    group_sel = None if json_request['group'] == "All" else json_request['group']
-#    col_sel = None if json_request['column'] == "All" else json_request['column']
-#    truth_sel = None if json_request['truth'] == "All" else json_request['truth']
-#    prediction_sel = None if json_request['prediction'] == "All" else json_request['prediction']
-#    image_sel = None if json_request['imagetype'] == "All" else json_request['imagetype']
-#    model_sel = None if json_request['model'] == "All" else json_request['model']
-#
-#    logging.debug("Input values: %s, %s, %s, %s, %s, %s, %s", 
-#                  dataset_sel, group_sel, col_sel, truth_sel, prediction_sel, 
-#                  image_sel, model_sel)
-#
-#    
-#    return_value = fp.retrieve_images(root_dir='static/images/results',
-#                                      dataset_sel=dataset_sel, 
-#                                      group_sel=group_sel,
-#                                      col_sel=col_sel,
-#                                      truth_sel=truth_sel,
-#                                      prediction_sel=prediction_sel,
-#                                      image_sel=image_sel,
-#                                      model_sel=model_sel)
-#
-#    # add '/' to each path
-#    for path in return_value['paths']:
-#        path['image'] = '/' + path['image']
-#        path['metadata'] = '/' +path['metadata']
-#
-#    logging.debug("Returned Json is (app.py): %s", json.dumps(return_value))
-#
-#
-#    return(json.dumps(return_value))

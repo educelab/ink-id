@@ -51,14 +51,16 @@ jQuery(document).ready(function($) {
 					// Make a clone of a shadow block 
 					var block_copy = $('#shadowViewerEntry').clone();
 	
+					var subvolumeID = JSON.stringify(subvolume.name);
 					var plotlymono_img = JSON.stringify(subvolume.plotlymonoImg);
 					var plotlycolor_img = JSON.stringify(subvolume.plotlycolorImg);
 					var ytcolor_img = JSON.stringify(subvolume.ytcolorImg);
-					var gradcam_img = JSON.stringify(subvolume.gradcamImg);
-					var gradcamrev_img = JSON.stringify(subvolume.gradcamrevImg);
+					var gradcam_img = JSON.stringify(subvolume.gradcamDefaultImg);
+					var gradcamrev_img = JSON.stringify(subvolume.gradcamReverseImg);
 	
 	
 					block_copy.attr("style", "display: block !important;");
+					block_copy.find('#subvolTitle').text(subvolumeID); 
 					block_copy.find('#plotlymono-img').attr("src", plotlymono_img.replace(/\"/g, ""));
 					block_copy.find('#plotlycolor-img').attr("src", plotlycolor_img.replace(/\"/g, ""));
 					block_copy.find('#ytcolor-img').attr("src", ytcolor_img.replace(/\"/g, ""));
