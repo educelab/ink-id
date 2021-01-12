@@ -1,6 +1,7 @@
 import argparse
 import json
 import os
+from pathlib import Path
 import re
 
 from humanize import naturalsize
@@ -89,7 +90,7 @@ def get_prediction_image(iteration, k_fold_dir, ppm_name, return_latest_if_not_f
     return None
 
 
-def build_frame(iteration, k_fold_dirs, ppms, caption_with_iteration, max_size):
+def build_frame(iteration, k_fold_dirs, ppms, caption_with_iteration, max_size, label_type):
     col_width = max([ppm['size'][0] for ppm in ppms.values()])
     row_heights = [ppm['size'][1] for ppm in ppms.values()]
     width = col_width * (len(k_fold_dirs) + 1)
@@ -104,16 +105,37 @@ def build_frame(iteration, k_fold_dirs, ppms, caption_with_iteration, max_size):
             if img is not None:
                 offset = (k * col_width, sum(row_heights[:ppm_i]))
                 frame.paste(img, offset)
-    # TODO add label column
+    for ppm_i, ppm in enumerate(ppms.values()):
+        if label_type == 'rgb_values':
+            label_key = 'rgb-label'
+        elif label_type == 'ink_labels':
+            label_key = 'ink-label'
+        else:
+            break
+        label_img_path = ppm[label_key]
+        # Try getting label image file from recorded location (may not exist on this machine)
+        if os.path.isfile(label_img_path):
+            img = Image.open(label_img_path)
+            offset = (len(k_fold_dirs) * col_width, sum(row_heights[:ppm_i]))
+            frame.paste(img, offset)
+        # If not there, maybe it is on the local machine under ~/data. This check is not very robust.
+        elif '/pscratch/seales_uksr/' in label_img_path:
+            label_img_path = label_img_path.replace('/pscratch/seales_uksr/', '')
+            label_img_path = os.path.join(Path.home(), 'data', label_img_path)
+            if os.path.isfile(label_img_path):
+                img = Image.open(label_img_path)
+                offset = (len(k_fold_dirs) * col_width, sum(row_heights[:ppm_i]))
+                frame.paste(img, offset)
+
     # Downsize image while keeping aspect ratio
     frame.thumbnail(max_size, Image.BICUBIC)
     return frame
 
 
-def create_animation(k_fold_dirs, iterations, ppms, caption_with_iteration, max_size):
+def create_animation(k_fold_dirs, iterations, ppms, caption_with_iteration, max_size, label_type):
     animation = []
     for iteration in tqdm(iterations):
-        frame = build_frame(iteration, k_fold_dirs, ppms, caption_with_iteration, max_size)
+        frame = build_frame(iteration, k_fold_dirs, ppms, caption_with_iteration, max_size, label_type)
         animation.append(frame)
     return animation
 
@@ -263,6 +285,7 @@ def main():
 
     # Get PPM data, and list of all iterations encountered across jobs (some might have more than others)
     metadata_file_used = None
+    metadata = None
     ppms_from_metadata = None
     # Iterate through k_fold dirs
     for k_fold_dir in k_fold_dirs:
@@ -270,7 +293,8 @@ def main():
         if metadata_file_used is None:
             metadata_file_used = os.path.join(k_fold_dir, 'metadata.json')
             with open(metadata_file_used) as f:
-                ppms_from_metadata = json.loads(f.read())['Region set']['ppms']
+                metadata = json.loads(f.read())
+                ppms_from_metadata = metadata['Region set']['ppms']
 
         # Look in predictions directory to get all iterations from prediction images
         pred_dir = os.path.join(k_fold_dir, 'predictions')
@@ -311,11 +335,13 @@ def main():
             encountered_iterations.add(iteration)
     encountered_iterations = sort_iterations(encountered_iterations)
 
+    label_type = metadata.get('Arguments').get('label_type')
+
     # Generate training animation
     print('\nCreating animation:')
     animation = create_animation(k_fold_dirs, encountered_iterations,
                                  ppms_from_metadata, args.caption_gif_with_iterations,
-                                 args.max_size)
+                                 args.max_size, label_type)
 
     # TODO generate final frame and save to image
 
