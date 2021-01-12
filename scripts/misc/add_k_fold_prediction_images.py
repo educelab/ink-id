@@ -14,6 +14,9 @@ import inkid
 
 
 # TODO handle epochs in filenames
+# In general, there is a lot of tedious string processing in this file. Parsing the
+# filenames to get the PPM, iteration, and epoch is annoying and fragile. It would
+# be better to use EXIF data or similar, perhaps integrated with Smeagol.
 
 
 # Return which k-fold job this directory corresponds to.
@@ -22,28 +25,68 @@ def k_from_dir(dirname):
     # Only interested in the basename, other parts of the path do not matter
     dirname = os.path.basename(dirname)
     # Only has a valid k-fold # if it matches this particular format
-    if re.match('.*\d\d\d\d-\d\d-\d\d_\d\d\.\d\d\.\d\d_(\d+)', dirname):
+    if re.match(r'.*\d\d\d\d-\d\d-\d\d_\d\d\.\d\d\.\d\d_(\d+)', dirname):
         # Return the last number in the dirname, which is the k-fold #
-        return int(re.findall('(\d+)', dirname)[-1])
+        return int(re.findall(r'(\d+)', dirname)[-1])
     else:
         # Otherwise probably was standalone job (not part of k-fold)
         return -1
 
 
+# Return a set of all iterations encountered in a k-fold directory
+# Optionally restrict to those of only a particular PPM
+def iterations_in_k_fold_dir(k_fold_dir, ppm_name=None):
+    iterations = set()
+    # Look in predictions directory to get all iterations from prediction images
+    pred_dir = os.path.join(k_fold_dir, 'predictions')
+    if os.path.isdir(pred_dir):
+        # Get all filenames in that directory
+        names = os.listdir(pred_dir)
+        # Filter out those that do not match the desired name format
+        if ppm_name is not None:
+            names = list(filter(lambda x: re.match(f'{ppm_name}_prediction_.*', x), names))
+        else:
+            names = list(filter(lambda x: re.match('.*_prediction_', x), names))
+        for name in names:
+            if re.match(r'.*_prediction_\d+_(\d+)', name):
+                iterations.add(re.search(r'.*_prediction_\d+_(\d+)', name).group(1))
+            elif re.match('.*_prediction_final', name):
+                iterations.add('final')
+    return sort_iterations(iterations)
+
+
 # Return a prediction image of the specified iteration, k-fold directory,
 # and PPM. If such an image does not exist return None
-def get_prediction_image(iteration, k_fold_dir, ppm_name, ppms, return_latest_if_not_found=True):
+def get_prediction_image(iteration, k_fold_dir, ppm_name, return_latest_if_not_found=True):
     filename = f'{ppm_name}_prediction_{iteration}.png'
     full_filename = os.path.join(k_fold_dir, 'predictions', filename)
     if os.path.isfile(full_filename):
         return Image.open(full_filename)
     elif return_latest_if_not_found:
+        ret_iteration = None
         # We did not find original file. Check to see if the requested iteration
         # is greater than any we have. If so, return the greatest one we have.
-        # TODO LEFT OFF
-        return None
-    else:
-        return None
+        iterations = iterations_in_k_fold_dir(k_fold_dir, ppm_name)
+        if len(iterations) == 0:
+            return None
+        if iteration == 'final':
+            ret_iteration = iterations[-1]
+        else:
+            # Remove 'final' if present
+            numeric_iterations = [i for i in iterations if i != 'final']
+            # Get int(yyy) from 'xxx_yyy'
+            numeric_iterations = [int(i.split('_')[1]) for i in numeric_iterations]
+            # Do the same with requested iteration
+            int_iteration = int(iteration.split('_')[1])
+            # If requested is beyond any we have, return the last one we have
+            if len(numeric_iterations) > 0 and int_iteration > max(numeric_iterations):
+                ret_iteration = iterations[-1]
+        if ret_iteration is not None:
+            filename = f'{ppm_name}_prediction_{ret_iteration}.png'
+            full_filename = os.path.join(k_fold_dir, 'predictions', filename)
+            if os.path.isfile(full_filename):
+                return Image.open(full_filename)
+    return None
 
 
 def build_frame(iteration, k_fold_dirs, ppms, caption_with_iteration, max_size):
@@ -57,7 +100,7 @@ def build_frame(iteration, k_fold_dirs, ppms, caption_with_iteration, max_size):
         # Make each row of this column
         for ppm_i, ppm in enumerate(ppms.values()):
             ppm_path = os.path.splitext(os.path.basename(ppm['path']))[0]
-            img = get_prediction_image(iteration, k_fold_dir, ppm_path, ppms)
+            img = get_prediction_image(iteration, k_fold_dir, ppm_path)
             if img is not None:
                 offset = (k * col_width, sum(row_heights[:ppm_i]))
                 frame.paste(img, offset)
@@ -67,14 +110,12 @@ def build_frame(iteration, k_fold_dirs, ppms, caption_with_iteration, max_size):
     return frame
 
 
-
 def create_animation(k_fold_dirs, iterations, ppms, caption_with_iteration, max_size):
     animation = []
     for iteration in tqdm(iterations):
         frame = build_frame(iteration, k_fold_dirs, ppms, caption_with_iteration, max_size)
         animation.append(frame)
     return animation
-
 
     # filenames_in_each_dir = []
     # for d in k_fold_dirs:
@@ -184,6 +225,17 @@ def write_gif(animation, outfile, fps=10):
 #         image.save(outfile)
 
 
+def sort_iterations(iterations):
+    has_final = 'final' in iterations
+    if has_final:
+        iterations.remove('final')
+    iterations = sorted(list(map(int, iterations)))
+    iterations = ['0_' + str(i) for i in iterations]
+    if has_final:
+        iterations.append('final')
+    return iterations
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     # Input directory with job output
@@ -242,11 +294,13 @@ def main():
                         # Extract iteration name from each image
                         if 'iterations' not in ppm:
                             ppm['iterations'] = []
-                        if re.match('.*_prediction_\d+_(\d+)', name):
-                            iteration = re.search('.*_prediction_\d+_(\d+)', name).group(1)
-                            ppm['iterations'].append(iteration)
+                        iteration = None
+                        if re.match(r'.*_prediction_\d+_(\d+)', name):
+                            iteration = re.search(r'.*_prediction_\d+_(\d+)', name).group(1)
                         elif re.match('.*_prediction_final', name):
-                            ppm['iterations'].append('final')
+                            iteration = 'final'
+                        if iteration is not None and iteration not in ppm['iterations']:
+                            ppm['iterations'].append(iteration)
     print(f'\nFound PPMs from {metadata_file_used}:')
     for ppm in ppms_from_metadata.keys():
         print(f'\t{ppm} {ppms_from_metadata[ppm]["size"]}')
@@ -255,13 +309,7 @@ def main():
     for ppm in ppms_from_metadata.values():
         for iteration in ppm['iterations']:
             encountered_iterations.add(iteration)
-    has_final = 'final' in encountered_iterations
-    if has_final:
-        encountered_iterations.remove('final')
-    encountered_iterations = sorted(list(map(int, encountered_iterations)))
-    encountered_iterations = ['0_' + str(i) for i in encountered_iterations]
-    if has_final:
-        encountered_iterations.append('final')
+    encountered_iterations = sort_iterations(encountered_iterations)
 
     # Generate training animation
     print('\nCreating animation:')
