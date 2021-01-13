@@ -90,7 +90,7 @@ def get_prediction_image(iteration, k_fold_dir, ppm_name, return_latest_if_not_f
     return None
 
 
-def build_frame(iteration, k_fold_dirs, ppms, caption_with_iteration, max_size, label_type):
+def build_frame(iteration, k_fold_dirs, ppms, label_type, max_size=None):
     col_width = max([ppm['size'][0] for ppm in ppms.values()])
     row_heights = [ppm['size'][1] for ppm in ppms.values()]
     width = col_width * (len(k_fold_dirs) + 1)
@@ -128,14 +128,16 @@ def build_frame(iteration, k_fold_dirs, ppms, caption_with_iteration, max_size, 
                 frame.paste(img, offset)
 
     # Downsize image while keeping aspect ratio
-    frame.thumbnail(max_size, Image.BICUBIC)
+    if max_size is not None:
+        frame.thumbnail(max_size, Image.BICUBIC)
+
     return frame
 
 
-def create_animation(k_fold_dirs, iterations, ppms, caption_with_iteration, max_size, label_type):
+def create_animation(k_fold_dirs, iterations, ppms, label_type, max_size):
     animation = []
     for iteration in tqdm(iterations):
-        frame = build_frame(iteration, k_fold_dirs, ppms, caption_with_iteration, max_size, label_type)
+        frame = build_frame(iteration, k_fold_dirs, ppms, label_type, max_size)
         animation.append(frame)
     return animation
 
@@ -340,10 +342,9 @@ def main():
     # Generate training animation
     print('\nCreating animation:')
     animation = create_animation(k_fold_dirs, encountered_iterations,
-                                 ppms_from_metadata, args.caption_gif_with_iterations,
-                                 args.max_size, label_type)
+                                 ppms_from_metadata, label_type, args.max_size)
 
-    # TODO generate final frame and save to image
+    # TODO generate final frame and save to image at full/high res
 
     # Write to image sequence
     if args.img_seq is not None:
