@@ -9,6 +9,7 @@ import imageio
 import numpy as np
 from PIL import Image
 import pygifsicle
+from tensorboard.backend.event_processing.event_multiplexer import EventMultiplexer
 from tqdm import tqdm
 
 import inkid
@@ -337,6 +338,14 @@ def main():
             encountered_iterations.add(iteration)
     encountered_iterations = sort_iterations(encountered_iterations)
 
+    # Tensorboard
+    multiplexer = EventMultiplexer().AddRunsFromDirectory(args.dir)
+    multiplexer.Reload()
+    for run in multiplexer.Runs():
+        accumulator = multiplexer.GetAccumulator(run)
+        print(accumulator.Scalars('train_loss'))
+        # TODO LEFT OFF make plots or something with this info :)
+
     label_type = metadata.get('Arguments').get('label_type')
 
     # Generate training animation
@@ -352,6 +361,9 @@ def main():
 
     # Write to gif
     write_gif(animation, os.path.join(args.dir, 'training.gif'), args.gif_delay)
+
+
+
 
     # Transfer results via rclone if requested
     inkid.ops.rclone_transfer_to_remote(args.rclone_transfer_remote, args.dir)
