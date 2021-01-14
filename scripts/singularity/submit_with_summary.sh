@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# This script submits sbatch jobs for both the training jobs and the subsequent
+# summary and upload scripts.
+
 # Run sbatch job as provided by just executing all args
 # (which includes call to submit.sh as the first arg)
 OUTPUT=$("$@")
