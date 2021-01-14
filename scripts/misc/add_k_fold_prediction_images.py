@@ -1,33 +1,43 @@
 import argparse
+import datetime
 import json
 import os
-from pathlib import Path
+from pathlib import Path, PurePath
 import re
 
 from humanize import naturalsize
 import imageio
+import matplotlib.pyplot as plt
 import numpy as np
 from PIL import Image
 import pygifsicle
+from scipy.signal import savgol_filter
 from tensorboard.backend.event_processing.event_multiplexer import EventMultiplexer
+from tensorboard.backend.event_processing.event_accumulator import STORE_EVERYTHING_SIZE_GUIDANCE
 from tqdm import tqdm
 
 import inkid
 
 
-# TODO handle epochs in filenames
-# In general, there is a lot of tedious string processing in this file. Parsing the
+# TODO check matplotlib works on headless machines
+
+
+# There is a lot of tedious string processing in this file. Parsing the
 # filenames to get the PPM, iteration, and epoch is annoying and fragile. It would
 # be better to use EXIF data or similar, perhaps integrated with Smeagol.
+
+
+# Return whether the given directory matches the expected structure for a k-fold job dir
+def is_k_fold_dir(dirname):
+    dirname = os.path.basename(dirname)
+    return re.match(r'.*\d\d\d\d-\d\d-\d\d_\d\d\.\d\d\.\d\d_(\d+)', dirname)
 
 
 # Return which k-fold job this directory corresponds to.
 # For the purpose of sorting a list of dirs based on job #.
 def k_from_dir(dirname):
-    # Only interested in the basename, other parts of the path do not matter
-    dirname = os.path.basename(dirname)
     # Only has a valid k-fold # if it matches this particular format
-    if re.match(r'.*\d\d\d\d-\d\d-\d\d_\d\d\.\d\d\.\d\d_(\d+)', dirname):
+    if is_k_fold_dir(dirname):
         # Return the last number in the dirname, which is the k-fold #
         return int(re.findall(r'(\d+)', dirname)[-1])
     else:
@@ -55,6 +65,45 @@ def iterations_in_k_fold_dir(k_fold_dir, ppm_name=None):
             elif re.match('.*_prediction_final', name):
                 iterations.add('final')
     return sort_iterations(iterations)
+
+
+# Reading Tensorboard files similar to this method https://stackoverflow.com/a/41083104
+def create_tensorboard_plots(base_dir, out_dir):
+    guidance = STORE_EVERYTHING_SIZE_GUIDANCE
+    multiplexer = EventMultiplexer(size_guidance=guidance).AddRunsFromDirectory(base_dir)
+    multiplexer.Reload()
+    scalars = []
+    for run in multiplexer.Runs():
+        scalars = multiplexer.GetAccumulator(run).Tags()['scalars']
+        break
+    for scalar in scalars:
+        for smooth in [True, False]:
+            fig, ax = plt.subplots()
+            for run in multiplexer.Runs():
+                run_path = PurePath(run)
+                label = k_from_dir(run_path.parts[0])
+                accumulator = multiplexer.GetAccumulator(run)
+                step = [x.step for x in accumulator.Scalars(scalar)]
+                value = [x.value for x in accumulator.Scalars(scalar)]
+                if smooth:
+                    # Make smoothing window a fraction of number of values
+                    smoothing_window = len(value) / 500
+                    # Ensure odd number, required for savgol_filter
+                    smoothing_window = int(smoothing_window / 2) * 2 + 1
+                    # For small sets make sure we at least do some smoothing
+                    smoothing_window = max(smoothing_window, 5)
+                    value = savgol_filter(value, smoothing_window, 3)
+                plt.plot(step, value, label=label)
+            title = scalar
+            if smooth:
+                title += ' (smoothed)'
+            else:
+                title += ' (no smoothing)'
+            ax.set(xlabel='step', ylabel=scalar, title=title)
+            ax.grid()
+            if len(multiplexer.Runs()) > 1:
+                plt.legend(title='k-fold job')
+            fig.savefig(os.path.join(out_dir, f'{title}.png'))
 
 
 # Return a prediction image of the specified iteration, k-fold directory,
@@ -142,60 +191,6 @@ def create_animation(k_fold_dirs, iterations, ppms, label_type, max_size):
         animation.append(frame)
     return animation
 
-    # filenames_in_each_dir = []
-    # for d in k_fold_dirs:
-    #     names = os.listdir(os.path.join(d, 'predictions'))
-    #     names = list(filter(lambda name: re.search('_(\d+)_(\d+)[._]', name) is not None, names))
-    #     names = sorted(
-    #         names,
-    #         key=lambda name: [int(v) for v in re.findall('_(\d+)_(\d+)[._]', name)[0]]
-    #     )
-    #     names = [os.path.join(d, 'predictions', name) for name in names]
-    #     filenames_in_each_dir.append(names)
-    #
-    # max_number_of_images = max([len(i) for i in filenames_in_each_dir])
-    # if max_number_of_images == 0:
-    #     return None
-    # num_frames = max_number_of_images
-    # animation = wand.image.Image()
-    # for i in range(num_frames):
-    #     frame = None
-    #     iterations_getting_shown = []
-    #     for d in filenames_in_each_dir:
-    #         if len(d) == 0:
-    #             return None
-    #         filename = d[i] if i < len(d) else d[-1]
-    #         iterations_getting_shown.append(
-    #             [int(v) for v in re.findall('_(\d+)_(\d+)[._]', os.path.basename(filename))[0]]
-    #         )
-    #         print('\t{}'.format(filename))
-    #         try:
-    #             partial_frame = wand.image.Image(filename=filename)
-    #             partial_frame.transform(resize='20%')
-    #         except wand.exceptions.CoderError:
-    #             partial_frame = wand.image.Image(width=1, height=1)
-    #         if frame is None:
-    #             frame = partial_frame
-    #         else:
-    #             frame.composite_channel(
-    #                 'all_channels',
-    #                 partial_frame,
-    #                 'modulus_add',
-    #                 left=0,
-    #                 top=0,
-    #             )
-    #     if caption:
-    #         epoch, batch = iterations_getting_shown[-1]
-    #         frame.caption(
-    #             '{:02d} {:08d}'.format(epoch, batch),
-    #             font=wand.font.Font(
-    #                 path='',
-    #                 color=wand.color.Color('#0C0687')
-    #             )
-    #         )
-    #     animation.sequence.append(frame)
-    # return animation
-
 
 def write_img_sequence(animation, outdir):
     if len(animation) == 0:
@@ -226,29 +221,6 @@ def write_gif(animation, outfile, fps=10):
     reduction = (prev_size - new_size) / prev_size * 100
     print(f'Size reduced {reduction:.2f}% from {naturalsize(prev_size)} to {naturalsize(new_size)}')
 
-#
-# def get_and_merge_images(k_fold_dirs, outfile):
-#     image = None
-#     for d in k_fold_dirs:
-#         # Sort by the iteration number and pick the last one
-#         names = os.listdir(os.path.join(d, 'predictions'))
-#         if len(names) == 0:
-#             continue
-#         names = list(filter(lambda name: re.search('_(\d+)_(\d+)[._]', name) is not None, names))
-#         names = sorted(
-#             names,
-#             key=lambda name: [int(v) for v in re.findall('_(\d+)_(\d+)[._]', name)[0]]
-#         )
-#         image_name = os.path.join(d, 'predictions', names[-1])
-#         print('\t{}'.format(image_name))
-#         if image is None:
-#             image = np.array(Image.open(image_name))
-#         else:
-#             image += np.array(Image.open(image_name))
-#     if image is not None:
-#         image = Image.fromarray(image)
-#         image.save(outfile)
-
 
 def sort_iterations(iterations):
     has_final = 'final' in iterations
@@ -273,14 +245,18 @@ def main():
     parser.add_argument('--max-size', type=int, nargs=2, default=[1920, 1080])
     # Rclone upload options
     parser.add_argument('--rclone-transfer-remote', metavar='remote', default=None,
-                        help = 'if specified, and if matches the name of one of the directories in '
+                        help='if specified, and if matches the name of one of the directories in '
                         'the output path, transfer the results to that rclone remote into the '
                         'sub-path following the remote name')
     args = parser.parse_args()
 
+    out_dir = f'{datetime.datetime.today().strftime("%Y-%m-%d_%H.%M.%S")}_summary'
+    out_dir = os.path.join(args.dir, out_dir)
+    os.makedirs(out_dir, exist_ok=True)
+
     # Get list of directories (not files) in given parent dir
-    k_fold_dirs = [os.path.join(args.dir, name) for name in os.listdir(args.dir)
-            if os.path.isdir(os.path.join(args.dir, name))]
+    possible_dirs = [os.path.join(args.dir, name) for name in os.listdir(args.dir)]
+    k_fold_dirs = list(filter(is_k_fold_dir, possible_dirs))
     k_fold_dirs = sorted(k_fold_dirs, key=k_from_dir)
     print('Found job directories:')
     for d in k_fold_dirs:
@@ -339,17 +315,13 @@ def main():
     encountered_iterations = sort_iterations(encountered_iterations)
 
     # Tensorboard
-    multiplexer = EventMultiplexer().AddRunsFromDirectory(args.dir)
-    multiplexer.Reload()
-    for run in multiplexer.Runs():
-        accumulator = multiplexer.GetAccumulator(run)
-        print(accumulator.Scalars('train_loss'))
-        # TODO LEFT OFF make plots or something with this info :)
-
-    label_type = metadata.get('Arguments').get('label_type')
+    print('\nCreating Tensorboard plots...')
+    create_tensorboard_plots(args.dir, out_dir)
+    print('done.')
 
     # Generate training animation
     print('\nCreating animation:')
+    label_type = metadata.get('Arguments').get('label_type')
     animation = create_animation(k_fold_dirs, encountered_iterations,
                                  ppms_from_metadata, label_type, args.max_size)
 
@@ -360,10 +332,7 @@ def main():
         write_img_sequence(animation, args.img_seq)
 
     # Write to gif
-    write_gif(animation, os.path.join(args.dir, 'training.gif'), args.gif_delay)
-
-
-
+    write_gif(animation, os.path.join(out_dir, 'training.gif'), args.gif_delay)
 
     # Transfer results via rclone if requested
     inkid.ops.rclone_transfer_to_remote(args.rclone_transfer_remote, args.dir)
