@@ -94,8 +94,6 @@ def create_tensorboard_plots(base_dir, out_dir):
             title = scalar
             if smooth:
                 title += ' (smoothed)'
-            else:
-                title += ' (no smoothing)'
             ax.set(xlabel='step', ylabel=scalar, title=title)
             ax.grid()
             if len(multiplexer.Runs()) > 1:
@@ -239,7 +237,8 @@ def main():
                         help='Generate an image sequence and save it to the provided directory')
     parser.add_argument('--gif-delay', default=10, type=int, help='GIF frame delay in hundredths of a second')
     parser.add_argument('--caption-gif-with-iterations', action='store_true')
-    parser.add_argument('--max-size', type=int, nargs=2, default=[1920, 1080])
+    parser.add_argument('--gif-max-size', type=int, nargs=2, default=[1920, 1080])
+    parser.add_argument('--static-max-size', type=int, nargs=2, default=[3840, 2160])
     # Rclone upload options
     parser.add_argument('--rclone-transfer-remote', metavar='remote', default=None,
                         help='if specified, and if matches the name of one of the directories in '
@@ -320,9 +319,7 @@ def main():
     print('\nCreating animation:')
     label_type = metadata.get('Arguments').get('label_type')
     animation = create_animation(k_fold_dirs, encountered_iterations,
-                                 ppms_from_metadata, label_type, args.max_size)
-
-    # TODO generate final frame and save to image at full/high res
+                                 ppms_from_metadata, label_type, args.gif_max_size)
 
     # Write to image sequence
     if args.img_seq is not None:
@@ -330,6 +327,12 @@ def main():
 
     # Write to gif
     write_gif(animation, os.path.join(out_dir, 'training.gif'), args.gif_delay)
+
+    # Write final frame to static image
+    print('\nCreating final static image...')
+    final_frame = build_frame('final', k_fold_dirs, ppms_from_metadata, label_type, args.static_max_size)
+    final_frame.save(os.path.join(out_dir, 'final.png'))
+    print('done.')
 
     # Transfer results via rclone if requested
     inkid.ops.rclone_transfer_to_remote(args.rclone_transfer_remote, args.dir)
