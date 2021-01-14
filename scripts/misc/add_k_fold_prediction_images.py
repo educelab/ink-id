@@ -19,9 +19,6 @@ from tqdm import tqdm
 import inkid
 
 
-# TODO check matplotlib works on headless machines
-
-
 # There is a lot of tedious string processing in this file. Parsing the
 # filenames to get the PPM, iteration, and epoch is annoying and fragile. It would
 # be better to use EXIF data or similar, perhaps integrated with Smeagol.

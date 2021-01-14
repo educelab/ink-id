@@ -25,6 +25,8 @@ From: ubuntu:16.04
   apt install -y python3.7-dev python3-pip
   pip3 install --upgrade pip
   pip install --upgrade virtualenv
+  # Needed for pygifsicle
+  apt install -y gifsicle
   # Create a virtualenv for this project
   virtualenv --python=python3.7 /usr/local/dri/ink-id/.venv
   # Activate virtualenv
