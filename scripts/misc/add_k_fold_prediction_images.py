@@ -140,6 +140,9 @@ def build_frame(iteration, k_fold_dirs, ppms, label_type, max_size=None):
     row_heights = [ppm['size'][1] for ppm in ppms.values()]
     width = col_width * (len(k_fold_dirs) + 1)
     height = sum(row_heights)
+    # Add space for logo
+    footer_height = int(height / 13)
+    height += footer_height
     frame = Image.new('RGB', (width, height))
     # One column at a time
     for k, k_fold_dir in enumerate(k_fold_dirs):
@@ -171,6 +174,15 @@ def build_frame(iteration, k_fold_dirs, ppms, label_type, max_size=None):
                 img = Image.open(label_img_path)
                 offset = (len(k_fold_dirs) * col_width, sum(row_heights[:ppm_i]))
                 frame.paste(img, offset)
+
+    # Add footer
+    frame.paste((64, 64, 64), (0, height - footer_height, width, height))
+    logo_height = footer_height
+    logo_path = os.path.join(os.path.dirname(inkid.__file__), 'assets', 'EduceLabBW.png')
+    logo = Image.open(logo_path)
+    logo.thumbnail((100000, logo_height), Image.BICUBIC)
+    logo_offset = (0, height - footer_height)
+    frame.paste(logo, logo_offset, logo.convert('RGBA'))
 
     # Downsize image while keeping aspect ratio
     if max_size is not None:
