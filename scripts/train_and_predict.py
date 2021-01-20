@@ -56,7 +56,7 @@ def perform_validation(model, dataloader, metrics, device, label_type):
     return metric_results
 
 
-def generate_prediction_image(dataloader, model, output_size, label_type, device, predictions_dir, filename,
+def generate_prediction_image(dataloader, model, output_size, label_type, device, predictions_dir, suffix,
                               reconstruct_fn, region_set, label_shape, prediction_averaging, grid_spacing):
     """Helper function to generate a prediction image given a model and dataloader, and save it to a file."""
     if label_shape == (1, 1):
@@ -109,7 +109,7 @@ def generate_prediction_image(dataloader, model, output_size, label_type, device
     for prediction, point in zip(predictions, points):
         region_id, x, y = point
         reconstruct_fn([int(region_id)], [prediction], [[int(x), int(y)]])
-    region_set.save_predictions(predictions_dir, filename)
+    region_set.save_predictions(predictions_dir, suffix)
     region_set.reset_predictions()
 
 

@@ -10,9 +10,12 @@ import progressbar
 
 class PPM:
     def __init__(self, path, volume=None, mask_path=None, ink_label_path=None,
-                 rgb_label_path=None, invert_normal=False):
+                 rgb_label_path=None, invert_normal=False, name=None):
         self._path = path
         self._volume = volume
+        self._name = name
+        if self._name is None:
+            self._name = os.path.splitext(os.path.basename(self._path))[0]
 
         ppm_path_stem, _ = os.path.splitext(self._path)
 
@@ -293,7 +296,7 @@ class PPM:
         if self._rgb_label is not None:
             self._rgb_values_prediction_image = np.zeros((self._height, self._width, 3), np.uint8)
 
-    def save_predictions(self, directory, iteration):
+    def save_predictions(self, directory, suffix):
         if not os.path.exists(directory):
             os.makedirs(directory)
 
@@ -307,8 +310,8 @@ class PPM:
                 os.path.join(
                     directory,
                     '{}_prediction_{}.png'.format(
-                        os.path.splitext(os.path.basename(self._path))[0],
-                        iteration,
+                        self._name,
+                        suffix,
                     ),
                 ),
             )

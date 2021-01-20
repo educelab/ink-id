@@ -153,6 +153,7 @@ class RegionSet:
                 ink_label_path,
                 rgb_label_path,
                 invert_normal,
+                ppm_name,
             )
 
         return self._ppms[ppm_name]
@@ -293,10 +294,10 @@ class RegionSet:
                 ppm_xy
             )
 
-    def save_predictions(self, directory, iteration):
-        """Save all predictions to files, with iteration in the filename."""
+    def save_predictions(self, directory, suffix):
+        """Save all predictions to files, with suffix in the filename."""
         for region in self._regions:
-            region.ppm.save_predictions(directory, iteration)
+            region.ppm.save_predictions(directory, suffix)
 
     def reset_predictions(self):
         """Reset all predictions."""
