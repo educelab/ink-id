@@ -312,25 +312,27 @@ def build_frame(iteration, k_fold_dirs, ppms, label_type, max_size=None, cmap_na
             break
         label_img_path = ppm[label_key]
         # Try getting label image file from recorded location (may not exist on this machine)
-        found_label_img = False
+        label_img = None
         if os.path.isfile(label_img_path):
-            found_label_img = True
-            img = Image.open(label_img_path)
-            offset = (len(k_fold_dirs) * col_width, sum(row_heights[:ppm_i]))
-            frame.paste(img, offset)
+            label_img = Image.open(label_img_path)
         # If not there, maybe it is on the local machine under ~/data.
         elif '/pscratch/seales_uksr/' in label_img_path:
             label_img_path = label_img_path.replace('/pscratch/seales_uksr/', '')
             label_img_path = os.path.join(Path.home(), 'data', label_img_path)
             if os.path.isfile(label_img_path):
-                found_label_img = True
-                img = Image.open(label_img_path)
-                offset = (
-                    len(k_fold_dirs) * col_width + (len(k_fold_dirs) + 1) * buffer_size,
-                    sum(row_heights[:ppm_i]) + (ppm_i + 1) * buffer_size
-                )
-                frame.paste(img, offset)
-        if not found_label_img and not already_warned_about_missing_label_images:
+                label_img = Image.open(label_img_path)
+        if label_img is not None:
+            if cmap_name is not None:
+                color_map = cm.get_cmap(cmap_name)
+                label_img = label_img.convert('L')
+                img_data = np.array(label_img)
+                label_img = Image.fromarray(np.uint8(color_map(img_data) * 255))
+            offset = (
+                len(k_fold_dirs) * col_width + (len(k_fold_dirs) + 1) * buffer_size,
+                sum(row_heights[:ppm_i]) + (ppm_i + 1) * buffer_size
+            )
+            frame.paste(label_img, offset)
+        elif not already_warned_about_missing_label_images:
             warnings.warn(
                 'At least one label image not found, check if dataset locally available',
                 RuntimeWarning
