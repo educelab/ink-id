@@ -9,7 +9,7 @@ from humanize import naturalsize
 import imageio
 import matplotlib.pyplot as plt
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFont
 import pygifsicle
 from scipy.signal import savgol_filter
 from tensorboard.backend.event_processing.event_multiplexer import EventMultiplexer
@@ -135,7 +135,7 @@ def get_prediction_image(iteration, k_fold_dir, ppm_name, return_latest_if_not_f
     return None
 
 
-def build_footer_img(width, height):
+def build_footer_img(width, height, iteration=None):
     footer = Image.new('RGB', (width, height))
     horizontal_offset = 0
     divider_bar_size = max(1, int(width / 500))
@@ -157,6 +157,41 @@ def build_footer_img(width, height):
             (horizontal_offset, 0, horizontal_offset + divider_bar_size, height)
         )
         horizontal_offset += divider_bar_size
+    # Add iteration/batch #
+    draw = ImageDraw.Draw(footer)
+    font_path = os.path.join(os.path.dirname(inkid.__file__), 'assets', 'fonts', 'Roboto-Regular.ttf')
+    fontsize = 1
+    font = ImageFont.truetype(font_path, fontsize)
+    txt = 'training batch'
+    allowed_font_height = int((height - buffer_size * 3) / 2)
+    while font.getsize(txt)[1] < allowed_font_height:
+        fontsize += 1
+        font = ImageFont.truetype(font_path, fontsize)
+    fontsize -= 1
+    draw.text(
+        (horizontal_offset + buffer_size, buffer_size),
+        txt,
+        (255, 255, 255),
+        font=font
+    )
+    font_w = font.getsize(txt)[0] + 2 * buffer_size
+    font_path = os.path.join(os.path.dirname(inkid.__file__), 'assets', 'fonts', 'Roboto-Black.ttf')
+    font = ImageFont.truetype(font_path, fontsize)
+    if re.match(r'\d+_\d+', iteration):
+        iteration = re.search(r'\d+_(\d+)', iteration).group(1)
+    draw.text(
+        (horizontal_offset + buffer_size, allowed_font_height + 2 * buffer_size),
+        iteration,
+        (255, 255, 255),
+        font=font
+    )
+    horizontal_offset += font_w
+    # Add divider bar
+    footer.paste(
+        (104, 104, 104),
+        (horizontal_offset, 0, horizontal_offset + divider_bar_size, height)
+    )
+    horizontal_offset += divider_bar_size
     return footer
 
 
@@ -211,7 +246,7 @@ def build_frame(iteration, k_fold_dirs, ppms, label_type, max_size=None):
                 frame.paste(img, offset)
 
     # Add footer
-    footer = build_footer_img(width, footer_height)
+    footer = build_footer_img(width, footer_height, iteration)
     frame.paste(footer, (0, height - footer_height))
 
     # Downsize image while keeping aspect ratio
@@ -277,8 +312,7 @@ def main():
     # Image generation options
     parser.add_argument('--img-seq', default=None,
                         help='Generate an image sequence and save it to the provided directory')
-    parser.add_argument('--gif-delay', default=10, type=int, help='GIF frame delay in hundredths of a second')
-    parser.add_argument('--caption-gif-with-iterations', action='store_true')
+    parser.add_argument('--gif-fps', default=10, type=int, help='GIF frames per second')
     parser.add_argument('--gif-max-size', type=int, nargs=2, default=[1920, 1080])
     parser.add_argument('--static-max-size', type=int, nargs=2, default=[3840, 2160])
     # Rclone upload options
@@ -368,7 +402,7 @@ def main():
         write_img_sequence(animation, args.img_seq)
 
     # Write to gif
-    write_gif(animation, os.path.join(out_dir, 'training.gif'), args.gif_delay)
+    write_gif(animation, os.path.join(out_dir, 'training.gif'), args.gif_fps)
 
     # Write final frame to static image
     print('\nCreating final static image...')
