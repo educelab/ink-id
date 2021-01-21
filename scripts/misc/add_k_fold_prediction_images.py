@@ -7,6 +7,7 @@ import re
 
 from humanize import naturalsize
 import imageio
+from matplotlib import cm
 import matplotlib.pyplot as plt
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
@@ -135,7 +136,7 @@ def get_prediction_image(iteration, k_fold_dir, ppm_name, return_latest_if_not_f
     return None
 
 
-def build_footer_img(width, height, iteration=None):
+def build_footer_img(width, height, iteration, cmap_name=None):
     footer = Image.new('RGB', (width, height))
     horizontal_offset = 0
     divider_bar_size = max(1, int(width / 500))
@@ -161,29 +162,29 @@ def build_footer_img(width, height, iteration=None):
     draw = ImageDraw.Draw(footer)
     font_path = os.path.join(os.path.dirname(inkid.__file__), 'assets', 'fonts', 'Roboto-Regular.ttf')
     fontsize = 1
-    font = ImageFont.truetype(font_path, fontsize)
+    font_regular = ImageFont.truetype(font_path, fontsize)
     txt = 'training batch'
     allowed_font_height = int((height - buffer_size * 3) / 2)
-    while font.getsize(txt)[1] < allowed_font_height:
+    while font_regular.getsize(txt)[1] < allowed_font_height:
         fontsize += 1
-        font = ImageFont.truetype(font_path, fontsize)
+        font_regular = ImageFont.truetype(font_path, fontsize)
     fontsize -= 1
     draw.text(
         (horizontal_offset + buffer_size, buffer_size),
         txt,
         (255, 255, 255),
-        font=font
+        font=font_regular
     )
-    font_w = font.getsize(txt)[0] + 2 * buffer_size
-    font_path = os.path.join(os.path.dirname(inkid.__file__), 'assets', 'fonts', 'Roboto-Black.ttf')
-    font = ImageFont.truetype(font_path, fontsize)
+    font_w = font_regular.getsize(txt)[0] + 2 * buffer_size
+    font_path_black = os.path.join(os.path.dirname(inkid.__file__), 'assets', 'fonts', 'Roboto-Black.ttf')
+    font_black = ImageFont.truetype(font_path_black, fontsize)
     if re.match(r'\d+_\d+', iteration):
         iteration = re.search(r'\d+_(\d+)', iteration).group(1)
     draw.text(
         (horizontal_offset + buffer_size, allowed_font_height + 2 * buffer_size),
         iteration,
         (255, 255, 255),
-        font=font
+        font=font_black
     )
     horizontal_offset += font_w
     # Add divider bar
@@ -192,10 +193,32 @@ def build_footer_img(width, height, iteration=None):
         (horizontal_offset, 0, horizontal_offset + divider_bar_size, height)
     )
     horizontal_offset += divider_bar_size
+    if cmap_name is not None:
+        cmap_title = 'color map'
+        draw.text(
+            (horizontal_offset + buffer_size, buffer_size),
+            cmap_title,
+            (255, 255, 255),
+            font=font_regular
+        )
+        draw.text(
+            (horizontal_offset + buffer_size, allowed_font_height + 2 * buffer_size),
+            cmap_name,
+            (255, 255, 255),
+            font=font_black
+        )
+        font_w = max(font_regular.getsize(cmap_title)[0], font_black.getsize(cmap_name)[0])
+        horizontal_offset += font_w + 2 * buffer_size
+        # Add divider bar
+        footer.paste(
+            (104, 104, 104),
+            (horizontal_offset, 0, horizontal_offset + divider_bar_size, height)
+        )
+        horizontal_offset += divider_bar_size
     return footer
 
 
-def build_frame(iteration, k_fold_dirs, ppms, label_type, max_size=None):
+def build_frame(iteration, k_fold_dirs, ppms, label_type, max_size=None, cmap_name=None):
     col_width = max([ppm['size'][0] for ppm in ppms.values()])
     row_heights = [ppm['size'][1] for ppm in ppms.values()]
     buffer_size = int(col_width / 10)
@@ -218,6 +241,11 @@ def build_frame(iteration, k_fold_dirs, ppms, label_type, max_size=None):
                     k * col_width + (k + 1) * buffer_size,
                     sum(row_heights[:ppm_i]) + (ppm_i + 1) * buffer_size
                 )
+                if cmap_name is not None:
+                    color_map = cm.get_cmap(cmap_name)
+                    img = img.convert('L')
+                    img_data = np.array(img)
+                    img = Image.fromarray(np.uint8(color_map(img_data) * 255))
                 frame.paste(img, offset)
     # Add label column
     for ppm_i, ppm in enumerate(ppms.values()):
@@ -246,7 +274,7 @@ def build_frame(iteration, k_fold_dirs, ppms, label_type, max_size=None):
                 frame.paste(img, offset)
 
     # Add footer
-    footer = build_footer_img(width, footer_height, iteration)
+    footer = build_footer_img(width, footer_height, iteration, cmap_name)
     frame.paste(footer, (0, height - footer_height))
 
     # Downsize image while keeping aspect ratio
@@ -386,6 +414,8 @@ def main():
             encountered_iterations.add(iteration)
     encountered_iterations = sort_iterations(encountered_iterations)
 
+    label_type = metadata.get('Arguments').get('label_type')
+
     # Tensorboard
     print('\nCreating Tensorboard plots...')
     create_tensorboard_plots(args.dir, out_dir)
@@ -393,7 +423,6 @@ def main():
 
     # Generate training animation
     print('\nCreating animation:')
-    label_type = metadata.get('Arguments').get('label_type')
     animation = create_animation(k_fold_dirs, encountered_iterations,
                                  ppms_from_metadata, label_type, args.gif_max_size)
 
@@ -409,6 +438,13 @@ def main():
     final_frame = build_frame('final', k_fold_dirs, ppms_from_metadata, label_type, args.static_max_size)
     final_frame.save(os.path.join(out_dir, 'final.png'))
     print('done.')
+
+    for cmap in ['plasma', 'viridis', 'hot', 'seismic', 'Spectral', 'coolwarm']:
+        print(f'\nCreating final static image with color map: {cmap}...')
+        final_frame = build_frame('final', k_fold_dirs, ppms_from_metadata, label_type, args.static_max_size,
+                                  cmap_name=cmap)
+        final_frame.save(os.path.join(out_dir, f'final_{cmap}.png'))
+        print('done.')
 
     # Transfer results via rclone if requested
     inkid.ops.rclone_transfer_to_remote(args.rclone_transfer_remote, args.dir)
