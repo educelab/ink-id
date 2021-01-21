@@ -157,7 +157,7 @@ def get_prediction_image(iteration, k_fold_dir, ppm_name, return_latest_if_not_f
     return img
 
 
-def build_footer_img(width, height, iteration, cmap_name=None):
+def build_footer_img(width, height, iteration, label_type, cmap_name=None):
     footer = Image.new('RGB', (width, height))
     horizontal_offset = 0
     divider_bar_size = max(1, int(width / 500))
@@ -214,6 +214,7 @@ def build_footer_img(width, height, iteration, cmap_name=None):
         (horizontal_offset, 0, horizontal_offset + divider_bar_size, height)
     )
     horizontal_offset += divider_bar_size
+    # Add color map name
     if cmap_name is not None:
         cmap_title = 'color map'
         draw.text(
@@ -230,6 +231,38 @@ def build_footer_img(width, height, iteration, cmap_name=None):
         )
         font_w = max(font_regular.getsize(cmap_title)[0], font_black.getsize(cmap_name)[0])
         horizontal_offset += font_w + 2 * buffer_size
+        # Add divider bar
+        footer.paste(
+            (104, 104, 104),
+            (horizontal_offset, 0, horizontal_offset + divider_bar_size, height)
+        )
+        horizontal_offset += divider_bar_size
+    # Add color map swatch
+    if label_type == 'ink_classes':
+        swatch_title = 'no ink            ink'
+        swatch = Image.new('RGB', font_regular.getsize(swatch_title))
+        for x in range(swatch.width):
+            intensity = int((x / swatch.width) * 255)
+            swatch.paste(
+                (intensity, intensity, intensity),
+                (x, 0, x + 1, swatch.height)
+            )
+        if cmap_name is not None:
+            color_map = cm.get_cmap(cmap_name)
+            swatch = swatch.convert('L')
+            img_data = np.array(swatch)
+            swatch = Image.fromarray(np.uint8(color_map(img_data) * 255))
+        draw.text(
+            (horizontal_offset + buffer_size, buffer_size),
+            swatch_title,
+            (255, 255, 255),
+            font=font_regular
+        )
+        footer.paste(
+            swatch,
+            (horizontal_offset + buffer_size, allowed_font_height + 2 * buffer_size)
+        )
+        horizontal_offset += swatch.width + 2 * buffer_size
         # Add divider bar
         footer.paste(
             (104, 104, 104),
@@ -305,7 +338,7 @@ def build_frame(iteration, k_fold_dirs, ppms, label_type, max_size=None, cmap_na
             already_warned_about_missing_label_images = True
 
     # Add footer
-    footer = build_footer_img(width, footer_height, iteration, cmap_name)
+    footer = build_footer_img(width, footer_height, iteration, label_type, cmap_name)
     frame.paste(footer, (0, height - footer_height))
 
     # Downsize image while keeping aspect ratio
