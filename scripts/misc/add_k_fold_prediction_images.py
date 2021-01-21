@@ -20,15 +20,20 @@ from tqdm import tqdm
 
 import inkid
 
-
+# General note:
 # There is a lot of tedious string processing in this file. Parsing the
 # filenames to get the PPM, iteration, and epoch is annoying and fragile. It would
 # be better to use EXIF data or similar, perhaps integrated with Smeagol.
+# Or perhaps to develop the RegionSet class some more instead of relying so much
+# on directly reading the metadata dictionary.
 
+# We might issue this warning but only need to do it once
 already_warned_about_missing_label_images = False
 
 
-# Return whether the given directory matches the expected structure for a k-fold job dir
+# Return whether the given directory matches the expected structure for a k-fold job dir.
+# For example we often want a list of the k-fold subdirs in a directory but do not want
+# e.g. previous summary subdirs, or others.
 def is_k_fold_dir(dirname):
     dirname = os.path.basename(dirname)
     return re.match(r'.*\d\d\d\d-\d\d-\d\d_\d\d\.\d\d\.\d\d_(\d+)', dirname)
@@ -114,8 +119,9 @@ def create_tensorboard_plots(base_dir, out_dir):
 def get_prediction_image(iteration, k_fold_dir, ppm_name, return_latest_if_not_found=True):
     filename = f'{ppm_name}_prediction_{iteration}.png'
     full_filename = os.path.join(k_fold_dir, 'predictions', filename)
+    img = None
     if os.path.isfile(full_filename):
-        return Image.open(full_filename)
+        img = Image.open(full_filename)
     elif return_latest_if_not_found:
         ret_iteration = None
         # We did not find original file. Check to see if the requested iteration
@@ -139,8 +145,16 @@ def get_prediction_image(iteration, k_fold_dir, ppm_name, return_latest_if_not_f
             filename = f'{ppm_name}_prediction_{ret_iteration}.png'
             full_filename = os.path.join(k_fold_dir, 'predictions', filename)
             if os.path.isfile(full_filename):
-                return Image.open(full_filename)
-    return None
+                img = Image.open(full_filename)
+    if img is not None:
+        # For some images (grayscale PNGs in my experience so far), Pillow opens them as
+        # 32-bit integer images and then clips them to 8-bit in later stages, creating
+        # washed out images. If it has opened an image as 32-bit we detect and convert it
+        # here, so it is not clipped later.
+        if img.mode == 'I':
+            array = np.uint8(np.array(img) / 256)
+            img = Image.fromarray(array)
+    return img
 
 
 def build_footer_img(width, height, iteration, cmap_name=None):
