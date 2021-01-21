@@ -4,6 +4,7 @@ import json
 import os
 from pathlib import Path, PurePath
 import re
+import warnings
 
 from humanize import naturalsize
 import imageio
@@ -23,6 +24,8 @@ import inkid
 # There is a lot of tedious string processing in this file. Parsing the
 # filenames to get the PPM, iteration, and epoch is annoying and fragile. It would
 # be better to use EXIF data or similar, perhaps integrated with Smeagol.
+
+already_warned_about_missing_label_images = False
 
 
 # Return whether the given directory matches the expected structure for a k-fold job dir
@@ -67,6 +70,8 @@ def iterations_in_k_fold_dir(k_fold_dir, ppm_name=None):
 
 # Reading Tensorboard files similar to this method https://stackoverflow.com/a/41083104
 def create_tensorboard_plots(base_dir, out_dir):
+    out_dir = os.path.join(out_dir, 'plots')
+    os.makedirs(out_dir, exist_ok=True)
     guidance = STORE_EVERYTHING_SIZE_GUIDANCE
     multiplexer = EventMultiplexer(size_guidance=guidance).AddRunsFromDirectory(base_dir)
     multiplexer.Reload()
@@ -74,6 +79,8 @@ def create_tensorboard_plots(base_dir, out_dir):
     for run in multiplexer.Runs():
         scalars = multiplexer.GetAccumulator(run).Tags()['scalars']
         break
+    # Disable warning when making more than 20 figures
+    plt.rcParams.update({'figure.max_open_warning': 0})
     for scalar in scalars:
         for smooth in [True, False]:
             fig, ax = plt.subplots()
@@ -219,6 +226,7 @@ def build_footer_img(width, height, iteration, cmap_name=None):
 
 
 def build_frame(iteration, k_fold_dirs, ppms, label_type, max_size=None, cmap_name=None):
+    global already_warned_about_missing_label_images
     col_width = max([ppm['size'][0] for ppm in ppms.values()])
     row_heights = [ppm['size'][1] for ppm in ppms.values()]
     buffer_size = int(col_width / 10)
@@ -251,27 +259,36 @@ def build_frame(iteration, k_fold_dirs, ppms, label_type, max_size=None, cmap_na
     for ppm_i, ppm in enumerate(ppms.values()):
         if label_type == 'rgb_values':
             label_key = 'rgb-label'
-        elif label_type == 'ink_labels':
+        elif label_type == 'ink_classes':
             label_key = 'ink-label'
         else:
             break
         label_img_path = ppm[label_key]
         # Try getting label image file from recorded location (may not exist on this machine)
+        found_label_img = False
         if os.path.isfile(label_img_path):
+            found_label_img = True
             img = Image.open(label_img_path)
             offset = (len(k_fold_dirs) * col_width, sum(row_heights[:ppm_i]))
             frame.paste(img, offset)
-        # If not there, maybe it is on the local machine under ~/data. This check is not very robust.
+        # If not there, maybe it is on the local machine under ~/data.
         elif '/pscratch/seales_uksr/' in label_img_path:
             label_img_path = label_img_path.replace('/pscratch/seales_uksr/', '')
             label_img_path = os.path.join(Path.home(), 'data', label_img_path)
             if os.path.isfile(label_img_path):
+                found_label_img = True
                 img = Image.open(label_img_path)
                 offset = (
                     len(k_fold_dirs) * col_width + (len(k_fold_dirs) + 1) * buffer_size,
                     sum(row_heights[:ppm_i]) + (ppm_i + 1) * buffer_size
                 )
                 frame.paste(img, offset)
+        if not found_label_img and not already_warned_about_missing_label_images:
+            warnings.warn(
+                'At least one label image not found, check if dataset locally available',
+                RuntimeWarning
+            )
+            already_warned_about_missing_label_images = True
 
     # Add footer
     footer = build_footer_img(width, footer_height, iteration, cmap_name)
@@ -316,7 +333,7 @@ def write_gif(animation, outfile, fps=10):
     # Optimize .gif file size
     prev_size = os.path.getsize(outfile)
     print('\nOptimizing .gif file', outfile)
-    pygifsicle.optimize(outfile)
+    pygifsicle.optimize(outfile, options=['-w'])
     new_size = os.path.getsize(outfile)
     reduction = (prev_size - new_size) / prev_size * 100
     print(f'Size reduced {reduction:.2f}% from {naturalsize(prev_size)} to {naturalsize(new_size)}')
@@ -439,11 +456,13 @@ def main():
     final_frame.save(os.path.join(out_dir, 'final.png'))
     print('done.')
 
+    color_maps_dir = os.path.join(out_dir, 'colormaps')
+    os.makedirs(color_maps_dir, exist_ok=True)
     for cmap in ['plasma', 'viridis', 'hot', 'seismic', 'Spectral', 'coolwarm']:
         print(f'\nCreating final static image with color map: {cmap}...')
         final_frame = build_frame('final', k_fold_dirs, ppms_from_metadata, label_type, args.static_max_size,
                                   cmap_name=cmap)
-        final_frame.save(os.path.join(out_dir, f'final_{cmap}.png'))
+        final_frame.save(os.path.join(color_maps_dir, f'final_{cmap}.png'))
         print('done.')
 
     # Transfer results via rclone if requested
