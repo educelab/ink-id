@@ -138,7 +138,7 @@ def get_prediction_image(iteration, k_fold_dir, ppm_name, return_latest_if_not_f
 def build_footer_img(width, height):
     footer = Image.new('RGB', (width, height))
     horizontal_offset = 0
-    divider_bar_size = int(width / 500)
+    divider_bar_size = max(1, int(width / 500))
     buffer_size = int(height / 8)
     # Fill with dark gray
     footer.paste((64, 64, 64), (0, 0, width, height))
@@ -163,13 +163,15 @@ def build_footer_img(width, height):
 def build_frame(iteration, k_fold_dirs, ppms, label_type, max_size=None):
     col_width = max([ppm['size'][0] for ppm in ppms.values()])
     row_heights = [ppm['size'][1] for ppm in ppms.values()]
-    width = col_width * (len(k_fold_dirs) + 1)
-    height = sum(row_heights)
+    buffer_size = int(col_width / 10)
+    width = col_width * (len(k_fold_dirs) + 1) + buffer_size * (len(k_fold_dirs) + 2)
+    height = sum(row_heights) + buffer_size * (len(row_heights) + 1)
     # Add space for footer
-    footer_height = int(height / 20)
+    footer_height = int(width / 16)
     height += footer_height
+    # Create empty frame
     frame = Image.new('RGB', (width, height))
-    footer = build_footer_img(width, footer_height)
+    # Add prediction images
     # One column at a time
     for k, k_fold_dir in enumerate(k_fold_dirs):
         # Make each row of this column
@@ -177,8 +179,12 @@ def build_frame(iteration, k_fold_dirs, ppms, label_type, max_size=None):
             ppm_path = os.path.splitext(os.path.basename(ppm['path']))[0]
             img = get_prediction_image(iteration, k_fold_dir, ppm_path)
             if img is not None:
-                offset = (k * col_width, sum(row_heights[:ppm_i]))
+                offset = (
+                    k * col_width + (k + 1) * buffer_size,
+                    sum(row_heights[:ppm_i]) + (ppm_i + 1) * buffer_size
+                )
                 frame.paste(img, offset)
+    # Add label column
     for ppm_i, ppm in enumerate(ppms.values()):
         if label_type == 'rgb_values':
             label_key = 'rgb-label'
@@ -198,10 +204,14 @@ def build_frame(iteration, k_fold_dirs, ppms, label_type, max_size=None):
             label_img_path = os.path.join(Path.home(), 'data', label_img_path)
             if os.path.isfile(label_img_path):
                 img = Image.open(label_img_path)
-                offset = (len(k_fold_dirs) * col_width, sum(row_heights[:ppm_i]))
+                offset = (
+                    len(k_fold_dirs) * col_width + (len(k_fold_dirs) + 1) * buffer_size,
+                    sum(row_heights[:ppm_i]) + (ppm_i + 1) * buffer_size
+                )
                 frame.paste(img, offset)
 
     # Add footer
+    footer = build_footer_img(width, footer_height)
     frame.paste(footer, (0, height - footer_height))
 
     # Downsize image while keeping aspect ratio
