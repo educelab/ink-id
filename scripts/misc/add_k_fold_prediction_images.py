@@ -135,15 +135,41 @@ def get_prediction_image(iteration, k_fold_dir, ppm_name, return_latest_if_not_f
     return None
 
 
+def build_footer_img(width, height):
+    footer = Image.new('RGB', (width, height))
+    horizontal_offset = 0
+    divider_bar_size = int(width / 500)
+    buffer_size = int(height / 8)
+    # Fill with dark gray
+    footer.paste((64, 64, 64), (0, 0, width, height))
+    # Add logos
+    for logo_filename in ['EduceLabBW.png', 'UK logo-white.png']:
+        logo_path = os.path.join(os.path.dirname(inkid.__file__), 'assets', logo_filename)
+        logo = Image.open(logo_path)
+        logo.thumbnail((100000, height - 2 * buffer_size), Image.BICUBIC)
+        logo_offset = (horizontal_offset + buffer_size, buffer_size)
+        # Third argument used as transparency mask. Convert to RGBA to force presence of alpha channel
+        footer.paste(logo, logo_offset, logo.convert('RGBA'))
+        horizontal_offset += logo.size[0] + 2 * buffer_size
+        # Add divider bar
+        footer.paste(
+            (104, 104, 104),
+            (horizontal_offset, 0, horizontal_offset + divider_bar_size, height)
+        )
+        horizontal_offset += divider_bar_size
+    return footer
+
+
 def build_frame(iteration, k_fold_dirs, ppms, label_type, max_size=None):
     col_width = max([ppm['size'][0] for ppm in ppms.values()])
     row_heights = [ppm['size'][1] for ppm in ppms.values()]
     width = col_width * (len(k_fold_dirs) + 1)
     height = sum(row_heights)
-    # Add space for logo
-    footer_height = int(height / 13)
+    # Add space for footer
+    footer_height = int(height / 20)
     height += footer_height
     frame = Image.new('RGB', (width, height))
+    footer = build_footer_img(width, footer_height)
     # One column at a time
     for k, k_fold_dir in enumerate(k_fold_dirs):
         # Make each row of this column
@@ -176,13 +202,7 @@ def build_frame(iteration, k_fold_dirs, ppms, label_type, max_size=None):
                 frame.paste(img, offset)
 
     # Add footer
-    frame.paste((64, 64, 64), (0, height - footer_height, width, height))
-    logo_height = footer_height
-    logo_path = os.path.join(os.path.dirname(inkid.__file__), 'assets', 'EduceLabBW.png')
-    logo = Image.open(logo_path)
-    logo.thumbnail((100000, logo_height), Image.BICUBIC)
-    logo_offset = (0, height - footer_height)
-    frame.paste(logo, logo_offset, logo.convert('RGBA'))
+    frame.paste(footer, (0, height - footer_height))
 
     # Downsize image while keeping aspect ratio
     if max_size is not None:
