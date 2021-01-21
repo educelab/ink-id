@@ -507,7 +507,7 @@ def main():
 
     color_maps_dir = os.path.join(out_dir, 'colormaps')
     os.makedirs(color_maps_dir, exist_ok=True)
-    for cmap in ['plasma', 'viridis', 'hot', 'seismic', 'Spectral', 'coolwarm']:
+    for cmap in ['plasma', 'viridis', 'hot', 'inferno', 'seismic', 'Spectral', 'coolwarm', 'bwr']:
         print(f'\nCreating final static image with color map: {cmap}...')
         final_frame = build_frame('final', k_fold_dirs, ppms_from_metadata, label_type, args.static_max_size,
                                   cmap_name=cmap)
