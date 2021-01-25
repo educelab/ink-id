@@ -162,7 +162,9 @@ def get_prediction_image(iteration, k_fold_dir, ppm_name, return_latest_if_not_f
         if img.mode == 'I':
             array = np.uint8(np.array(img) / 256)
             img = Image.fromarray(array)
-    return img.convert('RGB')
+        # Convert all to RGB since we might draw on them with color
+        img = img.convert('RGB')
+    return img
 
 
 def build_footer_img(width, height, iteration, label_type,
