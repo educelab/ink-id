@@ -348,11 +348,11 @@ def build_frame(iteration, k_fold_dir_to_metadata, ppms, label_type, max_size=No
         width = col_width * 2 + buffer_size * 3  # Only need space for one result column plus label column
     else:
         width = col_width * (len(k_fold_dirs) + 1) + buffer_size * (len(k_fold_dirs) + 2)
-    height = sum(row_heights) + buffer_size * (len(row_heights) + 1)
+    height = sum(row_heights) + buffer_size * (len(row_heights) + 2)
     # Add space for footer
     footer_height = int(width / 16)
-    line_width = int(footer_height / 40)
-    height += footer_height
+    rectangle_line_width = int(footer_height / 40)
+    height = height + footer_height
     # Create empty frame
     frame = Image.new('RGB', (width, height))
     # Add prediction images
@@ -368,12 +368,12 @@ def build_frame(iteration, k_fold_dir_to_metadata, ppms, label_type, max_size=No
                 if merge_all_of_same_ppm:
                     offset = (
                         buffer_size,
-                        sum(row_heights[:ppm_i]) + (ppm_i + 1) * buffer_size
+                        sum(row_heights[:ppm_i]) + (ppm_i + 2) * buffer_size
                     )
                 else:
                     offset = (
                         k * col_width + (k + 1) * buffer_size,
-                        sum(row_heights[:ppm_i]) + (ppm_i + 1) * buffer_size
+                        sum(row_heights[:ppm_i]) + (ppm_i + 2) * buffer_size
                     )
                 if cmap_name is not None:
                     color_map = cm.get_cmap(cmap_name)
@@ -398,13 +398,14 @@ def build_frame(iteration, k_fold_dir_to_metadata, ppms, label_type, max_size=No
                                 region['bounds'] = (0, 0, img.width, img.height)
                         draw = ImageDraw.Draw(new_img)
                         color = region_type_to_color[region_type]
-                        draw.rectangle(region['bounds'], outline=color, fill=None, width=line_width)
+                        draw.rectangle(region['bounds'], outline=color, fill=None, width=rectangle_line_width)
                 # When merging all predictions for same PPM, we don't want to overwrite other
                 # predictions with the blank part of this image. So, only paste the parts of this
                 # image that actually have content.
                 mask = new_img.convert('L')
                 mask = mask.point(lambda x: x > 0, mode='1')
                 frame.paste(new_img, offset, mask=mask)
+
     # Add label column
     for ppm_i, ppm in enumerate(ppms.values()):
         if label_type == 'rgb_values':
@@ -433,12 +434,12 @@ def build_frame(iteration, k_fold_dir_to_metadata, ppms, label_type, max_size=No
             if merge_all_of_same_ppm:
                 offset = (
                     col_width + buffer_size * 2,
-                    sum(row_heights[:ppm_i]) + (ppm_i + 1) * buffer_size
+                    sum(row_heights[:ppm_i]) + (ppm_i + 2) * buffer_size
                 )
             else:
                 offset = (
                     len(k_fold_dirs) * col_width + (len(k_fold_dirs) + 1) * buffer_size,
-                    sum(row_heights[:ppm_i]) + (ppm_i + 1) * buffer_size
+                    sum(row_heights[:ppm_i]) + (ppm_i + 2) * buffer_size
                 )
             frame.paste(label_img, offset)
         elif not already_warned_about_missing_label_images:
@@ -447,6 +448,81 @@ def build_frame(iteration, k_fold_dir_to_metadata, ppms, label_type, max_size=No
                 RuntimeWarning
             )
             already_warned_about_missing_label_images = True
+
+    # Make column headers
+    if merge_all_of_same_ppm:
+        draw = ImageDraw.Draw(frame)
+        font_path = os.path.join(os.path.dirname(inkid.__file__), 'assets', 'fonts', 'Roboto-Regular.ttf')
+        fontsize = 1
+        font_regular = ImageFont.truetype(font_path, fontsize)
+        txt = f'Combined runs'
+        allowed_width = col_width
+        while font_regular.getsize(txt)[0] < allowed_width and font_regular.getsize(txt)[1] < buffer_size:
+            fontsize += 1
+            font_regular = ImageFont.truetype(font_path, fontsize)
+        fontsize -= 1
+        offset_for_centering = int((col_width - font_regular.getsize(txt)[0]) / 2)
+        offset = (
+            buffer_size + offset_for_centering,
+            int(buffer_size * 0.5)
+        )
+        draw.text(
+            offset,
+            txt,
+            WHITE,
+            font=font_regular
+        )
+    else:
+        for k, k_fold_dir in enumerate(k_fold_dirs):
+            draw = ImageDraw.Draw(frame)
+            font_path = os.path.join(os.path.dirname(inkid.__file__), 'assets', 'fonts', 'Roboto-Regular.ttf')
+            fontsize = 1
+            font_regular = ImageFont.truetype(font_path, fontsize)
+            txt = f'Job {k}'
+            allowed_width = col_width
+            while font_regular.getsize(txt)[0] < allowed_width and font_regular.getsize(txt)[1] < buffer_size:
+                fontsize += 1
+                font_regular = ImageFont.truetype(font_path, fontsize)
+            fontsize -= 1
+            offset_for_centering = int((col_width - font_regular.getsize(txt)[0]) / 2)
+            offset = (
+                k * col_width + (k + 1) * buffer_size + offset_for_centering,
+                int(buffer_size * 0.5)
+            )
+            draw.text(
+                offset,
+                txt,
+                WHITE,
+                font=font_regular
+            )
+    draw = ImageDraw.Draw(frame)
+    font_path = os.path.join(os.path.dirname(inkid.__file__), 'assets', 'fonts', 'Roboto-Regular.ttf')
+    fontsize = 1
+    font_regular = ImageFont.truetype(font_path, fontsize)
+    txt = 'Label imaee'  # Hack because I don't want it to care about the part of the 'g' that sticks down
+    allowed_width = col_width
+    while font_regular.getsize(txt)[0] < allowed_width and font_regular.getsize(txt)[1] < buffer_size:
+        fontsize += 1
+        font_regular = ImageFont.truetype(font_path, fontsize)
+    fontsize -= 1
+    txt = 'Label image'
+    offset_for_centering = int((col_width - font_regular.getsize(txt)[0]) / 2)
+    if merge_all_of_same_ppm:
+        offset = (
+            col_width + buffer_size * 2 + offset_for_centering,
+            int(buffer_size * 0.5)
+        )
+    else:
+        offset = (
+            len(k_fold_dirs) * col_width + (len(k_fold_dirs) + 1) * buffer_size + offset_for_centering,
+            int(buffer_size * 0.5)
+        )
+    draw.text(
+        offset,
+        txt,
+        WHITE,
+        font=font_regular
+    )
 
     # Add footer
     footer = build_footer_img(width, footer_height, iteration, label_type,
