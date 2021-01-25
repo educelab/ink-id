@@ -20,6 +20,7 @@ Installation
     $ pip3 install -U virtualenv        # Install virtualenv
     $ virtualenv -p python3 .venv       # Create a new environment
     $ . .venv/bin/activate              # Activate the environment
+    (.venv) $ pip install -U pip        # Upgrade pip
     (.venv) $ pip install Cython numpy  # Install prerequisites
     (.venv) $ pip install -e .          # Install ink-id and dependencies
     (.venv) $ deactivate                # When finished, deactivate the environment
