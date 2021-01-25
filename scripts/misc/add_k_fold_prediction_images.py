@@ -30,6 +30,11 @@ import inkid
 # We might issue this warning but only need to do it once
 already_warned_about_missing_label_images = False
 
+WHITE = (255, 255, 255)
+LIGHT_GRAY = (104, 104, 104)
+DARK_GRAY = (64, 64, 64)
+RED = (255, 0, 0)
+
 
 # Return whether the given directory matches the expected structure for a k-fold job dir.
 # For example we often want a list of the k-fold subdirs in a directory but do not want
@@ -154,16 +159,16 @@ def get_prediction_image(iteration, k_fold_dir, ppm_name, return_latest_if_not_f
         if img.mode == 'I':
             array = np.uint8(np.array(img) / 256)
             img = Image.fromarray(array)
-    return img
+    return img.convert('RGB')
 
 
-def build_footer_img(width, height, iteration, label_type, cmap_name=None):
+def build_footer_img(width, height, iteration, label_type, cmap_name=None, label_training_regions=False):
     footer = Image.new('RGB', (width, height))
     horizontal_offset = 0
     divider_bar_size = max(1, int(width / 500))
     buffer_size = int(height / 8)
     # Fill with dark gray
-    footer.paste((64, 64, 64), (0, 0, width, height))
+    footer.paste(DARK_GRAY, (0, 0, width, height))
     # Add logos
     for logo_filename in ['EduceLabBW.png', 'UK logo-white.png']:
         logo_path = os.path.join(os.path.dirname(inkid.__file__), 'assets', logo_filename)
@@ -175,7 +180,7 @@ def build_footer_img(width, height, iteration, label_type, cmap_name=None):
         horizontal_offset += logo.size[0] + 2 * buffer_size
         # Add divider bar
         footer.paste(
-            (104, 104, 104),
+            LIGHT_GRAY,
             (horizontal_offset, 0, horizontal_offset + divider_bar_size, height)
         )
         horizontal_offset += divider_bar_size
@@ -193,7 +198,7 @@ def build_footer_img(width, height, iteration, label_type, cmap_name=None):
     draw.text(
         (horizontal_offset + buffer_size, buffer_size),
         txt,
-        (255, 255, 255),
+        WHITE,
         font=font_regular
     )
     font_w = font_regular.getsize(txt)[0] + 2 * buffer_size
@@ -204,13 +209,13 @@ def build_footer_img(width, height, iteration, label_type, cmap_name=None):
     draw.text(
         (horizontal_offset + buffer_size, allowed_font_height + 2 * buffer_size),
         iteration,
-        (255, 255, 255),
+        WHITE,
         font=font_black
     )
     horizontal_offset += font_w
     # Add divider bar
     footer.paste(
-        (104, 104, 104),
+        LIGHT_GRAY,
         (horizontal_offset, 0, horizontal_offset + divider_bar_size, height)
     )
     horizontal_offset += divider_bar_size
@@ -220,20 +225,20 @@ def build_footer_img(width, height, iteration, label_type, cmap_name=None):
         draw.text(
             (horizontal_offset + buffer_size, buffer_size),
             cmap_title,
-            (255, 255, 255),
+            WHITE,
             font=font_regular
         )
         draw.text(
             (horizontal_offset + buffer_size, allowed_font_height + 2 * buffer_size),
             cmap_name,
-            (255, 255, 255),
+            WHITE,
             font=font_black
         )
         font_w = max(font_regular.getsize(cmap_title)[0], font_black.getsize(cmap_name)[0])
         horizontal_offset += font_w + 2 * buffer_size
         # Add divider bar
         footer.paste(
-            (104, 104, 104),
+            LIGHT_GRAY,
             (horizontal_offset, 0, horizontal_offset + divider_bar_size, height)
         )
         horizontal_offset += divider_bar_size
@@ -255,7 +260,7 @@ def build_footer_img(width, height, iteration, label_type, cmap_name=None):
         draw.text(
             (horizontal_offset + buffer_size, buffer_size),
             swatch_title,
-            (255, 255, 255),
+            WHITE,
             font=font_regular
         )
         footer.paste(
@@ -265,15 +270,41 @@ def build_footer_img(width, height, iteration, label_type, cmap_name=None):
         horizontal_offset += swatch.width + 2 * buffer_size
         # Add divider bar
         footer.paste(
-            (104, 104, 104),
+            LIGHT_GRAY,
+            (horizontal_offset, 0, horizontal_offset + divider_bar_size, height)
+        )
+        horizontal_offset += divider_bar_size
+    if label_training_regions:
+        training_regions_title = 'training regions'
+        draw.text(
+            (horizontal_offset + buffer_size, buffer_size),
+            training_regions_title,
+            WHITE,
+            font=font_regular
+        )
+        draw = ImageDraw.Draw(footer)
+        x0 = horizontal_offset + buffer_size
+        y0 = allowed_font_height + 2 * buffer_size
+        x1 = x0 + font_regular.getsize(training_regions_title)[0]
+        y1 = y0 + font_regular.getsize(training_regions_title)[1]
+        draw.rectangle((x0, y0, x1, y1), outline=RED, fill=None, width=int(height / 40))
+        horizontal_offset += font_regular.getsize(training_regions_title)[0] + 2 * buffer_size
+        # Add divider bar
+        footer.paste(
+            LIGHT_GRAY,
             (horizontal_offset, 0, horizontal_offset + divider_bar_size, height)
         )
         horizontal_offset += divider_bar_size
     return footer
 
 
-def build_frame(iteration, k_fold_dirs, ppms, label_type, max_size=None, cmap_name=None):
+def build_frame(iteration, k_fold_dir_to_metadata, ppms, label_type, max_size=None, cmap_name=None,
+                label_training_regions=False):
+    # TODO: regions_to_include=['training', 'prediction', 'validation'],
+    #  merge_all_of_same_PPM=False
     global already_warned_about_missing_label_images
+
+    k_fold_dirs = k_fold_dir_to_metadata.keys()
     col_width = max([ppm['size'][0] for ppm in ppms.values()])
     row_heights = [ppm['size'][1] for ppm in ppms.values()]
     buffer_size = int(col_width / 10)
@@ -281,14 +312,17 @@ def build_frame(iteration, k_fold_dirs, ppms, label_type, max_size=None, cmap_na
     height = sum(row_heights) + buffer_size * (len(row_heights) + 1)
     # Add space for footer
     footer_height = int(width / 16)
+    line_width = int(footer_height / 40)
     height += footer_height
     # Create empty frame
     frame = Image.new('RGB', (width, height))
     # Add prediction images
     # One column at a time
     for k, k_fold_dir in enumerate(k_fold_dirs):
+        # Get metadata for this job
+        metadata = k_fold_dir_to_metadata[k_fold_dir]
         # Make each row of this column
-        for ppm_i, ppm in enumerate(ppms.values()):
+        for ppm_i, (ppm_name, ppm) in enumerate(ppms.items()):
             ppm_path = os.path.splitext(os.path.basename(ppm['path']))[0]
             img = get_prediction_image(iteration, k_fold_dir, ppm_path)
             if img is not None:
@@ -301,6 +335,14 @@ def build_frame(iteration, k_fold_dirs, ppms, label_type, max_size=None, cmap_na
                     img = img.convert('L')
                     img_data = np.array(img)
                     img = Image.fromarray(np.uint8(color_map(img_data) * 255))
+                if label_training_regions:
+                    training_regions = metadata['Region set']['regions']['training']
+                    for region in training_regions:
+                        if region['ppm'] == ppm_name:
+                            if 'bounds' not in region:
+                                region['bounds'] = (0, 0, img.width, img.height)
+                        draw = ImageDraw.Draw(img)
+                        draw.rectangle(region['bounds'], outline=RED, fill=None, width=line_width)
                 frame.paste(img, offset)
     # Add label column
     for ppm_i, ppm in enumerate(ppms.values()):
@@ -340,7 +382,8 @@ def build_frame(iteration, k_fold_dirs, ppms, label_type, max_size=None, cmap_na
             already_warned_about_missing_label_images = True
 
     # Add footer
-    footer = build_footer_img(width, footer_height, iteration, label_type, cmap_name)
+    footer = build_footer_img(width, footer_height, iteration, label_type, cmap_name,
+                              label_training_regions)
     frame.paste(footer, (0, height - footer_height))
 
     # Downsize image while keeping aspect ratio
@@ -429,17 +472,20 @@ def main():
         print(f'\t{d}')
 
     # Get PPM data, and list of all iterations encountered across jobs (some might have more than others)
-    metadata_file_used = None
-    metadata = None
+    # Start by storing a dict where we map the directory name to the metadata for that job
+    k_fold_dir_to_metadata = dict()
     ppms_from_metadata = None
     # Iterate through k_fold dirs
     for k_fold_dir in k_fold_dirs:
-        # If this is the first one, get metadata.json and read the PPM information
-        if metadata_file_used is None:
-            metadata_file_used = os.path.join(k_fold_dir, 'metadata.json')
-            with open(metadata_file_used) as f:
-                metadata = json.loads(f.read())
-                ppms_from_metadata = metadata['Region set']['ppms']
+        # Read the metadata file and store each of them (we need the region info
+        # from all k_fold directories)
+        metadata_file = os.path.join(k_fold_dir, 'metadata.json')
+        with open(metadata_file) as f:
+            metadata = json.loads(f.read())
+            k_fold_dir_to_metadata[k_fold_dir] = metadata
+
+        # Useful to separately store just the PPM info (should be same across all jobs)
+        ppms_from_metadata = list(k_fold_dir_to_metadata.values())[0]['Region set']['ppms']
 
         # Look in predictions directory to get all iterations from prediction images
         pred_dir = os.path.join(k_fold_dir, 'predictions')
@@ -470,9 +516,9 @@ def main():
                             iteration = 'final'
                         if iteration is not None and iteration not in ppm['iterations']:
                             ppm['iterations'].append(iteration)
-    print(f'\nFound PPMs from {metadata_file_used}:')
+    print(f'\nFound PPMs:')
     for ppm in ppms_from_metadata.keys():
-        print(f'\t{ppm} {ppms_from_metadata[ppm]["size"]}')
+        print(f'\t{ppm}, size: {ppms_from_metadata[ppm]["size"]}')
 
     encountered_iterations = set()
     for ppm in ppms_from_metadata.values():
@@ -482,37 +528,38 @@ def main():
 
     label_type = metadata.get('Arguments').get('label_type')
 
-    # Tensorboard
-    print('\nCreating Tensorboard plots...')
-    create_tensorboard_plots(args.dir, out_dir)
-    print('done.')
-
-    # Generate training animation
-    print('\nCreating animation:')
-    animation = create_animation(k_fold_dirs, encountered_iterations,
-                                 ppms_from_metadata, label_type, args.gif_max_size)
-
-    # Write to image sequence
-    if args.img_seq is not None:
-        write_img_sequence(animation, args.img_seq)
-
-    # Write to gif
-    write_gif(animation, os.path.join(out_dir, 'training.gif'), args.gif_fps)
+    # # Tensorboard
+    # print('\nCreating Tensorboard plots...')
+    # create_tensorboard_plots(args.dir, out_dir)
+    # print('done.')
+    #
+    # # Generate training animation
+    # print('\nCreating animation:')
+    # animation = create_animation(k_fold_dirs, encountered_iterations,
+    #                              ppms_from_metadata, label_type, args.gif_max_size)
+    #
+    # # Write to image sequence
+    # if args.img_seq is not None:
+    #     write_img_sequence(animation, args.img_seq)
+    #
+    # # Write to gif
+    # write_gif(animation, os.path.join(out_dir, 'training.gif'), args.gif_fps)
 
     # Write final frame to static image
     print('\nCreating final static image...')
-    final_frame = build_frame('final', k_fold_dirs, ppms_from_metadata, label_type, args.static_max_size)
+    final_frame = build_frame('final', k_fold_dir_to_metadata, ppms_from_metadata, label_type,
+                              args.static_max_size, label_training_regions=True)
     final_frame.save(os.path.join(out_dir, 'final.png'))
     print('done.')
-
-    color_maps_dir = os.path.join(out_dir, 'colormaps')
-    os.makedirs(color_maps_dir, exist_ok=True)
-    for cmap in ['plasma', 'viridis', 'hot', 'inferno', 'seismic', 'Spectral', 'coolwarm', 'bwr']:
-        print(f'\nCreating final static image with color map: {cmap}...')
-        final_frame = build_frame('final', k_fold_dirs, ppms_from_metadata, label_type, args.static_max_size,
-                                  cmap_name=cmap)
-        final_frame.save(os.path.join(color_maps_dir, f'final_{cmap}.png'))
-        print('done.')
+    #
+    # color_maps_dir = os.path.join(out_dir, 'colormaps')
+    # os.makedirs(color_maps_dir, exist_ok=True)
+    # for cmap in ['plasma', 'viridis', 'hot', 'inferno', 'seismic', 'Spectral', 'coolwarm', 'bwr']:
+    #     print(f'\nCreating final static image with color map: {cmap}...')
+    #     final_frame = build_frame('final', k_fold_dirs, ppms_from_metadata, label_type, args.static_max_size,
+    #                               cmap_name=cmap)
+    #     final_frame.save(os.path.join(color_maps_dir, f'final_{cmap}.png'))
+    #     print('done.')
 
     # Transfer results via rclone if requested
     inkid.ops.rclone_transfer_to_remote(args.rclone_transfer_remote, args.dir)
