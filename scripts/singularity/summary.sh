@@ -12,4 +12,4 @@
 
 module load ccs/singularity
 
-time singularity run --overlay inkid.overlay inkid.sif inkid-summary "$1" --all
+time singularity run --overlay inkid.overlay inkid.sif inkid-summary "$1"

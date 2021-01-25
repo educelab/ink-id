@@ -296,8 +296,6 @@ def build_footer_img(width, height, iteration, label_type,
             regions_txt += ', '
         if len(regions_shown) == 1:
             regions_txt += ' only'
-    if len(regions_shown) == 1:
-        regions_txt += ' only'
     draw.text(
         (horizontal_offset + buffer_size, allowed_font_height + 2 * buffer_size),
         regions_txt,
@@ -333,20 +331,23 @@ def build_footer_img(width, height, iteration, label_type,
 
 
 def build_frame(iteration, k_fold_dir_to_metadata, ppms, label_type, max_size=None,
-                regions_to_include=None, regions_to_label=None, cmap_name=None):
-    # TODO: merge_all_of_same_PPM=False
+                regions_to_include=None, regions_to_label=None, cmap_name=None,
+                merge_all_of_same_ppm=False):
     global already_warned_about_missing_label_images
 
     if regions_to_include is None:
         regions_to_include = ['training', 'prediction', 'validation']
     if regions_to_label is None:
-        regions_to_label = ['training']
+        regions_to_label = []
 
     k_fold_dirs = k_fold_dir_to_metadata.keys()
     col_width = max([ppm['size'][0] for ppm in ppms.values()])
     row_heights = [ppm['size'][1] for ppm in ppms.values()]
     buffer_size = int(col_width / 10)
-    width = col_width * (len(k_fold_dirs) + 1) + buffer_size * (len(k_fold_dirs) + 2)
+    if merge_all_of_same_ppm:
+        width = col_width * 2 + buffer_size * 3  # Only need space for one result column plus label column
+    else:
+        width = col_width * (len(k_fold_dirs) + 1) + buffer_size * (len(k_fold_dirs) + 2)
     height = sum(row_heights) + buffer_size * (len(row_heights) + 1)
     # Add space for footer
     footer_height = int(width / 16)
@@ -364,10 +365,16 @@ def build_frame(iteration, k_fold_dir_to_metadata, ppms, label_type, max_size=No
             ppm_path = os.path.splitext(os.path.basename(ppm['path']))[0]
             img = get_prediction_image(iteration, k_fold_dir, ppm_path)
             if img is not None:
-                offset = (
-                    k * col_width + (k + 1) * buffer_size,
-                    sum(row_heights[:ppm_i]) + (ppm_i + 1) * buffer_size
-                )
+                if merge_all_of_same_ppm:
+                    offset = (
+                        buffer_size,
+                        sum(row_heights[:ppm_i]) + (ppm_i + 1) * buffer_size
+                    )
+                else:
+                    offset = (
+                        k * col_width + (k + 1) * buffer_size,
+                        sum(row_heights[:ppm_i]) + (ppm_i + 1) * buffer_size
+                    )
                 if cmap_name is not None:
                     color_map = cm.get_cmap(cmap_name)
                     img = img.convert('L')
@@ -392,7 +399,12 @@ def build_frame(iteration, k_fold_dir_to_metadata, ppms, label_type, max_size=No
                         draw = ImageDraw.Draw(new_img)
                         color = region_type_to_color[region_type]
                         draw.rectangle(region['bounds'], outline=color, fill=None, width=line_width)
-                frame.paste(new_img, offset)
+                # When merging all predictions for same PPM, we don't want to overwrite other
+                # predictions with the blank part of this image. So, only paste the parts of this
+                # image that actually have content.
+                mask = new_img.convert('L')
+                mask = mask.point(lambda x: x > 0, mode='1')
+                frame.paste(new_img, offset, mask=mask)
     # Add label column
     for ppm_i, ppm in enumerate(ppms.values()):
         if label_type == 'rgb_values':
@@ -418,10 +430,16 @@ def build_frame(iteration, k_fold_dir_to_metadata, ppms, label_type, max_size=No
                 label_img = label_img.convert('L')
                 img_data = np.array(label_img)
                 label_img = Image.fromarray(np.uint8(color_map(img_data) * 255))
-            offset = (
-                len(k_fold_dirs) * col_width + (len(k_fold_dirs) + 1) * buffer_size,
-                sum(row_heights[:ppm_i]) + (ppm_i + 1) * buffer_size
-            )
+            if merge_all_of_same_ppm:
+                offset = (
+                    col_width + buffer_size * 2,
+                    sum(row_heights[:ppm_i]) + (ppm_i + 1) * buffer_size
+                )
+            else:
+                offset = (
+                    len(k_fold_dirs) * col_width + (len(k_fold_dirs) + 1) * buffer_size,
+                    sum(row_heights[:ppm_i]) + (ppm_i + 1) * buffer_size
+                )
             frame.paste(label_img, offset)
         elif not already_warned_about_missing_label_images:
             warnings.warn(
@@ -442,12 +460,14 @@ def build_frame(iteration, k_fold_dir_to_metadata, ppms, label_type, max_size=No
     return frame
 
 
-def create_animation(k_fold_dirs, iterations, ppms, label_type, max_size):
+def create_animation(filename, fps, iterations, write_sequence, *args, **kwargs):
     animation = []
     for iteration in tqdm(iterations):
-        frame = build_frame(iteration, k_fold_dirs, ppms, label_type, max_size)
+        frame = build_frame(iteration, *args, **kwargs)
         animation.append(frame)
-    return animation
+    write_gif(animation, filename + '.gif', fps=fps)
+    if write_sequence:
+        write_img_sequence(animation, filename)
 
 
 def write_img_sequence(animation, outdir):
@@ -496,8 +516,8 @@ def main():
     # Input directory with job output
     parser.add_argument('dir', metavar='path', help='input directory')
     # Image generation options
-    parser.add_argument('--img-seq', default=None,
-                        help='Generate an image sequence and save it to the provided directory')
+    parser.add_argument('--img-seq', action='store_true',
+                        help='Save an image sequence for any animations made')
     parser.add_argument('--gif-fps', default=10, type=int, help='GIF frames per second')
     parser.add_argument('--gif-max-size', type=int, nargs=2, default=[1920, 1080])
     parser.add_argument('--static-max-size', type=int, nargs=2, default=[3840, 2160])
@@ -577,38 +597,55 @@ def main():
 
     label_type = metadata.get('Arguments').get('label_type')
 
-    # # Tensorboard
-    # print('\nCreating Tensorboard plots...')
-    # create_tensorboard_plots(args.dir, out_dir)
-    # print('done.')
-    #
-    # # Generate training animation
-    # print('\nCreating animation:')
-    # animation = create_animation(k_fold_dirs, encountered_iterations,
-    #                              ppms_from_metadata, label_type, args.gif_max_size)
-    #
-    # # Write to image sequence
-    # if args.img_seq is not None:
-    #     write_img_sequence(animation, args.img_seq)
-    #
-    # # Write to gif
-    # write_gif(animation, os.path.join(out_dir, 'training.gif'), args.gif_fps)
-
-    # Write final frame to static image
-    print('\nCreating final static image...')
-    final_frame = build_frame('final', k_fold_dir_to_metadata, ppms_from_metadata, label_type,
-                              args.static_max_size)
-    final_frame.save(os.path.join(out_dir, 'final.png'))
+    # Tensorboard
+    print('\nCreating Tensorboard plots...')
+    create_tensorboard_plots(args.dir, out_dir)
     print('done.')
-    #
-    # color_maps_dir = os.path.join(out_dir, 'colormaps')
-    # os.makedirs(color_maps_dir, exist_ok=True)
-    # for cmap in ['plasma', 'viridis', 'hot', 'inferno', 'seismic', 'Spectral', 'coolwarm', 'bwr']:
-    #     print(f'\nCreating final static image with color map: {cmap}...')
-    #     final_frame = build_frame('final', k_fold_dirs, ppms_from_metadata, label_type, args.static_max_size,
-    #                               cmap_name=cmap)
-    #     final_frame.save(os.path.join(color_maps_dir, f'final_{cmap}.png'))
-    #     print('done.')
+
+    # Static images
+    print('\nCreating final static image with all regions...')
+    final_frame = build_frame('final', k_fold_dir_to_metadata, ppms_from_metadata, label_type,
+                              args.static_max_size, regions_to_label=['training'])
+    final_frame.save(os.path.join(out_dir, 'final_all.png'))
+    print('done.')
+
+    print('\nCreating final static image with only prediction regions...')
+    final_frame = build_frame('final', k_fold_dir_to_metadata, ppms_from_metadata, label_type,
+                              args.static_max_size, regions_to_include=['prediction'],
+                              merge_all_of_same_ppm=True)
+    final_frame.save(os.path.join(out_dir, 'final_prediction.png'))
+    print('done.')
+
+    # Color map images
+    color_maps_dir = os.path.join(out_dir, 'colormaps')
+    os.makedirs(color_maps_dir, exist_ok=True)
+    for cmap in ['plasma', 'viridis', 'hot', 'inferno', 'seismic', 'Spectral', 'coolwarm', 'bwr']:
+        print(f'\nCreating final static image with all regions and color map: {cmap}...')
+        final_frame = build_frame('final', k_fold_dir_to_metadata, ppms_from_metadata, label_type,
+                                  args.static_max_size, cmap_name=cmap, regions_to_label=['training'])
+        final_frame.save(os.path.join(color_maps_dir, f'final_all_{cmap}.png'))
+        print('done.')
+
+        print(f'\nCreating final static image with prediction regions and color map: {cmap}...')
+        final_frame = build_frame('final', k_fold_dir_to_metadata, ppms_from_metadata, label_type,
+                                  args.static_max_size, cmap_name=cmap, regions_to_include=['prediction'],
+                                  merge_all_of_same_ppm=True)
+        final_frame.save(os.path.join(color_maps_dir, f'final_prediction_{cmap}.png'))
+        print('done.')
+
+    # Gifs
+    print('\nCreating animation with all regions:')
+    create_animation(os.path.join(out_dir, 'animation_all'), args.gif_fps, encountered_iterations,
+                     args.img_seq, k_fold_dir_to_metadata,
+                     ppms_from_metadata, label_type, args.gif_max_size,
+                     regions_to_label=['training'])
+
+    print('\nCreating animation with only prediction regions:')
+    create_animation(os.path.join(out_dir, 'animation_prediction'), args.gif_fps, encountered_iterations,
+                     args.img_seq, k_fold_dir_to_metadata,
+                     ppms_from_metadata, label_type, args.gif_max_size,
+                     regions_to_include=['prediction'],
+                     merge_all_of_same_ppm=True)
 
     # Transfer results via rclone if requested
     inkid.ops.rclone_transfer_to_remote(args.rclone_transfer_remote, args.dir)
