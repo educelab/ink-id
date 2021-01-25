@@ -402,9 +402,9 @@ def build_frame(iteration, k_fold_dir_to_metadata, ppms, label_type, max_size=No
                         if region['ppm'] == ppm_name:
                             if 'bounds' not in region:
                                 region['bounds'] = (0, 0, img.width, img.height)
-                        draw = ImageDraw.Draw(new_img)
-                        color = region_type_to_color[region_type]
-                        draw.rectangle(region['bounds'], outline=color, fill=None, width=rectangle_line_width)
+                            draw = ImageDraw.Draw(new_img)
+                            color = region_type_to_color[region_type]
+                            draw.rectangle(region['bounds'], outline=color, fill=None, width=rectangle_line_width)
                 # When merging all predictions for same PPM, we don't want to overwrite other
                 # predictions with the blank part of this image. So, only paste the parts of this
                 # image that actually have content.
