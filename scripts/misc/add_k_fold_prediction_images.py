@@ -349,6 +349,12 @@ def build_frame(iteration, k_fold_dir_to_metadata, ppms, label_type, max_size=No
     else:
         width = col_width * (len(k_fold_dirs) + 1) + buffer_size * (len(k_fold_dirs) + 2)
     height = sum(row_heights) + buffer_size * (len(row_heights) + 2)
+    # Prevent weird aspect ratios
+    width_pad_offset = 0
+    if width < height * 0.7:
+        old_width = width
+        width = int(height * 0.7)
+        width_pad_offset = int((width - old_width) / 2)
     # Add space for footer
     footer_height = int(width / 16)
     rectangle_line_width = int(footer_height / 40)
@@ -367,12 +373,12 @@ def build_frame(iteration, k_fold_dir_to_metadata, ppms, label_type, max_size=No
             if img is not None:
                 if merge_all_of_same_ppm:
                     offset = (
-                        buffer_size,
+                        width_pad_offset + buffer_size,
                         sum(row_heights[:ppm_i]) + (ppm_i + 2) * buffer_size
                     )
                 else:
                     offset = (
-                        k * col_width + (k + 1) * buffer_size,
+                        width_pad_offset + k * col_width + (k + 1) * buffer_size,
                         sum(row_heights[:ppm_i]) + (ppm_i + 2) * buffer_size
                     )
                 if cmap_name is not None:
@@ -433,12 +439,12 @@ def build_frame(iteration, k_fold_dir_to_metadata, ppms, label_type, max_size=No
                 label_img = Image.fromarray(np.uint8(color_map(img_data) * 255))
             if merge_all_of_same_ppm:
                 offset = (
-                    col_width + buffer_size * 2,
+                    width_pad_offset + col_width + buffer_size * 2,
                     sum(row_heights[:ppm_i]) + (ppm_i + 2) * buffer_size
                 )
             else:
                 offset = (
-                    len(k_fold_dirs) * col_width + (len(k_fold_dirs) + 1) * buffer_size,
+                    width_pad_offset + len(k_fold_dirs) * col_width + (len(k_fold_dirs) + 1) * buffer_size,
                     sum(row_heights[:ppm_i]) + (ppm_i + 2) * buffer_size
                 )
             frame.paste(label_img, offset)
@@ -463,7 +469,7 @@ def build_frame(iteration, k_fold_dir_to_metadata, ppms, label_type, max_size=No
         fontsize -= 1
         offset_for_centering = int((col_width - font_regular.getsize(txt)[0]) / 2)
         offset = (
-            buffer_size + offset_for_centering,
+            width_pad_offset + buffer_size + offset_for_centering,
             int(buffer_size * 0.5)
         )
         draw.text(
@@ -486,7 +492,7 @@ def build_frame(iteration, k_fold_dir_to_metadata, ppms, label_type, max_size=No
             fontsize -= 1
             offset_for_centering = int((col_width - font_regular.getsize(txt)[0]) / 2)
             offset = (
-                k * col_width + (k + 1) * buffer_size + offset_for_centering,
+                width_pad_offset + k * col_width + (k + 1) * buffer_size + offset_for_centering,
                 int(buffer_size * 0.5)
             )
             draw.text(
@@ -509,12 +515,12 @@ def build_frame(iteration, k_fold_dir_to_metadata, ppms, label_type, max_size=No
     offset_for_centering = int((col_width - font_regular.getsize(txt)[0]) / 2)
     if merge_all_of_same_ppm:
         offset = (
-            col_width + buffer_size * 2 + offset_for_centering,
+            width_pad_offset + col_width + buffer_size * 2 + offset_for_centering,
             int(buffer_size * 0.5)
         )
     else:
         offset = (
-            len(k_fold_dirs) * col_width + (len(k_fold_dirs) + 1) * buffer_size + offset_for_centering,
+            width_pad_offset + len(k_fold_dirs) * col_width + (len(k_fold_dirs) + 1) * buffer_size + offset_for_centering,
             int(buffer_size * 0.5)
         )
     draw.text(
