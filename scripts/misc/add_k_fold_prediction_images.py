@@ -34,6 +34,9 @@ WHITE = (255, 255, 255)
 LIGHT_GRAY = (104, 104, 104)
 DARK_GRAY = (64, 64, 64)
 RED = (255, 0, 0)
+BLUE = (0, 0, 255)
+YELLOW = (255, 255, 0)
+region_type_to_color = {'training': RED, 'prediction': YELLOW, 'validation': BLUE}
 
 
 # Return whether the given directory matches the expected structure for a k-fold job dir.
@@ -162,7 +165,8 @@ def get_prediction_image(iteration, k_fold_dir, ppm_name, return_latest_if_not_f
     return img.convert('RGB')
 
 
-def build_footer_img(width, height, iteration, label_type, cmap_name=None, label_training_regions=False):
+def build_footer_img(width, height, iteration, label_type,
+                     regions_shown, regions_to_label, cmap_name=None):
     footer = Image.new('RGB', (width, height))
     horizontal_offset = 0
     divider_bar_size = max(1, int(width / 500))
@@ -274,35 +278,69 @@ def build_footer_img(width, height, iteration, label_type, cmap_name=None, label
             (horizontal_offset, 0, horizontal_offset + divider_bar_size, height)
         )
         horizontal_offset += divider_bar_size
-    if label_training_regions:
-        training_regions_title = 'training regions'
-        draw.text(
-            (horizontal_offset + buffer_size, buffer_size),
-            training_regions_title,
-            WHITE,
-            font=font_regular
-        )
-        draw = ImageDraw.Draw(footer)
-        x0 = horizontal_offset + buffer_size
-        y0 = allowed_font_height + 2 * buffer_size
-        x1 = x0 + font_regular.getsize(training_regions_title)[0]
-        y1 = y0 + font_regular.getsize(training_regions_title)[1]
-        draw.rectangle((x0, y0, x1, y1), outline=RED, fill=None, width=int(height / 40))
-        horizontal_offset += font_regular.getsize(training_regions_title)[0] + 2 * buffer_size
-        # Add divider bar
-        footer.paste(
-            LIGHT_GRAY,
-            (horizontal_offset, 0, horizontal_offset + divider_bar_size, height)
-        )
-        horizontal_offset += divider_bar_size
+    regions_title = 'regions shown'
+    draw.text(
+        (horizontal_offset + buffer_size, buffer_size),
+        regions_title,
+        WHITE,
+        font=font_regular
+    )
+    regions_txt = ''
+    for i, region_type in enumerate(regions_shown):
+        regions_txt += region_type
+        # Leave space for legend rectangle to surround word
+        if region_type in regions_to_label:
+            regions_txt += ' '
+        # Add commas between words
+        if i != len(regions_shown) - 1:
+            regions_txt += ', '
+        if len(regions_shown) == 1:
+            regions_txt += ' only'
+    if len(regions_shown) == 1:
+        regions_txt += ' only'
+    draw.text(
+        (horizontal_offset + buffer_size, allowed_font_height + 2 * buffer_size),
+        regions_txt,
+        WHITE,
+        font=font_black
+    )
+    font_w = max(font_regular.getsize(regions_title)[0], font_black.getsize(regions_txt)[0])
+    for region_type in regions_to_label:
+        if region_type in regions_txt:
+            preceding_txt = regions_txt.partition(region_type)[0]
+            x0 = horizontal_offset + buffer_size + font_black.getsize(preceding_txt)[0]
+            label_w = font_black.getsize(region_type)[0]
+            x1 = x0 + label_w
+            y0 = allowed_font_height + 2 * buffer_size
+            label_h = font_black.getsize(regions_txt)[1]
+            y1 = y0 + label_h
+            # Pad these a bit to not be right on the text
+            x0 -= int(buffer_size / 2)
+            y0 -= int(buffer_size / 2)
+            x1 += int(buffer_size / 2)
+            y1 += int(buffer_size / 2)
+            color = region_type_to_color[region_type]
+            draw = ImageDraw.Draw(footer)
+            draw.rectangle((x0, y0, x1, y1), outline=color, fill=None, width=int(height / 40))
+    horizontal_offset += font_w + 2 * buffer_size
+    # Add divider bar
+    footer.paste(
+        LIGHT_GRAY,
+        (horizontal_offset, 0, horizontal_offset + divider_bar_size, height)
+    )
+    horizontal_offset += divider_bar_size
     return footer
 
 
-def build_frame(iteration, k_fold_dir_to_metadata, ppms, label_type, max_size=None, cmap_name=None,
-                label_training_regions=False):
-    # TODO: regions_to_include=['training', 'prediction', 'validation'],
-    #  merge_all_of_same_PPM=False
+def build_frame(iteration, k_fold_dir_to_metadata, ppms, label_type, max_size=None,
+                regions_to_include=None, regions_to_label=None, cmap_name=None):
+    # TODO: merge_all_of_same_PPM=False
     global already_warned_about_missing_label_images
+
+    if regions_to_include is None:
+        regions_to_include = ['training', 'prediction', 'validation']
+    if regions_to_label is None:
+        regions_to_label = ['training']
 
     k_fold_dirs = k_fold_dir_to_metadata.keys()
     col_width = max([ppm['size'][0] for ppm in ppms.values()])
@@ -335,15 +373,26 @@ def build_frame(iteration, k_fold_dir_to_metadata, ppms, label_type, max_size=No
                     img = img.convert('L')
                     img_data = np.array(img)
                     img = Image.fromarray(np.uint8(color_map(img_data) * 255))
-                if label_training_regions:
-                    training_regions = metadata['Region set']['regions']['training']
-                    for region in training_regions:
+                # Only keep those regions we are interested in
+                new_img = Image.new('RGB', (img.width, img.height))
+                region_set = metadata['Region set']['regions']
+                for region_type, regions in region_set.items():
+                    if region_type in regions_to_include:
+                        for region in regions:
+                            if 'bounds' not in region:
+                                region['bounds'] = (0, 0, img.width, img.height)
+                            region_img = img.crop(region['bounds'])
+                            new_img.paste(region_img, (region['bounds'][0], region['bounds'][1]))
+                for region_type in regions_to_label:
+                    regions = region_set[region_type]
+                    for region in regions:
                         if region['ppm'] == ppm_name:
                             if 'bounds' not in region:
                                 region['bounds'] = (0, 0, img.width, img.height)
-                        draw = ImageDraw.Draw(img)
-                        draw.rectangle(region['bounds'], outline=RED, fill=None, width=line_width)
-                frame.paste(img, offset)
+                        draw = ImageDraw.Draw(new_img)
+                        color = region_type_to_color[region_type]
+                        draw.rectangle(region['bounds'], outline=color, fill=None, width=line_width)
+                frame.paste(new_img, offset)
     # Add label column
     for ppm_i, ppm in enumerate(ppms.values()):
         if label_type == 'rgb_values':
@@ -382,8 +431,8 @@ def build_frame(iteration, k_fold_dir_to_metadata, ppms, label_type, max_size=No
             already_warned_about_missing_label_images = True
 
     # Add footer
-    footer = build_footer_img(width, footer_height, iteration, label_type, cmap_name,
-                              label_training_regions)
+    footer = build_footer_img(width, footer_height, iteration, label_type,
+                              regions_to_include, regions_to_label, cmap_name)
     frame.paste(footer, (0, height - footer_height))
 
     # Downsize image while keeping aspect ratio
@@ -548,7 +597,7 @@ def main():
     # Write final frame to static image
     print('\nCreating final static image...')
     final_frame = build_frame('final', k_fold_dir_to_metadata, ppms_from_metadata, label_type,
-                              args.static_max_size, label_training_regions=True)
+                              args.static_max_size)
     final_frame.save(os.path.join(out_dir, 'final.png'))
     print('done.')
     #
