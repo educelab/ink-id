@@ -1,9 +1,9 @@
 Bootstrap: library
-From: ubuntu:16.04
+From: ubuntu:20.04
 
 %labels
   MAINTAINER Stephen Parsons <stephen.parsons@uky.edu>, Mami Hayashida <mami.hayashida@uky.edu>
-  OS Ubuntu 16.04
+  OS Ubuntu 20.04
 
 %files
   /tmp/ink-id /usr/local/dri/ink-id
@@ -17,20 +17,25 @@ From: ubuntu:16.04
   # Store git credentials for up to an hour (in overlay, not container) for convenience
   git config --global credential.helper cache
   git config --global credential.helper 'cache --timeout=3600'
-  # Required to make python3.7 available
+  # To make add-apt-repository available
   apt install -y software-properties-common
+  # To make python3.8 available
   add-apt-repository -y ppa:deadsnakes/ppa
+  # To make python3-pip available
+  add-apt-repository -y universe
   apt update
   # Python installs
-  apt install -y python3.7-dev python3-pip
+  apt install -y python3.8-dev python3-pip
   pip3 install --upgrade pip
   pip install --upgrade virtualenv
   # Needed for pygifsicle
   apt install -y gifsicle
   # Create a virtualenv for this project
-  virtualenv --python=python3.7 /usr/local/dri/ink-id/.venv
+  virtualenv --python=python3.8 /usr/local/dri/ink-id/.venv
   # Activate virtualenv
   . /usr/local/dri/ink-id/.venv/bin/activate
+  # Update pip
+  pip install --upgrade pip
   # Remove locally installed inkid from requirements file, we want to install that separately
   sed -i '/ink-id.git/d' /usr/local/dri/ink-id/requirements.txt
   # Install the exact versions of all of the dependencies
