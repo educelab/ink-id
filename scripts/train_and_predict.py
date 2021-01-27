@@ -204,6 +204,12 @@ def main():
         parser.print_help()
         return
 
+    # Make sure output does not already have contents
+    if os.path.isdir(args.output):
+        if len(os.listdir(args.output)) > 0:
+            logging.error('Provided output directory must be empty')
+            return
+
     # If this is one of a k-fold cross-validation job, then append k to the output path
     # Whether or not that is the case, go ahead and create the output directory
     if args.k is None:

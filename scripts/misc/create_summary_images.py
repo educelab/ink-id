@@ -39,15 +39,28 @@ YELLOW = (255, 255, 0)
 region_type_to_color = {'training': RED, 'prediction': YELLOW, 'validation': BLUE}
 
 
-# Return whether the given directory matches the expected structure for a k-fold job dir.
+# Return whether the given directory matches the expected structure for a job dir.
 # For example we often want a list of the k-fold subdirs in a directory but do not want
 # e.g. previous summary subdirs, or others.
+def is_job_dir(dirname):
+    # k-fold job
+    if is_k_fold_dir(dirname):
+        return True
+    # Standard job
+    dirname = os.path.basename(dirname)
+    if re.match(r'.*\d\d\d\d-\d\d-\d\d_\d\d\.\d\d\.\d\d$', dirname):
+        return True
+    # Must be something else
+    return False
+
+
+# Sometimes we want to know specifically if it is a k-fold job directory
 def is_k_fold_dir(dirname):
     dirname = os.path.basename(dirname)
-    return re.match(r'.*\d\d\d\d-\d\d-\d\d_\d\d\.\d\d\.\d\d_(\d+)', dirname)
+    return re.match(r'.*\d\d\d\d-\d\d-\d\d_\d\d\.\d\d\.\d\d_(\d+)$', dirname)
 
 
-# Return which k-fold job this directory corresponds to.
+# Return which k-fold job this directory corresponds to (if any, -1 otherwise).
 # For the purpose of sorting a list of dirs based on job #.
 def k_from_dir(dirname):
     # Only has a valid k-fold # if it matches this particular format
@@ -61,10 +74,10 @@ def k_from_dir(dirname):
 
 # Return a set of all iterations encountered in a k-fold directory
 # Optionally restrict to those of only a particular PPM
-def iterations_in_k_fold_dir(k_fold_dir, ppm_name=None):
+def iterations_in_job_dir(job_dir, ppm_name=None):
     iterations = set()
     # Look in predictions directory to get all iterations from prediction images
-    pred_dir = os.path.join(k_fold_dir, 'predictions')
+    pred_dir = os.path.join(job_dir, 'predictions')
     if os.path.isdir(pred_dir):
         # Get all filenames in that directory
         names = os.listdir(pred_dir)
@@ -100,6 +113,8 @@ def create_tensorboard_plots(base_dir, out_dir):
             for run in multiplexer.Runs():
                 run_path = PurePath(run)
                 label = k_from_dir(run_path.parts[0])
+                if label == -1:
+                    label = run_path.parts[0]
                 accumulator = multiplexer.GetAccumulator(run)
                 step = [x.step for x in accumulator.Scalars(scalar)]
                 value = [x.value for x in accumulator.Scalars(scalar)]
@@ -122,11 +137,11 @@ def create_tensorboard_plots(base_dir, out_dir):
             fig.savefig(os.path.join(out_dir, f'{title}.png'))
 
 
-# Return a prediction image of the specified iteration, k-fold directory,
+# Return a prediction image of the specified iteration, job directory,
 # and PPM. If such an image does not exist return None
-def get_prediction_image(iteration, k_fold_dir, ppm_name, return_latest_if_not_found=True):
+def get_prediction_image(iteration, job_dir, ppm_name, return_latest_if_not_found=True):
     filename = f'{ppm_name}_prediction_{iteration}.png'
-    full_filename = os.path.join(k_fold_dir, 'predictions', filename)
+    full_filename = os.path.join(job_dir, 'predictions', filename)
     img = None
     if os.path.isfile(full_filename):
         img = Image.open(full_filename)
@@ -134,7 +149,7 @@ def get_prediction_image(iteration, k_fold_dir, ppm_name, return_latest_if_not_f
         ret_iteration = None
         # We did not find original file. Check to see if the requested iteration
         # is greater than any we have. If so, return the greatest one we have.
-        iterations = iterations_in_k_fold_dir(k_fold_dir, ppm_name)
+        iterations = iterations_in_job_dir(job_dir, ppm_name)
         if len(iterations) == 0:
             return None
         if iteration == 'final':
@@ -151,7 +166,7 @@ def get_prediction_image(iteration, k_fold_dir, ppm_name, return_latest_if_not_f
                 ret_iteration = iterations[-1]
         if ret_iteration is not None:
             filename = f'{ppm_name}_prediction_{ret_iteration}.png'
-            full_filename = os.path.join(k_fold_dir, 'predictions', filename)
+            full_filename = os.path.join(job_dir, 'predictions', filename)
             if os.path.isfile(full_filename):
                 img = Image.open(full_filename)
     if img is not None:
@@ -332,7 +347,7 @@ def build_footer_img(width, height, iteration, label_type,
     return footer
 
 
-def build_frame(iteration, k_fold_dir_to_metadata, ppms, label_type, max_size=None,
+def build_frame(iteration, job_dir_to_metadata, ppms, label_type, max_size=None,
                 regions_to_include=None, regions_to_label=None, cmap_name=None,
                 merge_all_of_same_ppm=False):
     global already_warned_about_missing_label_images
@@ -342,14 +357,14 @@ def build_frame(iteration, k_fold_dir_to_metadata, ppms, label_type, max_size=No
     if regions_to_label is None:
         regions_to_label = []
 
-    k_fold_dirs = k_fold_dir_to_metadata.keys()
+    job_dirs = job_dir_to_metadata.keys()
     col_width = max([ppm['size'][0] for ppm in ppms.values()])
     row_heights = [ppm['size'][1] for ppm in ppms.values()]
     buffer_size = int(col_width / 10)
     if merge_all_of_same_ppm:
         width = col_width * 2 + buffer_size * 3  # Only need space for one result column plus label column
     else:
-        width = col_width * (len(k_fold_dirs) + 1) + buffer_size * (len(k_fold_dirs) + 2)
+        width = col_width * (len(job_dirs) + 1) + buffer_size * (len(job_dirs) + 2)
     height = sum(row_heights) + buffer_size * (len(row_heights) + 2)
     # Prevent weird aspect ratios
     width_pad_offset = 0
@@ -365,13 +380,12 @@ def build_frame(iteration, k_fold_dir_to_metadata, ppms, label_type, max_size=No
     frame = Image.new('RGB', (width, height))
     # Add prediction images
     # One column at a time
-    for k, k_fold_dir in enumerate(k_fold_dirs):
+    for job_i, job_dir in enumerate(job_dirs):
         # Get metadata for this job
-        metadata = k_fold_dir_to_metadata[k_fold_dir]
+        metadata = job_dir_to_metadata[job_dir]
         # Make each row of this column
         for ppm_i, (ppm_name, ppm) in enumerate(ppms.items()):
-            ppm_path = os.path.splitext(os.path.basename(ppm['path']))[0]
-            img = get_prediction_image(iteration, k_fold_dir, ppm_path)
+            img = get_prediction_image(iteration, job_dir, ppm_name)
             if img is not None:
                 if merge_all_of_same_ppm:
                     offset = (
@@ -380,7 +394,7 @@ def build_frame(iteration, k_fold_dir_to_metadata, ppms, label_type, max_size=No
                     )
                 else:
                     offset = (
-                        width_pad_offset + k * col_width + (k + 1) * buffer_size,
+                        width_pad_offset + job_i * col_width + (job_i + 1) * buffer_size,
                         sum(row_heights[:ppm_i]) + (ppm_i + 2) * buffer_size
                     )
                 if cmap_name is not None:
@@ -422,40 +436,41 @@ def build_frame(iteration, k_fold_dir_to_metadata, ppms, label_type, max_size=No
             label_key = 'ink-label'
         else:
             break
-        label_img_path = ppm[label_key]
-        # Try getting label image file from recorded location (may not exist on this machine)
-        label_img = None
-        if os.path.isfile(label_img_path):
-            label_img = Image.open(label_img_path)
-        # If not there, maybe it is on the local machine under ~/data.
-        elif '/pscratch/seales_uksr/' in label_img_path:
-            label_img_path = label_img_path.replace('/pscratch/seales_uksr/', '')
-            label_img_path = os.path.join(Path.home(), 'data', label_img_path)
+        label_img_path = ppm.get(label_key)
+        if label_img_path is not None:
+            # Try getting label image file from recorded location (may not exist on this machine)
+            label_img = None
             if os.path.isfile(label_img_path):
                 label_img = Image.open(label_img_path)
-        if label_img is not None:
-            if cmap_name is not None:
-                color_map = cm.get_cmap(cmap_name)
-                label_img = label_img.convert('L')
-                img_data = np.array(label_img)
-                label_img = Image.fromarray(np.uint8(color_map(img_data) * 255))
-            if merge_all_of_same_ppm:
-                offset = (
-                    width_pad_offset + col_width + buffer_size * 2,
-                    sum(row_heights[:ppm_i]) + (ppm_i + 2) * buffer_size
+            # If not there, maybe it is on the local machine under ~/data.
+            elif '/pscratch/seales_uksr/' in label_img_path:
+                label_img_path = label_img_path.replace('/pscratch/seales_uksr/', '')
+                label_img_path = os.path.join(Path.home(), 'data', label_img_path)
+                if os.path.isfile(label_img_path):
+                    label_img = Image.open(label_img_path)
+            if label_img is not None:
+                if cmap_name is not None:
+                    color_map = cm.get_cmap(cmap_name)
+                    label_img = label_img.convert('L')
+                    img_data = np.array(label_img)
+                    label_img = Image.fromarray(np.uint8(color_map(img_data) * 255))
+                if merge_all_of_same_ppm:
+                    offset = (
+                        width_pad_offset + col_width + buffer_size * 2,
+                        sum(row_heights[:ppm_i]) + (ppm_i + 2) * buffer_size
+                    )
+                else:
+                    offset = (
+                        width_pad_offset + len(job_dirs) * col_width + (len(job_dirs) + 1) * buffer_size,
+                        sum(row_heights[:ppm_i]) + (ppm_i + 2) * buffer_size
+                    )
+                frame.paste(label_img, offset)
+            elif not already_warned_about_missing_label_images:
+                warnings.warn(
+                    'At least one label image not found, check if dataset locally available',
+                    RuntimeWarning
                 )
-            else:
-                offset = (
-                    width_pad_offset + len(k_fold_dirs) * col_width + (len(k_fold_dirs) + 1) * buffer_size,
-                    sum(row_heights[:ppm_i]) + (ppm_i + 2) * buffer_size
-                )
-            frame.paste(label_img, offset)
-        elif not already_warned_about_missing_label_images:
-            warnings.warn(
-                'At least one label image not found, check if dataset locally available',
-                RuntimeWarning
-            )
-            already_warned_about_missing_label_images = True
+                already_warned_about_missing_label_images = True
 
     # Make column headers
     if merge_all_of_same_ppm:
@@ -481,12 +496,12 @@ def build_frame(iteration, k_fold_dir_to_metadata, ppms, label_type, max_size=No
             font=font_regular
         )
     else:
-        for k, k_fold_dir in enumerate(k_fold_dirs):
+        for job_i, job_dir in enumerate(job_dirs):
             draw = ImageDraw.Draw(frame)
             font_path = os.path.join(os.path.dirname(inkid.__file__), 'assets', 'fonts', 'Roboto-Regular.ttf')
             fontsize = 1
             font_regular = ImageFont.truetype(font_path, fontsize)
-            txt = f'Job {k}'
+            txt = f'Job {job_i}'
             allowed_width = col_width
             while font_regular.getsize(txt)[0] < allowed_width and font_regular.getsize(txt)[1] < buffer_size:
                 fontsize += 1
@@ -494,7 +509,7 @@ def build_frame(iteration, k_fold_dir_to_metadata, ppms, label_type, max_size=No
             fontsize -= 1
             offset_for_centering = int((col_width - font_regular.getsize(txt)[0]) / 2)
             offset = (
-                width_pad_offset + k * col_width + (k + 1) * buffer_size + offset_for_centering,
+                width_pad_offset + job_i * col_width + (job_i + 1) * buffer_size + offset_for_centering,
                 int(buffer_size * 0.5)
             )
             draw.text(
@@ -522,7 +537,7 @@ def build_frame(iteration, k_fold_dir_to_metadata, ppms, label_type, max_size=No
         )
     else:
         offset = (
-            width_pad_offset + len(k_fold_dirs) * col_width + (len(k_fold_dirs) + 1) * buffer_size + offset_for_centering,
+            width_pad_offset + len(job_dirs) * col_width + (len(job_dirs) + 1) * buffer_size + offset_for_centering,
             int(buffer_size * 0.5)
         )
     draw.text(
@@ -605,11 +620,6 @@ def main():
     parser.add_argument('--gif-fps', default=10, type=int, help='GIF frames per second')
     parser.add_argument('--gif-max-size', type=int, nargs=2, default=[1920, 1080])
     parser.add_argument('--static-max-size', type=int, nargs=2, default=[3840, 2160])
-    # Rclone upload options
-    parser.add_argument('--rclone-transfer-remote', metavar='remote', default=None,
-                        help='if specified, and if matches the name of one of the directories in '
-                        'the output path, transfer the results to that rclone remote into the '
-                        'sub-path following the remote name')
     args = parser.parse_args()
 
     out_dir = f'{datetime.datetime.today().strftime("%Y-%m-%d_%H.%M.%S")}_summary'
@@ -618,30 +628,30 @@ def main():
 
     # Get list of directories (not files) in given parent dir
     possible_dirs = [os.path.join(args.dir, name) for name in os.listdir(args.dir)]
-    k_fold_dirs = list(filter(is_k_fold_dir, possible_dirs))
-    k_fold_dirs = sorted(k_fold_dirs, key=k_from_dir)
+    job_dirs = list(filter(is_job_dir, possible_dirs))
+    job_dirs = sorted(job_dirs, key=k_from_dir)
     print('Found job directories:')
-    for d in k_fold_dirs:
+    for d in job_dirs:
         print(f'\t{d}')
 
     # Get PPM data, and list of all iterations encountered across jobs (some might have more than others)
     # Start by storing a dict where we map the directory name to the metadata for that job
-    k_fold_dir_to_metadata = dict()
+    job_dir_to_metadata = dict()
     ppms_from_metadata = None
-    # Iterate through k_fold dirs
-    for k_fold_dir in k_fold_dirs:
+    # Iterate through job dirs
+    for job_dir in job_dirs:
         # Read the metadata file and store each of them (we need the region info
-        # from all k_fold directories)
-        metadata_file = os.path.join(k_fold_dir, 'metadata.json')
+        # from all job directories)
+        metadata_file = os.path.join(job_dir, 'metadata.json')
         with open(metadata_file) as f:
             metadata = json.loads(f.read())
-            k_fold_dir_to_metadata[k_fold_dir] = metadata
+            job_dir_to_metadata[job_dir] = metadata
 
         # Useful to separately store just the PPM info (should be same across all jobs)
-        ppms_from_metadata = list(k_fold_dir_to_metadata.values())[0]['Region set']['ppms']
+        ppms_from_metadata = list(job_dir_to_metadata.values())[0]['Region set']['ppms']
 
         # Look in predictions directory to get all iterations from prediction images
-        pred_dir = os.path.join(k_fold_dir, 'predictions')
+        pred_dir = os.path.join(job_dir, 'predictions')
         if os.path.isdir(pred_dir):
             # Get all filenames in that directory
             names = os.listdir(pred_dir)
@@ -652,9 +662,9 @@ def main():
                 ppm_filename = re.search('(.*)_prediction_', name).group(1)
                 # Note PPM size based on image size. Would get this from the PPM file
                 # headers, but those are not necessarily on the machine this script is run on.
-                for ppm in ppms_from_metadata.values():
+                for ppm_name, ppm in ppms_from_metadata.items():
                     # Locate correct PPM in the metadata
-                    if os.path.splitext(os.path.basename(ppm['path']))[0] == ppm_filename:
+                    if ppm_name == ppm_filename:
                         # Only add size information if we haven't already
                         if 'size' not in ppm:
                             image_path = os.path.join(pred_dir, name)
@@ -669,15 +679,19 @@ def main():
                             iteration = 'final'
                         if iteration is not None and iteration not in ppm['iterations']:
                             ppm['iterations'].append(iteration)
-    print(f'\nFound PPMs:')
+    # Remove those PPMs that had no prediction images generated
+    ppms_from_metadata = {k: v for k, v in ppms_from_metadata.items() if 'size' in v}
+    print(f'\nFound PPMs with prediction images:')
     for ppm in ppms_from_metadata.keys():
         print(f'\t{ppm}, size: {ppms_from_metadata[ppm]["size"]}')
 
     encountered_iterations = set()
     for ppm in ppms_from_metadata.values():
-        for iteration in ppm['iterations']:
-            encountered_iterations.add(iteration)
+        if 'iterations' in ppm:
+            for iteration in ppm['iterations']:
+                encountered_iterations.add(iteration)
     encountered_iterations = sort_iterations(encountered_iterations)
+    last_iteration_seen = encountered_iterations[-1]
 
     label_type = metadata.get('Arguments').get('label_type')
 
@@ -688,16 +702,16 @@ def main():
 
     # Static images
     print('\nCreating final static image with all regions...')
-    final_frame = build_frame('final', k_fold_dir_to_metadata, ppms_from_metadata, label_type,
+    final_frame = build_frame(last_iteration_seen, job_dir_to_metadata, ppms_from_metadata, label_type,
                               args.static_max_size, regions_to_label=['training'])
-    final_frame.save(os.path.join(out_dir, 'final_all.png'))
+    final_frame.save(os.path.join(out_dir, f'{last_iteration_seen}_all.png'))
     print('done.')
 
     print('\nCreating final static image with only prediction regions...')
-    final_frame = build_frame('final', k_fold_dir_to_metadata, ppms_from_metadata, label_type,
+    final_frame = build_frame(last_iteration_seen, job_dir_to_metadata, ppms_from_metadata, label_type,
                               args.static_max_size, regions_to_include=['prediction'],
                               merge_all_of_same_ppm=True)
-    final_frame.save(os.path.join(out_dir, 'final_prediction.png'))
+    final_frame.save(os.path.join(out_dir, f'{last_iteration_seen}_prediction.png'))
     print('done.')
 
     # Color map images
@@ -705,34 +719,31 @@ def main():
     os.makedirs(color_maps_dir, exist_ok=True)
     for cmap in ['plasma', 'viridis', 'hot', 'inferno', 'seismic', 'Spectral', 'coolwarm', 'bwr']:
         print(f'\nCreating final static image with all regions and color map: {cmap}...')
-        final_frame = build_frame('final', k_fold_dir_to_metadata, ppms_from_metadata, label_type,
+        final_frame = build_frame(last_iteration_seen, job_dir_to_metadata, ppms_from_metadata, label_type,
                                   args.static_max_size, cmap_name=cmap, regions_to_label=['training'])
-        final_frame.save(os.path.join(color_maps_dir, f'final_all_{cmap}.png'))
+        final_frame.save(os.path.join(color_maps_dir, f'{last_iteration_seen}_all_{cmap}.png'))
         print('done.')
 
         print(f'\nCreating final static image with prediction regions and color map: {cmap}...')
-        final_frame = build_frame('final', k_fold_dir_to_metadata, ppms_from_metadata, label_type,
+        final_frame = build_frame(last_iteration_seen, job_dir_to_metadata, ppms_from_metadata, label_type,
                                   args.static_max_size, cmap_name=cmap, regions_to_include=['prediction'],
                                   merge_all_of_same_ppm=True)
-        final_frame.save(os.path.join(color_maps_dir, f'final_prediction_{cmap}.png'))
+        final_frame.save(os.path.join(color_maps_dir, f'{last_iteration_seen}_prediction_{cmap}.png'))
         print('done.')
 
     # Gifs
     print('\nCreating animation with all regions:')
     create_animation(os.path.join(out_dir, 'animation_all'), args.gif_fps, encountered_iterations,
-                     args.img_seq, k_fold_dir_to_metadata,
+                     args.img_seq, job_dir_to_metadata,
                      ppms_from_metadata, label_type, args.gif_max_size,
                      regions_to_label=['training'])
 
     print('\nCreating animation with only prediction regions:')
     create_animation(os.path.join(out_dir, 'animation_prediction'), args.gif_fps, encountered_iterations,
-                     args.img_seq, k_fold_dir_to_metadata,
+                     args.img_seq, job_dir_to_metadata,
                      ppms_from_metadata, label_type, args.gif_max_size,
                      regions_to_include=['prediction'],
                      merge_all_of_same_ppm=True)
-
-    # Transfer results via rclone if requested
-    inkid.ops.rclone_transfer_to_remote(args.rclone_transfer_remote, args.dir)
 
 
 if __name__ == '__main__':
