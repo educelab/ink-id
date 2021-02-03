@@ -97,6 +97,15 @@ After performing a run for each value of k, each will have created a directory o
 
    $ python scripts/misc/add_k_fold_prediction_images.py --dir ~/data/out/carbon_phantom_col1_test/
 
+Miscellaneous
+^^^^^^^^^^^^^
+
+Dummy dataset, to validate changes haven't broken anything obvious e.g. model dimensions:
+
+.. code-block:: bash
+
+   $ ./submit_with_summary.sh sbatch -p P4V12_SKY32M192_L --time=1-00:00:00 --mem=150G submit.sh $PSCRATCH/seales_uksr/dri-datasets-drive/Dummy/DummyTest.volpkg/paths/20200526152035/1x2_grid.json $PSCRATCH/seales_uksr/dri-experiments-drive/inkid/results/DummyTest/test/00 --subvolume-shape 48 48 48 --final-prediction-on-all --prediction-grid-spacing 8 --label-type rgb_values
+
 Contributing
 ============
 
