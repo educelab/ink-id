@@ -553,7 +553,8 @@ def main():
         f.write(json.dumps(metadata, indent=4, sort_keys=False))
 
     # Transfer results via rclone if requested
-    inkid.ops.rclone_transfer_to_remote(args.rclone_transfer_remote, output_path)
+    if args.rclone_transfer_remote is not None:
+        inkid.ops.rclone_transfer_to_remote(args.rclone_transfer_remote, output_path)
 
     writer.close()
 
