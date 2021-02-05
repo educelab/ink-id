@@ -129,7 +129,7 @@ cdef class Volume:
         data, w, h, d = None, 0, 0, 0
         logging.info('Loading volume slices from {}...'.format(slices_abs_path))
         bar = progressbar.ProgressBar()
-        for slice_i, slice_file in bar(enumerate(slice_files)):
+        for slice_i, slice_file in bar(list(enumerate(slice_files))):
             if data is None:
                 w, h = Image.open(slice_file).size
                 d = len(slice_files)
