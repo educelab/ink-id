@@ -20,7 +20,7 @@ def add_subvolume_args(parser):
                             'nearest_neighbor',
                             'interpolated',
                         ])
-    parser.add_argument('--subvolume-shape', metavar='n', nargs=3, type=int,
+    parser.add_argument('--subvolume-shape', metavar='n', nargs=3, type=int, default=None,
                         help='subvolume shape in z y x')
     parser.add_argument('--pad-to-shape', metavar='n', nargs=3, type=int, default=None,
                         help='pad subvolume with zeros to be of given shape (default no padding)')
