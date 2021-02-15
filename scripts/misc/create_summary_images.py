@@ -691,7 +691,6 @@ def main():
             for iteration in ppm['iterations']:
                 encountered_iterations.add(iteration)
     encountered_iterations = sort_iterations(encountered_iterations)
-    last_iteration_seen = encountered_iterations[-1]
 
     label_type = metadata.get('Arguments').get('label_type')
 
@@ -699,6 +698,11 @@ def main():
     print('\nCreating Tensorboard plots...')
     create_tensorboard_plots(args.dir, out_dir)
     print('done.')
+
+    if len(encountered_iterations) == 0:
+        print('No iterations encountered in prediction folders. No images will be produced.')
+        return
+    last_iteration_seen = encountered_iterations[-1]
 
     # Static images
     print('\nCreating final static image with all regions...')
