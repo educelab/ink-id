@@ -121,8 +121,8 @@ def main():
         default_config_files=[inkid.ops.default_arguments_file()],
     )
     # Needed files
-    parser.add_argument('data', metavar='infile', help='input data file (JSON or PPM)', nargs='?')
-    parser.add_argument('output', metavar='outfile', help='output directory', nargs='?')
+    parser.add_argument('data', metavar='infile', help='input data file (JSON or PPM)')
+    parser.add_argument('output', metavar='outfile', help='output directory')
 
     # Config file so the user can have various configs saved for e.g. different scans that are often processed
     parser.add_argument('-c', '--config-file', metavar='path', is_config_file=True,
@@ -175,6 +175,8 @@ def main():
     parser.add_argument('--no-batch-norm', action='store_true')
     parser.add_argument('--filters', metavar='n', nargs='*', type=int,
                         help='number of filters for each convolution layer')
+    parser.add_argument('--model', metavar='path', default=None,
+                        help='Pretrained model checkpoint to initialize network')
 
     # Run configuration
     parser.add_argument('--batch-size', metavar='n', type=int)
@@ -431,7 +433,15 @@ def main():
     else:
         logging.error('Feature type: {} does not have a model implementation.'.format(args.feature_type))
         return
+
+    # Load pretrained weights if specified
+    if args.model is not None:
+        checkpoint = torch.load(args.model)
+        model.load_state_dict(checkpoint['model_state_dict'])
+
+    # Move model to device (possibly GPU)
     model = model.to(device)
+
     # Show model in TensorBoard
     try:
         if train_dl is not None:
@@ -440,10 +450,12 @@ def main():
             writer.flush()
     except RuntimeError:
         logging.warning('Unable to add model graph to TensorBoard, skipping this step')
+
     # Print summary of model
     shape = (in_channels,) + tuple(args.pad_to_shape or args.subvolume_shape)
     summary = torchsummary.summary(model, shape, device=device, verbose=0, branching=False)
     logging.info('Model summary (sizes represent single batch):\n' + str(summary))
+
     # Define optimizer
     opt = torch.optim.Adam(model.parameters(), lr=args.learning_rate)
 
