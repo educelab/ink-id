@@ -106,7 +106,7 @@ Dummy dataset, to validate changes haven't broken anything obvious e.g. model di
 
    $ ./submit_with_summary.sh sbatch -p P4V12_SKY32M192_L --time=1-00:00:00 --mem=150G submit.sh $PSCRATCH/seales_uksr/dri-datasets-drive/Dummy/DummyTest.volpkg/paths/20200526152035/1x2_grid.json $PSCRATCH/seales_uksr/dri-experiments-drive/inkid/results/DummyTest/test/00 --subvolume-shape 48 48 48 --final-prediction-on-all --prediction-grid-spacing 8 --label-type rgb_values
 
-Texture a region using an existing trained model (important parts: `--model` and `--skip-training`:
+Texture a region using an existing trained model (important parts: ``--model`` and ``--skip-training``:
 
 .. code-block:: bash
 
