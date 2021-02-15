@@ -16,7 +16,6 @@ the prediction and validation sets for that run.
 
 import datetime
 import functools
-import inspect
 import itertools
 import json
 import logging
@@ -287,7 +286,7 @@ def main():
 
     # Add git hash to metadata if inside a git repository
     try:
-        repo = git.Repo(os.path.join(os.path.dirname(inspect.getfile(inkid)), '..'))
+        repo = git.Repo(os.path.join(os.path.dirname(inkid.__file__), '..'))
         sha = repo.head.object.hexsha
         metadata['Git hash'] = repo.git.rev_parse(sha, short=6)
     except git.exc.InvalidGitRepositoryError:
@@ -436,13 +435,12 @@ def main():
     # Show model in TensorBoard
     try:
         if train_dl is not None:
-            inputs, _ = iter(train_dl).next()
+            inputs, _ = next(iter(train_dl))
             writer.add_graph(model, inputs)
             writer.flush()
     except RuntimeError:
         logging.warning('Unable to add model graph to TensorBoard, skipping this step')
     # Print summary of model
-    device_str = "cuda" if torch.cuda.is_available() else "cpu"
     shape = (in_channels,) + tuple(args.pad_to_shape or args.subvolume_shape)
     summary = torchsummary.summary(model, shape, device=device, verbose=0, branching=False)
     logging.info('Model summary (sizes represent single batch):\n' + str(summary))
@@ -508,7 +506,8 @@ def main():
                             logging.info('Generating prediction image... ')
                             generate_prediction_image(pred_dl, model, output_size, args.label_type, device,
                                                       predictions_dir, f'{epoch}_{batch_num}', reconstruct_fn, regions,
-                                                      label_shape, args.prediction_averaging, args.prediction_grid_spacing)
+                                                      label_shape, args.prediction_averaging,
+                                                      args.prediction_grid_spacing)
                             logging.info('done')
                         else:
                             logging.info('Empty prediction set, skipping prediction image generation.')
