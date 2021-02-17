@@ -205,11 +205,6 @@ def main():
         parser.print_help()
         return
 
-    # Automatically suffix the output directory name with the validation index,
-    # if provided
-    if args.num is not None:
-        args.output += f'_{args.num}'
-
     # Make sure output does not already have contents
     if os.path.isdir(args.output):
         if len(os.listdir(args.output)) > 0:
