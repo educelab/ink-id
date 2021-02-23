@@ -16,7 +16,6 @@ the prediction and validation sets for that run.
 
 import datetime
 import functools
-import inspect
 import itertools
 import json
 import logging
@@ -56,7 +55,7 @@ def perform_validation(model, dataloader, metrics, device, label_type):
     return metric_results
 
 
-def generate_prediction_image(dataloader, model, output_size, label_type, device, predictions_dir, filename,
+def generate_prediction_image(dataloader, model, output_size, label_type, device, predictions_dir, suffix,
                               reconstruct_fn, region_set, label_shape, prediction_averaging, grid_spacing):
     """Helper function to generate a prediction image given a model and dataloader, and save it to a file."""
     if label_shape == (1, 1):
@@ -109,7 +108,7 @@ def generate_prediction_image(dataloader, model, output_size, label_type, device
     for prediction, point in zip(predictions, points):
         region_id, x, y = point
         reconstruct_fn([int(region_id)], [prediction], [[int(x), int(y)]])
-    region_set.save_predictions(predictions_dir, filename)
+    region_set.save_predictions(predictions_dir, suffix)
     region_set.reset_predictions()
 
 
@@ -122,8 +121,8 @@ def main():
         default_config_files=[inkid.ops.default_arguments_file()],
     )
     # Needed files
-    parser.add_argument('data', metavar='infile', help='input data file (JSON or PPM)', nargs='?')
-    parser.add_argument('output', metavar='outfile', help='output directory', nargs='?')
+    parser.add_argument('data', metavar='infile', help='input data file (JSON or PPM)')
+    parser.add_argument('output', metavar='outfile', help='output directory')
 
     # Config file so the user can have various configs saved for e.g. different scans that are often processed
     parser.add_argument('-c', '--config-file', metavar='path', is_config_file=True,
@@ -178,6 +177,8 @@ def main():
     parser.add_argument('--no-batch-norm', action='store_true')
     parser.add_argument('--filters', metavar='n', nargs='*', type=int,
                         help='number of filters for each convolution layer')
+    parser.add_argument('--model', metavar='path', default=None,
+                        help='Pretrained model checkpoint to initialize network')
 
     # Run configuration
     parser.add_argument('--batch-size', metavar='n', type=int)
@@ -205,6 +206,12 @@ def main():
     if args.data is None and args.output is None:
         parser.print_help()
         return
+
+    # Make sure output does not already have contents
+    if os.path.isdir(args.output):
+        if len(os.listdir(args.output)) > 0:
+            logging.error('Provided output directory must be empty')
+            return
 
     # If this is one of a k-fold cross-validation job, then append k to the output path
     # Whether or not that is the case, go ahead and create the output directory
@@ -283,7 +290,7 @@ def main():
 
     # Add git hash to metadata if inside a git repository
     try:
-        repo = git.Repo(os.path.join(os.path.dirname(inspect.getfile(inkid)), '..'))
+        repo = git.Repo(os.path.join(os.path.dirname(inkid.__file__), '..'))
         sha = repo.head.object.hexsha
         metadata['Git hash'] = repo.git.rev_parse(sha, short=6)
     except git.exc.InvalidGitRepositoryError:
@@ -400,12 +407,16 @@ def main():
                                        grid_spacing=args.prediction_grid_spacing)
 
     # Define the dataloaders which implement batching, shuffling, etc.
-    train_dl = DataLoader(train_ds, batch_size=args.batch_size, shuffle=True,
-                          num_workers=multiprocessing.cpu_count())
-    val_dl = DataLoader(val_ds, batch_size=args.batch_size * 2, shuffle=True,
-                        num_workers=multiprocessing.cpu_count())
-    pred_dl = DataLoader(pred_ds, batch_size=args.batch_size * 2, shuffle=False,
-                         num_workers=multiprocessing.cpu_count())
+    train_dl, val_dl, pred_dl = None, None, None
+    if len(train_ds) > 0:
+        train_dl = DataLoader(train_ds, batch_size=args.batch_size, shuffle=True,
+                              num_workers=multiprocessing.cpu_count())
+    if len(val_ds) > 0:
+        val_dl = DataLoader(val_ds, batch_size=args.batch_size * 2, shuffle=True,
+                            num_workers=multiprocessing.cpu_count())
+    if len(pred_ds) > 0:
+        pred_dl = DataLoader(pred_ds, batch_size=args.batch_size * 2, shuffle=False,
+                             num_workers=multiprocessing.cpu_count())
 
     # Specify the compute device for PyTorch purposes
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -432,19 +443,29 @@ def main():
     else:
         logging.error('Feature type: {} does not have a model implementation.'.format(args.feature_type))
         return
+
+    # Load pretrained weights if specified
+    if args.model is not None:
+        checkpoint = torch.load(args.model)
+        model.load_state_dict(checkpoint['model_state_dict'])
+
+    # Move model to device (possibly GPU)
     model = model.to(device)
+
     # Show model in TensorBoard
     try:
-        inputs, _ = iter(train_dl).next()
-        writer.add_graph(model, inputs)
-        writer.flush()
+        if train_dl is not None:
+            inputs, _ = next(iter(train_dl))
+            writer.add_graph(model, inputs)
+            writer.flush()
     except RuntimeError:
         logging.warning('Unable to add model graph to TensorBoard, skipping this step')
+
     # Print summary of model
-    device_str = "cuda" if torch.cuda.is_available() else "cpu"
     shape = (in_channels,) + tuple(args.pad_to_shape or args.subvolume_shape)
     summary = torchsummary.summary(model, shape, device=device, verbose=0, branching=False)
     logging.info('Model summary (sizes represent single batch):\n' + str(summary))
+
     # Define optimizer
     opt = torch.optim.Adam(model.parameters(), lr=args.learning_rate)
 
@@ -452,7 +473,7 @@ def main():
     last_summary = time.time()
 
     # Run training loop
-    if not args.skip_training:
+    if train_dl is not None and not args.skip_training:
         try:
             for epoch in range(args.training_epochs):
                 model.train()  # Turn on training mode
@@ -492,19 +513,26 @@ def main():
                         }, os.path.join(checkpoints_dir, f'checkpoint_{epoch}_{batch_num}.pt'))
 
                         # Periodic evaluation and prediction
-                        logging.info('Evaluating on validation set... ')
-                        val_results = perform_validation(model, val_dl, metrics, device, args.label_type)
-                        for metric, result in inkid.metrics.metrics_dict(val_results).items():
-                            writer.add_scalar('val_' + metric, result, epoch * len(train_dl) + batch_num)
-                            writer.flush()
-                        logging.info(f'done ({inkid.metrics.metrics_str(val_results)})')
+                        if val_dl is not None:
+                            logging.info('Evaluating on validation set... ')
+                            val_results = perform_validation(model, val_dl, metrics, device, args.label_type)
+                            for metric, result in inkid.metrics.metrics_dict(val_results).items():
+                                writer.add_scalar('val_' + metric, result, epoch * len(train_dl) + batch_num)
+                                writer.flush()
+                            logging.info(f'done ({inkid.metrics.metrics_str(val_results)})')
+                        else:
+                            logging.info('Empty validation set, skipping validation.')
 
                         # Prediction image
-                        logging.info('Generating prediction image... ')
-                        generate_prediction_image(pred_dl, model, output_size, args.label_type, device,
-                                                  predictions_dir, f'{epoch}_{batch_num}', reconstruct_fn, regions,
-                                                  label_shape, args.prediction_averaging, args.prediction_grid_spacing)
-                        logging.info('done')
+                        if pred_dl is not None:
+                            logging.info('Generating prediction image... ')
+                            generate_prediction_image(pred_dl, model, output_size, args.label_type, device,
+                                                      predictions_dir, f'{epoch}_{batch_num}', reconstruct_fn, regions,
+                                                      label_shape, args.prediction_averaging,
+                                                      args.prediction_grid_spacing)
+                            logging.info('done')
+                        else:
+                            logging.info('Empty prediction set, skipping prediction image generation.')
         except KeyboardInterrupt:
             pass
 
@@ -514,21 +542,25 @@ def main():
             final_pred_ds = inkid.data.PointsDataset(regions, ['prediction', 'training', 'validation'],
                                                      prediction_features_fn, lambda p: p,
                                                      grid_spacing=args.prediction_grid_spacing)
-            final_pred_dl = DataLoader(final_pred_ds, batch_size=args.batch_size * 2, shuffle=False,
-                                       num_workers=multiprocessing.cpu_count())
-            generate_prediction_image(final_pred_dl, model, output_size, args.label_type, device,
-                                      predictions_dir, 'final', reconstruct_fn, regions, label_shape,
-                                      args.prediction_averaging, args.prediction_grid_spacing)
+            if len(final_pred_ds) > 0:
+                final_pred_dl = DataLoader(final_pred_ds, batch_size=args.batch_size * 2, shuffle=False,
+                                           num_workers=multiprocessing.cpu_count())
+                generate_prediction_image(final_pred_dl, model, output_size, args.label_type, device,
+                                          predictions_dir, 'final', reconstruct_fn, regions, label_shape,
+                                          args.prediction_averaging, args.prediction_grid_spacing)
         # Perform finishing touches even if cut short
         except KeyboardInterrupt:
             pass
 
     # Add final validation metrics to metadata
     try:
-        logging.info('Performing final evaluation on validation set... ')
-        val_results = perform_validation(model, val_dl, metrics, device, args.label_type)
-        metadata['Final validation metrics'] = inkid.metrics.metrics_dict(val_results)
-        logging.info(f'done ({inkid.metrics.metrics_str(val_results)})')
+        if val_dl is not None:
+            logging.info('Performing final evaluation on validation set... ')
+            val_results = perform_validation(model, val_dl, metrics, device, args.label_type)
+            metadata['Final validation metrics'] = inkid.metrics.metrics_dict(val_results)
+            logging.info(f'done ({inkid.metrics.metrics_str(val_results)})')
+        else:
+            logging.info('Empty validation set, skipping final validation.')
     except KeyboardInterrupt:
         pass
 
@@ -542,7 +574,8 @@ def main():
         f.write(json.dumps(metadata, indent=4, sort_keys=False))
 
     # Transfer results via rclone if requested
-    inkid.ops.rclone_transfer_to_remote(args.rclone_transfer_remote, output_path)
+    if args.rclone_transfer_remote is not None:
+        inkid.ops.rclone_transfer_to_remote(args.rclone_transfer_remote, output_path)
 
     writer.close()
 

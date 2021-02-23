@@ -20,7 +20,7 @@ def add_subvolume_args(parser):
                             'nearest_neighbor',
                             'interpolated',
                         ])
-    parser.add_argument('--subvolume-shape', metavar='n', nargs=3, type=int,
+    parser.add_argument('--subvolume-shape', metavar='n', nargs=3, type=int, default=None,
                         help='subvolume shape in z y x')
     parser.add_argument('--pad-to-shape', metavar='n', nargs=3, type=int, default=None,
                         help='pad subvolume with zeros to be of given shape (default no padding)')
@@ -114,34 +114,39 @@ def get_descriptive_statistics(tensor):
 
 
 def rclone_transfer_to_remote(rclone_remote, output_path):
-    if rclone_remote is not None:
-        folders = []
-        path = os.path.abspath(output_path)
-        while True:
-            path, folder = os.path.split(path)
-            if folder != "":
-                folders.append(folder)
-            else:
-                if path != "":
-                    folders.append(path)
-                break
-        folders.reverse()
-
-        if rclone_remote not in folders:
-            logging.info('Provided rclone transfer remote was not a directory '
-                         'name in the output path, so it is not clear where in the '
-                         'remote to put the files. Transfer canceled.')
+    folders = []
+    path = os.path.abspath(output_path)
+    while True:
+        path, folder = os.path.split(path)
+        if folder != '':
+            folders.append(folder)
         else:
-            while folders.pop(0) != rclone_remote:
-                continue
+            if path != '':
+                folders.append(path)
+            break
+    folders.reverse()
 
-            command = [
-                'rclone',
-                'move',
-                '-v',
-                '--delete-empty-src-dirs',
-                output_path,
-                rclone_remote + ':' + os.path.join(*folders)
-            ]
-            logging.info(' '.join(command))
-            subprocess.call(command)
+    if rclone_remote is None:
+        for folder in folders:
+            if '-drive' in folder:
+                rclone_remote = folder
+                break
+
+    if rclone_remote not in folders:
+        print('Provided rclone transfer remote was not a directory '
+              'name in the output path, so it is not clear where in the '
+              'remote to put the files. Transfer canceled.')
+    else:
+        while folders.pop(0) != rclone_remote:
+            continue
+
+        command = [
+            'rclone',
+            'move',
+            '-v',
+            '--delete-empty-src-dirs',
+            output_path,
+            rclone_remote + ':' + os.path.join(*folders)
+        ]
+        logging.info(' '.join(command))
+        subprocess.call(command)

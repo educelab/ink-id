@@ -1,9 +1,9 @@
 Bootstrap: library
-From: ubuntu:16.04
+From: ubuntu:20.04
 
 %labels
   MAINTAINER Stephen Parsons <stephen.parsons@uky.edu>, Mami Hayashida <mami.hayashida@uky.edu>
-  OS Ubuntu 16.04
+  OS Ubuntu 20.04
 
 %files
   /tmp/ink-id /usr/local/dri/ink-id
@@ -17,18 +17,25 @@ From: ubuntu:16.04
   # Store git credentials for up to an hour (in overlay, not container) for convenience
   git config --global credential.helper cache
   git config --global credential.helper 'cache --timeout=3600'
-  # Required to make python3.7 available
+  # To make add-apt-repository available
   apt install -y software-properties-common
+  # To make python3.8 available
   add-apt-repository -y ppa:deadsnakes/ppa
+  # To make python3-pip available
+  add-apt-repository -y universe
   apt update
   # Python installs
-  apt install -y python3.7-dev python3-pip
+  apt install -y python3.8-dev python3-pip
   pip3 install --upgrade pip
   pip install --upgrade virtualenv
+  # Needed for pygifsicle
+  apt install -y gifsicle
   # Create a virtualenv for this project
-  virtualenv --python=python3.7 /usr/local/dri/ink-id/.venv
+  virtualenv --python=python3.8 /usr/local/dri/ink-id/.venv
   # Activate virtualenv
   . /usr/local/dri/ink-id/.venv/bin/activate
+  # Update pip
+  pip install --upgrade pip
   # Remove locally installed inkid from requirements file, we want to install that separately
   sed -i '/ink-id.git/d' /usr/local/dri/ink-id/requirements.txt
   # Install the exact versions of all of the dependencies
@@ -59,23 +66,22 @@ From: ubuntu:16.04
 
   Preparing for use:
     - Then get the container ready for use, for example:
-      `scp inkid.sif lcc:~`
+      `scp inkid.sif *.sh lcc:~`
       `ssh lcc`
       `module load ccs/singularity`
       `rm inkid.overlay && dd if=/dev/zero of=inkid.overlay bs=1M count=500 && mkfs.ext3 inkid.overlay  # Create a new overlay for the new container`
       `singularity shell --overlay inkid.overlay inkid.sif  # If you want to get into the container and make any changes to the code, or checkout another branch`
+      `rclone copy -uv inkid.sif dri-experiments-drive:singularity-containers`  # If you want to update the shared .sif file
 
   Usage:
     - Any script or shell usage should first source the virtualenv: `. /usr/local/dri/ink-id/.venv/bin/activate`
     - It is possible to use an overlay to allow one to check out another branch, pull recent changes, or make local edits to ink-id code. To create and use an overlay: `dd if=/dev/zero of=inkid.overlay bs=1M count=500 && mkfs.ext3 inkid.overlay; singularity shell --overlay inkid.overlay inkid.sif` (see Singularity documentation on persistent overlays). If the overlay directory is deleted or not specified when using the container, the changes will be gone and the checkout of ink-id built into the container will be present.
     - You can use `git config` to set your name and email after creating an overlay so you get accurate commit authorship.
-    - It is recommended to use the included `ink-id/scripts/singularity/submit.sh` to run a job.
+    - It is recommended to use the included `ink-id/scripts/singularity/submit.sh` to run a job, which already activate the virtual environment.
     - Example usage with sbatch:
       `sbatch -p <partition> --time=<timelimit> submit.sh ...  # Submit jobs using the container`
 
   Selected example jobs:
-    - Omega: `sbatch -p <partition> --time=<timelimit> --mem=<memory> --array=1%2 submit.sh /pscratch/seales_uksr/dri-experiments-drive/inkid/data/PHercParisObjet59/PHercParisObjet59.volpkg/working/2rows_All.json /pscratch/seales_uksr/dri-experiments-drive/inkid/results/PHercParisObjet59/<output> --subvolume-shape 48 48 48 --training-epochs 1 --final-prediction-on-all --rclone-transfer-remote dri-experiments-drive`
-    - Test omega (small volume): `sbatch -p <partition> --time=<timelimit> --array=1%2 submit.sh /pscratch/seales_uksr/dri-experiments-drive/inkid/data/PHercParisObjet59/PHercParisObjet59_Test.volpkg/working/22kV_2rows_All.json /pscratch/seales_uksr/dri-experiments-drive/inkid/results/PHercParisObjet59/<output> --subvolume-shape 48 48 48 --training-epochs 1 --final-prediction-on-all --rclone-transfer-remote dri-experiments-drive`
-    - Carbon Phantom Column 2 Theta: `sbatch -p <partition> --time=<timelimit> --mem=<memory> --array=2%2 submit.sh /pscratch/seales_uksr/dri-experiments-drive/inkid/data/CarbonPhantom/CarbonPhantomV3.volpkg/working/2/Col2_k-fold-characters-region-set.json /pscratch/seales_uksr/dri-experiments-drive/inkid/results/CarbonPhantom/<output> --subvolume-shape 34 34 34 --training-epochs 1 --final-prediction-on-all --rclone-transfer-remote dri-experiments-drive`
+    - MS910 fragments: `./submit_with_summary.sh sbatch -p <PARTITION> --time=<TIMELIMIT> --mem=150G submit.sh $PSCRATCH/seales_uksr/dri-datasets-drive/MorganM910/MS910.volpkg/working/segmentation/all-fragments.json $PSCRATCH/seales_uksr/dri-experiments-drive/inkid/results/MS910/fragments/all/test/<OUTPUT> --subvolume-shape 48 48 48 --final-prediction-on-all --prediction-grid-spacing 8 --label-type rgb_values`
 
   This container is intended to be built once and used with multiple checkouts of inkid code, using an overlay to store the changes or checkouts. Only when the dependencies change does the container need rebuilding.

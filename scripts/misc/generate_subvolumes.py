@@ -29,6 +29,10 @@ def main():
     parser.add_argument('--no-augmentation', action='store_false', dest='augmentation')
     args = parser.parse_args()
 
+    if args.subvolume_shape is None and args.pad_to_shape is None:
+        print('Must specify either --subvolume-shape or --pad-to-shape')
+        return
+
     region_data = inkid.data.RegionSet.get_data_from_file(args.input)
     os.makedirs(args.output, exist_ok=True)
 

@@ -126,14 +126,16 @@ cdef class Volume:
                     slice_files.append(os.path.join(root, filename))
         slice_files.sort()
 
-        data = []
+        data, w, h, d = None, 0, 0, 0
         logging.info('Loading volume slices from {}...'.format(slices_abs_path))
         bar = progressbar.ProgressBar()
-        for slice_file in bar(slice_files):
-            data.append(np.array(Image.open(slice_file)))
+        for slice_i, slice_file in bar(list(enumerate(slice_files))):
+            if data is None:
+                w, h = Image.open(slice_file).size
+                d = len(slice_files)
+                data = np.empty((d, h, w), dtype=np.uint16)
+            data[slice_i, :, :] = np.array(Image.open(slice_file), dtype=np.uint16).copy()
         print()
-        logging.info('Converting loaded slice images into volume in memory...')
-        data = np.array(data, dtype=np.uint16)
         self._data_view = data
         logging.info('Loaded volume {} with shape (z, y, x) = {}'.format(
             slices_abs_path,

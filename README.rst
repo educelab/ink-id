@@ -14,15 +14,18 @@ Installation
 
 .. code-block:: bash
 
-    $ git clone https://code.cs.uky.edu/seales-research/ink-id.git && cd ink-id
+    $ git clone https://code.cs.uky.edu/seales-research/ink-id.git && cd ink-id  # From code.cs server
+    $ git clone https://gitlab.com/educelab/ink-id.git && cd ink-id # From gitlab.com
+
     $ pip3 install -U virtualenv        # Install virtualenv
     $ virtualenv -p python3 .venv       # Create a new environment
     $ . .venv/bin/activate              # Activate the environment
+    (.venv) $ pip install -U pip        # Upgrade pip
     (.venv) $ pip install Cython numpy  # Install prerequisites
     (.venv) $ pip install -e .          # Install ink-id and dependencies
     (.venv) $ deactivate                # When finished, deactivate the environment
 
-After changes to Cython files (`.pyx` and `.pxd`), those modules must be rebuilt:
+After changes to Cython files (``.pyx`` and ``.pxd``), those modules must be rebuilt:
 
 .. code-block:: bash
 
@@ -53,15 +56,15 @@ Examples
 SLURM Jobs
 ^^^^^^^^^^
 
-This code is most commonly used in Singularity containers, run as SLURM jobs on a compute cluster. For documentation of this usage, see the `container .def file <https://code.cs.uky.edu/seales-research/ink-id/-/blob/develop/scripts/singularity/inkid.def>`_.
+This code is most commonly used in Singularity containers, run as SLURM jobs on a compute cluster. For documentation of this usage, see ``scripts/singularity/inkid.def``.
 
 Grid Training
 ^^^^^^^^^^^^^
 
 To perform grid training, create a RegionSet JSON file for the PPM with only one training region (with no bounds, meaning it will default to the full size of the PPM). For example:
-`examples/region-set-files/lunate-sigma-one-region.json <https://code.vis.uky.edu/seales-research/ink-id/blob/develop/examples/region_set_files/lunate-sigma-one-region.json>`_.
+``examples/region-set-files/lunate-sigma-one-region.json``.
 
-Then use `scripts/misc/split_region_into_grid.py <https://code.vis.uky.edu/seales-research/ink-id/blob/develop/scripts/misc/split_region_into_grid.py>`_ to split this into a grid of the desired shape. Example:
+Then use ```scripts/misc/split_region_into_grid.py`` to split this into a grid of the desired shape. Example:
 
 .. code-block:: bash
 
@@ -76,8 +79,7 @@ Then use this region set for standard k-fold cross validation and prediction.
 K-Fold Cross Validation (and Prediction)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-`scripts/train_and_predict.py
-<https://code.vis.uky.edu/seales-research/ink-id/blob/develop/scripts/train_and_predict.py>`_ typically takes a region set file as input and trains on the specified training regions, validates on the validation regions, and predicts on the prediction regions. However if the ``-k`` argument is passed, the behavior is slightly different. In this case it expects the input region set to have only a set of training regions, with validation and prediction being empty. The kth training region will be removed from the training set and added to the validation and prediction sets. Example:
+``scripts/train_and_predict.py`` typically takes a region set file as input and trains on the specified training regions, validates on the validation regions, and predicts on the prediction regions. However if the ``-k`` argument is passed, the behavior is slightly different. In this case it expects the input region set to have only a set of training regions, with validation and prediction being empty. The kth training region will be removed from the training set and added to the validation and prediction sets. Example:
 
 .. code-block:: bash
 
@@ -95,6 +97,21 @@ After performing a run for each value of k, each will have created a directory o
 
    $ python scripts/misc/add_k_fold_prediction_images.py --dir ~/data/out/carbon_phantom_col1_test/
 
+Miscellaneous
+^^^^^^^^^^^^^
+
+Dummy dataset, to validate changes haven't broken anything obvious e.g. model dimensions:
+
+.. code-block:: bash
+
+   $ ./submit_with_summary.sh sbatch -p P4V12_SKY32M192_L --time=1-00:00:00 --mem=150G submit.sh $PSCRATCH/seales_uksr/dri-datasets-drive/Dummy/DummyTest.volpkg/paths/20200526152035/1x2_grid.json $PSCRATCH/seales_uksr/dri-experiments-drive/inkid/results/DummyTest/test/00 --subvolume-shape 48 48 48 --final-prediction-on-all --prediction-grid-spacing 8 --label-type rgb_values
+
+Texture a region using an existing trained model (important parts: ``--model`` and ``--skip-training``:
+
+.. code-block:: bash
+
+   $ ./submit_with_summary.sh sbatch -p P4V12_SKY32M192_L --time=1-00:00:00 --mem=187G submit.sh $PSCRATCH/seales_uksr/dri-datasets-drive/MorganM910/MS910.volpkg/working/segmentation/quire_p60.json $PSCRATCH/seales_uksr/dri-experiments-drive/inkid/results/MS910/p60/fromSavedWeights/02 --subvolume-shape 48 48 48 --final-prediction-on-all --prediction-grid-spacing 8 --label-type rgb_values --skip-training --model $PSCRATCH/seales_uksr/dri-experiments-drive/inkid/results/MS910/p60/initial/09/2021-02-08_09.15.07/checkpoints/checkpoint_0_175000.pt
+
 Contributing
 ============
 
@@ -106,4 +123,4 @@ and document code based on the `Google Python Style Guide standards <https://goo
 License
 =======
 
-This package is licensed under the Microsoft Reference Source License (MS-RSL) - see `LICENSE <https://code.cs.uky.edu/seales-research/ink-id/blob/develop/LICENSE>`_ for details.
+This package is licensed under the GNU General Public License (GPLv3) - see ``LICENSE`` for details.
