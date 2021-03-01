@@ -13,7 +13,7 @@ From: ubuntu:20.04
   chmod --recursive a+rw /usr/local/dri/ink-id
   # Basic installs
   apt update
-  apt install -y git nano
+  apt install -y git nano vim
   # Store git credentials for up to an hour (in overlay, not container) for convenience
   git config --global credential.helper cache
   git config --global credential.helper 'cache --timeout=3600'
