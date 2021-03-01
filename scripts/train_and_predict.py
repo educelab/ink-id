@@ -205,12 +205,6 @@ def main():
         parser.print_help()
         return
 
-    # Make sure output does not already have contents
-    if os.path.isdir(args.output):
-        if len(os.listdir(args.output)) > 0:
-            logging.error('Provided output directory must be empty')
-            return
-
     # If this is one of a k-fold cross-validation job, then append k to the output path
     # Whether or not that is the case, go ahead and create the output directory
     if args.k is None:
@@ -218,6 +212,26 @@ def main():
     else:
         dir_name = datetime.datetime.today().strftime('%Y-%m-%d_%H.%M.%S') + '_' + str(args.k)
     output_path = os.path.join(args.output, dir_name)
+
+    # If this is not a cross-validation job, then the defined output dir should be empty.
+    # If this is a cross-validation job, that directory might have output from other
+    # cross-validation splits, but not this one
+    if os.path.isdir(args.output):
+        if args.k is None:
+            if len(os.listdir(args.output)) > 0:
+                logging.error(f'Provided output directory must be empty: {args.output}')
+                return
+        else:
+            dirs_in_output = [os.path.join(args.output, f) for f in os.listdir(args.output)]
+            dirs_in_output = list(filter(os.path.isdir, dirs_in_output))
+            print(dirs_in_output)
+            for job_dir in dirs_in_output:
+                print(job_dir)
+                if job_dir.endswith(f'_{args.k}'):
+                    logging.error(f'Cross-validation directory for same k already exists '
+                                  f'in output directory: {job_dir}')
+                    return
+
     os.makedirs(output_path)
 
     # Create TensorBoard writer
