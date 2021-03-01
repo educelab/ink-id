@@ -180,7 +180,7 @@ class Subvolume3DUNet(torch.nn.Module):
         upconv_padding = 0 # Not listed in paper
 
         final_conv_kernel_size = 1
-        final_conv_stride = 2 # Not listed in paper
+        final_conv_stride = 1 # Not listed in paper, but stride 1 makes size work out
         final_conv_padding = 0 # Not listed in paper
 
         channels = starting_channels
@@ -190,7 +190,7 @@ class Subvolume3DUNet(torch.nn.Module):
         self._decoder_modules = torch.nn.ModuleList()
         out_channels = in_channels
         output_shape = [out_channels]
-        output_shape.extend(map(lambda x: x // 2, input_shape))
+        output_shape.extend(input_shape)
         self.output_shape = tuple(output_shape)
 
         # Build the left side of the "U" shape plus bottom (encoder)
@@ -228,10 +228,11 @@ class Subvolume3DUNet(torch.nn.Module):
                     self._ConvBlock(in_channels=channels,
                                     out_channels=channels,
                                     bn_momentum=bn_momentum))
+
+        # Final decoder simple convolution (decoder)
         self._decoder_modules.append(
-                self._ConvBlock(in_channels=channels,
+                torch.nn.Conv3d(in_channels=channels,
                                 out_channels=out_channels,
-                                bn_momentum=bn_momentum,
                                 kernel_size=final_conv_kernel_size,
                                 stride=final_conv_stride,
                                 padding=final_conv_padding))
