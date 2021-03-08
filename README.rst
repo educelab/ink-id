@@ -43,7 +43,7 @@ The package can be used as a Python library:
    params = inkid.ops.load_default_parameters()
    regions = inkid.data.RegionSet.from_json(region_set_filename)
 
-An application is also included for running a training job with intermediate validation and prediction:
+A script is also included for running a training job and/or generating prediction images:
 
 ::
 
@@ -58,8 +58,37 @@ SLURM Jobs
 
 This code is most commonly used in Singularity containers, run as SLURM jobs on a compute cluster. For documentation of this usage, see ``scripts/singularity/inkid.def``.
 
+K-Fold Cross Validation (and Prediction)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+``scripts/train_and_predict.py`` typically takes a region set file as input and trains on the specified training regions, validates on the validation regions, and predicts on the prediction regions. However if the ``-k`` argument is passed, the behavior is slightly different. In this case it expects the input region set to have only a set of training regions, with validation and prediction being empty. The kth training region will be removed from the training set and added to the validation and prediction sets. Example:
+
+.. code-block:: bash
+
+   $ inkid-train-and-predict ~/data/lunate-sigma/grid-2x5.json ~/data/out/ -k 7 --final-prediction-on-all
+
+It is possible to schedule all of these jobs with one command if using SLURM's ``sbatch``. Example:
+
+.. code-block:: bash
+
+   $ sbatch --array=0-4%2 scripts/slurm_train_and_predict.sh ~/data/CarbonPhantomV3.volpkg/working/2/Col2_k-fold-characters-region-set.json ~/data/out/col2_not_flattened --final-prediction-on-all
+
+After performing a run for each value of k, each will have created a subdirectory of output.
+
+Generating Summary Images
+^^^^^^^^^^^^^^^^^^^^^^^^^
+
+There is a script ``scripts/misc/create_summary_images.py`` that takes the parent output directory and will generate various output images combining the cross-validation results. Example:
+
+.. code-block:: bash
+
+   $ python scripts/misc/add_k_fold_prediction_images.py ~/data/out/carbon_phantom_col1_test/
+
 Grid Training
 ^^^^^^^^^^^^^
+
+When working with only one surface PPM, it is often desirable to split that single surface into a grid to be used with k-fold cross-validation.
+There is a script to automatically create the grid region set file.
 
 To perform grid training, create a RegionSet JSON file for the PPM with only one training region (with no bounds, meaning it will default to the full size of the PPM). For example:
 ``examples/region-set-files/lunate-sigma-one-region.json``.
@@ -76,31 +105,12 @@ Then use ```scripts/misc/split_region_into_grid.py`` to split this into a grid o
 
 Then use this region set for standard k-fold cross validation and prediction.
 
-K-Fold Cross Validation (and Prediction)
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-``scripts/train_and_predict.py`` typically takes a region set file as input and trains on the specified training regions, validates on the validation regions, and predicts on the prediction regions. However if the ``-k`` argument is passed, the behavior is slightly different. In this case it expects the input region set to have only a set of training regions, with validation and prediction being empty. The kth training region will be removed from the training set and added to the validation and prediction sets. Example:
-
-.. code-block:: bash
-
-   $ inkid-train-and-predict ~/data/lunate-sigma/grid-2x5.json ~/data/out/ -k 7 --final-prediction-on-all
-
-It is possible to run all of these with one command if using ``sbatch`` on the server. Example:
-
-.. code-block:: bash
-
-   $ sbatch --array=0-4%2 scripts/slurm_train_and_predict.sh ~/data/CarbonPhantomV3.volpkg/working/2/Col2_k-fold-characters-region-set.json ~/data/out/col2_not_flattened --final-prediction-on-all
-
-After performing a run for each value of k, each will have created a directory of output. If these are all in the same parent directory, there is a script to merge together the individual predictions into a final prediction image. If ``--best-f1`` is passed, it will take the prediction with the best f1 score for each individual region, rather than the final prediction for that region. Example:
-
-.. code-block:: bash
-
-   $ python scripts/misc/add_k_fold_prediction_images.py --dir ~/data/out/carbon_phantom_col1_test/
-
 Miscellaneous
 ^^^^^^^^^^^^^
 
-Dummy dataset, to validate changes haven't broken anything obvious e.g. model dimensions:
+There is a dummy test dataset in the DRI Datasets Drive that is meant to be a small volume to quickly validate
+training and prediction code. If something major has been broken such as dimensions in the neural network model, this will
+make that clear without having to wait for large volumes to load. Example:
 
 .. code-block:: bash
 
