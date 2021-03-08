@@ -140,7 +140,6 @@ def main():
                         help='type of feature model is built on',
                         choices=[
                             'subvolume_3dcnn',
-                            'subvolume_3dunet',
                             'voxel_vector_1dcnn',
                             'descriptive_statistics',
                         ])
@@ -170,6 +169,12 @@ def main():
     parser.add_argument('--no-augmentation', action='store_false', dest='augmentation')
 
     # Network architecture
+    parser.add_argument('--model', metavar='name', default='original',
+                        help='model to run against',
+                        choices=[
+                            'original',
+                            '3dunet_full'
+                        ])
     parser.add_argument('--learning-rate', metavar='n', type=float)
     parser.add_argument('--drop-rate', metavar='n', type=float)
     parser.add_argument('--batch-norm-momentum', metavar='n', type=float)
@@ -325,7 +330,7 @@ def main():
         metadata_file.write(json.dumps(metadata, indent=4, sort_keys=False))
 
     # Define the feature inputs to the network
-    if args.feature_type == 'subvolume_3dcnn' or args.feature_type == 'subvolume_3dunet':
+    if args.feature_type == 'subvolume_3dcnn':
         point_to_subvolume_input = functools.partial(
             regions.point_to_subvolume_input,
             subvolume_shape=args.subvolume_shape,
@@ -440,26 +445,27 @@ def main():
             in_channels = 8
             args.subvolume_shape = [i // 2 for i in args.subvolume_shape]
             args.pad_to_shape = None
-        encoder = inkid.model.Subvolume3DcnnEncoder(args.subvolume_shape, args.pad_to_shape, args.batch_norm_momentum,
-                                                    args.no_batch_norm, args.filters, in_channels)
+        if args.model == 'original':
+            encoder = inkid.model.Subvolume3DcnnEncoder(args.subvolume_shape,
+                                                        args.pad_to_shape,
+                                                        args.batch_norm_momentum,
+                                                        args.no_batch_norm,
+                                                        args.filters,
+                                                        in_channels)
+        elif args.model == '3dunet_full':
+            encoder = inkid.model.Subvolume3DUNet(args.subvolume_shape,
+                                                  args.pad_to_shape,
+                                                  args.batch_norm_momentum,
+                                                  args.unet_starting_channels,
+                                                  in_channels)
+        else:
+            logging.error(f'Model {args.model} is invalid for feature type {args.feature_type}.')
+            return
         if args.model_3d_to_2d:
             decoder = inkid.model.ConvolutionalInkDecoder(args.filters, output_size)
         else:
             decoder = inkid.model.LinearInkDecoder(args.drop_rate, encoder.output_shape, output_size)
         model = torch.nn.Sequential(encoder, decoder)
-    elif args.feature_type == 'subvolume_3dunet':
-        in_channels = 1
-        # TODO: Should we support dwt_channel_subbands (in_channels = 8) here?
-        unet = inkid.model.Subvolume3DUNet(args.subvolume_shape,
-                                           args.pad_to_shape,
-                                           args.batch_norm_momentum,
-                                           args.unet_starting_channels,
-                                           in_channels)
-        if args.model_3d_to_2d:
-            decoder = inkid.model.ConvolutionalInkDecoder(args.filters, output_size)
-        else:
-            decoder = inkid.model.LinearInkDecoder(args.drop_rate, unet.output_shape, output_size)
-        model = torch.nn.Sequential(unet, decoder)
     else:
         logging.error('Feature type: {} does not have a model implementation.'.format(args.feature_type))
         return
