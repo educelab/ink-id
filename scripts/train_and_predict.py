@@ -178,7 +178,7 @@ def main():
                         help='number of filters for each convolution layer')
     parser.add_argument('--unet-starting-channels', metavar='n', type=int,
                         help='number of channels to start with in 3D-UNet')
-    parser.add_argument('--model', metavar='path', default=None,
+    parser.add_argument('--load-weights-from', metavar='path', default=None,
                         help='Pretrained model checkpoint to initialize network')
 
     # Run configuration
@@ -267,8 +267,8 @@ def main():
     _, file_extension = os.path.splitext(args.data)
     file_extension = file_extension.lower()
     if file_extension == '.ppm':
-        if args.model is None:
-            logging.error("Pre-trained model (--model) required when texturing a .ppm file.")
+        if args.load_weights_from is None:
+            logging.error("Pre-trained model (--load-weights-from) required when texturing a .ppm file.")
             return
         if args.override_volume_slices_dir is None:
             logging.error("Volume (--override-volume-slices-dir) required when texturing a .ppm file.")
@@ -465,8 +465,8 @@ def main():
         return
 
     # Load pretrained weights if specified
-    if args.model is not None:
-        checkpoint = torch.load(args.model)
+    if args.load_weights_from is not None:
+        checkpoint = torch.load(args.load_weights_from)
         model.load_state_dict(checkpoint['model_state_dict'])
 
     # Move model to device (possibly GPU)
