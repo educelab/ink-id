@@ -25,11 +25,22 @@ def main():
         print('Could not find a root directory for dri-datasets-drive')
         return
 
-    # Look inside DRI Datasets Drive for the Benchmarks/Datasets folder
-    datasets_dir = os.path.join(dri_datasets_drive_path, 'Benchmarks', 'Datasets')
+    # See if we can find a root of the invisible-library folder locally
+    invisible_library_path = None
+    for candidate_path in [os.path.expanduser('~/repos/invisible-library'),
+                           '/pscratch/seales_uksr/invisible-library']:
+        if os.path.exists(candidate_path):
+            invisible_library_path = candidate_path
+            break
+    if invisible_library_path is None:
+        print('Could not find a root directory for invisible-library')
+        return
+
+    # Look inside invisible-library for the Datasets folder
+    datasets_dir = os.path.join(invisible_library_path, 'Datasets')
     if not os.path.exists(datasets_dir):
-        print(f'Could not find Benchmarks/Datasets directory inside DRI Datasets Drive '
-              f'directory: {dri_datasets_drive_path}')
+        print(f'Could not find Datasets directory inside invisible-library '
+              f'directory: {invisible_library_path}')
         return
 
     # Find which tasks we have results for
@@ -49,6 +60,8 @@ def main():
                 dataset_source_names = [os.path.splitext(os.path.basename(s))[0] for s in dataset_source_files]
                 # See if we have all sources for a given dataset
                 if set(dataset_source_names).issubset(set(task_result_source_names)):
+                    dataset_name = os.path.splitext(os.path.basename(dataset_filename))[0]
+                    print(f'Dataset: {dataset_name}')
                     # If so, we can compute some metrics
                     if task_name == 'rgb':
                         total_ssim = 0
