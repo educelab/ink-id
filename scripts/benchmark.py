@@ -57,6 +57,8 @@ def main():
                         total_pixels = 0
                         result_images = [os.path.join(task_dir, t) for t in os.listdir(task_dir)]
                         for result_image_file in result_images:
+                            result_img = Image.open(result_image_file)
+
                             # Get the corresponding source .json file from the dataset
                             source_name = os.path.splitext(os.path.basename(result_image_file))[0]
                             candidate_sources = [i for i in dataset_source_files if source_name in i]
@@ -67,16 +69,41 @@ def main():
                                 rgb_label_path = source_json['rgb-label']
                                 rgb_label_path = os.path.abspath(os.path.join(os.path.dirname(source_json_path), rgb_label_path))
                                 rgb_label_img = Image.open(rgb_label_path)
-                                pixels_in_img = rgb_label_img.width * rgb_label_img.height
-                                rgb_label_img = np.array(rgb_label_img)
-                            result_img = np.array(Image.open(result_image_file))
+
+                            # Mask images based on region's specified mask
+                            mask_path = source_json['mask']
+                            mask_path = os.path.abspath(os.path.join(os.path.dirname(source_json_path), mask_path))
+                            mask_img = Image.open(mask_path)
+
+                            # Generate new blank image and copy masked label image into it
+                            blank_img = Image.new('RGB', mask_img.size)
+                            blank_img.paste(rgb_label_img, mask=mask_img)
+                            rgb_label_img = blank_img.copy()
+
+                            # Do the same with the result image
+                            blank_img = Image.new('RGB', mask_img.size)
+                            blank_img.paste(result_img, mask=mask_img)
+                            result_img = blank_img.copy()
+
+                            # Crop to region's bounding box
+                            if source_json.get('bounding-box') is not None:
+                                rgb_label_img.crop(source_json['bounding-box'])
+
+                            # Convert images to numpy arrays
+                            rgb_label_img = np.array(rgb_label_img)
+                            result_img = np.array(result_img)
+
+                            pixels_in_img = rgb_label_img.shape[0] * rgb_label_img.shape[1]
+                            total_pixels += pixels_in_img
+
                             img_ssim = ssim(rgb_label_img, result_img, multichannel=True)
                             total_ssim += img_ssim * pixels_in_img
+
                             img_mse = mse(rgb_label_img, result_img)
                             total_mse += img_mse * pixels_in_img
+
                             img_psnr = psnr(rgb_label_img, result_img)
                             total_psnr += img_psnr * pixels_in_img
-                            total_pixels += pixels_in_img
                             # Use that to find and get the corresponding label image
                         # SSIM
                         print(f'SSIM: {total_ssim / total_pixels}')
