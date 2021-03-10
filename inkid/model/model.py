@@ -158,7 +158,8 @@ class Subvolume3DUNet(torch.nn.Module):
                  pad_to_shape,
                  bn_momentum,
                  starting_channels,
-                 in_channels):
+                 in_channels,
+                 decode=True):
         super().__init__()
 
         # Sanity check that our starting_channels is divisible by 2 since we
@@ -188,9 +189,11 @@ class Subvolume3DUNet(torch.nn.Module):
         self._in_channels = in_channels
         self._encoder_modules = torch.nn.ModuleList()
         self._decoder_modules = torch.nn.ModuleList()
-        out_channels = in_channels
+        self._decode = decode
+        # The output shape depends on whether we run the decoder or not.
+        out_channels = in_channels if decode else starting_channels * 16
         output_shape = [out_channels]
-        output_shape.extend(input_shape)
+        output_shape.extend(input_shape if decode else map(lambda x: x / 8, input_shape))
         self.output_shape = tuple(output_shape)
 
         # Build the left side of the "U" shape plus bottom (encoder)
@@ -241,16 +244,25 @@ class Subvolume3DUNet(torch.nn.Module):
         if self._in_channels > 1:
             x = torch.squeeze(x)
 
+        # 0-indexed layers where shortcut/concatenation lines should appear on
+        # both the encoder and decoder sides of the network.
+        ENCODER_SHORTCUT_LAYERS = (1, 4, 7)
+        DECODER_SHORTCUT_LAYERS = (0, 3, 6)
+
         concat_lines = []
 
         for i, layer in enumerate(self._encoder_modules):
             x = layer(x)
-            if i in (1, 4, 7):
+            if i in ENCODER_SHORTCUT_LAYERS:
                 concat_lines.append(x)
+
+        # If we're not supposed to run the decoder section, just return now.
+        if not self._decode:
+            return x
 
         for i, layer in enumerate(self._decoder_modules):
             x = layer(x)
-            if i in (0, 3, 6):
+            if i in DECODER_SHORTCUT_LAYERS:
                 x = torch.cat((concat_lines.pop(), x), dim=1)
 
         return x

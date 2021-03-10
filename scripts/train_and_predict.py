@@ -173,7 +173,8 @@ def main():
                         help='model to run against',
                         choices=[
                             'original',
-                            '3dunet_full'
+                            '3dunet_full',
+                            '3dunet_half'
                         ])
     parser.add_argument('--learning-rate', metavar='n', type=float)
     parser.add_argument('--drop-rate', metavar='n', type=float)
@@ -452,12 +453,13 @@ def main():
                                                         args.no_batch_norm,
                                                         args.filters,
                                                         in_channels)
-        elif args.model == '3dunet_full':
+        elif args.model in ('3dunet_full', '3dunet_half'):
             encoder = inkid.model.Subvolume3DUNet(args.subvolume_shape,
                                                   args.pad_to_shape,
                                                   args.batch_norm_momentum,
                                                   args.unet_starting_channels,
-                                                  in_channels)
+                                                  in_channels,
+                                                  decode=(args.model == '3dunet_full'))
         else:
             logging.error(f'Model {args.model} is invalid for feature type {args.feature_type}.')
             return
