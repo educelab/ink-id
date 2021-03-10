@@ -9,6 +9,22 @@ from skimage.metrics import peak_signal_noise_ratio as psnr
 from skimage.metrics import structural_similarity as ssim
 
 
+def dice(label_img, result_img):
+    # Threshold both images
+    label_img = label_img > 255 / 2
+    result_img = result_img > 255 / 2
+
+    d = np.sum(result_img[label_img]) * 2.0 / (np.sum(result_img) + np.sum(label_img))
+
+    # Visualize to make sure we aren't crazy
+    # label_img = Image.fromarray(label_img)
+    # result_img = Image.fromarray(result_img)
+    # label_img.show()
+    # result_img.show()
+
+    return d
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('results', metavar='DIR')
@@ -80,7 +96,8 @@ def main():
                             with open(source_json_path, 'r') as source_json_file:
                                 source_json = json.load(source_json_file)
                                 rgb_label_path = source_json['rgb-label']
-                                rgb_label_path = os.path.abspath(os.path.join(os.path.dirname(source_json_path), rgb_label_path))
+                                rgb_label_path = os.path.abspath(
+                                    os.path.join(os.path.dirname(source_json_path), rgb_label_path))
                                 rgb_label_img = Image.open(rgb_label_path)
 
                             # Mask images based on region's specified mask
@@ -125,9 +142,59 @@ def main():
                         # PSNR
                         print(f'PSNR: {total_psnr / pixels_in_img}')
                     elif task_name == 'ink':
+                        total_dice = 0
+                        total_mIOU = 0
+                        total_pixels = 0
+                        result_images = [os.path.join(task_dir, t) for t in os.listdir(task_dir)]
+                        for result_image_file in result_images:
+                            result_img = Image.open(result_image_file).convert('L')
+
+                            # Get the corresponding source .json file from the dataset
+                            source_name = os.path.splitext(os.path.basename(result_image_file))[0]
+                            candidate_sources = [i for i in dataset_source_files if source_name in i]
+                            assert len(candidate_sources) == 1
+                            source_json_path = os.path.join(dri_datasets_drive_path, candidate_sources[0])
+                            with open(source_json_path, 'r') as source_json_file:
+                                source_json = json.load(source_json_file)
+                                ink_label_path = source_json['ink-label']
+                                ink_label_path = os.path.abspath(
+                                    os.path.join(os.path.dirname(source_json_path), ink_label_path))
+                                ink_label_img = Image.open(ink_label_path)
+
+                            # Mask images based on region's specified mask
+                            mask_path = source_json['mask']
+                            mask_path = os.path.abspath(os.path.join(os.path.dirname(source_json_path), mask_path))
+                            mask_img = Image.open(mask_path)
+
+                            # Generate new blank image and copy masked label image into it
+                            blank_img = Image.new('L', mask_img.size)
+                            blank_img.paste(ink_label_img, mask=mask_img)
+                            ink_label_img = blank_img.copy()
+
+                            # Do the same with the result image
+                            blank_img = Image.new('L', mask_img.size)
+                            blank_img.paste(result_img, mask=mask_img)
+                            result_img = blank_img.copy()
+
+                            # Crop to region's bounding box
+                            if source_json.get('bounding-box') is not None:
+                                ink_label_img = ink_label_img.crop(source_json['bounding-box'])
+                                # TODO remove, the regions should come pre-cropped maybe.
+                                result_img = result_img.crop(source_json['bounding-box'])
+
+                            # Convert images to numpy arrays
+                            ink_label_img = np.array(ink_label_img)
+                            result_img = np.array(result_img)
+
+                            pixels_in_img = ink_label_img.shape[0] * ink_label_img.shape[1]
+                            total_pixels += pixels_in_img
+
+                            img_dice = dice(ink_label_img, result_img)
+                            total_dice += img_dice * pixels_in_img
                         # Dice
+                        print(f'Dice: {total_dice / total_pixels}')
                         # mIOU
-                        pass
+                        print(f'mIOU: {total_mIOU / total_pixels}')
                     elif task_name == 'volcart-texture':
                         # SSIM
                         # PSNR
