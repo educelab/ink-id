@@ -643,6 +643,9 @@ def main():
         # Read the metadata file and store each of them (we need the region info
         # from all job directories)
         metadata_file = os.path.join(job_dir, 'metadata.json')
+        if not os.path.exists(metadata_file):
+            print(f'No job metadata file found in {job_dir}')
+            return
         with open(metadata_file) as f:
             metadata = json.loads(f.read())
             job_dir_to_metadata[job_dir] = metadata
