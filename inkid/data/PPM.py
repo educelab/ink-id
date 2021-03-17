@@ -65,7 +65,9 @@ class PPM:
         self.process_PPM_file(self._path)
 
         self._ink_classes_prediction_image = np.zeros((self._height, self._width), np.uint16)
+        self._ink_classes_prediction_image_written_to = False
         self._rgb_values_prediction_image = np.zeros((self._height, self._width, 3), np.uint8)
+        self._rgb_values_prediction_image_written_to = False
 
     @staticmethod
     def parse_PPM_header(filename):
@@ -273,6 +275,7 @@ class PPM:
             if 0 <= y_s < self._ink_classes_prediction_image.shape[0] \
                     and 0 <= x_s < self._ink_classes_prediction_image.shape[1]:
                 self._ink_classes_prediction_image[y_s, x_s] = v
+        self._ink_classes_prediction_image_written_to = True
 
     def reconstruct_predicted_rgb(self, rgb, ppm_xy):
         assert len(ppm_xy) == 2
@@ -289,21 +292,24 @@ class PPM:
             if 0 <= y_s < self._rgb_values_prediction_image.shape[0] \
                     and 0 <= x_s < self._rgb_values_prediction_image.shape[1]:
                 self._rgb_values_prediction_image[y_s, x_s] = v
+        self._rgb_values_prediction_image_written_to = True
 
     def reset_predictions(self):
         if self._ink_label is not None:
             self._ink_classes_prediction_image = np.zeros((self._height, self._width), np.uint16)
+            self._ink_classes_prediction_image_written_to = False
         if self._rgb_label is not None:
             self._rgb_values_prediction_image = np.zeros((self._height, self._width, 3), np.uint8)
+            self._rgb_values_prediction_image_written_to = False
 
     def save_predictions(self, directory, suffix):
         if not os.path.exists(directory):
             os.makedirs(directory)
 
         im = None
-        if self._ink_classes_prediction_image.any():
+        if self._ink_classes_prediction_image_written_to:
             im = Image.fromarray(self._ink_classes_prediction_image)
-        elif self._rgb_values_prediction_image.any():
+        elif self._rgb_values_prediction_image_written_to:
             im = Image.fromarray(self._rgb_values_prediction_image)
         if im is not None:
             im.save(
