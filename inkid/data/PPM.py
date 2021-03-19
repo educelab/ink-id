@@ -223,7 +223,7 @@ class PPM:
             out_of_bounds
         )
 
-    def point_to_subvolume(self, point, subvolume_shape,
+    def point_to_subvolume(self, point, subvolume_shape_voxels, subvolume_shape_microns,
                            out_of_bounds=None, move_along_normal=None,
                            jitter_max=None, augment_subvolume=None,
                            method=None, normalize=None,
@@ -234,7 +234,7 @@ class PPM:
         square_corners = None
         if model_3d_to_2d:
             square_corners = []
-            y_d, x_d = np.array([subvolume_shape[1], subvolume_shape[2]]) // 2
+            y_d, x_d = np.array([subvolume_shape_voxels[1], subvolume_shape_voxels[2]]) // 2
             if 0 <= x - x_d and x + x_d < self._width and 0 <= y - y_d and y + y_d < self._height:
                 # Top left
                 square_corners.append(self.get_point_with_normal(ppm_x - x_d, ppm_y - y_d)[0:3])
@@ -246,7 +246,8 @@ class PPM:
                 square_corners.append(self.get_point_with_normal(ppm_x + x_d, ppm_y + y_d)[0:3])
         return self._volume.get_subvolume(
             (x, y, z),
-            subvolume_shape,
+            subvolume_shape_voxels,
+            subvolume_shape_microns,
             normal=(n_x, n_y, n_z),
             out_of_bounds=out_of_bounds,
             move_along_normal=move_along_normal,

@@ -3,6 +3,7 @@
 Define the Volume class to represent volumetric data.
 """
 
+import json
 cimport libc.math as math
 import logging
 import os
@@ -104,6 +105,8 @@ cdef class Volume:
     """
     cdef unsigned short [:, :, :] _data_view
     cdef int shape_z, shape_y, shape_x
+    cdef dict _metadata
+    cdef float _voxelsize
     
     def __init__(self, slices_path):
         """Initialize a volume using a path to the slices directory.
@@ -117,6 +120,18 @@ cdef class Volume:
 
         """
         slices_abs_path = os.path.abspath(slices_path)
+
+        # Load metadata
+        self._metadata = dict()
+        metadata_filename = os.path.join(slices_abs_path, 'meta.json')
+        if not os.path.exists(metadata_filename):
+            logging.warning(f'No volume meta.json file found in {slices_abs_path}')
+        else:
+            with open(metadata_filename) as f:
+                self._metadata = json.loads(f.read())
+        self._voxelsize = self._metadata.get('voxelsize')
+
+        # Get list of slice image filenames
         slice_files = []
         for root, dirs, files in os.walk(slices_abs_path):
             for filename in files:
@@ -126,6 +141,7 @@ cdef class Volume:
                     slice_files.append(os.path.join(root, filename))
         slice_files.sort()
 
+        # Load slice images into volume
         data, w, h, d = None, 0, 0, 0
         logging.info('Loading volume slices from {}...'.format(slices_abs_path))
         bar = progressbar.ProgressBar()
@@ -144,15 +160,6 @@ cdef class Volume:
         self.shape_z = data.shape[0]
         self.shape_y = data.shape[1]
         self.shape_x = data.shape[2]
-
-    def normalize(self):
-        # Don't have a good answer for this right now since it would make everything floats
-        # data = np.asarray(self._data_view, dtype=np.float32)
-        # data = data - data.mean()
-        # data = data / data.std()
-        # data = np.asarray(data, dtype=np.uint16)
-        # self._data_view = data
-        pass
 
     cdef unsigned short intensity_at(self, int x, int y, int z) nogil:
         """Get the intensity value at a voxel position."""
@@ -182,9 +189,9 @@ cdef class Volume:
         dy = math.modf(y, &y0d)
         dz = math.modf(z, &z0d)
 
-        x0 = <int>(x0d)
-        y0 = <int>(y0d)
-        z0 = <int>(z0d)
+        x0 = <int> x0d
+        y0 = <int> y0d
+        z0 = <int> z0d
 
         x1 = x0 + 1
         y1 = y0 + 1
@@ -370,8 +377,8 @@ cdef class Volume:
                     )
 
 
-    def get_subvolume(self, center, shape, normal, out_of_bounds,
-                      move_along_normal, jitter_max,
+    def get_subvolume(self, center, shape_voxels, shape_microns, normal,
+                      out_of_bounds, move_along_normal, jitter_max,
                       augment_subvolume, method, normalize, pad_to_shape,
                       fft, dwt, dwt_channel_subbands, square_corners):
         """Get a subvolume from a center point and normal vector.
@@ -389,7 +396,8 @@ cdef class Volume:
 
         Args:
             center: The starting center point of the subvolume.
-            shape: The desired shape of the subvolume.
+            shape_voxels: The desired shape of the subvolume in voxels.
+            shape_microns: The desired spatial extent of the sampled subvolume in microns. TODO left off
             normal: The normal vector at the center point.
             out_of_bounds: String indicating what to do if the requested
                 subvolume does not fit entirely within the volume.
@@ -405,7 +413,7 @@ cdef class Volume:
 
         """
         assert len(center) == 3
-        assert len(shape) == 3
+        assert len(shape_voxels) == 3
 
         # TODO if square_corners is not None and not empty, modify basis vectors before calling (and center and normal?)
         # TODO if empty return zeros?
@@ -443,11 +451,11 @@ cdef class Volume:
         c.y = center[1]
         c.z = center[2]
 
-        s.z = shape[0]
-        s.y = shape[1]
-        s.x = shape[2]
+        s.z = shape_voxels[0]
+        s.y = shape_voxels[1]
+        s.x = shape_voxels[2]
 
-        subvolume = np.zeros(shape, dtype=np.uint16)
+        subvolume = np.zeros(shape_voxels, dtype=np.uint16)
 
         if square_corners is None or len(square_corners) > 0:
             if square_corners is None:
@@ -493,12 +501,12 @@ cdef class Volume:
             subvolume = subvolume / subvolume.std()
 
         if pad_to_shape is not None:
-            assert pad_to_shape[0] >= shape[0]
-            assert pad_to_shape[1] >= shape[1]
-            assert pad_to_shape[2] >= shape[2]
-            z_d = pad_to_shape[0] - shape[0]
-            y_d = pad_to_shape[1] - shape[1]
-            x_d = pad_to_shape[2] - shape[2]
+            assert pad_to_shape[0] >= shape_voxels[0]
+            assert pad_to_shape[1] >= shape_voxels[1]
+            assert pad_to_shape[2] >= shape_voxels[2]
+            z_d = pad_to_shape[0] - shape_voxels[0]
+            y_d = pad_to_shape[1] - shape_voxels[1]
+            x_d = pad_to_shape[2] - shape_voxels[2]
             subvolume = np.pad(
                 subvolume,
                 (
@@ -510,6 +518,6 @@ cdef class Volume:
             )
             assert subvolume.shape == tuple(pad_to_shape)
         else:
-            assert subvolume.shape == tuple(shape)
+            assert subvolume.shape == tuple(shape_voxels)
 
         return subvolume

@@ -259,7 +259,7 @@ def main():
 
     # Automatically increase prediction grid spacing if using 2D labels, and turn off augmentation
     if args.model_3d_to_2d:
-        args.prediction_grid_spacing = args.subvolume_shape[-1]
+        args.prediction_grid_spacing = args.subvolume_shape_voxels[-1]
         args.augmentation = False
 
     # Define directories for prediction images and checkpoints
@@ -334,7 +334,7 @@ def main():
     if args.feature_type == 'subvolume_3dcnn':
         point_to_subvolume_input = functools.partial(
             regions.point_to_subvolume_input,
-            subvolume_shape=args.subvolume_shape,
+            subvolume_shape=args.subvolume_shape_voxels,
             out_of_bounds='all_zeros',
             move_along_normal=args.move_along_normal,
             method=args.subvolume_method,
@@ -367,7 +367,8 @@ def main():
     elif args.feature_type == 'descriptive_statistics':
         training_features_fn = functools.partial(
             regions.point_to_descriptive_statistics,
-            subvolume_shape=args.subvolume_shape,
+            subvolume_shape_voxels=args.subvolume_shape_voxels,
+            subvolume_shape_microns=args.subvolume_shape_microns
         )
         validation_features_fn = training_features_fn
         prediction_features_fn = training_features_fn
@@ -377,7 +378,7 @@ def main():
 
     # Define the labels
     if args.model_3d_to_2d:
-        label_shape = (args.subvolume_shape[1], args.subvolume_shape[2])
+        label_shape = (args.subvolume_shape_voxels[1], args.subvolume_shape_voxels[2])
     else:
         label_shape = (1, 1)
     if args.label_type == 'ink_classes':
@@ -444,17 +445,17 @@ def main():
         in_channels = 1
         if args.dwt_channel_subbands:
             in_channels = 8
-            args.subvolume_shape = [i // 2 for i in args.subvolume_shape]
+            args.subvolume_shape_voxels = [i // 2 for i in args.subvolume_shape_voxels]
             args.pad_to_shape = None
         if args.model == 'original':
-            encoder = inkid.model.Subvolume3DcnnEncoder(args.subvolume_shape,
+            encoder = inkid.model.Subvolume3DcnnEncoder(args.subvolume_shape_voxels,
                                                         args.pad_to_shape,
                                                         args.batch_norm_momentum,
                                                         args.no_batch_norm,
                                                         args.filters,
                                                         in_channels)
         elif args.model in ('3dunet_full', '3dunet_half'):
-            encoder = inkid.model.Subvolume3DUNet(args.subvolume_shape,
+            encoder = inkid.model.Subvolume3DUNet(args.subvolume_shape_voxels,
                                                   args.pad_to_shape,
                                                   args.batch_norm_momentum,
                                                   args.unet_starting_channels,
@@ -490,7 +491,7 @@ def main():
         logging.warning('Unable to add model graph to TensorBoard, skipping this step')
 
     # Print summary of model
-    shape = (in_channels,) + tuple(args.pad_to_shape or args.subvolume_shape)
+    shape = (in_channels,) + tuple(args.pad_to_shape or args.subvolume_shape_voxels)
     summary = torchsummary.summary(model, shape, device=device, verbose=0, branching=False)
     logging.info('Model summary (sizes represent single batch):\n' + str(summary))
 
