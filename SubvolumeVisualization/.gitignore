@@ -10,3 +10,4 @@ localTestFiles/
 nohup.out
 vis.yml
 **/__pycache__
+**/.ipynb_checkpoints/

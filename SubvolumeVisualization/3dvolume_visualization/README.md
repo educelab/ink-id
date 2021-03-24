@@ -3,8 +3,9 @@ TODO:
 
 # Contents
 * volume_renderer.py: produces 3D volume rendered images of subvolume.
+* subvolume_inspection.ipynb: Jupyter Notebook
 
-# Filename Organization (for display filtering)
+# Volume_renderer Filename Organization (for display filtering)
 ## For subvolume images 
 ```
 {dataset}-{group}-{column}-{truth}-{sample num}-{image-type}.png
@@ -111,3 +112,19 @@ testcase_yt.save_image(scene, output_dir, [args])
 testcase.animated_full_rotation(scene, n_steps=120)
 ```
 
+# subvolume_inspection.ipynb
+Requires config file (`input_data.info`)
+
+Example
+```
+[input_data]
+dataset_name = CarbonPhantom
+subvol_type = NearestNeighbor
+col = Col2
+ground_truth = NoInkIndividual
+dataset_num = 8
+input_prefix = /home/mhaya2/3d-utilities/SubvolumeVisualization/Data/labeled_subvolume_sampler/
+
+[output]
+output_prefix = /home/mhaya2/3d-utilities/SubvolumeVisualization/Results/InputSubvolumeInspections/
+```
