@@ -110,6 +110,7 @@ def create_tensorboard_plots(base_dir, out_dir):
     for scalar in scalars:
         for smooth in [True, False]:
             fig, ax = plt.subplots()
+            make_this_plot = True
             for run in multiplexer.Runs():
                 run_path = PurePath(run)
                 label = k_from_dir(run_path.parts[0])
@@ -125,16 +126,24 @@ def create_tensorboard_plots(base_dir, out_dir):
                     smoothing_window = int(smoothing_window / 2) * 2 + 1
                     # For small sets make sure we at least do some smoothing
                     smoothing_window = max(smoothing_window, 5)
-                    value = savgol_filter(value, smoothing_window, 3)
+                    # If this is a very small set of points, it doesn't need any smoothing.
+                    # Move on and rely on the unsmoothed plot which will also be generated.
+                    if smoothing_window > len(value):
+                        print(f'Skipping smoothed plot for {run} since smoothing window would exceed data length.')
+                        make_this_plot = False
+                    # Do the smoothing
+                    if make_this_plot:
+                        value = savgol_filter(value, smoothing_window, 3)
                 plt.plot(step, value, label=label)
-            title = scalar
-            if smooth:
-                title += ' (smoothed)'
-            ax.set(xlabel='step', ylabel=scalar, title=title)
-            ax.grid()
-            if len(multiplexer.Runs()) > 1:
-                plt.legend(title='k-fold job')
-            fig.savefig(os.path.join(out_dir, f'{title}.png'))
+            if make_this_plot:
+                title = scalar
+                if smooth:
+                    title += ' (smoothed)'
+                ax.set(xlabel='step', ylabel=scalar, title=title)
+                ax.grid()
+                if len(multiplexer.Runs()) > 1:
+                    plt.legend(title='k-fold job')
+                fig.savefig(os.path.join(out_dir, f'{title}.png'))
 
 
 # Return a prediction image of the specified iteration, job directory,
