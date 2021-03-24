@@ -9,8 +9,7 @@ import struct
 
 import numpy as np
 from PIL import Image
-import progressbar
-
+from tqdm import tqdm
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
@@ -36,9 +35,8 @@ def main():
         f.write('{}\n'.format('<>'))
 
     # Write the data
-    bar = progressbar.ProgressBar()
     with open(args.ppm, 'ab') as f:
-        for tif_y in bar(range(0, len(tif), args.stepsize)):
+        for tif_y in tqdm(range(0, len(tif), args.stepsize)):
             for tif_x in range(0, len(tif[tif_y]), args.stepsize):
                 tif_z = tif[tif_y][tif_x]
                 ppm_coordinate = [

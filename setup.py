@@ -28,7 +28,6 @@ setup(
         'mathutils',
         'matplotlib',
         'Pillow',
-        'progressbar2',
         'pygifsicle',
         'pylint',
         'pywavelets',

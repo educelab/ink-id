@@ -5,7 +5,7 @@ import struct
 
 import numpy as np
 from PIL import Image
-import progressbar
+from tqdm import tqdm
 
 
 class PPM:
@@ -146,8 +146,7 @@ class PPM:
                 if header_terminator_re.match(line):
                     break
 
-            bar = progressbar.ProgressBar()
-            for y in bar(range(self._height)):
+            for y in tqdm(range(self._height)):
                 for x in range(self._width):
                     for idx in range(self._dim):
                         # This only works if we assume dimension 6
@@ -325,8 +324,7 @@ class PPM:
         new_data = np.empty((self._height, self._width, self._dim))
 
         logging.info('Downscaling PPM by factor of {} on all axes...'.format(scale_factor))
-        bar = progressbar.ProgressBar()
-        for y in bar(range(self._height)):
+        for y in tqdm(range(self._height)):
             for x in range(self._width):
                 for idx in range(self._dim):
                     new_data[y, x, idx] = self._data[y * scale_factor, x * scale_factor, idx]
@@ -343,8 +341,7 @@ class PPM:
             f.write('type: double\n'.encode('utf-8'))
             f.write('version: {}\n'.format(self._version).encode('utf-8'))
             f.write('<>\n'.encode('utf-8'))
-            bar = progressbar.ProgressBar()
-            for y in bar(range(self._height)):
+            for y in tqdm(range(self._height)):
                 for x in range(self._width):
                     for idx in range(self._dim):
                         f.write(struct.pack('d', self._data[y, x, idx]))
