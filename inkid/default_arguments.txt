@@ -1,5 +1,5 @@
 # Subvolume geometry
-subvolume-shape = [34, 34, 34]
+subvolume-shape-voxels = [34, 34, 34]
 move-along-normal = 0
 
 # Voxel vector geometry

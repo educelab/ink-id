@@ -20,10 +20,12 @@ def add_subvolume_args(parser):
                             'nearest_neighbor',
                             'interpolated',
                         ])
-    parser.add_argument('--subvolume-shape', metavar='n', nargs=3, type=int, default=None,
-                        help='subvolume shape in z y x')
-    parser.add_argument('--pad-to-shape', metavar='n', nargs=3, type=int, default=None,
-                        help='pad subvolume with zeros to be of given shape (default no padding)')
+    parser.add_argument('--subvolume-shape-microns', metavar='um', nargs=3, type=float, default=None,
+                        help='subvolume shape (microns) in (z, y, x)')
+    parser.add_argument('--subvolume-shape-voxels', metavar='n', nargs=3, type=int, default=None,
+                        help='subvolume shape (voxels) in (z, y, x)')
+    parser.add_argument('--pad-to-shape-voxels', metavar='n', nargs=3, type=int, default=None,
+                        help='pad subvolume with zeros to be of given shape in voxels (default no padding)')
     parser.add_argument('--move-along-normal', metavar='n', type=float,
                         help='number of voxels to move along normal before getting a subvolume')
     parser.add_argument('--normalize-subvolumes', action='store_true',
