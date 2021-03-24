@@ -227,8 +227,7 @@ class PPM:
                            out_of_bounds=None, move_along_normal=None,
                            jitter_max=None, augment_subvolume=None,
                            method=None, normalize=None,
-                           pad_to_shape=None,
-                           fft=None, dwt=None, dwt_channel_subbands=None, model_3d_to_2d=None):
+                           model_3d_to_2d=None):
         ppm_x, ppm_y = point
         x, y, z, n_x, n_y, n_z = self.get_point_with_normal(ppm_x, ppm_y)
         square_corners = None
@@ -255,11 +254,7 @@ class PPM:
             augment_subvolume=augment_subvolume,
             method=method,
             normalize=normalize,
-            pad_to_shape_voxels=pad_to_shape,
             square_corners=square_corners,
-            fft=fft,
-            dwt=dwt,
-            dwt_channel_subbands=dwt_channel_subbands,
         )
 
     def reconstruct_predicted_ink_classes(self, class_probabilities, ppm_xy):

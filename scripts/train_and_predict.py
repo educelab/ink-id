@@ -339,11 +339,7 @@ def main():
             move_along_normal=args.move_along_normal,
             method=args.subvolume_method,
             normalize=args.normalize_subvolumes,
-            pad_to_shape=args.pad_to_shape_voxels,
             model_3d_to_2d=args.model_3d_to_2d,
-            fft=args.fft,
-            dwt=args.dwt,
-            dwt_channel_subbands=args.dwt_channel_subbands,
         )
         training_features_fn = functools.partial(
             point_to_subvolume_input,
@@ -446,20 +442,14 @@ def main():
     # Create the model for training
     if args.feature_type == 'subvolume_3dcnn':
         in_channels = 1
-        if args.dwt_channel_subbands:
-            in_channels = 8
-            args.subvolume_shape_voxels = [i // 2 for i in args.subvolume_shape_voxels]
-            args.pad_to_shape_voxels = None
         if args.model == 'original':
             encoder = inkid.model.Subvolume3DcnnEncoder(args.subvolume_shape_voxels,
-                                                        args.pad_to_shape_voxels,
                                                         args.batch_norm_momentum,
                                                         args.no_batch_norm,
                                                         args.filters,
                                                         in_channels)
         elif args.model in ('3dunet_full', '3dunet_half'):
             encoder = inkid.model.Subvolume3DUNet(args.subvolume_shape_voxels,
-                                                  args.pad_to_shape_voxels,
                                                   args.batch_norm_momentum,
                                                   args.unet_starting_channels,
                                                   in_channels,
@@ -494,7 +484,7 @@ def main():
         logging.warning('Unable to add model graph to TensorBoard, skipping this step')
 
     # Print summary of model
-    shape = (in_channels,) + tuple(args.pad_to_shape_voxels or args.subvolume_shape_voxels)
+    shape = (in_channels,) + tuple(args.subvolume_shape_voxels)
     summary = torchsummary.summary(model, shape, device=device, verbose=0, branching=False)
     logging.info('Model summary (sizes represent single batch):\n' + str(summary))
 

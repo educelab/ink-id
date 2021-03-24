@@ -394,8 +394,7 @@ cdef class Volume:
 
     def get_subvolume(self, center, shape_voxels, shape_microns, normal,
                       out_of_bounds, move_along_normal, jitter_max,
-                      augment_subvolume, method, normalize, pad_to_shape_voxels,
-                      fft, dwt, dwt_channel_subbands, square_corners):
+                      augment_subvolume, method, normalize, square_corners):
         """Get a subvolume from a center point and normal vector.
 
         At the time of writing, this function very closely resembles
@@ -509,41 +508,12 @@ cdef class Volume:
             rotate_direction = np.random.randint(4)
             subvolume = np.rot90(subvolume, k=rotate_direction, axes=(1, 2))
 
-        if fft:
-            subvolume = np.real(np.fft.fftn(subvolume))
-            subvolume = np.log(np.abs(np.fft.fftshift(subvolume)) + 1e-7)
-
-        if dwt is not None:
-            coeffs = pywt.wavedecn(subvolume, wavelet=dwt, level=1)
-            if dwt_channel_subbands:
-                subvolume = np.stack((coeffs[0], *coeffs[1].values()), axis=0)
-                return subvolume
-            else:
-                subvolume, _ = pywt.coeffs_to_array(coeffs)
-
-        if normalize or fft:
+        if normalize:
             subvolume = np.asarray(subvolume, dtype=np.float32)
             subvolume = subvolume - subvolume.mean()
             subvolume = subvolume / subvolume.std()
 
-        if pad_to_shape_voxels is not None:
-            assert pad_to_shape_voxels[0] >= shape_voxels[0]
-            assert pad_to_shape_voxels[1] >= shape_voxels[1]
-            assert pad_to_shape_voxels[2] >= shape_voxels[2]
-            z_d = pad_to_shape_voxels[0] - shape_voxels[0]
-            y_d = pad_to_shape_voxels[1] - shape_voxels[1]
-            x_d = pad_to_shape_voxels[2] - shape_voxels[2]
-            subvolume = np.pad(
-                subvolume,
-                (
-                    (z_d // 2, z_d - (z_d // 2)),
-                    (y_d // 2, y_d - (y_d // 2)),
-                    (x_d // 2, x_d - (x_d // 2)),
-                ),
-                'constant'
-            )
-            assert subvolume.shape == tuple(pad_to_shape_voxels)
-        else:
-            assert subvolume.shape == tuple(shape_voxels)
+
+        assert subvolume.shape == tuple(shape_voxels)
 
         return subvolume

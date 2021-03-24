@@ -23,14 +23,11 @@ def conv_output_shape(input_shape, kernel_size: Union[int, tuple], stride: Union
 
 
 class Subvolume3DcnnEncoder(torch.nn.Module):
-    def __init__(self, subvolume_shape, pad_to_shape,
+    def __init__(self, subvolume_shape,
                  batch_norm_momentum, no_batch_norm, filters, in_channels):
         super().__init__()
 
-        if pad_to_shape is not None:
-            input_shape = pad_to_shape
-        else:
-            input_shape = subvolume_shape
+        input_shape = subvolume_shape
 
         self._batch_norm = not no_batch_norm
         self._in_channels = in_channels
@@ -155,7 +152,6 @@ class ConvolutionalInkDecoder(torch.nn.Module):
 class Subvolume3DUNet(torch.nn.Module):
     def __init__(self,
                  subvolume_shape,
-                 pad_to_shape,
                  bn_momentum,
                  starting_channels,
                  in_channels,
@@ -167,10 +163,7 @@ class Subvolume3DUNet(torch.nn.Module):
         if starting_channels % 2 != 0:
             raise ValueError('starting_channels must be divisible by 2')
 
-        if pad_to_shape is not None:
-            input_shape = pad_to_shape
-        else:
-            input_shape = subvolume_shape
+        input_shape = subvolume_shape
 
         pool_kernel_size = 2
         pool_stride = 2

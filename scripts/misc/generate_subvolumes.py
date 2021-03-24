@@ -29,10 +29,6 @@ def main():
     parser.add_argument('--no-augmentation', action='store_false', dest='augmentation')
     args = parser.parse_args()
 
-    if args.subvolume_shape_voxels is None and args.pad_to_shape_voxels is None:
-        print('Must specify either --subvolume-shape-voxels or --pad-to-shape-voxels')
-        return
-
     region_data = inkid.data.RegionSet.get_data_from_file(args.input)
     os.makedirs(args.output, exist_ok=True)
 
@@ -50,9 +46,6 @@ def main():
         move_along_normal=args.move_along_normal,
         method=args.subvolume_method,
         normalize=args.normalize_subvolumes,
-        pad_to_shape=args.pad_to_shape_voxels,
-        fft=args.fft,
-        dwt=args.dwt,
         augment_subvolume=args.augmentation,
         jitter_max=args.jitter_max,
     )
@@ -74,9 +67,8 @@ def main():
     points_dl = torch.utils.data.DataLoader(points_ds, shuffle=True)
 
     square_side_length = math.ceil(math.sqrt(args.number))
-    subvolume_shape_voxels = args.pad_to_shape_voxels or args.subvolume_shape_voxels
     pad = 20
-    padded_shape_voxels = [i + pad * 2 for i in subvolume_shape_voxels]
+    padded_shape_voxels = [i + pad * 2 for i in args.subvolume_shape_voxels]
     concatenated_shape = [padded_shape_voxels[0],
                           padded_shape_voxels[1] * square_side_length,
                           padded_shape_voxels[2] * square_side_length]

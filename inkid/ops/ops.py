@@ -22,18 +22,12 @@ def add_subvolume_args(parser):
                         ])
     parser.add_argument('--subvolume-shape-microns', metavar='um', nargs=3, type=float, default=None,
                         help='subvolume shape (microns) in (z, y, x)')
-    parser.add_argument('--subvolume-shape-voxels', metavar='n', nargs=3, type=int, default=None,
+    parser.add_argument('--subvolume-shape-voxels', metavar='n', nargs=3, type=int, required=True,
                         help='subvolume shape (voxels) in (z, y, x)')
-    parser.add_argument('--pad-to-shape-voxels', metavar='n', nargs=3, type=int, default=None,
-                        help='pad subvolume with zeros to be of given shape in voxels (default no padding)')
     parser.add_argument('--move-along-normal', metavar='n', type=float,
                         help='number of voxels to move along normal before getting a subvolume')
     parser.add_argument('--normalize-subvolumes', action='store_true',
                         help='normalize each subvolume to zero mean and unit variance on the fly')
-    parser.add_argument('--fft', action='store_true', help='Apply FFT to subvolumes')
-    parser.add_argument('--dwt', metavar='name', default=None, help='Apply specified DWT to subvolumes')
-    parser.add_argument('--dwt-channel-subbands', action='store_true',
-                        help='Combine DWT subbands into multiple channels of smaller subvolume')
 
 
 def visualize_batch(xb, yb):
