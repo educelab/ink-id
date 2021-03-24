@@ -124,13 +124,13 @@ def create_tensorboard_plots(base_dir, out_dir):
                     # Ensure odd number, required for savgol_filter
                     smoothing_window = int(smoothing_window / 2) * 2 + 1
                     # For small sets make sure we at least do some smoothing
-                    smoothing_window = min(max(smoothing_window, 5), len(value))
-                    # Smoothing window must be odd
-                    if smoothing_window % 2 == 0:
-                        smoothing_window -= 1
-                    # Polyorder must be less than window
-                    order = min(smoothing_window - 1, 3)
-                    value = savgol_filter(value, smoothing_window, order)
+                    smoothing_window = max(smoothing_window, 5)
+                    # If this is a very small set of points, it doesn't need any smoothing.
+                    # Move on and rely on the unsmoothed plot which will also be generated.
+                    if smoothing_window > len(value):
+                        continue
+                    # Do the smoothing
+                    value = savgol_filter(value, smoothing_window, 3)
                 plt.plot(step, value, label=label)
             title = scalar
             if smooth:
