@@ -229,7 +229,8 @@ class RegionSet:
         return np.asarray(voxel_vector, np.float32)
 
     def point_to_subvolume_input(self, region_id_with_point,
-                                 subvolume_shape, out_of_bounds=None,
+                                 subvolume_shape_voxels, subvolume_shape_microns,
+                                 out_of_bounds=None,
                                  move_along_normal=None,
                                  jitter_max=None,
                                  augment_subvolume=None, method=None,
@@ -245,7 +246,8 @@ class RegionSet:
         region_id, x, y = region_id_with_point
         subvolume = self._regions[region_id].ppm.point_to_subvolume(
             (x, y),
-            subvolume_shape,
+            subvolume_shape_voxels,
+            subvolume_shape_microns,
             out_of_bounds=out_of_bounds,
             move_along_normal=move_along_normal,
             jitter_max=jitter_max,

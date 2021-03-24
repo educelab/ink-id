@@ -255,7 +255,7 @@ class PPM:
             augment_subvolume=augment_subvolume,
             method=method,
             normalize=normalize,
-            pad_to_shape=pad_to_shape,
+            pad_to_shape_voxels=pad_to_shape,
             square_corners=square_corners,
             fft=fft,
             dwt=dwt,

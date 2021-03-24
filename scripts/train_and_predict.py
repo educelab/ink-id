@@ -200,6 +200,7 @@ def main():
     parser.add_argument('--checkpoint-every-n-batches', metavar='n', type=int)
     parser.add_argument('--final-prediction-on-all', action='store_true')
     parser.add_argument('--skip-training', action='store_true')
+    parser.add_argument('--dataloaders-num-workers', metavar='n', type=int, default=None)
 
     # Rclone
     parser.add_argument('--rclone-transfer-remote', metavar='remote', default=None,
@@ -233,9 +234,7 @@ def main():
         else:
             dirs_in_output = [os.path.join(args.output, f) for f in os.listdir(args.output)]
             dirs_in_output = list(filter(os.path.isdir, dirs_in_output))
-            print(dirs_in_output)
             for job_dir in dirs_in_output:
-                print(job_dir)
                 if job_dir.endswith(f'_{args.k}'):
                     logging.error(f'Cross-validation directory for same k already exists '
                                   f'in output directory: {job_dir}')
@@ -334,12 +333,13 @@ def main():
     if args.feature_type == 'subvolume_3dcnn':
         point_to_subvolume_input = functools.partial(
             regions.point_to_subvolume_input,
-            subvolume_shape=args.subvolume_shape_voxels,
+            subvolume_shape_voxels=args.subvolume_shape_voxels,
+            subvolume_shape_microns=args.subvolume_shape_microns,
             out_of_bounds='all_zeros',
             move_along_normal=args.move_along_normal,
             method=args.subvolume_method,
             normalize=args.normalize_subvolumes,
-            pad_to_shape=args.pad_to_shape,
+            pad_to_shape=args.pad_to_shape_voxels,
             model_3d_to_2d=args.model_3d_to_2d,
             fft=args.fft,
             dwt=args.dwt,
@@ -420,17 +420,20 @@ def main():
     pred_ds = inkid.data.PointsDataset(regions, ['prediction'], prediction_features_fn, lambda p: p,
                                        grid_spacing=args.prediction_grid_spacing)
 
+    if args.dataloaders_num_workers is None:
+        args.dataloaders_num_workers = multiprocessing.cpu_count()
+
     # Define the dataloaders which implement batching, shuffling, etc.
     train_dl, val_dl, pred_dl = None, None, None
     if len(train_ds) > 0:
         train_dl = DataLoader(train_ds, batch_size=args.batch_size, shuffle=True,
-                              num_workers=multiprocessing.cpu_count())
+                              num_workers=args.dataloaders_num_workers)
     if len(val_ds) > 0:
         val_dl = DataLoader(val_ds, batch_size=args.batch_size * 2, shuffle=True,
-                            num_workers=multiprocessing.cpu_count())
+                            num_workers=args.dataloaders_num_workers)
     if len(pred_ds) > 0:
         pred_dl = DataLoader(pred_ds, batch_size=args.batch_size * 2, shuffle=False,
-                             num_workers=multiprocessing.cpu_count())
+                             num_workers=args.dataloaders_num_workers)
 
     # Specify the compute device for PyTorch purposes
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -446,17 +449,17 @@ def main():
         if args.dwt_channel_subbands:
             in_channels = 8
             args.subvolume_shape_voxels = [i // 2 for i in args.subvolume_shape_voxels]
-            args.pad_to_shape = None
+            args.pad_to_shape_voxels = None
         if args.model == 'original':
             encoder = inkid.model.Subvolume3DcnnEncoder(args.subvolume_shape_voxels,
-                                                        args.pad_to_shape,
+                                                        args.pad_to_shape_voxels,
                                                         args.batch_norm_momentum,
                                                         args.no_batch_norm,
                                                         args.filters,
                                                         in_channels)
         elif args.model in ('3dunet_full', '3dunet_half'):
             encoder = inkid.model.Subvolume3DUNet(args.subvolume_shape_voxels,
-                                                  args.pad_to_shape,
+                                                  args.pad_to_shape_voxels,
                                                   args.batch_norm_momentum,
                                                   args.unet_starting_channels,
                                                   in_channels,
@@ -491,7 +494,7 @@ def main():
         logging.warning('Unable to add model graph to TensorBoard, skipping this step')
 
     # Print summary of model
-    shape = (in_channels,) + tuple(args.pad_to_shape or args.subvolume_shape_voxels)
+    shape = (in_channels,) + tuple(args.pad_to_shape_voxels or args.subvolume_shape_voxels)
     summary = torchsummary.summary(model, shape, device=device, verbose=0, branching=False)
     logging.info('Model summary (sizes represent single batch):\n' + str(summary))
 
@@ -573,7 +576,7 @@ def main():
                                                      grid_spacing=args.prediction_grid_spacing)
             if len(final_pred_ds) > 0:
                 final_pred_dl = DataLoader(final_pred_ds, batch_size=args.batch_size * 2, shuffle=False,
-                                           num_workers=multiprocessing.cpu_count())
+                                           num_workers=args.dataloaders_num_workers)
                 generate_prediction_image(final_pred_dl, model, output_size, args.label_type, device,
                                           predictions_dir, 'final', reconstruct_fn, regions, label_shape,
                                           args.prediction_averaging, args.prediction_grid_spacing)
