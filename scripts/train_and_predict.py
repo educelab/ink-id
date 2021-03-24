@@ -35,6 +35,7 @@ import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 import torchsummary
+from tqdm import tqdm
 
 import inkid
 
@@ -44,7 +45,7 @@ def perform_validation(model, dataloader, metrics, device, label_type):
     model.eval()  # Turn off training mode for batch norm and dropout purposes
     with torch.no_grad():
         metric_results = {metric: [] for metric in metrics}
-        for xb, yb in dataloader:
+        for xb, yb in tqdm(dataloader):
             pred = model(xb.to(device))
             yb = yb.to(device)
             if label_type == 'ink_classes':
@@ -66,7 +67,7 @@ def generate_prediction_image(dataloader, model, output_size, label_type, device
     points = np.empty(shape=(0, 3))
     model.eval()  # Turn off training mode for batch norm and dropout purposes
     with torch.no_grad():
-        for pxb, pts in dataloader:
+        for pxb, pts in tqdm(dataloader):
             # Smooth predictions via augmentation. Augment each subvolume 8-fold via rotations and flips
             if prediction_averaging:
                 rotations = range(4)
