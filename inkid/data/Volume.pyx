@@ -3,6 +3,7 @@
 Define the Volume class to represent volumetric data.
 """
 
+import json
 cimport libc.math as math
 import logging
 import os
@@ -12,8 +13,8 @@ import mathutils
 import numpy as np
 cimport numpy as cnp
 from PIL import Image
-import progressbar
 import pywt
+from tqdm import tqdm
 
 
 cdef BasisVectors get_basis_from_square(square_corners):
@@ -104,6 +105,8 @@ cdef class Volume:
     """
     cdef unsigned short [:, :, :] _data_view
     cdef int shape_z, shape_y, shape_x
+    cdef dict _metadata
+    cdef float _voxelsize
     
     def __init__(self, slices_path):
         """Initialize a volume using a path to the slices directory.
@@ -117,6 +120,18 @@ cdef class Volume:
 
         """
         slices_abs_path = os.path.abspath(slices_path)
+
+        # Load metadata
+        self._metadata = dict()
+        metadata_filename = os.path.join(slices_abs_path, 'meta.json')
+        if not os.path.exists(metadata_filename):
+            logging.warning(f'No volume meta.json file found in {slices_abs_path}')
+        else:
+            with open(metadata_filename) as f:
+                self._metadata = json.loads(f.read())
+        self._voxelsize = self._metadata.get('voxelsize')
+
+        # Get list of slice image filenames
         slice_files = []
         for root, dirs, files in os.walk(slices_abs_path):
             for filename in files:
@@ -126,10 +141,10 @@ cdef class Volume:
                     slice_files.append(os.path.join(root, filename))
         slice_files.sort()
 
+        # Load slice images into volume
         data, w, h, d = None, 0, 0, 0
         logging.info('Loading volume slices from {}...'.format(slices_abs_path))
-        bar = progressbar.ProgressBar()
-        for slice_i, slice_file in bar(list(enumerate(slice_files))):
+        for slice_i, slice_file in tqdm(list(enumerate(slice_files))):
             if data is None:
                 w, h = Image.open(slice_file).size
                 d = len(slice_files)
@@ -144,15 +159,6 @@ cdef class Volume:
         self.shape_z = data.shape[0]
         self.shape_y = data.shape[1]
         self.shape_x = data.shape[2]
-
-    def normalize(self):
-        # Don't have a good answer for this right now since it would make everything floats
-        # data = np.asarray(self._data_view, dtype=np.float32)
-        # data = data - data.mean()
-        # data = data / data.std()
-        # data = np.asarray(data, dtype=np.uint16)
-        # self._data_view = data
-        pass
 
     cdef unsigned short intensity_at(self, int x, int y, int z) nogil:
         """Get the intensity value at a voxel position."""
@@ -182,9 +188,9 @@ cdef class Volume:
         dy = math.modf(y, &y0d)
         dz = math.modf(z, &z0d)
 
-        x0 = <int>(x0d)
-        y0 = <int>(y0d)
-        z0 = <int>(z0d)
+        x0 = <int> x0d
+        y0 = <int> y0d
+        z0 = <int> z0d
 
         x1 = x0 + 1
         y1 = y0 + 1
@@ -287,22 +293,30 @@ cdef class Volume:
 
         return subvolume
 
-    cdef void interpolated_with_basis_vectors(self, Float3 center, Int3 shape, BasisVectors basis, uint16[:,:,:] array) nogil:
+    cdef void interpolated_with_basis_vectors(self, Float3 center, Int3 shape_voxels, Float3 shape_microns, BasisVectors basis, uint16[:,:,:] array) nogil:
         cdef int x, y, z, x_offset, y_offset, z_offset
-        cdef Float3 volume_point
+        cdef Float3 volume_point, subvolume_voxel_size_microns, subvolume_voxel_size_volume_voxel_size_ratio
         cdef Int3 offset
+
+        subvolume_voxel_size_microns.x = shape_microns.x / shape_voxels.x
+        subvolume_voxel_size_microns.y = shape_microns.y / shape_voxels.y
+        subvolume_voxel_size_microns.z = shape_microns.z / shape_voxels.z
+
+        subvolume_voxel_size_volume_voxel_size_ratio.x = subvolume_voxel_size_microns.x / self._voxelsize
+        subvolume_voxel_size_volume_voxel_size_ratio.y = subvolume_voxel_size_microns.y / self._voxelsize
+        subvolume_voxel_size_volume_voxel_size_ratio.z = subvolume_voxel_size_microns.z / self._voxelsize
         
-        for z in range(shape.z):
-            for y in range(shape.y):
-                for x in range(shape.x):
+        for z in range(shape_voxels.z):
+            for y in range(shape_voxels.y):
+                for x in range(shape_voxels.x):
                     # Convert from an index relative to an origin in
                     # the corner to a position relative to the
                     # subvolume center (which may not correspond
                     # exactly to one of the subvolume voxel positions
                     # if any of the side lengths are even).
-                    offset.x = <int>((-1 * (shape.x - 1) / 2.0 + x) + 0.5)
-                    offset.y = <int>((-1 * (shape.y - 1) / 2.0 + y) + 0.5)
-                    offset.z = <int>((-1 * (shape.z - 1) / 2.0 + z) + 0.5)
+                    offset.x = <int>((-1 * (shape_voxels.x - 1) / 2.0 + x) + 0.5)
+                    offset.y = <int>((-1 * (shape_voxels.y - 1) / 2.0 + y) + 0.5)
+                    offset.z = <int>((-1 * (shape_voxels.z - 1) / 2.0 + z) + 0.5)
 
                     # Calculate the corresponding position in the
                     # volume.
@@ -310,17 +324,17 @@ cdef class Volume:
                     volume_point.y = center.y
                     volume_point.z = center.z
                     
-                    volume_point.x += offset.x * basis.x.x
-                    volume_point.y += offset.x * basis.x.y
-                    volume_point.z += offset.x * basis.x.z
+                    volume_point.x += offset.x * basis.x.x * subvolume_voxel_size_volume_voxel_size_ratio.x
+                    volume_point.y += offset.x * basis.x.y * subvolume_voxel_size_volume_voxel_size_ratio.x
+                    volume_point.z += offset.x * basis.x.z * subvolume_voxel_size_volume_voxel_size_ratio.x
 
-                    volume_point.x += offset.y * basis.y.x
-                    volume_point.y += offset.y * basis.y.y
-                    volume_point.z += offset.y * basis.y.z
+                    volume_point.x += offset.y * basis.y.x * subvolume_voxel_size_volume_voxel_size_ratio.y
+                    volume_point.y += offset.y * basis.y.y * subvolume_voxel_size_volume_voxel_size_ratio.y
+                    volume_point.z += offset.y * basis.y.z * subvolume_voxel_size_volume_voxel_size_ratio.y
 
-                    volume_point.x += offset.z * basis.z.x
-                    volume_point.y += offset.z * basis.z.y
-                    volume_point.z += offset.z * basis.z.z
+                    volume_point.x += offset.z * basis.z.x * subvolume_voxel_size_volume_voxel_size_ratio.z
+                    volume_point.y += offset.z * basis.z.y * subvolume_voxel_size_volume_voxel_size_ratio.z
+                    volume_point.z += offset.z * basis.z.z * subvolume_voxel_size_volume_voxel_size_ratio.z
                     
                     array[z, y, x] = self.interpolate_at(
                         volume_point.x,
@@ -328,40 +342,48 @@ cdef class Volume:
                         volume_point.z
                     )
 
-    cdef void nearest_neighbor_with_basis_vectors(self, Float3 center, Int3 shape, BasisVectors basis, uint16[:,:,:] array) nogil:
+    cdef void nearest_neighbor_with_basis_vectors(self, Float3 center, Int3 shape_voxels, Float3 shape_microns, BasisVectors basis, uint16[:,:,:] array) nogil:
         cdef int x, y, z, x_offset, y_offset, z_offset
-        cdef Float3 volume_point
+        cdef Float3 volume_point, subvolume_voxel_size_microns, subvolume_voxel_size_volume_voxel_size_ratio
         cdef Int3 offset
+
+        subvolume_voxel_size_microns.x = shape_microns.x / shape_voxels.x
+        subvolume_voxel_size_microns.y = shape_microns.y / shape_voxels.y
+        subvolume_voxel_size_microns.z = shape_microns.z / shape_voxels.z
+
+        subvolume_voxel_size_volume_voxel_size_ratio.x = subvolume_voxel_size_microns.x / self._voxelsize
+        subvolume_voxel_size_volume_voxel_size_ratio.y = subvolume_voxel_size_microns.y / self._voxelsize
+        subvolume_voxel_size_volume_voxel_size_ratio.z = subvolume_voxel_size_microns.z / self._voxelsize
         
-        for z in range(shape.z):
-            for y in range(shape.y):
-                for x in range(shape.x):
+        for z in range(shape_voxels.z):
+            for y in range(shape_voxels.y):
+                for x in range(shape_voxels.x):
                     # Convert from an index relative to an origin in
                     # the corner to a position relative to the
                     # subvolume center (which may not correspond
                     # exactly to one of the subvolume voxel positions
                     # if any of the side lengths are even).
-                    offset.x = <int>((-1 * (shape.x - 1) / 2.0 + x) + 0.5)
-                    offset.y = <int>((-1 * (shape.y - 1) / 2.0 + y) + 0.5)
-                    offset.z = <int>((-1 * (shape.z - 1) / 2.0 + z) + 0.5)
+                    offset.x = <int>((-1 * (shape_voxels.x - 1) / 2.0 + x) + 0.5)
+                    offset.y = <int>((-1 * (shape_voxels.y - 1) / 2.0 + y) + 0.5)
+                    offset.z = <int>((-1 * (shape_voxels.z - 1) / 2.0 + z) + 0.5)
 
                     # Calculate the corresponding position in the
                     # volume.
                     volume_point.x = center.x
                     volume_point.y = center.y
                     volume_point.z = center.z
-                    
-                    volume_point.x += offset.x * basis.x.x
-                    volume_point.y += offset.x * basis.x.y
-                    volume_point.z += offset.x * basis.x.z
 
-                    volume_point.x += offset.y * basis.y.x
-                    volume_point.y += offset.y * basis.y.y
-                    volume_point.z += offset.y * basis.y.z
+                    volume_point.x += offset.x * basis.x.x * subvolume_voxel_size_volume_voxel_size_ratio.x
+                    volume_point.y += offset.x * basis.x.y * subvolume_voxel_size_volume_voxel_size_ratio.x
+                    volume_point.z += offset.x * basis.x.z * subvolume_voxel_size_volume_voxel_size_ratio.x
 
-                    volume_point.x += offset.z * basis.z.x
-                    volume_point.y += offset.z * basis.z.y
-                    volume_point.z += offset.z * basis.z.z
+                    volume_point.x += offset.y * basis.y.x * subvolume_voxel_size_volume_voxel_size_ratio.y
+                    volume_point.y += offset.y * basis.y.y * subvolume_voxel_size_volume_voxel_size_ratio.y
+                    volume_point.z += offset.y * basis.y.z * subvolume_voxel_size_volume_voxel_size_ratio.y
+
+                    volume_point.x += offset.z * basis.z.x * subvolume_voxel_size_volume_voxel_size_ratio.z
+                    volume_point.y += offset.z * basis.z.y * subvolume_voxel_size_volume_voxel_size_ratio.z
+                    volume_point.z += offset.z * basis.z.z * subvolume_voxel_size_volume_voxel_size_ratio.z
                     
                     array[z, y, x] = self.intensity_at(
                         <int>(volume_point.x + 0.5),
@@ -370,10 +392,9 @@ cdef class Volume:
                     )
 
 
-    def get_subvolume(self, center, shape, normal, out_of_bounds,
-                      move_along_normal, jitter_max,
-                      augment_subvolume, method, normalize, pad_to_shape,
-                      fft, dwt, dwt_channel_subbands, square_corners):
+    def get_subvolume(self, center, shape_voxels, shape_microns, normal,
+                      out_of_bounds, move_along_normal, jitter_max,
+                      augment_subvolume, method, normalize, square_corners):
         """Get a subvolume from a center point and normal vector.
 
         At the time of writing, this function very closely resembles
@@ -389,7 +410,8 @@ cdef class Volume:
 
         Args:
             center: The starting center point of the subvolume.
-            shape: The desired shape of the subvolume.
+            shape_voxels: The desired shape of the subvolume in voxels.
+            shape_microns: The desired spatial extent of the sampled subvolume in microns.
             normal: The normal vector at the center point.
             out_of_bounds: String indicating what to do if the requested
                 subvolume does not fit entirely within the volume.
@@ -401,11 +423,18 @@ cdef class Volume:
             method: String to indicate how to get the volume data.
 
         Returns:
-            A numpy array of the requested shape.
+            A numpy array of the requested shape. TODO is the array type consistent?
 
         """
         assert len(center) == 3
-        assert len(shape) == 3
+        assert len(shape_voxels) == 3
+
+        # If shape_microns not specified, fall back to the old method
+        # (spatial extent based only on number of voxels and not voxel size)
+        if shape_microns is None:
+            shape_microns = list(np.array(shape_voxels) * self._voxelsize)
+
+        assert len(shape_microns) == 3
 
         # TODO if square_corners is not None and not empty, modify basis vectors before calling (and center and normal?)
         # TODO if empty return zeros?
@@ -432,8 +461,8 @@ cdef class Volume:
         center += (move_along_normal + random.randint(-jitter_max, jitter_max)) * normal
 
         cdef BasisVectors basis
-        cdef Float3 n, c
-        cdef Int3 s
+        cdef Float3 n, c, s_m
+        cdef Int3 s_v
 
         n.x = normal[0]
         n.y = normal[1]
@@ -443,11 +472,15 @@ cdef class Volume:
         c.y = center[1]
         c.z = center[2]
 
-        s.z = shape[0]
-        s.y = shape[1]
-        s.x = shape[2]
+        s_v.z = shape_voxels[0]
+        s_v.y = shape_voxels[1]
+        s_v.x = shape_voxels[2]
 
-        subvolume = np.zeros(shape, dtype=np.uint16)
+        s_m.z = shape_microns[0]
+        s_m.y = shape_microns[1]
+        s_m.x = shape_microns[2]
+
+        subvolume = np.zeros(shape_voxels, dtype=np.uint16)
 
         if square_corners is None or len(square_corners) > 0:
             if square_corners is None:
@@ -458,9 +491,9 @@ cdef class Volume:
                 method = 'nearest_neighbor'
             assert method in ['interpolated', 'nearest_neighbor']
             if method == 'interpolated':
-                self.interpolated_with_basis_vectors(c, s, basis, subvolume)
+                self.interpolated_with_basis_vectors(c, s_v, s_m, basis, subvolume)
             elif method == 'nearest_neighbor':
-                self.nearest_neighbor_with_basis_vectors(c, s, basis, subvolume)
+                self.nearest_neighbor_with_basis_vectors(c, s_v, s_m, basis, subvolume)
 
         if augment_subvolume:
             flip_direction = np.random.randint(4)
@@ -475,41 +508,12 @@ cdef class Volume:
             rotate_direction = np.random.randint(4)
             subvolume = np.rot90(subvolume, k=rotate_direction, axes=(1, 2))
 
-        if fft:
-            subvolume = np.real(np.fft.fftn(subvolume))
-            subvolume = np.log(np.abs(np.fft.fftshift(subvolume)) + 1e-7)
-
-        if dwt is not None:
-            coeffs = pywt.wavedecn(subvolume, wavelet=dwt, level=1)
-            if dwt_channel_subbands:
-                subvolume = np.stack((coeffs[0], *coeffs[1].values()), axis=0)
-                return subvolume
-            else:
-                subvolume, _ = pywt.coeffs_to_array(coeffs)
-
-        if normalize or fft:
+        if normalize:
             subvolume = np.asarray(subvolume, dtype=np.float32)
             subvolume = subvolume - subvolume.mean()
             subvolume = subvolume / subvolume.std()
 
-        if pad_to_shape is not None:
-            assert pad_to_shape[0] >= shape[0]
-            assert pad_to_shape[1] >= shape[1]
-            assert pad_to_shape[2] >= shape[2]
-            z_d = pad_to_shape[0] - shape[0]
-            y_d = pad_to_shape[1] - shape[1]
-            x_d = pad_to_shape[2] - shape[2]
-            subvolume = np.pad(
-                subvolume,
-                (
-                    (z_d // 2, z_d - (z_d // 2)),
-                    (y_d // 2, y_d - (y_d // 2)),
-                    (x_d // 2, x_d - (x_d // 2)),
-                ),
-                'constant'
-            )
-            assert subvolume.shape == tuple(pad_to_shape)
-        else:
-            assert subvolume.shape == tuple(shape)
+
+        assert subvolume.shape == tuple(shape_voxels)
 
         return subvolume

@@ -37,7 +37,6 @@ numpy==1.19.5
 oauthlib==3.1.0
 packaging==20.8
 Pillow==8.1.0
-progressbar2==3.53.1
 protobuf==3.14.0
 pyasn1==0.4.8
 pyasn1-modules==0.2.8

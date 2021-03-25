@@ -3,9 +3,7 @@ import re
 import struct
 
 import numpy as np
-import progressbar
-
-import inkid
+from tqdm import tqdm
 
 
 def main():
@@ -25,8 +23,7 @@ def main():
     resized_data = np.empty((new_height, new_width, 6))
 
     print('Creating new PPM...')
-    bar = progressbar.ProgressBar()
-    for y in bar(range(new_height)):
+    for y in tqdm(range(new_height)):
         for x in range(new_width):
             resized_data[y, x] = ppm_data[y * size_scale_factor, x * size_scale_factor]
             resized_data[y, x, 0] /= coordinate_scale_factor
@@ -45,9 +42,8 @@ def main():
         f.write('{}\n'.format('<>'))
 
     # Write the data
-    bar = progressbar.ProgressBar()
     with open(args.output, 'ab') as f:
-        for y in bar(range(new_height)):
+        for y in tqdm(range(new_height)):
             for x in range(new_width):
                 pm = [float(i) for i in resized_data[y, x]]
                 s = struct.pack('d'*6, *pm)
@@ -120,8 +116,7 @@ def process_PPM_file(filename, header):
             if header_terminator_re.match(line):
                 break
 
-        bar = progressbar.ProgressBar()
-        for y in bar(range(height)):
+        for y in tqdm(range(height)):
             for x in range(width):
                 for idx in range(dim):
                     # This only works if we assume dimension 6

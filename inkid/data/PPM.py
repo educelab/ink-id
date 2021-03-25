@@ -5,7 +5,7 @@ import struct
 
 import numpy as np
 from PIL import Image
-import progressbar
+from tqdm import tqdm
 
 
 class PPM:
@@ -65,7 +65,9 @@ class PPM:
         self.process_PPM_file(self._path)
 
         self._ink_classes_prediction_image = np.zeros((self._height, self._width), np.uint16)
+        self._ink_classes_prediction_image_written_to = False
         self._rgb_values_prediction_image = np.zeros((self._height, self._width, 3), np.uint8)
+        self._rgb_values_prediction_image_written_to = False
 
     @staticmethod
     def parse_PPM_header(filename):
@@ -144,8 +146,7 @@ class PPM:
                 if header_terminator_re.match(line):
                     break
 
-            bar = progressbar.ProgressBar()
-            for y in bar(range(self._height)):
+            for y in tqdm(range(self._height)):
                 for x in range(self._width):
                     for idx in range(self._dim):
                         # This only works if we assume dimension 6
@@ -221,18 +222,17 @@ class PPM:
             out_of_bounds
         )
 
-    def point_to_subvolume(self, point, subvolume_shape,
+    def point_to_subvolume(self, point, subvolume_shape_voxels, subvolume_shape_microns,
                            out_of_bounds=None, move_along_normal=None,
                            jitter_max=None, augment_subvolume=None,
                            method=None, normalize=None,
-                           pad_to_shape=None,
-                           fft=None, dwt=None, dwt_channel_subbands=None, model_3d_to_2d=None):
+                           model_3d_to_2d=None):
         ppm_x, ppm_y = point
         x, y, z, n_x, n_y, n_z = self.get_point_with_normal(ppm_x, ppm_y)
         square_corners = None
         if model_3d_to_2d:
             square_corners = []
-            y_d, x_d = np.array([subvolume_shape[1], subvolume_shape[2]]) // 2
+            y_d, x_d = np.array([subvolume_shape_voxels[1], subvolume_shape_voxels[2]]) // 2
             if 0 <= x - x_d and x + x_d < self._width and 0 <= y - y_d and y + y_d < self._height:
                 # Top left
                 square_corners.append(self.get_point_with_normal(ppm_x - x_d, ppm_y - y_d)[0:3])
@@ -244,7 +244,8 @@ class PPM:
                 square_corners.append(self.get_point_with_normal(ppm_x + x_d, ppm_y + y_d)[0:3])
         return self._volume.get_subvolume(
             (x, y, z),
-            subvolume_shape,
+            subvolume_shape_voxels,
+            subvolume_shape_microns,
             normal=(n_x, n_y, n_z),
             out_of_bounds=out_of_bounds,
             move_along_normal=move_along_normal,
@@ -252,11 +253,7 @@ class PPM:
             augment_subvolume=augment_subvolume,
             method=method,
             normalize=normalize,
-            pad_to_shape=pad_to_shape,
             square_corners=square_corners,
-            fft=fft,
-            dwt=dwt,
-            dwt_channel_subbands=dwt_channel_subbands,
         )
 
     def reconstruct_predicted_ink_classes(self, class_probabilities, ppm_xy):
@@ -273,6 +270,7 @@ class PPM:
             if 0 <= y_s < self._ink_classes_prediction_image.shape[0] \
                     and 0 <= x_s < self._ink_classes_prediction_image.shape[1]:
                 self._ink_classes_prediction_image[y_s, x_s] = v
+        self._ink_classes_prediction_image_written_to = True
 
     def reconstruct_predicted_rgb(self, rgb, ppm_xy):
         assert len(ppm_xy) == 2
@@ -289,21 +287,24 @@ class PPM:
             if 0 <= y_s < self._rgb_values_prediction_image.shape[0] \
                     and 0 <= x_s < self._rgb_values_prediction_image.shape[1]:
                 self._rgb_values_prediction_image[y_s, x_s] = v
+        self._rgb_values_prediction_image_written_to = True
 
     def reset_predictions(self):
         if self._ink_label is not None:
             self._ink_classes_prediction_image = np.zeros((self._height, self._width), np.uint16)
+            self._ink_classes_prediction_image_written_to = False
         if self._rgb_label is not None:
             self._rgb_values_prediction_image = np.zeros((self._height, self._width, 3), np.uint8)
+            self._rgb_values_prediction_image_written_to = False
 
     def save_predictions(self, directory, suffix):
         if not os.path.exists(directory):
             os.makedirs(directory)
 
         im = None
-        if self._ink_classes_prediction_image.any():
+        if self._ink_classes_prediction_image_written_to:
             im = Image.fromarray(self._ink_classes_prediction_image)
-        elif self._rgb_values_prediction_image.any():
+        elif self._rgb_values_prediction_image_written_to:
             im = Image.fromarray(self._rgb_values_prediction_image)
         if im is not None:
             im.save(
@@ -323,8 +324,7 @@ class PPM:
         new_data = np.empty((self._height, self._width, self._dim))
 
         logging.info('Downscaling PPM by factor of {} on all axes...'.format(scale_factor))
-        bar = progressbar.ProgressBar()
-        for y in bar(range(self._height)):
+        for y in tqdm(range(self._height)):
             for x in range(self._width):
                 for idx in range(self._dim):
                     new_data[y, x, idx] = self._data[y * scale_factor, x * scale_factor, idx]
@@ -341,8 +341,7 @@ class PPM:
             f.write('type: double\n'.encode('utf-8'))
             f.write('version: {}\n'.format(self._version).encode('utf-8'))
             f.write('<>\n'.encode('utf-8'))
-            bar = progressbar.ProgressBar()
-            for y in bar(range(self._height)):
+            for y in tqdm(range(self._height)):
                 for x in range(self._width):
                     for idx in range(self._dim):
                         f.write(struct.pack('d', self._data[y, x, idx]))

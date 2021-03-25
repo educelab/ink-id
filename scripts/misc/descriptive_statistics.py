@@ -4,7 +4,7 @@ import os
 import sys
 
 import numpy as np
-import progressbar
+from tqdm import tqdm
 
 import inkid
 
@@ -36,8 +36,7 @@ def main():
     print('Calculating summary statistics...')
     all_statistics = []
     all_points = []
-    bar = progressbar.ProgressBar()
-    for point in bar(points):
+    for point in tqdm(points):
         region_id, x, y = point
         subvolume = regions._regions[region_id].ppm.point_to_subvolume(
             (x, y),

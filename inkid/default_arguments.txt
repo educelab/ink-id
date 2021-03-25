@@ -1,5 +1,5 @@
 # Subvolume geometry
-subvolume-shape = [34, 34, 34]
+subvolume-shape-voxels = [34, 34, 34]
 move-along-normal = 0
 
 # Voxel vector geometry
@@ -14,6 +14,7 @@ learning-rate = 0.001
 drop-rate = 0.5
 batch-norm-momentum = 0.9
 filters = [32, 16, 8, 4]
+unet-starting-channels = 32
 
 # Run configuration
 batch-size = 32

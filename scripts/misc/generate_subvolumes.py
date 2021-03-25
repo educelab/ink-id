@@ -29,10 +29,6 @@ def main():
     parser.add_argument('--no-augmentation', action='store_false', dest='augmentation')
     args = parser.parse_args()
 
-    if args.subvolume_shape is None and args.pad_to_shape is None:
-        print('Must specify either --subvolume-shape or --pad-to-shape')
-        return
-
     region_data = inkid.data.RegionSet.get_data_from_file(args.input)
     os.makedirs(args.output, exist_ok=True)
 
@@ -44,14 +40,12 @@ def main():
 
     point_to_subvolume_input = functools.partial(
         region_set.point_to_subvolume_input,
-        subvolume_shape=args.subvolume_shape,
+        subvolume_shape_voxels=args.subvolume_shape_voxels,
+        subvolume_shape_microns=args.subvolume_shape_microns,
         out_of_bounds='all_zeros',
         move_along_normal=args.move_along_normal,
         method=args.subvolume_method,
         normalize=args.normalize_subvolumes,
-        pad_to_shape=args.pad_to_shape,
-        fft=args.fft,
-        dwt=args.dwt,
         augment_subvolume=args.augmentation,
         jitter_max=args.jitter_max,
     )
@@ -66,15 +60,18 @@ def main():
     points_ds = inkid.data.PointsDataset(region_set, ['training', 'validation', 'prediction'], point_to_subvolume_input,
                                          specify_inkness=specify_inkness)
 
+    seed = 42
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+
     points_dl = torch.utils.data.DataLoader(points_ds, shuffle=True)
 
     square_side_length = math.ceil(math.sqrt(args.number))
-    subvolume_shape = args.pad_to_shape or args.subvolume_shape
     pad = 20
-    padded_shape = [i + pad * 2 for i in subvolume_shape]
-    concatenated_shape = [padded_shape[0],
-                          padded_shape[1] * square_side_length,
-                          padded_shape[2] * square_side_length]
+    padded_shape_voxels = [i + pad * 2 for i in args.subvolume_shape_voxels]
+    concatenated_shape = [padded_shape_voxels[0],
+                          padded_shape_voxels[1] * square_side_length,
+                          padded_shape_voxels[2] * square_side_length]
     concatenated_subvolumes = np.zeros(concatenated_shape)
 
     counter = 0
@@ -83,12 +80,12 @@ def main():
             break
         subvolume = subvolume.numpy()[0][0]
         if args.concat_subvolumes:
-            concat_x = (counter // square_side_length) * padded_shape[2]
-            concat_y = (counter % square_side_length) * padded_shape[1]
+            concat_x = (counter // square_side_length) * padded_shape_voxels[2]
+            concat_y = (counter % square_side_length) * padded_shape_voxels[1]
             subvolume = np.pad(subvolume, pad)
-            concatenated_subvolumes[0:padded_shape[0],
-                                    concat_y:concat_y + padded_shape[1],
-                                    concat_x:concat_x + padded_shape[2]] = subvolume
+            concatenated_subvolumes[0:padded_shape_voxels[0],
+                                    concat_y:concat_y + padded_shape_voxels[1],
+                                    concat_x:concat_x + padded_shape_voxels[2]] = subvolume
         else:
             inkid.ops.save_volume_to_image_stack(subvolume, os.path.join(args.output, str(counter)))
         counter += 1

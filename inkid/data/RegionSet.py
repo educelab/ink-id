@@ -208,11 +208,13 @@ class RegionSet:
         return generator
 
     def point_to_descriptive_statistics(self, region_id_with_point,
-                                        subvolume_shape):
+                                        subvolume_shape_voxels,
+                                        subvolume_shape_microns):
         region_id, x, y = region_id_with_point
         subvolume = self._regions[region_id].ppm.point_to_subvolume(
             (x, y),
-            subvolume_shape,
+            subvolume_shape_voxels,
+            subvolume_shape_microns
         )
         return np.asarray(inkid.ops.get_descriptive_statistics(subvolume), np.float32)
 
@@ -227,12 +229,12 @@ class RegionSet:
         return np.asarray(voxel_vector, np.float32)
 
     def point_to_subvolume_input(self, region_id_with_point,
-                                 subvolume_shape, out_of_bounds=None,
+                                 subvolume_shape_voxels, subvolume_shape_microns,
+                                 out_of_bounds=None,
                                  move_along_normal=None,
                                  jitter_max=None,
                                  augment_subvolume=None, method=None,
-                                 normalize=None, pad_to_shape=None,
-                                 fft=None, dwt=None, dwt_channel_subbands=None, model_3d_to_2d=None):
+                                 normalize=None, model_3d_to_2d=None):
         """Take a region_id and (x, y) point, and return a subvolume.
 
         First use the PPM (x, y) to find the 3D position and normal
@@ -243,18 +245,15 @@ class RegionSet:
         region_id, x, y = region_id_with_point
         subvolume = self._regions[region_id].ppm.point_to_subvolume(
             (x, y),
-            subvolume_shape,
+            subvolume_shape_voxels,
+            subvolume_shape_microns,
             out_of_bounds=out_of_bounds,
             move_along_normal=move_along_normal,
             jitter_max=jitter_max,
             augment_subvolume=augment_subvolume,
             method=method,
             normalize=normalize,
-            pad_to_shape=pad_to_shape,
             model_3d_to_2d=model_3d_to_2d,
-            fft=fft,
-            dwt=dwt,
-            dwt_channel_subbands=dwt_channel_subbands,
         )
         return np.asarray(subvolume, np.float32)
 

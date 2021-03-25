@@ -4,7 +4,7 @@ import struct
 
 import numpy as np
 from PIL import Image
-import progressbar
+from tqdm import tqdm
 
 
 def main():
@@ -57,8 +57,7 @@ def main():
         f.write('type: double\n'.encode('utf-8'))
         f.write('version: {}\n'.format(version).encode('utf-8'))
         f.write('<>\n'.encode('utf-8'))
-        bar = progressbar.ProgressBar()
-        for y in bar(range(h)):
+        for y in tqdm(range(h)):
             for x in range(w):
                 for idx in range(dim):
                     f.write(struct.pack('d', ppm_data[y, x, idx]))

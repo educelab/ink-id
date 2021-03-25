@@ -23,14 +23,11 @@ def conv_output_shape(input_shape, kernel_size: Union[int, tuple], stride: Union
 
 
 class Subvolume3DcnnEncoder(torch.nn.Module):
-    def __init__(self, subvolume_shape, pad_to_shape,
+    def __init__(self, subvolume_shape,
                  batch_norm_momentum, no_batch_norm, filters, in_channels):
         super().__init__()
 
-        if pad_to_shape is not None:
-            input_shape = pad_to_shape
-        else:
-            input_shape = subvolume_shape
+        input_shape = subvolume_shape
 
         self._batch_norm = not no_batch_norm
         self._in_channels = in_channels
@@ -150,3 +147,141 @@ class ConvolutionalInkDecoder(torch.nn.Module):
         y = self.convtranspose4(y)
         y = self.leakyReLU(y)
         return y
+
+
+class Subvolume3DUNet(torch.nn.Module):
+    def __init__(self,
+                 subvolume_shape,
+                 bn_momentum,
+                 starting_channels,
+                 in_channels,
+                 decode=True):
+        super().__init__()
+
+        # Sanity check that our starting_channels is divisible by 2 since we
+        # need to double and halve this parameter repeatedly
+        if starting_channels % 2 != 0:
+            raise ValueError('starting_channels must be divisible by 2')
+
+        input_shape = subvolume_shape
+
+        pool_kernel_size = 2
+        pool_stride = 2
+        pool_padding = 0 # Not listed in paper
+
+        upconv_kernel_size = 2
+        upconv_stride = 2
+        upconv_padding = 0 # Not listed in paper
+
+        final_conv_kernel_size = 1
+        final_conv_stride = 1 # Not listed in paper, but stride 1 makes size work out
+        final_conv_padding = 0 # Not listed in paper
+
+        channels = starting_channels
+
+        self._in_channels = in_channels
+        self._encoder_modules = torch.nn.ModuleList()
+        self._decoder_modules = torch.nn.ModuleList()
+        self._decode = decode
+        # The output shape depends on whether we run the decoder or not.
+        out_channels = in_channels if decode else starting_channels * 16
+        output_shape = [out_channels]
+        output_shape.extend(input_shape if decode else map(lambda x: x / 8, input_shape))
+        self.output_shape = tuple(output_shape)
+
+        # Build the left side of the "U" shape plus bottom (encoder)
+        for i in range(4):
+            if i > 0:
+                self._encoder_modules.append(
+                        torch.nn.MaxPool3d(kernel_size=pool_kernel_size,
+                                           stride=pool_stride,
+                                           padding=pool_padding))
+            self._encoder_modules.append(
+                    self._ConvBlock(in_channels=channels if i > 0 else in_channels,
+                                    out_channels=channels,
+                                    bn_momentum=bn_momentum))
+            self._encoder_modules.append(
+                    self._ConvBlock(in_channels=channels,
+                                    out_channels=channels * 2,
+                                    bn_momentum=bn_momentum))
+            channels *= 2
+
+        # Build the right side of the "U" shape (decoder)
+        for i in range(3):
+            self._decoder_modules.append(
+                    torch.nn.ConvTranspose3d(in_channels=channels,
+                                             out_channels=channels,
+                                             kernel_size=upconv_kernel_size,
+                                             stride=upconv_stride,
+                                             padding=upconv_padding))
+            channels //= 2
+            self._decoder_modules.append(
+                    self._ConvBlock(in_channels=channels * 3,
+                                    out_channels=channels,
+                                    bn_momentum=bn_momentum))
+
+            self._decoder_modules.append(
+                    self._ConvBlock(in_channels=channels,
+                                    out_channels=channels,
+                                    bn_momentum=bn_momentum))
+
+        # Final decoder simple convolution (decoder)
+        self._decoder_modules.append(
+                torch.nn.Conv3d(in_channels=channels,
+                                out_channels=out_channels,
+                                kernel_size=final_conv_kernel_size,
+                                stride=final_conv_stride,
+                                padding=final_conv_padding))
+
+    def forward(self, x):
+        if self._in_channels > 1:
+            x = torch.squeeze(x)
+
+        # 0-indexed layers where shortcut/concatenation lines should appear on
+        # both the encoder and decoder sides of the network.
+        ENCODER_SHORTCUT_LAYERS = (1, 4, 7)
+        DECODER_SHORTCUT_LAYERS = (0, 3, 6)
+
+        concat_lines = []
+
+        for i, layer in enumerate(self._encoder_modules):
+            x = layer(x)
+            if i in ENCODER_SHORTCUT_LAYERS:
+                concat_lines.append(x)
+
+        # If we're not supposed to run the decoder section, just return now.
+        if not self._decode:
+            return x
+
+        for i, layer in enumerate(self._decoder_modules):
+            x = layer(x)
+            if i in DECODER_SHORTCUT_LAYERS:
+                x = torch.cat((concat_lines.pop(), x), dim=1)
+
+        return x
+
+    class _ConvBlock(torch.nn.Module):
+        def __init__(self,
+                     in_channels,
+                     out_channels,
+                     bn_momentum,
+                     kernel_size=3,
+                     stride=1,
+                     padding=1):
+            super().__init__()
+            # Padding needs to be 1 or our subvolume will shrink by 2 in each
+            # dimension upon applying the Conv3d operation
+            self.conv = torch.nn.Conv3d(in_channels=in_channels,
+                                        out_channels=out_channels,
+                                        kernel_size=kernel_size,
+                                        stride=stride,
+                                        padding=padding)
+            self.bn = torch.nn.BatchNorm3d(num_features=out_channels,
+                                           momentum=bn_momentum)
+            self.relu = torch.nn.ReLU()
+
+        def forward(self, x):
+            x = self.conv(x)
+            x = self.bn(x)
+            x = self.relu(x)
+            return x

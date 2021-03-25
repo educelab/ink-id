@@ -35,6 +35,7 @@ import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 import torchsummary
+from tqdm import tqdm
 
 import inkid
 
@@ -44,7 +45,7 @@ def perform_validation(model, dataloader, metrics, device, label_type):
     model.eval()  # Turn off training mode for batch norm and dropout purposes
     with torch.no_grad():
         metric_results = {metric: [] for metric in metrics}
-        for xb, yb in dataloader:
+        for xb, yb in tqdm(dataloader):
             pred = model(xb.to(device))
             yb = yb.to(device)
             if label_type == 'ink_classes':
@@ -66,7 +67,7 @@ def generate_prediction_image(dataloader, model, output_size, label_type, device
     points = np.empty(shape=(0, 3))
     model.eval()  # Turn off training mode for batch norm and dropout purposes
     with torch.no_grad():
-        for pxb, pts in dataloader:
+        for pxb, pts in tqdm(dataloader):
             # Smooth predictions via augmentation. Augment each subvolume 8-fold via rotations and flips
             if prediction_averaging:
                 rotations = range(4)
@@ -169,13 +170,22 @@ def main():
     parser.add_argument('--no-augmentation', action='store_false', dest='augmentation')
 
     # Network architecture
+    parser.add_argument('--model', metavar='name', default='original',
+                        help='model to run against',
+                        choices=[
+                            'original',
+                            '3dunet_full',
+                            '3dunet_half'
+                        ])
     parser.add_argument('--learning-rate', metavar='n', type=float)
     parser.add_argument('--drop-rate', metavar='n', type=float)
     parser.add_argument('--batch-norm-momentum', metavar='n', type=float)
     parser.add_argument('--no-batch-norm', action='store_true')
     parser.add_argument('--filters', metavar='n', nargs='*', type=int,
                         help='number of filters for each convolution layer')
-    parser.add_argument('--model', metavar='path', default=None,
+    parser.add_argument('--unet-starting-channels', metavar='n', type=int,
+                        help='number of channels to start with in 3D-UNet')
+    parser.add_argument('--load-weights-from', metavar='path', default=None,
                         help='Pretrained model checkpoint to initialize network')
 
     # Run configuration
@@ -191,6 +201,7 @@ def main():
     parser.add_argument('--checkpoint-every-n-batches', metavar='n', type=int)
     parser.add_argument('--final-prediction-on-all', action='store_true')
     parser.add_argument('--skip-training', action='store_true')
+    parser.add_argument('--dataloaders-num-workers', metavar='n', type=int, default=None)
 
     # Rclone
     parser.add_argument('--rclone-transfer-remote', metavar='remote', default=None,
@@ -224,9 +235,7 @@ def main():
         else:
             dirs_in_output = [os.path.join(args.output, f) for f in os.listdir(args.output)]
             dirs_in_output = list(filter(os.path.isdir, dirs_in_output))
-            print(dirs_in_output)
             for job_dir in dirs_in_output:
-                print(job_dir)
                 if job_dir.endswith(f'_{args.k}'):
                     logging.error(f'Cross-validation directory for same k already exists '
                                   f'in output directory: {job_dir}')
@@ -250,7 +259,7 @@ def main():
 
     # Automatically increase prediction grid spacing if using 2D labels, and turn off augmentation
     if args.model_3d_to_2d:
-        args.prediction_grid_spacing = args.subvolume_shape[-1]
+        args.prediction_grid_spacing = args.subvolume_shape_voxels[-1]
         args.augmentation = False
 
     # Define directories for prediction images and checkpoints
@@ -264,8 +273,8 @@ def main():
     _, file_extension = os.path.splitext(args.data)
     file_extension = file_extension.lower()
     if file_extension == '.ppm':
-        if args.model is None:
-            logging.error("Pre-trained model (--model) required when texturing a .ppm file.")
+        if args.load_weights_from is None:
+            logging.error("Pre-trained model (--load-weights-from) required when texturing a .ppm file.")
             return
         if args.override_volume_slices_dir is None:
             logging.error("Volume (--override-volume-slices-dir) required when texturing a .ppm file.")
@@ -325,16 +334,13 @@ def main():
     if args.feature_type == 'subvolume_3dcnn':
         point_to_subvolume_input = functools.partial(
             regions.point_to_subvolume_input,
-            subvolume_shape=args.subvolume_shape,
+            subvolume_shape_voxels=args.subvolume_shape_voxels,
+            subvolume_shape_microns=args.subvolume_shape_microns,
             out_of_bounds='all_zeros',
             move_along_normal=args.move_along_normal,
             method=args.subvolume_method,
             normalize=args.normalize_subvolumes,
-            pad_to_shape=args.pad_to_shape,
             model_3d_to_2d=args.model_3d_to_2d,
-            fft=args.fft,
-            dwt=args.dwt,
-            dwt_channel_subbands=args.dwt_channel_subbands,
         )
         training_features_fn = functools.partial(
             point_to_subvolume_input,
@@ -358,7 +364,8 @@ def main():
     elif args.feature_type == 'descriptive_statistics':
         training_features_fn = functools.partial(
             regions.point_to_descriptive_statistics,
-            subvolume_shape=args.subvolume_shape,
+            subvolume_shape_voxels=args.subvolume_shape_voxels,
+            subvolume_shape_microns=args.subvolume_shape_microns
         )
         validation_features_fn = training_features_fn
         prediction_features_fn = training_features_fn
@@ -368,7 +375,7 @@ def main():
 
     # Define the labels
     if args.model_3d_to_2d:
-        label_shape = (args.subvolume_shape[1], args.subvolume_shape[2])
+        label_shape = (args.subvolume_shape_voxels[1], args.subvolume_shape_voxels[2])
     else:
         label_shape = (1, 1)
     if args.label_type == 'ink_classes':
@@ -410,17 +417,20 @@ def main():
     pred_ds = inkid.data.PointsDataset(regions, ['prediction'], prediction_features_fn, lambda p: p,
                                        grid_spacing=args.prediction_grid_spacing)
 
+    if args.dataloaders_num_workers is None:
+        args.dataloaders_num_workers = multiprocessing.cpu_count()
+
     # Define the dataloaders which implement batching, shuffling, etc.
     train_dl, val_dl, pred_dl = None, None, None
     if len(train_ds) > 0:
         train_dl = DataLoader(train_ds, batch_size=args.batch_size, shuffle=True,
-                              num_workers=multiprocessing.cpu_count())
+                              num_workers=args.dataloaders_num_workers)
     if len(val_ds) > 0:
         val_dl = DataLoader(val_ds, batch_size=args.batch_size * 2, shuffle=True,
-                            num_workers=multiprocessing.cpu_count())
+                            num_workers=args.dataloaders_num_workers)
     if len(pred_ds) > 0:
         pred_dl = DataLoader(pred_ds, batch_size=args.batch_size * 2, shuffle=False,
-                             num_workers=multiprocessing.cpu_count())
+                             num_workers=args.dataloaders_num_workers)
 
     # Specify the compute device for PyTorch purposes
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -433,12 +443,21 @@ def main():
     # Create the model for training
     if args.feature_type == 'subvolume_3dcnn':
         in_channels = 1
-        if args.dwt_channel_subbands:
-            in_channels = 8
-            args.subvolume_shape = [i // 2 for i in args.subvolume_shape]
-            args.pad_to_shape = None
-        encoder = inkid.model.Subvolume3DcnnEncoder(args.subvolume_shape, args.pad_to_shape, args.batch_norm_momentum,
-                                                    args.no_batch_norm, args.filters, in_channels)
+        if args.model == 'original':
+            encoder = inkid.model.Subvolume3DcnnEncoder(args.subvolume_shape_voxels,
+                                                        args.batch_norm_momentum,
+                                                        args.no_batch_norm,
+                                                        args.filters,
+                                                        in_channels)
+        elif args.model in ('3dunet_full', '3dunet_half'):
+            encoder = inkid.model.Subvolume3DUNet(args.subvolume_shape_voxels,
+                                                  args.batch_norm_momentum,
+                                                  args.unet_starting_channels,
+                                                  in_channels,
+                                                  decode=(args.model == '3dunet_full'))
+        else:
+            logging.error(f'Model {args.model} is invalid for feature type {args.feature_type}.')
+            return
         if args.model_3d_to_2d:
             decoder = inkid.model.ConvolutionalInkDecoder(args.filters, output_size)
         else:
@@ -449,8 +468,8 @@ def main():
         return
 
     # Load pretrained weights if specified
-    if args.model is not None:
-        checkpoint = torch.load(args.model)
+    if args.load_weights_from is not None:
+        checkpoint = torch.load(args.load_weights_from)
         model.load_state_dict(checkpoint['model_state_dict'])
 
     # Move model to device (possibly GPU)
@@ -466,7 +485,7 @@ def main():
         logging.warning('Unable to add model graph to TensorBoard, skipping this step')
 
     # Print summary of model
-    shape = (in_channels,) + tuple(args.pad_to_shape or args.subvolume_shape)
+    shape = (in_channels,) + tuple(args.subvolume_shape_voxels)
     summary = torchsummary.summary(model, shape, device=device, verbose=0, branching=False)
     logging.info('Model summary (sizes represent single batch):\n' + str(summary))
 
@@ -548,7 +567,7 @@ def main():
                                                      grid_spacing=args.prediction_grid_spacing)
             if len(final_pred_ds) > 0:
                 final_pred_dl = DataLoader(final_pred_ds, batch_size=args.batch_size * 2, shuffle=False,
-                                           num_workers=multiprocessing.cpu_count())
+                                           num_workers=args.dataloaders_num_workers)
                 generate_prediction_image(final_pred_dl, model, output_size, args.label_type, device,
                                           predictions_dir, 'final', reconstruct_fn, regions, label_shape,
                                           args.prediction_averaging, args.prediction_grid_spacing)
