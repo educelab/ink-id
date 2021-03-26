@@ -1,6 +1,5 @@
 """Miscellaneous operations used in ink-id."""
 
-import inspect
 import logging
 import math
 import os
@@ -8,26 +7,20 @@ import subprocess
 
 import numpy as np
 from PIL import Image
-from torch.utils.data import random_split
-
-import inkid
+import torch
 
 
 def add_subvolume_args(parser):
-    parser.add_argument('--subvolume-method', metavar='name', default='nearest_neighbor',
-                        help='method for getting subvolumes',
-                        choices=[
-                            'nearest_neighbor',
-                            'interpolated',
-                        ])
+    parser.add_argument('--subvolume-method', default='nearest_neighbor',
+                        help='method for sampling subvolumes', choices=['nearest_neighbor', 'interpolated'])
     parser.add_argument('--subvolume-shape-microns', metavar='um', nargs=3, type=float, default=None,
                         help='subvolume shape (microns) in (z, y, x)')
     parser.add_argument('--subvolume-shape-voxels', metavar='n', nargs=3, type=int, required=True,
-                        help='subvolume shape (voxels) in (z, y, x)')
-    parser.add_argument('--move-along-normal', metavar='n', type=float,
-                        help='number of voxels to move along normal before getting a subvolume')
+                        help='subvolume shape (voxels) in (z, y, x)', default=[48, 48, 48])
+    parser.add_argument('--move-along-normal', metavar='n', type=float, default=0,
+                        help='number of voxels to move along normal vector before sampling a subvolume')
     parser.add_argument('--normalize-subvolumes', action='store_true',
-                        help='normalize each subvolume to zero mean and unit variance on the fly')
+                        help='normalize each subvolume to zero mean and unit variance')
 
 
 def visualize_batch(xb, yb):
@@ -41,7 +34,7 @@ def visualize_batch(xb, yb):
 def take_from_dataset(dataset, n_samples):
     """Take the first n samples from a dataset to reduce the size."""
     if n_samples < len(dataset):
-        dataset = random_split(dataset, [n_samples, len(dataset) - n_samples])[0]
+        dataset = torch.utils.data.random_split(dataset, [n_samples, len(dataset) - n_samples])[0]
     return dataset
 
 
@@ -72,15 +65,6 @@ def save_volume_to_image_stack(volume, dirname):
         image = image.astype(np.uint16)
         image = Image.fromarray(image)
         image.save(os.path.join(dirname, str(z) + '.tif'))
-
-
-def default_arguments_file():
-    """Return the default arguments file.
-
-    https://stackoverflow.com/questions/247770/retrieving-python-module-path
-
-    """
-    return os.path.join(os.path.dirname(inspect.getfile(inkid)), 'default_arguments.txt')
 
 
 def remap(x, in_min, in_max, out_min, out_max):

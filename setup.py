@@ -18,7 +18,6 @@ setup(
     packages=['inkid'],
     install_requires=[
         'autopep8',
-        'configargparse',
         'Cython',
         'gitpython',
         'humanize',
@@ -30,7 +29,7 @@ setup(
         'Pillow',
         'pygifsicle',
         'pylint',
-        'pywavelets',
+        'scikit-image',
         'scikit-learn',
         'sphinx',
         'tensorboard',

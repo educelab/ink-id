@@ -143,7 +143,7 @@ def main():
                         print(f'PSNR: {total_psnr / pixels_in_img}')
                     elif task_name == 'ink':
                         total_dice = 0
-                        total_mIOU = 0
+                        total_m_iou = 0
                         total_pixels = 0
                         result_images = [os.path.join(task_dir, t) for t in os.listdir(task_dir)]
                         for result_image_file in result_images:
@@ -194,7 +194,7 @@ def main():
                         # Dice
                         print(f'Dice: {total_dice / total_pixels}')
                         # mIOU
-                        print(f'mIOU: {total_mIOU / total_pixels}')
+                        print(f'mIOU: {total_m_iou / total_pixels}')
                     elif task_name == 'volcart-texture':
                         # SSIM
                         # PSNR

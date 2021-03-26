@@ -10,10 +10,11 @@ k-fold cross validation (and prediction in this case). To do that,
 create a RegionSet of entirely training regions, and then pass an
 index k to this script via the command line argument. It will take the
 kth training region, remove it from the training set, and add it to
-the prediction and validation sets for that run.
+the prediction and validation sets for that run. TODO update
 
 """
 
+import argparse
 import datetime
 import functools
 import itertools
@@ -25,7 +26,6 @@ import sys
 import time
 import timeit
 
-import configargparse
 import git
 import kornia
 import numpy as np
@@ -117,88 +117,66 @@ def main():
     """Run the training and prediction process."""
     start = timeit.default_timer()
 
-    parser = configargparse.ArgumentParser(
-        description=__doc__,
-        default_config_files=[inkid.ops.default_arguments_file()],
-    )
+    parser = argparse.ArgumentParser(description=__doc__)
+
     # Needed files
-    parser.add_argument('data', metavar='infile', help='input data file (JSON or PPM)')
-    parser.add_argument('output', metavar='outfile', help='output directory')
+    parser.add_argument('output', metavar='path', help='output directory')
+    parser.add_argument('--training-set', metavar='path', nargs='*', help='training dataset(s)')
+    parser.add_argument('--validation-set', metavar='path', nargs='*', help='validation dataset(s)')
+    parser.add_argument('--prediction-set', metavar='path', nargs='*', help='prediction dataset(s)')
 
-    # Config file so the user can have various configs saved for e.g. different scans that are often processed
-    parser.add_argument('-c', '--config-file', metavar='path', is_config_file=True,
-                        help='file of pre-specified arguments (in addition to pre-loaded defaults)')
-
-    # Region set modifications
-    parser.add_argument('-k', metavar='num', default=None, type=int,
-                        help='index of region to use for prediction and validation')
-    parser.add_argument('--override-volume-slices-dir', metavar='path', default=None,
-                        help='override directory for all volume slices (only works if there is '
-                             'only one volume in the region set file)')
+    # Dataset modifications
+    parser.add_argument('--cross-validate-on', metavar='n', default=None, type=int,
+                        help='remove the nth source from the flattened set of all training data sources, and '
+                             'add this set to the validation and prediction sets')
 
     # Method
-    parser.add_argument('--feature-type', metavar='name', default='subvolume_3dcnn',
-                        help='type of feature model is built on',
-                        choices=[
-                            'subvolume_3dcnn',
-                            'voxel_vector_1dcnn',
-                            'descriptive_statistics',
-                        ])
-    parser.add_argument('--label-type', metavar='name', default='ink_classes',
-                        help='type of label to train',
-                        choices=[
-                            'ink_classes',
-                            'rgb_values',
-                        ])
+    parser.add_argument('--feature-type', default='subvolume_3dcnn', help='type of input features',
+                        choices=['subvolume_3dcnn', 'voxel_vector_1dcnn', 'descriptive_statistics'])
+    parser.add_argument('--label-type', default='ink_classes', help='type of labels',
+                        choices=['ink_classes', 'rgb_values'])
     parser.add_argument('--model-3d-to-2d', action='store_true',
-                        help='Use semi-fully convolutional model (which removes a dimension) with 2d labels per '
-                             'subvolume')
-    parser.add_argument('--loss', choices=['cross_entropy', 'dice', 'tversky', 'focal'], default='cross_entropy')
-    parser.add_argument('--tversky-loss-alpha', type=float, default=0.5)
-    parser.add_argument('--focal-loss-alpha', type=float, default=0.5)
+                        help='Use 2d labels per subvolume rather than single value')
+    parser.add_argument('--loss', default='cross_entropy', choices=['cross_entropy', 'dice', 'tversky', 'focal'])
+    parser.add_argument('--tversky-loss-alpha', metavar='n', type=float, default=0.5)
+    parser.add_argument('--focal-loss-alpha', metavar='n', type=float, default=0.5)
 
     # Subvolumes
     inkid.ops.add_subvolume_args(parser)
 
     # Voxel vectors
-    parser.add_argument('--length-in-each-direction', metavar='n', type=int,
+    parser.add_argument('--length-in-each-direction', metavar='n', type=int, default=8,
                         help='length of voxel vector in each direction along normal')
 
     # Data organization/augmentation
-    parser.add_argument('--jitter-max', metavar='n', type=int)
-    parser.add_argument('--augmentation', action='store_true', dest='augmentation')
-    parser.add_argument('--no-augmentation', action='store_false', dest='augmentation')
+    parser.add_argument('--jitter-max', metavar='n', type=int, default=4)
+    parser.add_argument('--no-augmentation', action='store_true')
 
     # Network architecture
-    parser.add_argument('--model', metavar='name', default='original',
-                        help='model to run against',
-                        choices=[
-                            'original',
-                            '3dunet_full',
-                            '3dunet_half'
-                        ])
-    parser.add_argument('--learning-rate', metavar='n', type=float)
-    parser.add_argument('--drop-rate', metavar='n', type=float)
-    parser.add_argument('--batch-norm-momentum', metavar='n', type=float)
+    parser.add_argument('--model', default='original', help='model to run against',
+                        choices=['original', '3dunet_full', '3dunet_half'])
+    parser.add_argument('--learning-rate', metavar='n', type=float, default=0.001)
+    parser.add_argument('--drop-rate', metavar='n', type=float, default=0.5)
+    parser.add_argument('--batch-norm-momentum', metavar='n', type=float, default=0.9)
     parser.add_argument('--no-batch-norm', action='store_true')
-    parser.add_argument('--filters', metavar='n', nargs='*', type=int,
+    parser.add_argument('--filters', metavar='n', nargs='*', type=int, default=[32, 16, 8, 4],
                         help='number of filters for each convolution layer')
-    parser.add_argument('--unet-starting-channels', metavar='n', type=int,
+    parser.add_argument('--unet-starting-channels', metavar='n', type=int, default=32,
                         help='number of channels to start with in 3D-UNet')
     parser.add_argument('--load-weights-from', metavar='path', default=None,
-                        help='Pretrained model checkpoint to initialize network')
+                        help='pretrained model checkpoint to initialize network')
 
     # Run configuration
-    parser.add_argument('--batch-size', metavar='n', type=int)
+    parser.add_argument('--batch-size', metavar='n', type=int, default=32)
     parser.add_argument('--training-max-samples', metavar='n', type=int, default=None)
-    parser.add_argument('--training-epochs', metavar='n', type=int, default=None)
-    parser.add_argument('--prediction-grid-spacing', metavar='n', type=int,
+    parser.add_argument('--training-epochs', metavar='n', type=int, default=1)
+    parser.add_argument('--prediction-grid-spacing', metavar='n', type=int, default=4,
                         help='prediction points will be taken from an NxN grid')
     parser.add_argument('--prediction-averaging', action='store_true',
-                        help='Average multiple predictions based on rotated and flipped input subvolumes')
-    parser.add_argument('--validation-max-samples', metavar='n', type=int)
-    parser.add_argument('--summary-every-n-batches', metavar='n', type=int)
-    parser.add_argument('--checkpoint-every-n-batches', metavar='n', type=int)
+                        help='average multiple predictions based on rotated and flipped input subvolumes')
+    parser.add_argument('--validation-max-samples', metavar='n', type=int, default=5000)
+    parser.add_argument('--summary-every-n-batches', metavar='n', type=int, default=10)
+    parser.add_argument('--checkpoint-every-n-batches', metavar='n', type=int, default=5000)
     parser.add_argument('--final-prediction-on-all', action='store_true')
     parser.add_argument('--skip-training', action='store_true')
     parser.add_argument('--dataloaders-num-workers', metavar='n', type=int, default=None)
@@ -211,24 +189,26 @@ def main():
 
     args = parser.parse_args()
 
-    # Make sure both input and output are provided
-    if args.data is None and args.output is None:
+    # Argument makes more sense as a negative, variable makes more sense as a positive
+    args.augmentation = not args.no_augmentation
+
+    # Make sure some sort of input is provided, else there is nothing to do
+    if args.training_set is None and args.prediction_set is None and args.validation_set is None:
         parser.print_help()
         return
 
-    # If this is one of a k-fold cross-validation job, then append k to the output path
-    # Whether or not that is the case, go ahead and create the output directory
-    if args.k is None:
+    # If this is part of a cross-validation job, append n (--cross-validate-on) to the output path
+    if args.cross_validate_on is None:
         dir_name = datetime.datetime.today().strftime('%Y-%m-%d_%H.%M.%S')
     else:
-        dir_name = datetime.datetime.today().strftime('%Y-%m-%d_%H.%M.%S') + '_' + str(args.k)
+        dir_name = datetime.datetime.today().strftime('%Y-%m-%d_%H.%M.%S') + '_' + str(args.cross_validate_on)
     output_path = os.path.join(args.output, dir_name)
 
     # If this is not a cross-validation job, then the defined output dir should be empty.
-    # If this is a cross-validation job, that directory might have output from other
+    # If this is a cross-validation job, that directory is allowed to have output from other
     # cross-validation splits, but not this one
     if os.path.isdir(args.output):
-        if args.k is None:
+        if args.cross_validate_on is None:
             if len(os.listdir(args.output)) > 0:
                 logging.error(f'Provided output directory must be empty: {args.output}')
                 return
@@ -236,8 +216,8 @@ def main():
             dirs_in_output = [os.path.join(args.output, f) for f in os.listdir(args.output)]
             dirs_in_output = list(filter(os.path.isdir, dirs_in_output))
             for job_dir in dirs_in_output:
-                if job_dir.endswith(f'_{args.k}'):
-                    logging.error(f'Cross-validation directory for same k already exists '
+                if job_dir.endswith(f'_{args.cross_validate_on}'):
+                    logging.error(f'Cross-validation directory for same hold-out set already exists '
                                   f'in output directory: {job_dir}')
                     return
 
@@ -268,45 +248,19 @@ def main():
     checkpoints_dir = os.path.join(output_path, 'checkpoints')
     os.makedirs(checkpoints_dir)
 
-    # If input file is a PPM, treat this as a texturing module
-    # Skip training, run a prediction on all regions, require trained model, require slices dir
-    _, file_extension = os.path.splitext(args.data)
-    file_extension = file_extension.lower()
-    if file_extension == '.ppm':
-        if args.load_weights_from is None:
-            logging.error("Pre-trained model (--load-weights-from) required when texturing a .ppm file.")
-            return
-        if args.override_volume_slices_dir is None:
-            logging.error("Volume (--override-volume-slices-dir) required when texturing a .ppm file.")
-            return
-        logging.info("PPM input file provided. Skipping training and running final prediction on all.")
-        args.skip_training = True
-        args.final_prediction_on_all = True
-
     # Transform the input file into region set, can handle JSON or PPM
-    region_data = inkid.data.RegionSet.get_data_from_file(args.data)
+    region_data = inkid.data.RegionSet.get_data_from_file(args.data)  # TODO region set LEFT OFF
 
-    # Override volume slices directory (iff only one volume specified in the region set)
-    if args.override_volume_slices_dir is not None:
-        volume_dirs_seen = set()
-        for ppm in region_data['ppms']:
-            volume_dirs_seen.add(region_data['ppms'][ppm]['volume'])
-            if len(volume_dirs_seen) > 1:
-                raise ValueError('--override-volume-slices-dir only '
-                                 'permitted if there is one volume in the region set')
-        for ppm in region_data['ppms']:
-            region_data['ppms'][ppm]['volume'] = args.override_volume_slices_dir
-
-    # If k-fold job, remove kth region from training and put in prediction/validation sets
-    if args.k is not None:
-        k_region = region_data['regions']['training'].pop(int(args.k))
-        region_data['regions']['prediction'].append(k_region)
-        region_data['regions']['validation'].append(k_region)
+    # If k-fold job, remove nth region from training and put in prediction/validation sets TODO region set
+    if args.cross_validate_on is not None:
+        n_region = region_data['regions']['training'].pop(int(args.cross_validate_on))
+        region_data['regions']['prediction'].append(n_region)
+        region_data['regions']['validation'].append(n_region)
 
     # Now that we have made all these changes to the region data, create a region set from this data
-    regions = inkid.data.RegionSet(region_data)
+    regions = inkid.data.RegionSet(region_data)  # TODO region set
 
-    # Create metadata dict
+    # Create metadata dict TODO region set
     metadata = {'Arguments': vars(args), 'Region set': region_data, 'Command': ' '.join(sys.argv)}
 
     # Add git hash to metadata if inside a git repository
@@ -326,14 +280,14 @@ def main():
     # Diagnostic printing
     logging.info('\n' + json.dumps(metadata, indent=4, sort_keys=False))
 
-    # Write preliminary metadata to file
+    # Write preliminary metadata to file (will be updated when job completes)
     with open(os.path.join(output_path, 'metadata.json'), 'w') as metadata_file:
         metadata_file.write(json.dumps(metadata, indent=4, sort_keys=False))
 
     # Define the feature inputs to the network
     if args.feature_type == 'subvolume_3dcnn':
         point_to_subvolume_input = functools.partial(
-            regions.point_to_subvolume_input,
+            regions.point_to_subvolume_input,  # TODO region set
             subvolume_shape_voxels=args.subvolume_shape_voxels,
             subvolume_shape_microns=args.subvolume_shape_microns,
             out_of_bounds='all_zeros',
@@ -379,7 +333,7 @@ def main():
     else:
         label_shape = (1, 1)
     if args.label_type == 'ink_classes':
-        label_fn = functools.partial(regions.point_to_ink_classes_label, shape=label_shape)
+        label_fn = functools.partial(regions.point_to_ink_classes_label, shape=label_shape)  # TODO region set
         output_size = 2
         metrics = {
             'loss': {
@@ -396,17 +350,17 @@ def main():
         }
         reconstruct_fn = regions.reconstruct_predicted_ink_classes
     elif args.label_type == 'rgb_values':
-        label_fn = functools.partial(regions.point_to_rgb_values_label, shape=label_shape)
+        label_fn = functools.partial(regions.point_to_rgb_values_label, shape=label_shape)  # TODO region set
         output_size = 3
         metrics = {
             'loss': nn.SmoothL1Loss(reduction='mean')
         }
-        reconstruct_fn = regions.reconstruct_predicted_rgb
+        reconstruct_fn = regions.reconstruct_predicted_rgb  # TODO region set
     else:
         logging.error('Label type not recognized: {}'.format(args.label_type))
         return
 
-    # Define the datasets
+    # Define the datasets TODO region set
     train_ds = inkid.data.PointsDataset(regions, ['training'], training_features_fn, label_fn)
     if args.training_max_samples is not None:
         train_ds = inkid.ops.take_from_dataset(train_ds, args.training_max_samples)
@@ -420,7 +374,7 @@ def main():
     if args.dataloaders_num_workers is None:
         args.dataloaders_num_workers = multiprocessing.cpu_count()
 
-    # Define the dataloaders which implement batching, shuffling, etc.
+    # Define the dataloaders which implement batching, shuffling, etc. TODO region set
     train_dl, val_dl, pred_dl = None, None, None
     if len(train_ds) > 0:
         train_dl = DataLoader(train_ds, batch_size=args.batch_size, shuffle=True,
