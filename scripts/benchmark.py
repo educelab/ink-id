@@ -202,7 +202,6 @@ def main():
                         pass
 
     # TODO
-    # Do the masking LEFT OFF
     # Do the region bounding if relevant
     # Save them to central leaderboard .csv
     # Save them to results metadata.json

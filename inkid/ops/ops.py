@@ -15,7 +15,7 @@ def add_subvolume_args(parser):
                         help='method for sampling subvolumes', choices=['nearest_neighbor', 'interpolated'])
     parser.add_argument('--subvolume-shape-microns', metavar='um', nargs=3, type=float, default=None,
                         help='subvolume shape (microns) in (z, y, x)')
-    parser.add_argument('--subvolume-shape-voxels', metavar='n', nargs=3, type=int, required=True,
+    parser.add_argument('--subvolume-shape-voxels', metavar='n', nargs=3, type=int,
                         help='subvolume shape (voxels) in (z, y, x)', default=[48, 48, 48])
     parser.add_argument('--move-along-normal', metavar='n', type=float, default=0,
                         help='number of voxels to move along normal vector before sampling a subvolume')

@@ -25,6 +25,7 @@ import os
 import sys
 import time
 import timeit
+from typing import List
 
 import git
 import kornia
@@ -38,6 +39,62 @@ import torchsummary
 from tqdm import tqdm
 
 import inkid
+
+
+class InkidDataSource(object):
+    """Can be either a region or a volume. Produces subvolumes and possibly labels."""
+
+    def __init__(self, path: str) -> None:
+        pass
+
+
+class InkidDataset(torch.utils.data.Dataset):
+    def __init__(self, data_source_paths: List[str], data_root: str) -> None:
+        """TODO
+
+        Args:
+            data_source_paths: a list of dataset or data source file paths
+        """
+        # Convert the list of paths to a list of InkidDataSources
+        data_source_paths = self.expand_data_sources(data_source_paths)
+        self.sources: List[InkidDataSource] = list()
+        for data_source_path in data_source_paths:
+            self.sources.append(InkidDataSource(data_source_path))
+        print(self.sources)
+
+    def __len__(self) -> int:
+        pass
+
+    def __getitem__(self, idx: int):
+        pass
+
+    def expand_data_sources(self, data_source_paths: List[str], are_we_recursing: bool = False) -> List[str]:
+        """Expand .txt and .json contents into flattened list of .json files.
+
+        The file paths in the input can point to either .txt or .json files. The .txt
+        files are themselves lists of other files, which can further be .txt or .json.
+        This function goes through this list, and for any .txt file it reads the list
+        that file contains and recursively processes it. The result is a list of only
+        .json data source file paths.
+
+        The original input file paths are absolute since they are passed from the command line.
+        The rest of the paths will be relative to the data root directory. This changes
+        all paths to be absolute.
+
+        """
+        expanded_paths: List[str] = list()
+        for source_path in data_source_paths:
+            file_extension = os.path.splitext(source_path)[1]
+            if file_extension == '.json':
+                self.sources.append(InkidDataSource(source_path))
+            elif file_extension == '.txt':
+                source_json_paths = self.expand_data_sources([source_path], are_we_recursing=True)
+                for source_json_path in source_json_paths:
+                    self.sources.append(InkidDataSource(source_json_path))
+            else:
+                raise ValueError(f'Data source {source_path} is not a permitted file type (.txt or .json)')
+        with open(dataset_txt_file_path) as f:
+            return f.readlines()
 
 
 def perform_validation(model, dataloader, metrics, device, label_type):
@@ -121,9 +178,11 @@ def main():
 
     # Needed files
     parser.add_argument('output', metavar='path', help='output directory')
-    parser.add_argument('--training-set', metavar='path', nargs='*', help='training dataset(s)')
-    parser.add_argument('--validation-set', metavar='path', nargs='*', help='validation dataset(s)')
-    parser.add_argument('--prediction-set', metavar='path', nargs='*', help='prediction dataset(s)')
+    parser.add_argument('--training-set', metavar='path', nargs='*', help='training dataset(s)', default=[])
+    parser.add_argument('--validation-set', metavar='path', nargs='*', help='validation dataset(s)', default=[])
+    parser.add_argument('--prediction-set', metavar='path', nargs='*', help='prediction dataset(s)', default=[])
+    parser.add_argument('--data-root', matavar='path', default=None,
+                        help='path to the data root that contains the ')
 
     # Dataset modifications
     parser.add_argument('--cross-validate-on', metavar='n', default=None, type=int,
@@ -193,9 +252,9 @@ def main():
     args.augmentation = not args.no_augmentation
 
     # Make sure some sort of input is provided, else there is nothing to do
-    if args.training_set is None and args.prediction_set is None and args.validation_set is None:
-        parser.print_help()
-        return
+    if len(args.training_set) == 0 and len(args.prediction_set) == 0 and len(args.validation_set) == 0:
+        raise ValueError('At least one of --training-set, --prediction-set, or --validation-set '
+                         'must be specified.')
 
     # If this is part of a cross-validation job, append n (--cross-validate-on) to the output path
     if args.cross_validate_on is None:
@@ -247,6 +306,8 @@ def main():
     os.makedirs(predictions_dir)
     checkpoints_dir = os.path.join(output_path, 'checkpoints')
     os.makedirs(checkpoints_dir)
+
+    train_ds = InkidDataset(args.training_set)
 
     # Transform the input file into region set, can handle JSON or PPM
     region_data = inkid.data.RegionSet.get_data_from_file(args.data)  # TODO region set LEFT OFF
