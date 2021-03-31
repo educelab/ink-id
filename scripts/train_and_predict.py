@@ -13,7 +13,10 @@ kth training region, remove it from the training set, and add it to
 the prediction and validation sets for that run. TODO update
 
 """
+# For InkidDataSource.from_path() https://stackoverflow.com/a/33533514
+from __future__ import annotations
 
+from abc import ABC, abstractmethod
 import argparse
 import datetime
 import functools
@@ -25,11 +28,12 @@ import os
 import sys
 import time
 import timeit
-from typing import List
+from typing import List, Optional, Tuple
 
 import git
 import kornia
 import numpy as np
+from PIL import Image
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -40,36 +44,178 @@ from tqdm import tqdm
 
 import inkid
 
+RegionPoint: Tuple[str, int, int]
 
-class InkidDataSource(object):
-    """Can be either a region or a volume. Produces subvolumes and possibly labels."""
 
+class InkidDataSource(ABC):
+    """Can be either a region or a volume. Produces inputs (e.g. subvolumes) and possibly labels."""
     def __init__(self, path: str) -> None:
+        self.path = path
+        with open(path, 'r') as f:
+            source_json = json.load(f)
+        self._source_json = source_json
+
+    def data_dict(self):
+        return self._source_json
+
+    def make_path_absolute(self, path: str) -> str:
+        return os.path.abspath(os.path.join(os.path.dirname(self.path), path))
+
+    @abstractmethod
+    def __len__(self):
+        pass
+
+    @abstractmethod
+    def __getitem__(self, item):
+        pass
+
+    @staticmethod
+    def from_path(path: str) -> InkidDataSource:
+        with open(path, 'r') as f:
+            source_json = json.load(f)
+        if source_json.get('type') == 'region':
+            return InkidRegionSource(path)
+        elif source_json.get('type') == 'volume':
+            return InkidVolumeSource(path)
+        else:
+            raise ValueError(f'Source file {path} does not specify valid "type" of "region" or "volume"')
+
+
+class InkidRegionSource(InkidDataSource):
+    def __init__(self, path: str) -> None:
+        """TODO
+
+        (x, y) are always in PPM space not this region space
+
+        """
+        super().__init__(path)
+
+        for key in ['ppm', 'volume', 'mask', 'ink-label', 'rgb-label', 'volcart-texture-label']:
+            if self._source_json[key] is not None:
+                self._source_json[key] = self.make_path_absolute(self._source_json[key])
+
+        self._ppm: inkid.data.PPM = inkid.data.PPM.from_path(self._source_json['ppm'])
+        self._volume: inkid.data.Volume = inkid.data.Volume.from_path(self._source_json['volume'])
+        self._bounding_box: Optional[Tuple[int, int, int, int]] = self._source_json['bounding-box']
+        if self._bounding_box is None:
+            self._bounding_box = self.get_default_bounds()
+        self._invert_normal: bool = self._source_json['invert-normal']
+
+        self._mask, self._ink_label, self._rgb_label, self._volcart_texture_label = None, None, None, None
+        if self._source_json['mask'] is not None:
+            self._mask = np.array(Image.open(self._source_json['mask']))
+        if self._source_json['ink-label'] is not None:
+            self._ink_label = np.array(Image.open(self._source_json['ink-label']))
+        if self._source_json['rgb-label'] is not None:
+            self._rgb_label = np.array(Image.open(self._source_json['rgb-label']))
+        if self._source_json['volcart-texture-label'] is not None:
+            self._volcart_texture_label = np.array(Image.open(self._source_json['volcart-texture-label']))
+
+        self._points: List[RegionPoint] = list()
+        self._points_list_needs_update: bool = True
+
+        self.grid_spacing = 1
+        self.specify_inkness = None
+        
+    def __len__(self) -> int:
+        if self._points_list_needs_update:
+            self.update_points_list()
+        return len(self._points)
+
+    def __getitem__(self, item):
+        if self._points_list_needs_update:
+            self.update_points_list()
+        point: RegionPoint = self._points[item]
+        # TODO get that point (x, y) from list of points
+        # TODO read that value from PPM
+        # TODO get the feature using feature_fn
+        # TODO get the label using label_fn
+        # TODO return them
+        pass
+
+    def update_points_list(self) -> None:
+        self._points = list()
+        x0, y0, x1, y1 = self._bounding_box
+        for y in range(y0, y1, self.grid_spacing):
+            for x in range(x0, x1, self.grid_spacing):
+                if self.specify_inkness is not None:
+                    if self.specify_inkness and not self.is_ink(x, y):
+                        continue
+                    elif not self.specify_inkness and self.is_ink(x, y):
+                        continue
+                if self.is_on_surface(x, y):
+                    self._points.append((self.path, x, y))
+        self._points_list_needs_update = False
+
+    @property
+    def grid_spacing(self):
+        return self._grid_spacing
+
+    @grid_spacing.setter
+    def grid_spacing(self, spacing: int):
+        self._grid_spacing = spacing
+        self._points_list_needs_update = True
+
+    @property
+    def specify_inkness(self):
+        return self._specify_inkness
+
+    @specify_inkness.setter
+    def specify_inkness(self, inkness: Optional[bool]):
+        self._specify_inkness = inkness
+        self._points_list_needs_update = True
+
+    def is_ink(self, x: int, y: int) -> bool:
+        assert self._ink_label is not None
+        return self._ink_label[y, x] != 0
+
+    def is_on_surface(self, x: int, y: int, r: int = 1) -> bool:
+        """Return whether a point is on the surface mask.
+
+        Check a point and a square of radius r around it, and return
+        False if any of those points are not on the surface
+        mask. Return True otherwise.
+
+        """
+        assert self._mask is not None
+        square = self._mask[y-r:y+r+1, x-r:x+r+1]
+        return np.size(square) > 0 and np.min(square) != 0
+
+    def get_default_bounds(self) -> Tuple[int, int, int, int]:
+        """Return the full bounds of the PPM in (x0, y0, x1, y1) format."""
+        return 0, 0, self._ppm.width, self._ppm.height
+
+
+class InkidVolumeSource(InkidDataSource):
+    def __init__(self, path: str) -> None:
+        super().__init__(path)
+
+    def __len__(self):
+        pass
+
+    def __getitem__(self, item):
         pass
 
 
 class InkidDataset(torch.utils.data.Dataset):
-    def __init__(self, data_source_paths: List[str], data_root: str) -> None:
+    def __init__(self, source_paths: List[str], data_root: str) -> None:
         """TODO
 
         Args:
-            data_source_paths: a list of dataset or data source file paths
+            source_paths: A list of .txt dataset or .json data source file paths.
+            data_root: The Invisible Library root data directory.
+
         """
+        self.data_root = data_root
+
         # Convert the list of paths to a list of InkidDataSources
-        data_source_paths = self.expand_data_sources(data_source_paths)
+        source_paths = self.expand_data_sources(source_paths)
         self.sources: List[InkidDataSource] = list()
-        for data_source_path in data_source_paths:
-            self.sources.append(InkidDataSource(data_source_path))
-        print(self.sources)
+        for source_path in source_paths:
+            self.sources.append(InkidDataSource.from_path(source_path))
 
-    def __len__(self) -> int:
-        pass
-
-    def __getitem__(self, idx: int):
-        pass
-
-    def expand_data_sources(self, data_source_paths: List[str], are_we_recursing: bool = False) -> List[str]:
-        """Expand .txt and .json contents into flattened list of .json files.
+    def expand_data_sources(self, source_paths: List[str], recursing: bool = False) -> List[str]:
+        """Expand list of .txt and .json filenames into flattened list of .json filenames.
 
         The file paths in the input can point to either .txt or .json files. The .txt
         files are themselves lists of other files, which can further be .txt or .json.
@@ -77,24 +223,60 @@ class InkidDataset(torch.utils.data.Dataset):
         that file contains and recursively processes it. The result is a list of only
         .json data source file paths.
 
-        The original input file paths are absolute since they are passed from the command line.
-        The rest of the paths will be relative to the data root directory. This changes
-        all paths to be absolute.
+        Args:
+            source_paths (List[str]): A list of .txt dataset or .json data source file paths.
+            recursing: (bool): Whether or not this is a recursive call. This affects whether the paths
+                in source_paths are expected to be absolute (when not recursive, since they were passed
+                from command line) or relative to self.data_root (when recursive, since they were read
+                from a .txt dataset file).
+
+        Returns:
+            List[str]: A list of absolute paths to the .json data source files representing this dataset.
 
         """
         expanded_paths: List[str] = list()
-        for source_path in data_source_paths:
+        for source_path in source_paths:
+            if recursing:
+                source_path = os.path.join(self.data_root, source_path)
             file_extension = os.path.splitext(source_path)[1]
             if file_extension == '.json':
-                self.sources.append(InkidDataSource(source_path))
+                expanded_paths.append(source_path)
             elif file_extension == '.txt':
-                source_json_paths = self.expand_data_sources([source_path], are_we_recursing=True)
-                for source_json_path in source_json_paths:
-                    self.sources.append(InkidDataSource(source_json_path))
+                with open(source_path, 'r') as f:
+                    sources_in_file = f.read().splitlines()
+                expanded_paths += self.expand_data_sources(sources_in_file, recursing=True)
             else:
                 raise ValueError(f'Data source {source_path} is not a permitted file type (.txt or .json)')
-        with open(dataset_txt_file_path) as f:
-            return f.readlines()
+        return list(set(expanded_paths))  # Remove duplicates
+
+    def set_regions_grid_spacing(self, spacing: int):
+        for source in self.sources:
+            if isinstance(source, InkidRegionSource):
+                source.grid_spacing = spacing
+
+    def __len__(self) -> int:
+        return sum([len(source) for source in self.sources])
+
+    def __getitem__(self, item: int):
+        for source in self.sources:
+            source_len = len(source)
+            if item < source_len:
+                return source[item]
+            item -= source_len
+        raise IndexError()
+
+    def regions(self) -> List[InkidRegionSource]:
+        return [source for source in self.sources if isinstance(source, InkidRegionSource)]
+
+    def remove_source(self, source_path: str) -> None:
+        source_idx_to_remove: int = self.source_paths().index(source_path)
+        self.sources.pop(source_idx_to_remove)
+
+    def source_paths(self) -> List[str]:
+        return [source.path for source in self.sources]
+
+    def data_dict(self):
+        return {source.path: source.data_dict() for source in self.sources}
 
 
 def perform_validation(model, dataloader, metrics, device, label_type):
@@ -181,8 +363,8 @@ def main():
     parser.add_argument('--training-set', metavar='path', nargs='*', help='training dataset(s)', default=[])
     parser.add_argument('--validation-set', metavar='path', nargs='*', help='validation dataset(s)', default=[])
     parser.add_argument('--prediction-set', metavar='path', nargs='*', help='prediction dataset(s)', default=[])
-    parser.add_argument('--data-root', matavar='path', default=None,
-                        help='path to the data root that contains the ')
+    parser.add_argument('--data-root', metavar='path', default=None,
+                        help='path to the root directory that contains the .volpkgs, etc.')
 
     # Dataset modifications
     parser.add_argument('--cross-validate-on', metavar='n', default=None, type=int,
@@ -307,22 +489,35 @@ def main():
     checkpoints_dir = os.path.join(output_path, 'checkpoints')
     os.makedirs(checkpoints_dir)
 
-    train_ds = InkidDataset(args.training_set)
+    # Look for the Invisible Library data root directory, if it is not specified
+    if args.data_root is None:
+        args.data_root = inkid.ops.try_find_data_root()
+        if args.data_root is None:
+            raise FileNotFoundError('Unable to find Invisible Library data root directory by guessing.'
+                                    ' Please specify --data-root.')
 
-    # Transform the input file into region set, can handle JSON or PPM
-    region_data = inkid.data.RegionSet.get_data_from_file(args.data)  # TODO region set LEFT OFF
+    train_ds = InkidDataset(args.training_set, args.data_root)
+    val_ds = InkidDataset(args.validation_set, args.data_root)
+    pred_ds = InkidDataset(args.prediction_set, args.data_root)
+    pred_ds.region_grid_spacing = args.prediction_grid_spacing
 
-    # If k-fold job, remove nth region from training and put in prediction/validation sets TODO region set
+    # If k-fold job, remove nth region from training and put in prediction/validation sets
     if args.cross_validate_on is not None:
-        n_region = region_data['regions']['training'].pop(int(args.cross_validate_on))
-        region_data['regions']['prediction'].append(n_region)
-        region_data['regions']['validation'].append(n_region)
+        nth_region_path: str = train_ds.regions()[args.cross_validate_on].path
+        train_ds.remove_source(nth_region_path)
+        val_ds.sources.append(InkidRegionSource(nth_region_path))
+        pred_ds.sources.append(InkidRegionSource(nth_region_path))
 
-    # Now that we have made all these changes to the region data, create a region set from this data
-    regions = inkid.data.RegionSet(region_data)  # TODO region set
-
-    # Create metadata dict TODO region set
-    metadata = {'Arguments': vars(args), 'Region set': region_data, 'Command': ' '.join(sys.argv)}
+    # Create metadata dict
+    metadata = {
+        'Arguments': vars(args),
+        'Data': {
+            'training': train_ds.data_dict(),
+            'validation': val_ds.data_dict(),
+            'prediction': pred_ds.data_dict(),
+        },
+        'Command': ' '.join(sys.argv)
+    }
 
     # Add git hash to metadata if inside a git repository
     try:
@@ -422,15 +617,15 @@ def main():
         return
 
     # Define the datasets TODO region set
-    train_ds = inkid.data.PointsDataset(regions, ['training'], training_features_fn, label_fn)
-    if args.training_max_samples is not None:
-        train_ds = inkid.ops.take_from_dataset(train_ds, args.training_max_samples)
-    val_ds = inkid.data.PointsDataset(regions, ['validation'], validation_features_fn, label_fn)
-    # Only take n samples for validation, not the entire region
-    if args.validation_max_samples is not None:
-        val_ds = inkid.ops.take_from_dataset(val_ds, args.validation_max_samples)
-    pred_ds = inkid.data.PointsDataset(regions, ['prediction'], prediction_features_fn, lambda p: p,
-                                       grid_spacing=args.prediction_grid_spacing)
+    # train_ds = inkid.data.PointsDataset(regions, ['training'], training_features_fn, label_fn)
+    # if args.training_max_samples is not None:
+    #     train_ds = inkid.ops.take_from_dataset(train_ds, args.training_max_samples)
+    # val_ds = inkid.data.PointsDataset(regions, ['validation'], validation_features_fn, label_fn)
+    # # Only take n samples for validation, not the entire region
+    # if args.validation_max_samples is not None:
+    #     val_ds = inkid.ops.take_from_dataset(val_ds, args.validation_max_samples)
+    # pred_ds = inkid.data.PointsDataset(regions, ['prediction'], prediction_features_fn, lambda p: p,
+    #                                    grid_spacing=args.prediction_grid_spacing)
 
     if args.dataloaders_num_workers is None:
         args.dataloaders_num_workers = multiprocessing.cpu_count()

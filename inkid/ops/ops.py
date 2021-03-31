@@ -130,3 +130,18 @@ def rclone_transfer_to_remote(rclone_remote, output_path):
         ]
         logging.info(' '.join(command))
         subprocess.call(command)
+
+
+def try_find_data_root():
+    candidate_directories = [
+        '$HOME/data/dri-datasets-drive',
+        '$PSCRATCH/seales_uksr/dri-datasets-drive',
+        '$HOME/data/mount/dri-datasets-drive',
+        '/Volumes/GoogleDrive/Shared drives/DRI Datasets'
+    ]
+    for candidate_directory in candidate_directories:
+        candidate_directory = os.path.expandvars(candidate_directory)
+        if os.path.exists(candidate_directory):
+            if os.path.exists(os.path.join(candidate_directory, 'InvisibleLibrary.txt')):
+                return candidate_directory
+    return None
