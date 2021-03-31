@@ -66,7 +66,7 @@ class RegionSet:
     @classmethod
     def from_json(cls, filename):
         """Initialize a RegionSet from a JSON filename."""
-        data = RegionSet.get_data_from_file(filename)
+        data = RegionSet.get_data_from_file_or_url(filename)
         return cls(data)
 
     @staticmethod
@@ -145,15 +145,7 @@ class RegionSet:
             volume = self._volumes[volume_path]
 
             invert_normal = ppm_data.get('invert_normal')
-            self._ppms[ppm_name] = inkid.data.PPM(
-                ppm_path,
-                volume,
-                mask_path,
-                ink_label_path,
-                rgb_label_path,
-                invert_normal,
-                ppm_name,
-            )
+            self._ppms[ppm_name] = inkid.data.PPM(ppm_path)
 
         return self._ppms[ppm_name]
 

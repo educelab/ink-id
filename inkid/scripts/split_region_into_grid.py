@@ -49,7 +49,7 @@ def main():
             )
         )
 
-        header = inkid.data.PPM.parse_PPM_header(ppm_path)
+        header = inkid.data.PPM.parse_ppm_header(ppm_path)
         bounds = [0, 0, header['width'], header['height']]
 
     width = bounds[2] - bounds[0]
