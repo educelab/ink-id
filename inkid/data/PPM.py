@@ -64,6 +64,11 @@ class PPM:
         cls.initialized_ppms[path] = PPM(path)
         return cls.initialized_ppms[path]
 
+    @classmethod
+    def ensure_all_ppms_loaded(cls) -> None:
+        for ppm in cls.initialized_ppms.values():
+            ppm.ensure_loaded()
+
     @staticmethod
     def parse_ppm_header(filename):
         comments_re = re.compile('^#')

@@ -861,6 +861,9 @@ def main():
     # Move model to device (possibly GPU)
     model = model.to(device)
 
+    # Ensure all PPMs loaded
+    inkid.data.PPM.ensure_all_ppms_loaded()
+
     # Show model in TensorBoard
     try:
         if train_dl is not None:
