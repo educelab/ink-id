@@ -14,7 +14,7 @@ from tqdm import tqdm
 class PPM:
     initialized_ppms: Dict[str, PPM] = dict()
 
-    def __init__(self, path):
+    def __init__(self, path: str, lazy_load: bool = False):
         self._path = path
         ppm_path_stem, _ = os.path.splitext(self._path)
 
@@ -31,6 +31,9 @@ class PPM:
         logging.info(f'Initialized PPM for {self._path} with width {self.width}, '
                      f'height {self.height}, dim {self._dim}')
 
+        if not lazy_load:
+            self.ensure_loaded()
+
     def is_loaded(self):
         return self._data is not None
 
@@ -44,11 +47,6 @@ class PPM:
             return cls.initialized_ppms[path]
         cls.initialized_ppms[path] = PPM(path)
         return cls.initialized_ppms[path]
-
-    @classmethod
-    def ensure_all_ppms_loaded(cls) -> None:
-        for ppm in cls.initialized_ppms.values():
-            ppm.ensure_loaded()
 
     @staticmethod
     def parse_ppm_header(filename):
