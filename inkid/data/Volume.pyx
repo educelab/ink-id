@@ -402,7 +402,7 @@ cdef class Volume:
 
     def get_subvolume(self, center, shape_voxels, shape_microns, normal,
                       out_of_bounds, move_along_normal, jitter_max,
-                      augment_subvolume, method, normalize, square_corners):
+                      augment_subvolume, method, normalize=False, square_corners=None):
         """Get a subvolume from a center point and normal vector.
 
         At the time of writing, this function very closely resembles
@@ -521,7 +521,11 @@ cdef class Volume:
             subvolume = subvolume - subvolume.mean()
             subvolume = subvolume / subvolume.std()
 
-
         assert subvolume.shape == tuple(shape_voxels)
+
+        # Convert to float
+        subvolume = np.asarray(subvolume, np.float32)
+        # Add singleton dimension for number of channels
+        subvolume = np.expand_dims(subvolume, 0)
 
         return subvolume

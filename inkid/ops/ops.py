@@ -32,9 +32,13 @@ def visualize_batch(xb, yb):
 
 
 def take_from_dataset(dataset, n_samples):
-    """Take the first n samples from a dataset to reduce the size."""
+    """Take only n samples from a dataset to reduce the size."""
     if n_samples < len(dataset):
-        dataset = torch.utils.data.random_split(dataset, [n_samples, len(dataset) - n_samples])[0]
+        dataset = torch.utils.data.random_split(
+            dataset=dataset,
+            lengths=[n_samples, len(dataset) - n_samples],
+            generator=torch.Generator().manual_seed(42)
+        )[0]
     return dataset
 
 
