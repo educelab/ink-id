@@ -31,6 +31,9 @@ class PPM:
 
         self._data: Optional[np.typing.ArrayLike] = None
 
+        logging.info(f'Initialized PPM for {self._path} with width {self.width}, '
+                     f'height {self.height}, dim {self._dim}')
+
     @staticmethod
     def get_raw_data(filename):
         url = urlsplit(filename)
@@ -139,48 +142,6 @@ class PPM:
         self.ensure_loaded()
         return self._data[ppm_y][ppm_x]
 
-    # def point_to_ink_classes_label(self, point, shape):
-    #     assert self._ink_label is not None
-    #     x, y = point
-    #     label = np.stack((np.ones(shape), np.zeros(shape))).astype(np.float32)  # Create array of no-ink labels
-    #     y_d, x_d = np.array(shape) // 2  # Calculate distance from center to edges of square we are sampling
-    #     # Iterate over label indices
-    #     for idx, _ in np.ndenumerate(label):
-    #         _, y_idx, x_idx = idx
-    #         y_s = y - y_d + y_idx  # Sample point is center minus distance (half edge length) plus label index
-    #         x_s = x - x_d + x_idx
-    #         # Bounds check to make sure inside PPM
-    #         if 0 <= y_s < self._ink_label.shape[0] and 0 <= x_s < self._ink_label.shape[1]:
-    #             if self._ink_label[y_s, x_s] != 0:
-    #                 label[:, y_idx, x_idx] = [0.0, 1.0]  # Mark this "ink"
-    #     return label
-    #
-    # def point_to_rgb_values_label(self, point, shape):
-    #     assert self._rgb_label is not None
-    #     x, y = point
-    #     label = np.zeros((3,) + shape).astype(np.float32)
-    #     y_d, x_d = np.array(shape) // 2  # Calculate distance from center to edges of square we are sampling
-    #     # Iterate over label indices
-    #     for idx, _ in np.ndenumerate(label):
-    #         _, y_idx, x_idx = idx
-    #         y_s = y - y_d + y_idx  # Sample point is center minus distance (half edge length) plus label index
-    #         x_s = x - x_d + x_idx
-    #         # Bounds check to make sure inside PPM
-    #         if 0 <= y_s < self._rgb_label.shape[0] and 0 <= x_s < self._rgb_label.shape[1]:
-    #             label[:, y_idx, x_idx] = self._rgb_label[y_s, x_s]
-    #     return label
-    #
-    # def point_to_voxel_vector(self, point, length_in_each_direction,
-    #                           out_of_bounds=None):
-    #     ppm_x, ppm_y = point
-    #     x, y, z, n_x, n_y, n_z = self.get_point_with_normal(ppm_x, ppm_y)
-    #     return self._volume.get_voxel_vector(
-    #         (x, y, z),
-    #         (n_x, n_y, n_z),
-    #         length_in_each_direction,
-    #         out_of_bounds
-    #     )
-    #
     # def point_to_subvolume(self, point, subvolume_shape_voxels, subvolume_shape_microns,
     #                        out_of_bounds=None, move_along_normal=None,
     #                        jitter_max=None, augment_subvolume=None,
@@ -214,67 +175,6 @@ class PPM:
     #         normalize=normalize,
     #         square_corners=square_corners,
     #     )
-    #
-    # def reconstruct_predicted_ink_classes(self, class_probabilities, ppm_xy):
-    #     assert len(ppm_xy) == 2
-    #     x, y = ppm_xy
-    #     value = class_probabilities[1] * np.iinfo(np.uint16).max  # Convert ink class probability to image intensity
-    #     y_d, x_d = np.array(value.shape) // 2  # Calculate distance from center to edges of square we are writing
-    #     # Iterate over label indices
-    #     for idx, v in np.ndenumerate(value):
-    #         y_idx, x_idx = idx
-    #         y_s = y - y_d + y_idx  # Sample point is center minus distance (half edge length) plus label index
-    #         x_s = x - x_d + x_idx
-    #         # Bounds check to make sure inside PPM
-    #         if 0 <= y_s < self._ink_classes_prediction_image.shape[0] \
-    #                 and 0 <= x_s < self._ink_classes_prediction_image.shape[1]:
-    #             self._ink_classes_prediction_image[y_s, x_s] = v
-    #     self._ink_classes_prediction_image_written_to = True
-    #
-    # def reconstruct_predicted_rgb(self, rgb, ppm_xy):
-    #     assert len(ppm_xy) == 2
-    #     x, y = ppm_xy
-    #     value = np.clip(rgb, 0, np.iinfo(np.uint8).max)  # Restrict value to uint8 range
-    #     y_d, x_d = np.array(value.shape)[1:] // 2  # Calculate distance from center to edges of square we are writing
-    #     # Iterate over label indices
-    #     for idx in np.ndindex(value.shape[1:]):
-    #         y_idx, x_idx = idx
-    #         v = value[:, y_idx, x_idx]
-    #         y_s = y - y_d + y_idx  # Sample point is center minus distance (half edge length) plus label index
-    #         x_s = x - x_d + x_idx
-    #         # Bounds check to make sure inside PPM
-    #         if 0 <= y_s < self._rgb_values_prediction_image.shape[0] \
-    #                 and 0 <= x_s < self._rgb_values_prediction_image.shape[1]:
-    #             self._rgb_values_prediction_image[y_s, x_s] = v
-    #     self._rgb_values_prediction_image_written_to = True
-    #
-    # def reset_predictions(self):
-    #     if self._ink_label is not None:
-    #         self._ink_classes_prediction_image = np.zeros((self._height, self._width), np.uint16)
-    #         self._ink_classes_prediction_image_written_to = False
-    #     if self._rgb_label is not None:
-    #         self._rgb_values_prediction_image = np.zeros((self._height, self._width, 3), np.uint8)
-    #         self._rgb_values_prediction_image_written_to = False
-    #
-    # def save_predictions(self, directory, suffix):
-    #     if not os.path.exists(directory):
-    #         os.makedirs(directory)
-    #
-    #     im = None
-    #     if self._ink_classes_prediction_image_written_to:
-    #         im = Image.fromarray(self._ink_classes_prediction_image)
-    #     elif self._rgb_values_prediction_image_written_to:
-    #         im = Image.fromarray(self._rgb_values_prediction_image)
-    #     if im is not None:
-    #         im.save(
-    #             os.path.join(
-    #                 directory,
-    #                 '{}_prediction_{}.png'.format(
-    #                     self._name,
-    #                     suffix,
-    #                 ),
-    #             ),
-    #         )
 
     def scale_down_by(self, scale_factor):
         self.ensure_loaded()

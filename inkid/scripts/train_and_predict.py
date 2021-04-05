@@ -20,7 +20,6 @@ from abc import ABC, abstractmethod
 import argparse
 import contextlib
 import datetime
-import functools
 import itertools
 import json
 import logging
@@ -29,7 +28,7 @@ import os
 import sys
 import time
 import timeit
-from typing import List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import git
 import numpy as np
@@ -44,8 +43,6 @@ from tqdm import tqdm
 
 import inkid
 
-RegionPoint: Tuple[str, int, int]
-
 
 class InkidDataSource(ABC):
     """Can be either a region or a volume. Produces inputs (e.g. subvolumes) and possibly labels."""
@@ -54,6 +51,12 @@ class InkidDataSource(ABC):
         with open(path, 'r') as f:
             source_json = json.load(f)
         self._source_json = source_json
+
+        self.feature_type: Optional[str] = None
+        self.feature_args: Dict = dict()
+
+        self.label_type: Optional[str] = None
+        self.label_args: Dict = dict()
 
     def data_dict(self):
         return self._source_json
@@ -79,6 +82,9 @@ class InkidDataSource(ABC):
             return InkidVolumeSource(path)
         else:
             raise ValueError(f'Source file {path} does not specify valid "type" of "region" or "volume"')
+
+
+RegionPoint = Tuple[str, int, int]
 
 
 class InkidRegionSource(InkidDataSource):
@@ -111,11 +117,20 @@ class InkidRegionSource(InkidDataSource):
         if self._source_json['volcart-texture-label'] is not None:
             self._volcart_texture_label = np.array(Image.open(self._source_json['volcart-texture-label']))
 
-        self._points: List[RegionPoint] = list()
+        self._points = list()
         self._points_list_needs_update: bool = True
 
         self.grid_spacing = 1
         self.specify_inkness = None
+
+        self._ink_classes_prediction_image = np.zeros((self._ppm.height, self._ppm.width), np.uint16)
+        self._ink_classes_prediction_image_written_to = False
+        self._rgb_values_prediction_image = np.zeros((self._ppm.height, self._ppm.width, 3), np.uint8)
+        self._rgb_values_prediction_image_written_to = False
+
+    @property
+    def name(self) -> str:
+        return os.path.splitext(os.path.basename(self.path))[0]
         
     def __len__(self) -> int:
         if self._points_list_needs_update:
@@ -125,13 +140,55 @@ class InkidRegionSource(InkidDataSource):
     def __getitem__(self, item):
         if self._points_list_needs_update:
             self.update_points_list()
-        point: RegionPoint = self._points[item]
-        # TODO get that point (x, y) from list of points
-        # TODO read that value from PPM
-        # TODO get the feature using feature_fn
-        # TODO get the label using label_fn
-        # TODO return them
-        pass
+        # Get the point (x, y) from list of points
+        surface_x, surface_y = self._points[item]
+        # Read that value from PPM
+        x, y, z, n_x, n_y, n_z = self._ppm.get_point_with_normal(surface_x, surface_y)
+        # Get the feature metadata (useful for e.g. knowing where this feature came from on the surface)
+        feature_metadata: RegionPoint = (self.path, surface_x, surface_y)
+        # Get the feature
+        feature = None
+        if self.feature_type == 'subvolume_3dcnn':
+            feature = self._volume.get_subvolume(
+                center=(x, y, z),
+                normal=(n_x, n_y, n_z),
+                **self.feature_args
+            )
+        elif self.feature_type == 'voxel_vector_1dcnn':
+            feature = self._volume.get_voxel_vector(
+                center=(x, y, z),
+                normal=(n_x, n_y, n_z),
+                **self.feature_args
+            )
+        elif self.feature_type == 'descriptive_statistics':
+            subvolume = self._volume.get_subvolume(
+                center=(x, y, z),
+                normal=(n_x, n_y, n_z),
+                **self.feature_args
+            )
+            feature = inkid.ops.get_descriptive_statistics(subvolume)
+        elif self.feature_type is not None:
+            raise ValueError(f'Unknown feature_type: {self.feature_type} set for InkidRegionSource'
+                             f' {self.path}')
+        # Get the label
+        label = None
+        if self.label_type == 'ink_classes':
+            label = self.point_to_ink_classes_label(
+                (surface_x, surface_y),
+                **self.label_args
+            )
+        elif self.label_type == 'rgb_values':
+            label = self.point_to_rgb_values_label(
+                (surface_x, surface_y),
+                **self.label_args
+            )
+        elif self.label_type is not None:
+            raise ValueError(f'Unknown label_type: {self.label_type} set for InkidRegionSource'
+                             f' {self.path}')
+        if label is None:
+            return feature_metadata, feature
+        else:
+            return feature_metadata, feature, label
 
     def update_points_list(self) -> None:
         self._points = list()
@@ -144,7 +201,7 @@ class InkidRegionSource(InkidDataSource):
                     elif not self.specify_inkness and self.is_ink(x, y):
                         continue
                 if self.is_on_surface(x, y):
-                    self._points.append((self.path, x, y))
+                    self._points.append((x, y))
         self._points_list_needs_update = False
 
     @property
@@ -185,6 +242,93 @@ class InkidRegionSource(InkidDataSource):
         """Return the full bounds of the PPM in (x0, y0, x1, y1) format."""
         return 0, 0, self._ppm.width, self._ppm.height
 
+    def point_to_ink_classes_label(self, point, shape):
+        assert self._ink_label is not None
+        x, y = point
+        label = np.stack((np.ones(shape), np.zeros(shape))).astype(np.float32)  # Create array of no-ink labels
+        y_d, x_d = np.array(shape) // 2  # Calculate distance from center to edges of square we are sampling
+        # Iterate over label indices
+        for idx, _ in np.ndenumerate(label):
+            _, y_idx, x_idx = idx
+            y_s = y - y_d + y_idx  # Sample point is center minus distance (half edge length) plus label index
+            x_s = x - x_d + x_idx
+            # Bounds check to make sure inside PPM
+            if 0 <= y_s < self._ink_label.shape[0] and 0 <= x_s < self._ink_label.shape[1]:
+                if self._ink_label[y_s, x_s] != 0:
+                    label[:, y_idx, x_idx] = [0.0, 1.0]  # Mark this "ink"
+        return label
+
+    def point_to_rgb_values_label(self, point, shape):
+        assert self._rgb_label is not None
+        x, y = point
+        label = np.zeros((3,) + shape).astype(np.float32)
+        y_d, x_d = np.array(shape) // 2  # Calculate distance from center to edges of square we are sampling
+        # Iterate over label indices
+        for idx, _ in np.ndenumerate(label):
+            _, y_idx, x_idx = idx
+            y_s = y - y_d + y_idx  # Sample point is center minus distance (half edge length) plus label index
+            x_s = x - x_d + x_idx
+            # Bounds check to make sure inside PPM
+            if 0 <= y_s < self._rgb_label.shape[0] and 0 <= x_s < self._rgb_label.shape[1]:
+                label[:, y_idx, x_idx] = self._rgb_label[y_s, x_s]
+        return label
+
+    def store_prediction(self, x, y, prediction, label_type):
+        """TODO prediction shape [v, y, x]"""
+        # Repeat prediction to fill grid square so prediction image is not single pixels in sea of blackness
+        if prediction.shape[1] == 1 and prediction.shape[2] == 1:
+            prediction = np.repeat(prediction, repeats=self.grid_spacing, axis=1)
+            prediction = np.repeat(prediction, repeats=self.grid_spacing, axis=2)
+        # Calculate distance from center to edges of square we are writing
+        y_d, x_d = np.array(prediction.shape)[1:] // 2
+        # Iterate over label indices
+        for idx in np.ndindex(prediction.shape[1:]):
+            y_idx, x_idx = idx
+            value = prediction[:, y_idx, x_idx]
+            # Sample point in PPM space is center minus distance (half edge length) plus label index
+            y_s = y - y_d + y_idx
+            x_s = x - x_d + x_idx
+            # Bounds check to make sure inside PPM
+            if 0 <= x_s < self._ppm.width and 0 <= y_s < self._ppm.height:
+                if label_type == 'ink_classes':
+                    # Convert ink class probability to image intensity
+                    v = value[1] * np.iinfo(np.uint16).max
+                    self._ink_classes_prediction_image[y_s, x_s] = v
+                    self._ink_classes_prediction_image_written_to = True
+                elif label_type == 'rgb_values':
+                    # Restrict value to uint8 range
+                    v = np.clip(value, 0, np.iinfo(np.uint8).max)
+                    self._rgb_values_prediction_image[y_s, x_s] = v
+                    self._rgb_values_prediction_image_written_to = True
+                else:
+                    raise ValueError(f'Unknown label_type: {label_type} used for prediction')
+
+    def save_predictions(self, directory, suffix):
+        if not os.path.exists(directory):
+            os.makedirs(directory)
+
+        im = None
+        if self._ink_classes_prediction_image_written_to:
+            im = Image.fromarray(self._ink_classes_prediction_image)
+        elif self._rgb_values_prediction_image_written_to:
+            im = Image.fromarray(self._rgb_values_prediction_image)
+        if im is not None:
+            im.save(
+                os.path.join(
+                    directory,
+                    '{}_prediction_{}.png'.format(
+                        self.name,
+                        suffix,
+                    ),
+                ),
+            )
+
+    def reset_predictions(self):
+        self._ink_classes_prediction_image = np.zeros((self._ppm.height, self._ppm.width), np.uint16)
+        self._ink_classes_prediction_image_written_to = False
+        self._rgb_values_prediction_image = np.zeros((self._ppm.height, self._ppm.width, 3), np.uint8)
+        self._rgb_values_prediction_image_written_to = False
+
 
 class InkidVolumeSource(InkidDataSource):
     def __init__(self, path: str) -> None:
@@ -198,8 +342,20 @@ class InkidVolumeSource(InkidDataSource):
 
 
 class InkidDataset(torch.utils.data.Dataset):
+    """A PyTorch Dataset to serve inkid features and labels.
+
+        An inkid dataset is a PyTorch Dataset which maintains a set of inkid data
+        sources. Each source generates features (e.g. subvolumes) and possibly labels
+        (e.g. ink presence). A PyTorch Dataloader can be created from this Dataset,
+        which allows direct input to a model.
+
+    """
     def __init__(self, source_paths: List[str], data_root: str) -> None:
-        """TODO
+        """Initialize the dataset given .json data source and/or .txt dataset paths.
+
+        This recursively expands any provided .txt dataset files until there is just a
+        list of absolute paths to .json data source files. InkidDataSource objects are
+        then instantiated.
 
         Args:
             source_paths: A list of .txt dataset or .json data source file paths.
@@ -268,6 +424,12 @@ class InkidDataset(torch.utils.data.Dataset):
     def regions(self) -> List[InkidRegionSource]:
         return [source for source in self.sources if isinstance(source, InkidRegionSource)]
 
+    def get_source(self, source_path: str) -> Optional[InkidDataSource]:
+        for source in self.sources:
+            if source.path == source_path:
+                return source
+        return None
+
     def remove_source(self, source_path: str) -> None:
         source_idx_to_remove: int = self.source_paths().index(source_path)
         self.sources.pop(source_idx_to_remove)
@@ -278,13 +440,25 @@ class InkidDataset(torch.utils.data.Dataset):
     def data_dict(self):
         return {source.path: source.data_dict() for source in self.sources}
 
+    def set_for_all_sources(self, attribute: str, value):
+        for source in self.sources:
+            setattr(source, attribute, value)
+
+    def save_predictions(self, directory, suffix):
+        for region in self.regions():
+            region.save_predictions(directory, suffix)
+
+    def reset_predictions(self):
+        for region in self.regions():
+            region.reset_predictions()
+
 
 def perform_validation(model, dataloader, metrics, device, label_type):
     """Run the validation process using a model and dataloader, and return the results of all metrics."""
     model.eval()  # Turn off training mode for batch norm and dropout purposes
     with torch.no_grad():
         metric_results = {metric: [] for metric in metrics}
-        for xb, yb in tqdm(dataloader):
+        for _, xb, yb in tqdm(dataloader):
             pred = model(xb.to(device))
             yb = yb.to(device)
             if label_type == 'ink_classes':
@@ -296,17 +470,11 @@ def perform_validation(model, dataloader, metrics, device, label_type):
 
 
 def generate_prediction_image(dataloader, model, output_size, label_type, device, predictions_dir, suffix,
-                              reconstruct_fn, region_set, label_shape, prediction_averaging, grid_spacing):
+                              prediction_averaging):
     """Helper function to generate a prediction image given a model and dataloader, and save it to a file."""
-    if label_shape == (1, 1):
-        pred_shape = (grid_spacing, grid_spacing)
-    else:
-        pred_shape = label_shape
-    predictions = np.empty(shape=(0, output_size, pred_shape[0], pred_shape[1]))
-    points = np.empty(shape=(0, 3))
     model.eval()  # Turn off training mode for batch norm and dropout purposes
     with torch.no_grad():
-        for pxb, pts in tqdm(dataloader):
+        for batch_metadata, batch_features in tqdm(dataloader):
             # Smooth predictions via augmentation. Augment each subvolume 8-fold via rotations and flips
             if prediction_averaging:
                 rotations = range(4)
@@ -314,11 +482,11 @@ def generate_prediction_image(dataloader, model, output_size, label_type, device
             else:
                 rotations = [0]
                 flips = [False]
-            batch_preds = np.zeros((0, pxb.shape[0], output_size, pred_shape[0], pred_shape[1]))
+            batch_preds = None
             for rotation, flip in itertools.product(rotations, flips):
-                # Example pxb.shape = [64, 1, 48, 48, 48] (BxCxDxHxW)
+                # Example batch_features.shape = [64, 1, 48, 48, 48] (BxCxDxHxW)
                 # Augment via rotation and flip
-                aug_pxb = pxb.rot90(rotation, [3, 4])
+                aug_pxb = batch_features.rot90(rotation, [3, 4])
                 if flip:
                     aug_pxb = aug_pxb.flip(4)
                 pred = model(aug_pxb.to(device))
@@ -332,24 +500,24 @@ def generate_prediction_image(dataloader, model, output_size, label_type, device
                 pred = pred.rot90(-rotation, [2, 3])
                 pred = np.expand_dims(pred.numpy(), axis=0)
                 # Example pred.shape = [1, 64, 2, 48, 48] (BxCxHxW)
-                # Repeat prediction to fill grid square so prediction image is not single pixels in sea of blackness
-                if label_shape == (1, 1):
-                    pred = np.repeat(pred, repeats=grid_spacing, axis=3)
-                    pred = np.repeat(pred, repeats=grid_spacing, axis=4)
                 # Save this augmentation to the batch totals
+                if batch_preds is None:
+                    batch_preds = np.zeros((0, batch_features.shape[0], output_size, pred.shape[3], pred.shape[4]))
                 batch_preds = np.append(batch_preds, pred, axis=0)
             # Average over batch of predictions after augmentation
             batch_pred = batch_preds.mean(0)
-            pts = pts.numpy()
-            # Add batch of predictions to list
-            predictions = np.append(predictions, batch_pred, axis=0)
-            points = np.append(points, pts, axis=0)
+            # Separate these three lists
+            source_paths, xs, ys = batch_metadata
+            for prediction, source_path, x, y in zip(batch_pred, source_paths, xs, ys):
+                dataloader.dataset.get_source(source_path).store_prediction(
+                    int(x),
+                    int(y),
+                    prediction,
+                    label_type
+                )
+    dataloader.dataset.save_predictions(predictions_dir, suffix)
+    dataloader.dataset.reset_predictions()
     model.train()
-    for prediction, point in zip(predictions, points):
-        region_id, x, y = point
-        reconstruct_fn([int(region_id)], [prediction], [[int(x), int(y)]])
-    region_set.save_predictions(predictions_dir, suffix)
-    region_set.reset_predictions()
 
 
 def main():
@@ -500,11 +668,9 @@ def main():
             raise FileNotFoundError('Unable to find Invisible Library data root directory by guessing.'
                                     ' Please specify --data-root.')
 
-
     train_ds = InkidDataset(args.training_set, args.data_root)
     val_ds = InkidDataset(args.validation_set, args.data_root)
     pred_ds = InkidDataset(args.prediction_set, args.data_root)
-    pred_ds.region_grid_spacing = args.prediction_grid_spacing
 
     # If k-fold job, remove nth region from training and put in prediction/validation sets
     if args.cross_validate_on is not None:
@@ -512,6 +678,8 @@ def main():
         train_ds.remove_source(nth_region_path)
         val_ds.sources.append(InkidRegionSource(nth_region_path))
         pred_ds.sources.append(InkidRegionSource(nth_region_path))
+
+    pred_ds.set_regions_grid_spacing(args.prediction_grid_spacing)
 
     # Create metadata dict
     metadata = {
@@ -538,7 +706,7 @@ def main():
     if 'SLURM_JOB_NAME' in os.environ:
         metadata['SLURM Job Name'] = os.getenv('SLURM_JOB_NAME')
 
-    # Diagnostic printing
+    # Print metadata for logging and diagnostics
     logging.info('\n' + json.dumps(metadata, indent=4, sort_keys=False))
 
     # Write preliminary metadata to file (will be updated when job completes)
@@ -547,46 +715,49 @@ def main():
 
     # Define the feature inputs to the network
     if args.feature_type == 'subvolume_3dcnn':
-        point_to_subvolume_input = functools.partial(
-            regions.point_to_subvolume_input,  # TODO region set
-            subvolume_shape_voxels=args.subvolume_shape_voxels,
-            subvolume_shape_microns=args.subvolume_shape_microns,
+        subvolume_args = dict(
+            shape_voxels=args.subvolume_shape_voxels,
+            shape_microns=args.subvolume_shape_microns,
             out_of_bounds='all_zeros',
             move_along_normal=args.move_along_normal,
             method=args.subvolume_method,
             normalize=args.normalize_subvolumes,
-            model_3d_to_2d=args.model_3d_to_2d,
         )
-        training_features_fn = functools.partial(
-            point_to_subvolume_input,
+        train_feature_args = subvolume_args.copy()
+        train_feature_args.update(
             augment_subvolume=args.augmentation,
             jitter_max=args.jitter_max,
         )
-        validation_features_fn = functools.partial(
-            point_to_subvolume_input,
+        val_feature_args = subvolume_args.copy()
+        val_feature_args.update(
             augment_subvolume=False,
             jitter_max=0,
         )
-        prediction_features_fn = validation_features_fn
+        pred_feature_args = val_feature_args.copy()
     elif args.feature_type == 'voxel_vector_1dcnn':
-        training_features_fn = functools.partial(
-            regions.point_to_voxel_vector_input,
+        train_feature_args = dict(
             length_in_each_direction=args.length_in_each_direction,
             out_of_bounds='all_zeros',
         )
-        validation_features_fn = training_features_fn
-        prediction_features_fn = training_features_fn
+        val_feature_args = train_feature_args.copy()
+        pred_feature_args = train_feature_args.copy()
     elif args.feature_type == 'descriptive_statistics':
-        training_features_fn = functools.partial(
-            regions.point_to_descriptive_statistics,
+        train_feature_args = dict(
             subvolume_shape_voxels=args.subvolume_shape_voxels,
             subvolume_shape_microns=args.subvolume_shape_microns
         )
-        validation_features_fn = training_features_fn
-        prediction_features_fn = training_features_fn
+        val_feature_args = train_feature_args.copy()
+        pred_feature_args = train_feature_args.copy()
     else:
         logging.error('Feature type not recognized: {}'.format(args.feature_type))
         return
+
+    train_ds.set_for_all_sources('feature_type', args.feature_type)
+    train_ds.set_for_all_sources('feature_args', train_feature_args)
+    val_ds.set_for_all_sources('feature_type', args.feature_type)
+    val_ds.set_for_all_sources('feature_args', val_feature_args)
+    pred_ds.set_for_all_sources('feature_type', args.feature_type)
+    pred_ds.set_for_all_sources('feature_args', pred_feature_args)
 
     # Define the labels
     if args.model_3d_to_2d:
@@ -594,7 +765,9 @@ def main():
     else:
         label_shape = (1, 1)
     if args.label_type == 'ink_classes':
-        label_fn = functools.partial(regions.point_to_ink_classes_label, shape=label_shape)  # TODO region set
+        label_args = dict(
+            shape=label_shape
+        )
         output_size = 2
         metrics = {
             'loss': {
@@ -606,33 +779,34 @@ def main():
             'fbeta': inkid.metrics.fbeta,
             'auc': inkid.metrics.auc
         }
-        reconstruct_fn = regions.reconstruct_predicted_ink_classes
     elif args.label_type == 'rgb_values':
-        label_fn = functools.partial(regions.point_to_rgb_values_label, shape=label_shape)  # TODO region set
+        label_args = dict(
+            shape=label_shape
+        )
         output_size = 3
         metrics = {
             'loss': nn.SmoothL1Loss(reduction='mean')
         }
-        reconstruct_fn = regions.reconstruct_predicted_rgb  # TODO region set
     else:
         logging.error('Label type not recognized: {}'.format(args.label_type))
         return
 
-    # Define the datasets TODO region set
-    # train_ds = inkid.data.PointsDataset(regions, ['training'], training_features_fn, label_fn)
-    # if args.training_max_samples is not None:
-    #     train_ds = inkid.ops.take_from_dataset(train_ds, args.training_max_samples)
-    # val_ds = inkid.data.PointsDataset(regions, ['validation'], validation_features_fn, label_fn)
-    # # Only take n samples for validation, not the entire region
-    # if args.validation_max_samples is not None:
-    #     val_ds = inkid.ops.take_from_dataset(val_ds, args.validation_max_samples)
-    # pred_ds = inkid.data.PointsDataset(regions, ['prediction'], prediction_features_fn, lambda p: p,
-    #                                    grid_spacing=args.prediction_grid_spacing)
+    train_ds.set_for_all_sources('label_type', args.label_type)  # TODO should all this stuff just be in init
+    train_ds.set_for_all_sources('label_args', label_args)
+    val_ds.set_for_all_sources('label_type', args.label_type)
+    val_ds.set_for_all_sources('label_args', label_args)
+    # pred_ds does not generate labels, left as None
+
+    if args.training_max_samples is not None:
+        train_ds = inkid.ops.take_from_dataset(train_ds, args.training_max_samples)
+    # Only take n samples for validation, not the entire region
+    if args.validation_max_samples is not None:
+        val_ds = inkid.ops.take_from_dataset(val_ds, args.validation_max_samples)
 
     if args.dataloaders_num_workers is None:
         args.dataloaders_num_workers = multiprocessing.cpu_count()
 
-    # Define the dataloaders which implement batching, shuffling, etc. TODO region set
+    # Define the dataloaders which implement batching, shuffling, etc.
     train_dl, val_dl, pred_dl = None, None, None
     if len(train_ds) > 0:
         train_dl = DataLoader(train_ds, batch_size=args.batch_size, shuffle=True,
@@ -690,8 +864,8 @@ def main():
     # Show model in TensorBoard
     try:
         if train_dl is not None:
-            inputs, _ = next(iter(train_dl))
-            writer.add_graph(model, inputs)
+            _, features, _ = next(iter(train_dl))
+            writer.add_graph(model, features)
             writer.flush()
     except RuntimeError:
         logging.warning('Unable to add model graph to TensorBoard, skipping this step')
@@ -779,10 +953,8 @@ def main():
                                 if pred_dl is not None:
                                     logging.info('Generating prediction image... ')
                                     generate_prediction_image(pred_dl, model, output_size, args.label_type, device,
-                                                              predictions_dir, f'{epoch}_{batch_num}', reconstruct_fn,
-                                                              regions,
-                                                              label_shape, args.prediction_averaging,
-                                                              args.prediction_grid_spacing)
+                                                              predictions_dir, f'{epoch}_{batch_num}',
+                                                              args.prediction_averaging)
                                     logging.info('done')
                                 else:
                                     logging.info('Empty prediction set, skipping prediction image generation.')
@@ -795,15 +967,16 @@ def main():
     # Run a final prediction on all regions
     if args.final_prediction_on_all:
         try:
-            final_pred_ds = inkid.data.PointsDataset(regions, ['prediction', 'training', 'validation'],
-                                                     prediction_features_fn, lambda p: p,
-                                                     grid_spacing=args.prediction_grid_spacing)
+            all_sources = list(set(args.training_set + args.validation_set + args.prediction_set))
+            final_pred_ds = InkidDataset(all_sources, args.data_root)
+            final_pred_ds.set_for_all_sources('feature_type', args.feature_type)
+            final_pred_ds.set_for_all_sources('feature_args', pred_feature_args)
+            final_pred_ds.set_regions_grid_spacing(args.prediction_grid_spacing)
             if len(final_pred_ds) > 0:
                 final_pred_dl = DataLoader(final_pred_ds, batch_size=args.batch_size * 2, shuffle=False,
                                            num_workers=args.dataloaders_num_workers)
                 generate_prediction_image(final_pred_dl, model, output_size, args.label_type, device,
-                                          predictions_dir, 'final', reconstruct_fn, regions, label_shape,
-                                          args.prediction_averaging, args.prediction_grid_spacing)
+                                          predictions_dir, 'final', args.prediction_averaging)
         # Perform finishing touches even if cut short
         except KeyboardInterrupt:
             pass
