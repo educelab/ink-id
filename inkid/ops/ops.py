@@ -1,5 +1,6 @@
 """Miscellaneous operations used in ink-id."""
 
+import itertools
 import logging
 import math
 import os
@@ -10,6 +11,8 @@ from dicttoxml import dicttoxml
 import numpy as np
 from PIL import Image
 import torch
+import torch.nn.functional as F
+from tqdm import tqdm
 
 
 def add_subvolume_args(parser):
@@ -158,3 +161,70 @@ def try_find_data_root():
             if os.path.exists(os.path.join(candidate_directory, 'InvisibleLibrary.txt')):
                 return candidate_directory
     return None
+
+
+def perform_validation(model, dataloader, metrics, device, label_type):
+    """Run the validation process using a model and dataloader, and return the results of all metrics."""
+    model.eval()  # Turn off training mode for batch norm and dropout purposes
+    with torch.no_grad():
+        metric_results = {metric: [] for metric in metrics}
+        for _, xb, yb in tqdm(dataloader):
+            pred = model(xb.to(device))
+            yb = yb.to(device)
+            if label_type == 'ink_classes':
+                _, yb = yb.max(1)  # Argmax
+            for metric, fn in metrics.items():
+                metric_results[metric].append(fn(pred, yb))
+    model.train()
+    return metric_results
+
+
+def generate_prediction_images(dataloader, model, output_size, label_type, device, predictions_dir, suffix,
+                               prediction_averaging):
+    """Helper function to generate a prediction image given a model and dataloader, and save it to a file."""
+    model.eval()  # Turn off training mode for batch norm and dropout purposes
+    with torch.no_grad():
+        for batch_metadata, batch_features in tqdm(dataloader):
+            # Smooth predictions via augmentation. Augment each subvolume 8-fold via rotations and flips
+            if prediction_averaging:
+                rotations = range(4)
+                flips = [False, True]
+            else:
+                rotations = [0]
+                flips = [False]
+            batch_preds = None
+            for rotation, flip in itertools.product(rotations, flips):
+                # Example batch_features.shape = [64, 1, 48, 48, 48] (BxCxDxHxW)
+                # Augment via rotation and flip
+                aug_pxb = batch_features.rot90(rotation, [3, 4])
+                if flip:
+                    aug_pxb = aug_pxb.flip(4)
+                pred = model(aug_pxb.to(device))
+                if label_type == 'ink_classes':
+                    pred = F.softmax(pred, dim=1)
+                pred = pred.cpu()
+                # Example pred.shape = [64, 2, 48, 48] (BxCxHxW)
+                # Undo flip and rotation
+                if flip:
+                    pred = pred.flip(3)
+                pred = pred.rot90(-rotation, [2, 3])
+                pred = np.expand_dims(pred.numpy(), axis=0)
+                # Example pred.shape = [1, 64, 2, 48, 48] (BxCxHxW)
+                # Save this augmentation to the batch totals
+                if batch_preds is None:
+                    batch_preds = np.zeros((0, batch_features.shape[0], output_size, pred.shape[3], pred.shape[4]))
+                batch_preds = np.append(batch_preds, pred, axis=0)
+            # Average over batch of predictions after augmentation
+            batch_pred = batch_preds.mean(0)
+            # Separate these three lists
+            source_paths, xs, ys = batch_metadata
+            for prediction, source_path, x, y in zip(batch_pred, source_paths, xs, ys):
+                dataloader.dataset.get_source(source_path).store_prediction(
+                    int(x),
+                    int(y),
+                    prediction,
+                    label_type
+                )
+    dataloader.dataset.save_predictions(predictions_dir, suffix)
+    dataloader.dataset.reset_predictions()
+    model.train()
