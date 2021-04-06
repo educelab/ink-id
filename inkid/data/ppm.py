@@ -126,6 +126,7 @@ class PPM:
         self.ensure_loaded()
         return self._data[ppm_y][ppm_x]
 
+    # TODO reimplement model_3d_to_2d with new dataset thing. make sure square corners use shape_microns
     # def point_to_subvolume(self, point, subvolume_shape_voxels, subvolume_shape_microns,
     #                        out_of_bounds=None, move_along_normal=None,
     #                        jitter_max=None, augment_subvolume=None,
