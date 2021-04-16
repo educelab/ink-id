@@ -11,3 +11,5 @@ nohup.out
 vis.yml
 **/__pycache__
 **/.ipynb_checkpoints/
+**/*.info
+gradcam/model_localcopy.py
