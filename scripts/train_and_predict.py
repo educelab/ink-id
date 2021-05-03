@@ -37,6 +37,11 @@ from torch.utils.tensorboard import SummaryWriter
 import torchsummary
 from tqdm import tqdm
 
+import skimage
+import skimage.color
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
+
 import inkid
 
 
@@ -111,6 +116,98 @@ def generate_prediction_image(dataloader, model, output_size, label_type, device
         reconstruct_fn([int(region_id)], [prediction], [[int(x), int(y)]])
     region_set.save_predictions(predictions_dir, suffix)
     region_set.reset_predictions()
+
+
+def generate_subvolume_input_images(batch_num, xb, yb, points, regions):
+    logging.info(f'Generating subvolume input images for batch {batch_num}')
+    for i, (x, y, point) in enumerate(zip(xb, yb, points)):
+        sv_data = torch.squeeze(x).numpy()
+        sv_point = tuple(map(int, regions.point_to_subvolume_point(point)))
+        volume = regions.get_volume(point)
+
+        slc_xy = skimage.color.gray2rgb(
+                    skimage.img_as_ubyte(volume[sv_point[2], :, :]))
+        slc_xz = skimage.color.gray2rgb(
+                    skimage.img_as_ubyte(volume[:, sv_point[1], :]))
+        slc_yz = skimage.color.gray2rgb(
+                    skimage.img_as_ubyte(volume[:, :, sv_point[0]]))
+
+        fig = make_subplots(rows=2, cols=3,
+                subplot_titles=('x-y plane',
+                                'x-z plane',
+                                'y-z plane',
+                                'x-y plane',
+                                'x-z plane',
+                                'y-z plane'),
+                specs=[[{}, {}, {}],
+                    [{'type': 'scene'},
+                     {'type': 'scene'},
+                     {'type': 'scene'}]],
+                    row_titles = ['Volume Slices', 'Subvolume'])
+
+        # x-y plane
+        fig.add_trace(go.Image(z=slc_xy), 1, 1)
+        fig.add_hline(y=sv_point[1], row=1, col=1, line_color='#f00',
+                line_width=1)
+        fig.add_vline(x=sv_point[0], row=1, col=1, line_color='#f00',
+                line_width=1)
+        fig.update_xaxes(title_text='x', row=1, col=1)
+        fig.update_yaxes(title_text='y', row=1, col=1)
+
+        # x-z plane
+        fig.add_trace(go.Image(z=slc_xz), 1, 2)
+        fig.add_hline(y=sv_point[2], row=1, col=2, line_color='#f00',
+                line_width=1)
+        fig.add_vline(x=sv_point[0], row=1, col=2, line_color='#f00',
+                line_width=1)
+        fig.update_xaxes(title_text='x', row=1, col=2)
+        fig.update_yaxes(title_text='z', row=1, col=2)
+
+        # y-z plane
+        fig.add_trace(go.Image(z=slc_yz), 1, 3)
+        fig.add_hline(y=sv_point[2], row=1, col=3, line_color='#f00',
+                line_width=1)
+        fig.add_vline(x=sv_point[1], row=1, col=3, line_color='#f00',
+                line_width=1)
+        fig.update_xaxes(title_text='y', row=1, col=3)
+        fig.update_yaxes(title_text='z', row=1, col=3)
+
+        # actual subvolume
+        X, Y, Z = np.mgrid[0:sv_data.shape[0], 0:sv_data.shape[1], 0:sv_data.shape[2]]
+        vol = go.Volume(
+                x = X.flatten(),
+                y = Y.flatten(),
+                z = Z.flatten(),
+                value = sv_data.flatten(),
+                opacityscale='max',
+                isomin=0,
+                isomax=2 ** 16,
+                surface_count=20,
+                colorscale='rainbow')
+        fig.add_trace(vol, 2, 1)
+        fig.add_trace(vol, 2, 2)
+        fig.add_trace(vol, 2, 3)
+        camera_xy = dict(
+            up=dict(x=0.0, y=1.0, z=0.0),
+            eye=dict(x=0.0, y=0.0, z=2.5)
+        )
+        camera_xz = dict(
+            up=dict(x=0.0, y=0.0, z=1.0),
+            eye=dict(x=0.0, y=2.5, z=0.0)
+        )
+        camera_yz = dict(
+            up=dict(x=0.0, y=0.0, z=1.0),
+            eye=dict(x=2.5, y=0.0, z=0.0)
+        )
+        fig.update_layout(width=1920, height=1920,
+                title_text=f'batch #: {batch_num}, label: {torch.squeeze(y).numpy()}, region: {point.numpy()}')
+        fig.layout.scene1.camera = camera_xy
+        fig.layout.scene2.camera = camera_xz
+        fig.layout.scene3.camera = camera_yz
+        fig.write_image(f'images/subvolume-input-{batch_num}-{i}.pdf')
+        assert False
+    assert False
+    logging.info(f'Done generating subvolume input images for batch {batch_num}')
 
 
 def main():
@@ -478,7 +575,7 @@ def main():
     # Show model in TensorBoard
     try:
         if train_dl is not None:
-            inputs, _ = next(iter(train_dl))
+            inputs, _, _ = next(iter(train_dl))
             writer.add_graph(model, inputs)
             writer.flush()
     except RuntimeError:
@@ -501,7 +598,10 @@ def main():
             for epoch in range(args.training_epochs):
                 model.train()  # Turn on training mode
                 total_batches = len(train_dl)
-                for batch_num, (xb, yb) in enumerate(train_dl):
+                for batch_num, (xb, yb, points) in enumerate(train_dl):
+                    # Generate input images before training if requested
+                    generate_subvolume_input_images(batch_num, xb, yb, points, regions)
+
                     xb = xb.to(device)
                     yb = yb.to(device)
                     pred = model(xb)

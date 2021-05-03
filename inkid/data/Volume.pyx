@@ -517,3 +517,6 @@ cdef class Volume:
         assert subvolume.shape == tuple(shape_voxels)
 
         return subvolume
+
+    cpdef get_data_view(self):
+        return self._data_view

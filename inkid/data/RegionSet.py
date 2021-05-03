@@ -27,7 +27,7 @@ class PointsDataset(torch.utils.data.Dataset):
         feature = torch.from_numpy(self._feature_transform(point))[None, :, :, :]
         if self._label_transform is not None:
             label = torch.from_numpy(self._label_transform(point))
-            return feature, label
+            return feature, label, point
         else:
             return feature
 
@@ -265,6 +265,15 @@ class RegionSet:
     def point_to_rgb_values_label(self, region_id_with_point, shape=(1, 1)):
         region_id, x, y = region_id_with_point
         return self._regions[region_id].ppm.point_to_rgb_values_label((x, y), shape=shape)
+
+    def point_to_subvolume_point(self, region_id_with_point):
+        region_id, x, y = region_id_with_point
+        x, y, z, _, _, _ = self._regions[region_id].ppm.get_point_with_normal(x, y)
+        return x, y, z
+
+    def get_volume(self, region_id_with_point):
+        region_id, x, y = region_id_with_point
+        return np.asarray(self._regions[region_id].ppm._volume.get_data_view())
 
     def reconstruct_predicted_rgb(self, region_ids, rgbs, ppm_xy_coordinates):
         assert len(region_ids) == len(rgbs) == len(ppm_xy_coordinates)
