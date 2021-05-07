@@ -5,7 +5,9 @@ import logging
 import math
 import os
 import subprocess
+from xml.dom.minidom import parseString
 
+from dicttoxml import dicttoxml
 import numpy as np
 from PIL import Image
 from torch.utils.data import random_split
@@ -146,3 +148,10 @@ def rclone_transfer_to_remote(rclone_remote, output_path):
         ]
         logging.info(' '.join(command))
         subprocess.call(command)
+
+
+# https://www.geeksforgeeks.org/serialize-python-dictionary-to-xml/
+def dict_to_xml(data):
+    xml = dicttoxml(data)
+    dom = parseString(xml)
+    return dom.toprettyxml()
