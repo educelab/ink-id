@@ -46,8 +46,6 @@ def main():
     parser.add_argument('--training-set', metavar='path', nargs='*', help='training dataset(s)', default=[])
     parser.add_argument('--validation-set', metavar='path', nargs='*', help='validation dataset(s)', default=[])
     parser.add_argument('--prediction-set', metavar='path', nargs='*', help='prediction dataset(s)', default=[])
-    parser.add_argument('--data-root', metavar='path', default=None,
-                        help='path to the root directory that contains the .volpkgs, etc.')
 
     # Dataset modifications
     parser.add_argument('--cross-validate-on', metavar='n', default=None, type=int,
@@ -172,16 +170,9 @@ def main():
     checkpoints_dir = os.path.join(output_path, 'checkpoints')
     os.makedirs(checkpoints_dir)
 
-    # Look for the Invisible Library data root directory, if it is not specified
-    if args.data_root is None:
-        args.data_root = inkid.ops.try_find_data_root()
-        if args.data_root is None:
-            raise FileNotFoundError('Unable to find Invisible Library data root directory by guessing.'
-                                    ' Please specify --data-root.')
-
-    train_ds = inkid.data.Dataset(args.training_set, args.data_root)
-    val_ds = inkid.data.Dataset(args.validation_set, args.data_root)
-    pred_ds = inkid.data.Dataset(args.prediction_set, args.data_root)
+    train_ds = inkid.data.Dataset(args.training_set)
+    val_ds = inkid.data.Dataset(args.validation_set)
+    pred_ds = inkid.data.Dataset(args.prediction_set)
 
     # If k-fold job, remove nth region from training and put in prediction/validation sets
     if args.cross_validate_on is not None:
@@ -461,7 +452,7 @@ def main():
     if args.final_prediction_on_all:
         try:
             all_sources = list(set(args.training_set + args.validation_set + args.prediction_set))
-            final_pred_ds = inkid.data.Dataset(all_sources, args.data_root)
+            final_pred_ds = inkid.data.Dataset(all_sources)
             final_pred_ds.set_for_all_sources('feature_type', args.feature_type)
             final_pred_ds.set_for_all_sources('feature_args', pred_feature_args)
             final_pred_ds.set_regions_grid_spacing(args.prediction_grid_spacing)

@@ -320,7 +320,7 @@ class Dataset(torch.utils.data.Dataset):
         which allows direct input to a model.
 
     """
-    def __init__(self, source_paths: List[str], data_root: str) -> None:
+    def __init__(self, source_paths: List[str]) -> None:
         """Initialize the dataset given .json data source and/or .txt dataset paths.
 
         This recursively expands any provided .txt dataset files until there is just a
@@ -329,18 +329,14 @@ class Dataset(torch.utils.data.Dataset):
 
         Args:
             source_paths: A list of .txt dataset or .json data source file paths.
-            data_root: The Invisible Library root data directory.
-
         """
-        self.data_root = data_root
-
         # Convert the list of paths to a list of InkidDataSources
         source_paths = self.expand_data_sources(source_paths)
         self.sources: List[DataSource] = list()
         for source_path in source_paths:
             self.sources.append(DataSource.from_path(source_path))
 
-    def expand_data_sources(self, source_paths: List[str], recursing: bool = False) -> List[str]:
+    def expand_data_sources(self, source_paths: List[str]) -> List[str]:
         """Expand list of .txt and .json filenames into flattened list of .json filenames.
 
         The file paths in the input can point to either .txt or .json files. The .txt
@@ -351,10 +347,6 @@ class Dataset(torch.utils.data.Dataset):
 
         Args:
             source_paths (List[str]): A list of .txt dataset or .json data source file paths.
-            recursing: (bool): Whether or not this is a recursive call. This affects whether the paths
-                in source_paths are expected to be absolute (when not recursive, since they were passed
-                from command line) or relative to self.data_root (when recursive, since they were read
-                from a .txt dataset file).
 
         Returns:
             List[str]: A list of absolute paths to the .json data source files representing this dataset.
@@ -362,15 +354,14 @@ class Dataset(torch.utils.data.Dataset):
         """
         expanded_paths: List[str] = list()
         for source_path in source_paths:
-            if recursing:
-                source_path = os.path.join(self.data_root, source_path)
             file_extension = os.path.splitext(source_path)[1]
             if file_extension == '.json':
                 expanded_paths.append(source_path)
             elif file_extension == '.txt':
                 with open(source_path, 'r') as f:
                     sources_in_file = f.read().splitlines()
-                expanded_paths += self.expand_data_sources(sources_in_file, recursing=True)
+                sources_in_file = [os.path.join(os.path.dirname(source_path), s) for s in sources_in_file]
+                expanded_paths += self.expand_data_sources(sources_in_file)
             else:
                 raise ValueError(f'Data source {source_path} is not a permitted file type (.txt or .json)')
         return list(set(expanded_paths))  # Remove duplicates
