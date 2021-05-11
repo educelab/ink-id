@@ -14,7 +14,7 @@ def main():
     if input('Is this region set a grid? [y/N]: ').lower().strip() == 'y':
         is_grid = True
 
-    # Write region data source files in place
+    # Write region data source files
     region_set_path = args.input
     region_set_dir = os.path.dirname(region_set_path)
     with open(region_set_path) as f:
@@ -45,23 +45,20 @@ def main():
                 col = i % cols
                 region_filename = f'{dataset_name}_Row{row}_Col{col}.json'
             else:
-                region_filename = input(f'Enter a name for region {i}: ')
+                region_filename = input(f'Enter a name for region {i}: ') + '.json'
             new_region_file_path = os.path.join(region_set_dir, region_filename)
             with open(new_region_file_path, 'w') as f2:
                 f2.write(json.dumps(new_region, indent=4, sort_keys=False))
                 print(f'Wrote {new_region_file_path}')
-            region_files_written.append(new_region_file_path)
+            region_files_written.append(region_filename)
 
-    # Write dataset file (to be moved manually where it needs to go)
-    for drive_candidate_string in ['DRI Datasets', 'dri-datasets-drive']:
-        if drive_candidate_string in args.input:
-            data_root = args.input[:args.input.index(drive_candidate_string) + len(drive_candidate_string)]
-            dataset_file_name = dataset_name + '.txt'
-            with open(dataset_file_name, 'w') as f:
-                for region_file_written in region_files_written:
-                    f.write(os.path.relpath(region_file_written, data_root) + '\n')
-            print(f'Wrote dataset file to {dataset_file_name}')
-            break
+    # Write dataset file
+    dataset_file_name = dataset_name + '.txt'
+    dataset_file_path = os.path.join(region_set_dir, dataset_file_name)
+    with open(dataset_file_path, 'w') as f:
+        for region_file_written in region_files_written:
+            f.write(region_file_written + '\n')
+    print(f'Wrote dataset file to {dataset_file_path}')
 
 
 if __name__ == '__main__':
