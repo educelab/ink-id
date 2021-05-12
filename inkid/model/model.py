@@ -90,6 +90,75 @@ class Subvolume3DcnnEncoder(torch.nn.Module):
         return y
 
 
+class Subvolume3DcnnDecoder(torch.nn.Module):
+    def __init__(self, subvolume_shape,
+                 batch_norm_momentum, no_batch_norm, filters, in_channels):
+        super().__init__()
+
+        input_shape = subvolume_shape
+
+        self._batch_norm = not no_batch_norm
+        self._in_channels = in_channels
+
+        self.relu = torch.nn.ReLU()
+
+        paddings = [1, 1, 1, 1]
+        kernel_sizes = [3, 3, 3, 3]
+        strides = [1, 2, 2, 2]
+
+        self.trans_conv1 = torch.nn.ConvTranspose3d(
+            in_channels=filters[3], out_channels=filters[2], output_padding=1,
+            kernel_size=kernel_sizes[3], stride=strides[3], padding=paddings[3]
+        )
+        torch.nn.init.xavier_uniform_(self.trans_conv1.weight)
+        torch.nn.init.zeros_(self.trans_conv1.bias)
+        self.batch_norm1 = torch.nn.BatchNorm3d(num_features=filters[2], momentum=batch_norm_momentum)
+
+        self.trans_conv2 = torch.nn.ConvTranspose3d(
+            in_channels=filters[2], out_channels=filters[1], output_padding=1,
+            kernel_size=kernel_sizes[2], stride=strides[2], padding=paddings[2]
+        )
+        torch.nn.init.xavier_uniform_(self.trans_conv2.weight)
+        torch.nn.init.zeros_(self.trans_conv2.bias)
+        self.batch_norm2 = torch.nn.BatchNorm3d(num_features=filters[1], momentum=batch_norm_momentum)
+
+        self.trans_conv3 = torch.nn.ConvTranspose3d(
+            in_channels=filters[1], out_channels=filters[0], output_padding=1,
+            kernel_size=kernel_sizes[1], stride=strides[1], padding=paddings[1]
+        )
+        torch.nn.init.xavier_uniform_(self.trans_conv3.weight)
+        torch.nn.init.zeros_(self.trans_conv3.bias)
+        self.batch_norm3 = torch.nn.BatchNorm3d(num_features=filters[0], momentum=batch_norm_momentum)
+
+        self.trans_conv4 = torch.nn.ConvTranspose3d(
+            in_channels=filters[0], out_channels=in_channels, output_padding=0,
+            kernel_size=kernel_sizes[0], stride=strides[0], padding=paddings[0]
+        )
+        torch.nn.init.xavier_uniform_(self.trans_conv4.weight)
+        torch.nn.init.zeros_(self.trans_conv4.bias)
+        self.batch_norm4 = torch.nn.BatchNorm3d(num_features=in_channels, momentum=batch_norm_momentum)
+
+    def forward(self, x):
+        y = self.trans_conv1(x)
+        y = self.relu(y)
+        if self._batch_norm:
+            y = self.batch_norm1(y)
+        y = self.trans_conv2(y)
+        y = self.relu(y)
+        if self._batch_norm:
+            y = self.batch_norm2(y)
+        y = self.trans_conv3(y)
+        y = self.relu(y)
+        if self._batch_norm:
+            y = self.batch_norm3(y)
+        y = self.trans_conv4(y)
+        y = self.relu(y)
+        if self._batch_norm:
+            y = self.batch_norm4(y)
+
+        return y
+
+
 class LinearInkDecoder(torch.nn.Module):
     def __init__(self, drop_rate, input_shape, output_neurons):
         super().__init__()
