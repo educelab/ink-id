@@ -364,7 +364,7 @@ class Dataset(torch.utils.data.Dataset):
                 expanded_paths += self.expand_data_sources(sources_in_file)
             else:
                 raise ValueError(f'Data source {source_path} is not a permitted file type (.txt or .json)')
-        return list(set(expanded_paths))  # Remove duplicates
+        return list(dict.fromkeys(expanded_paths))  # Remove duplicates, keep order https://stackoverflow.com/a/17016257
 
     def set_regions_grid_spacing(self, spacing: int):
         for source in self.sources:
