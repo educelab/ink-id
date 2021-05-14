@@ -367,8 +367,12 @@ def main():
 
     # Load pretrained weights if specified
     if args.load_weights_from is not None:
+        model_dict = model.state_dict()
         checkpoint = torch.load(args.load_weights_from)
-        model.load_state_dict(checkpoint['model_state_dict'])
+        pretrained_dict = checkpoint['model_state_dict']
+        pretrained_dict = {k: v for k, v in pretrained_dict.items() if k in model_dict}
+        model_dict.update(pretrained_dict)
+        model.load_state_dict(model_dict)
 
     # Move model to device (possibly GPU)
     model = model.to(device)

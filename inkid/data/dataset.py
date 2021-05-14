@@ -140,6 +140,7 @@ class RegionSource(DataSource):
         elif self.feature_type is not None:
             raise ValueError(f'Unknown feature_type: {self.feature_type} set for InkidRegionSource'
                              f' {self.path}')
+        feature = feature.astype(np.float32) / 65535  # TODO clean this up rather than hardcoded number
         # Get the label
         label = None
         if self.label_type == 'ink_classes':
