@@ -59,7 +59,7 @@ def main():
                         choices=['ink_classes', 'rgb_values'])
     parser.add_argument('--model-3d-to-2d', action='store_true',
                         help='Use 2d labels per subvolume rather than single value')
-    parser.add_argument('--loss', default='cross_entropy', choices=['cross_entropy', 'dice', 'tversky', 'focal'])
+    parser.add_argument('--loss', default='cross_entropy', choices=['cross_entropy', 'mse', 'dice', 'tversky', 'focal'])
     parser.add_argument('--tversky-loss-alpha', metavar='n', type=float, default=0.5)
     parser.add_argument('--focal-loss-alpha', metavar='n', type=float, default=0.5)
 
@@ -76,7 +76,7 @@ def main():
 
     # Network architecture
     parser.add_argument('--model', default='original', help='model to run against',
-                        choices=['original', '3dunet_full', '3dunet_half'])
+                        choices=['original', '3dunet_full', '3dunet_half', 'autoencoder'])
     parser.add_argument('--learning-rate', metavar='n', type=float, default=0.001)
     parser.add_argument('--drop-rate', metavar='n', type=float, default=0.5)
     parser.add_argument('--batch-norm-momentum', metavar='n', type=float, default=0.9)
@@ -274,6 +274,7 @@ def main():
         metrics = {
             'loss': {
                 'cross_entropy': nn.CrossEntropyLoss(),
+                'mse': nn.MSELoss(),
                 'dice': kornia.losses.DiceLoss(),
                 'tversky': kornia.losses.TverskyLoss(alpha=args.tversky_loss_alpha, beta=1 - args.tversky_loss_alpha),
                 'focal': kornia.losses.FocalLoss(alpha=args.focal_loss_alpha),
@@ -334,7 +335,7 @@ def main():
     # Create the model for training
     if args.feature_type == 'subvolume_3dcnn':
         in_channels = 1
-        if args.model == 'original':
+        if args.model in ['original', 'autoencoder']:
             encoder = inkid.model.Subvolume3DcnnEncoder(args.subvolume_shape_voxels,
                                                         args.batch_norm_momentum,
                                                         args.no_batch_norm,
@@ -349,7 +350,13 @@ def main():
         else:
             logging.error(f'Model {args.model} is invalid for feature type {args.feature_type}.')
             return
-        if args.model_3d_to_2d:
+        if args.model == 'autoencoder':
+            decoder = inkid.model.Subvolume3DcnnDecoder(args.subvolume_shape_voxels,
+                                                        args.batch_norm_momentum,
+                                                        args.no_batch_norm,
+                                                        args.filters,
+                                                        in_channels)
+        elif args.model_3d_to_2d:
             decoder = inkid.model.ConvolutionalInkDecoder(args.filters, output_size)
         else:
             decoder = inkid.model.LinearInkDecoder(args.drop_rate, encoder.output_shape, output_size)
@@ -394,9 +401,12 @@ def main():
                 total_batches = len(train_dl)
                 for batch_num, (_, xb, yb) in enumerate(train_dl):
                     xb = xb.to(device)
-                    yb = yb.to(device)
+                    if args.model == 'autoencoder':
+                        yb = xb.clone()
+                    else:
+                        yb = yb.to(device)
                     pred = model(xb)
-                    if args.label_type == 'ink_classes':
+                    if args.label_type == 'ink_classes' and args.model != 'autoencoder':
                         _, yb = yb.max(1)  # Argmax
                     for metric, fn in metrics.items():
                         metric_results[metric].append(fn(pred, yb))
