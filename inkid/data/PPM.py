@@ -30,9 +30,11 @@ class PPM:
         self._mask = np.array(Image.open(
             self.get_raw_data(self._mask_path)))
         self._ink_label = np.asarray(Image.open(
-            self.get_raw_data(self._ink_label_path)).convert('L'), np.uint16)
+            self.get_raw_data(self._ink_label_path)
+        ).convert('L'), np.uint16) if self._ink_label_path else None
         self._rgb_label = np.asarray(Image.open(
-            self.get_raw_data(self._rgb_label_path)).convert('RGB'), np.uint8)
+            self.get_raw_data(self._rgb_label_path)
+        ).convert('RGB'), np.uint8) if self._rgb_label_path else None
         self._invert_normal = invert_normal
         if self._invert_normal:
             logging.info('Normals are being inverted for this PPM.')
