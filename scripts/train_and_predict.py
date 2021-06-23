@@ -268,22 +268,7 @@ def main():
     checkpoints_dir = os.path.join(output_path, 'checkpoints')
     os.makedirs(checkpoints_dir)
 
-    # If input file is a PPM, treat this as a texturing module
-    # Skip training, run a prediction on all regions, require trained model, require slices dir
-    _, file_extension = os.path.splitext(args.data)
-    file_extension = file_extension.lower()
-    if file_extension == '.ppm':
-        if args.load_weights_from is None:
-            logging.error("Pre-trained model (--load-weights-from) required when texturing a .ppm file.")
-            return
-        if args.override_volume_slices_dir is None:
-            logging.error("Volume (--override-volume-slices-dir) required when texturing a .ppm file.")
-            return
-        logging.info("PPM input file provided. Skipping training and running final prediction on all.")
-        args.skip_training = True
-        args.final_prediction_on_all = True
-
-    # Transform the input file into region set, can handle JSON or PPM
+    # Transform the JSON input file into a region set
     region_data = inkid.data.RegionSet.get_data_from_file(args.data)
 
     # Override volume slices directory (iff only one volume specified in the region set)
