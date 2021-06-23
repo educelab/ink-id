@@ -75,9 +75,9 @@ class PPM:
         version_re = re.compile('^version')
         header_terminator_re = re.compile('^<>$')
 
-        f = cls.get_raw_data(filename)
+        data = cls.get_raw_data(filename)
         while True:
-            line = f.readline().decode('utf-8')
+            line = data.readline().decode('utf-8')
             if comments_re.match(line):
                 pass
             elif width_re.match(line):
@@ -134,10 +134,10 @@ class PPM:
 
         self._data = np.empty((self._height, self._width, self._dim))
 
-        f = self.get_raw_data(filename)
+        data = self.get_raw_data(filename)
         header_terminator_re = re.compile('^<>$')
         while True:
-            line = f.readline().decode('utf-8')
+            line = data.readline().decode('utf-8')
             if header_terminator_re.match(line):
                 break
 
@@ -148,9 +148,9 @@ class PPM:
                     # PPMs with (x, y, z, n_x, n_y, n_z)
                     if self._dim == 6:
                         if idx in [3, 4, 5] and self._invert_normal:
-                            self._data[y, x, idx] = -1 * struct.unpack('d', f.read(8))[0]
+                            self._data[y, x, idx] = -1 * struct.unpack('d', data.read(8))[0]
                         else:
-                            self._data[y, x, idx] = struct.unpack('d', f.read(8))[0]
+                            self._data[y, x, idx] = struct.unpack('d', data.read(8))[0]
         print()
 
     def get_default_bounds(self):
