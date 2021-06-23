@@ -269,7 +269,7 @@ def main():
     os.makedirs(checkpoints_dir)
 
     # Transform the JSON input file into a region set
-    region_data = inkid.data.RegionSet.get_data_from_file(args.data)
+    region_data = inkid.data.RegionSet.get_data_from_file_or_url(args.data)
 
     # Override volume slices directory (iff only one volume specified in the region set)
     if args.override_volume_slices_dir is not None:

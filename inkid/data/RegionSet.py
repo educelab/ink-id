@@ -6,6 +6,8 @@ import sys
 from jsmin import jsmin
 import numpy as np
 import torch
+import requests
+from urllib.parse import urlsplit, urlunsplit
 
 import inkid
 
@@ -67,35 +69,53 @@ class RegionSet:
         data = RegionSet.get_data_from_file(filename)
         return cls(data)
 
-    @staticmethod
-    def get_data_from_file(filename):
-        with open(filename, 'r') as f:
-            # minify to remove comments
-            minified = jsmin(str(f.read()))
-            data = json.loads(minified)
-            data = RegionSet.make_data_paths_absolute(data, os.path.dirname(filename))
-            return data
+    @classmethod
+    def get_data_from_file_or_url(cls, filename):
+        """Create a RegionSet from a filename or URL.
 
-    @staticmethod
-    def make_data_paths_absolute(data, paths_were_relative_to=os.getcwd()):
-        """Convert the input data paths to absolute paths.
-
-        This was designed for the case where the user passes a JSON
-        data input file to a script, containing paths that were
-        relative to the location of the data file and not to the
-        script. In this case you would set paths_were_relative_to to
-        the dirname of the JSON file.
+        Supports absolute and relative file paths as well as the http and https
+        protocols.
 
         """
+        url = urlsplit(filename)
+        if url.scheme in ('http', 'https'):
+            response = requests.get(filename)
+            if response.status_code != 200:
+                raise ValueError(f'Unable to fetch from URL '
+                                 f'(code={response.status_code}): {filename}')
+            raw_data = response.text
+        elif url.scheme == '':
+            with open(filename, 'r') as f:
+                raw_data = str(f.read())
+        else:
+            raise ValueError(f'Unsupported URL: {filename}')
+        relative_url = (url.scheme,
+                        url.netloc,
+                        os.path.dirname(url.path),
+                        url.query,
+                        url.fragment)
+        # Minify to remove comments, load JSON, and normalize it
+        return cls.normalize_json(json.loads(jsmin(raw_data)), relative_url)
+
+    @staticmethod
+    def normalize_json(data, relative_url):
+        """Normalize paths to be absolute and with URLs where appropriate."""
         for ppm in data['ppms']:
             for key in data['ppms'][ppm]:
                 if isinstance(data['ppms'][ppm][key], str):
-                    data['ppms'][ppm][key] = os.path.normpath(
-                        os.path.join(
-                            paths_were_relative_to,
+                    url = urlsplit(data['ppms'][ppm][key])
+                    # Leave existing URLs and absolute file paths alone
+                    if url.scheme != '' or os.path.isabs(data['ppms'][ppm][key]):
+                        continue
+                    # For all others, we generate a new URL relative to the
+                    # region set file itself. This handles all schemas as well
+                    # as regular file paths.
+                    new_url = list(relative_url)
+                    new_url[2] = os.path.abspath(os.path.join(
+                            new_url[2],
                             data['ppms'][ppm][key]
-                        )
-                    )
+                    ))
+                    data['ppms'][ppm][key] = urlunsplit(new_url)
         return data
 
     def create_ppm_if_needed(self, ppm_name, ppm_data):

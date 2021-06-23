@@ -4,73 +4,66 @@ import re
 import struct
 
 import numpy as np
+import requests
 from PIL import Image
 from tqdm import tqdm
+from urllib.parse import urlsplit
+from io import BytesIO
 
 
 class PPM:
-    def __init__(self, path, volume=None, mask_path=None, ink_label_path=None,
-                 rgb_label_path=None, invert_normal=False, name=None):
+    def __init__(self, path, volume, mask_path, ink_label_path,
+                 rgb_label_path, invert_normal, name):
         self._path = path
         self._volume = volume
+        self._mask_path = mask_path
+        self._ink_label_path = ink_label_path
+        self._rgb_label_path = rgb_label_path
+        self._invert_normal = invert_normal
         self._name = name
+
+        # Sanity check parameters
         if self._name is None:
-            self._name = os.path.splitext(os.path.basename(self._path))[0]
+            raise ValueError('Name is required.')
 
-        ppm_path_stem, _ = os.path.splitext(self._path)
-
-        if mask_path is not None:
-            self._mask_path = mask_path
-        else:
-            default_mask_path = ppm_path_stem + '_mask.png'
-            if os.path.isfile(default_mask_path):
-                self._mask_path = default_mask_path
-            else:
-                self._mask_path = None
-
-        self._mask = None
-        if self._mask_path is not None:
-            self._mask = np.array(Image.open(self._mask_path))
-
-        if ink_label_path is not None:
-            self._ink_label_path = ink_label_path
-        else:
-            default_ink_label_path = ppm_path_stem + '_ink-label.png'
-            if os.path.isfile(default_ink_label_path):
-                self._ink_label_path = default_ink_label_path
-            else:
-                self._ink_label_path = None
-
-        if rgb_label_path is not None:
-            self._rgb_label_path = rgb_label_path
-        else:
-            default_rgb_label_path = ppm_path_stem + '_reference.png'
-            if os.path.isfile(default_rgb_label_path):
-                self._rgb_label_path = default_rgb_label_path
-            else:
-                self._rgb_label_path = None
-
-        self._ink_label = None
-        if self._ink_label_path is not None:
-            self._ink_label = np.asarray(Image.open(self._ink_label_path).convert('L'), np.uint16)
-
-        self._rgb_label = None
-        if self._rgb_label_path is not None:
-            self._rgb_label = np.asarray(Image.open(self._rgb_label_path).convert('RGB'), np.uint8)
-
+        # Load all masks
+        self._mask = np.array(Image.open(
+            self.get_raw_data(self._mask_path)))
+        self._ink_label = np.asarray(Image.open(
+            self.get_raw_data(self._ink_label_path)).convert('L'), np.uint16)
+        self._rgb_label = np.asarray(Image.open(
+            self.get_raw_data(self._rgb_label_path)).convert('RGB'), np.uint8)
         self._invert_normal = invert_normal
         if self._invert_normal:
             logging.info('Normals are being inverted for this PPM.')
 
+        # Load the PPM
         self.process_PPM_file(self._path)
 
+        # Initialize prediction images
         self._ink_classes_prediction_image = np.zeros((self._height, self._width), np.uint16)
         self._ink_classes_prediction_image_written_to = False
         self._rgb_values_prediction_image = np.zeros((self._height, self._width, 3), np.uint8)
         self._rgb_values_prediction_image_written_to = False
 
     @staticmethod
-    def parse_PPM_header(filename):
+    def get_raw_data(filename):
+        url = urlsplit(filename)
+        if url.scheme in ('http', 'https'):
+            response = requests.get(filename)
+            if response.status_code != 200:
+                raise ValueError(f'Unable to fetch URL '
+                                 f'(code={response.status_code}): {filename}')
+            data = response.content
+        elif url.scheme == '':
+            with open(filename, 'rb') as f:
+                data = f.read()
+        else:
+            raise ValueError(f'Unsupported URL: {filename}')
+        return BytesIO(data)
+
+    @classmethod
+    def parse_PPM_header(cls, filename):
         comments_re = re.compile('^#')
         width_re = re.compile('^width')
         height_re = re.compile('^height')
@@ -80,28 +73,28 @@ class PPM:
         version_re = re.compile('^version')
         header_terminator_re = re.compile('^<>$')
 
-        with open(filename, 'rb') as f:
-            while True:
-                line = f.readline().decode('utf-8')
-                if comments_re.match(line):
-                    pass
-                elif width_re.match(line):
-                    width = int(line.split(': ')[1])
-                elif height_re.match(line):
-                    height = int(line.split(': ')[1])
-                elif dim_re.match(line):
-                    dim = int(line.split(': ')[1])
-                elif ordered_re.match(line):
-                    ordered = line.split(': ')[1].strip() == 'true'
-                elif type_re.match(line):
-                    val_type = line.split(': ')[1].strip()
-                    assert val_type in ['double']
-                elif version_re.match(line):
-                    version = line.split(': ')[1].strip()
-                elif header_terminator_re.match(line):
-                    break
-                else:
-                    logging.warning('PPM header contains unknown line: {}'.format(line.strip()))
+        f = cls.get_raw_data(filename)
+        while True:
+            line = f.readline().decode('utf-8')
+            if comments_re.match(line):
+                pass
+            elif width_re.match(line):
+                width = int(line.split(': ')[1])
+            elif height_re.match(line):
+                height = int(line.split(': ')[1])
+            elif dim_re.match(line):
+                dim = int(line.split(': ')[1])
+            elif ordered_re.match(line):
+                ordered = line.split(': ')[1].strip() == 'true'
+            elif type_re.match(line):
+                val_type = line.split(': ')[1].strip()
+                assert val_type in ['double']
+            elif version_re.match(line):
+                version = line.split(': ')[1].strip()
+            elif header_terminator_re.match(line):
+                break
+            else:
+                logging.warning('PPM header contains unknown line: {}'.format(line.strip()))
 
         return {
             'width': width,
@@ -123,7 +116,7 @@ class PPM:
         origin would be at self._data[0, 0, 3].
 
         """
-        header = PPM.parse_PPM_header(filename)
+        header = self.parse_PPM_header(filename)
         self._width = header['width']
         self._height = header['height']
         self._dim = header['dim']
@@ -139,23 +132,23 @@ class PPM:
 
         self._data = np.empty((self._height, self._width, self._dim))
 
-        with open(filename, 'rb') as f:
-            header_terminator_re = re.compile('^<>$')
-            while True:
-                line = f.readline().decode('utf-8')
-                if header_terminator_re.match(line):
-                    break
+        f = self.get_raw_data(filename)
+        header_terminator_re = re.compile('^<>$')
+        while True:
+            line = f.readline().decode('utf-8')
+            if header_terminator_re.match(line):
+                break
 
-            for y in tqdm(range(self._height)):
-                for x in range(self._width):
-                    for idx in range(self._dim):
-                        # This only works if we assume dimension 6
-                        # PPMs with (x, y, z, n_x, n_y, n_z)
-                        if self._dim == 6:
-                            if idx in [3, 4, 5] and self._invert_normal:
-                                self._data[y, x, idx] = -1 * struct.unpack('d', f.read(8))[0]
-                            else:
-                                self._data[y, x, idx] = struct.unpack('d', f.read(8))[0]
+        for y in tqdm(range(self._height)):
+            for x in range(self._width):
+                for idx in range(self._dim):
+                    # This only works if we assume dimension 6
+                    # PPMs with (x, y, z, n_x, n_y, n_z)
+                    if self._dim == 6:
+                        if idx in [3, 4, 5] and self._invert_normal:
+                            self._data[y, x, idx] = -1 * struct.unpack('d', f.read(8))[0]
+                        else:
+                            self._data[y, x, idx] = struct.unpack('d', f.read(8))[0]
         print()
 
     def get_default_bounds(self):
