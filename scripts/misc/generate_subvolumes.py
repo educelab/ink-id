@@ -27,7 +27,21 @@ def main():
     parser.add_argument('--jitter-max', metavar='n', type=int)
     parser.add_argument('--augmentation', action='store_true', dest='augmentation')
     parser.add_argument('--no-augmentation', action='store_false', dest='augmentation')
+
+    # Data region
+    parser.add_argument('-k', metavar='num', default=None, type=int,
+                        help='index of region to use for prediction and validation')
+    parser.add_argument('--region', metavar='name', default='all', 
+                        help='training, prediction, validation, or all',
+                        choices=[
+                            'training',
+                            'prediction',
+                            'validation',
+                            'all'
+                        ])
+
     args = parser.parse_args()
+
 
     region_data = inkid.data.RegionSet.get_data_from_file(args.input)
     os.makedirs(args.output, exist_ok=True)
@@ -35,6 +49,12 @@ def main():
     if args.ink_mask is not None:
         for ppm in region_data['ppms']:
             region_data['ppms'][ppm]['ink-label'] = args.ink_mask
+
+    # If k-fold job, remove kth region from training and put in prediction/validation sets
+    if args.k is not None:
+        k_region = region_data['regions']['training'].pop(int(args.k))
+        region_data['regions']['prediction'].append(k_region)
+        region_data['regions']['validation'].append(k_region)
 
     region_set = inkid.data.RegionSet(region_data)
 
@@ -57,7 +77,10 @@ def main():
     else:
         specify_inkness = None
 
-    points_ds = inkid.data.PointsDataset(region_set, ['training', 'validation', 'prediction'], point_to_subvolume_input,
+    regions = ['training', 'validation', 'prediction'] if args.region == 'all' \
+                                                                else [args.region]
+
+    points_ds = inkid.data.PointsDataset(region_set, regions, point_to_subvolume_input,
                                          specify_inkness=specify_inkness)
 
     seed = 42
