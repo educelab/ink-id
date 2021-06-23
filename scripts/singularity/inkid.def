@@ -69,7 +69,8 @@ From: ubuntu:20.04
       `scp inkid.sif *.sh lcc:~`
       `ssh lcc`
       `module load ccs/singularity`
-      `rm inkid.overlay && dd if=/dev/zero of=inkid.overlay bs=1M count=500 && mkfs.ext3 inkid.overlay  # Create a new overlay for the new container`
+      `mkdir -p out`
+      `rm -f inkid.overlay && dd if=/dev/zero of=inkid.overlay bs=1M count=500 && mkfs.ext3 inkid.overlay  # Create a new overlay for the new container`
       `singularity shell --overlay inkid.overlay inkid.sif  # If you want to get into the container and make any changes to the code, or checkout another branch`
       `rclone copy -uv inkid.sif dri-experiments-drive:singularity-containers`  # If you want to update the shared .sif file
 
