@@ -69,8 +69,8 @@ class RegionSet:
         data = RegionSet.get_data_from_file(filename)
         return cls(data)
 
-    @classmethod
-    def get_data_from_file_or_url(cls, filename):
+    @staticmethod
+    def get_data_from_file_or_url(filename):
         """Create a RegionSet from a filename or URL.
 
         Supports absolute and relative file paths as well as the http and https
@@ -95,7 +95,7 @@ class RegionSet:
                         url.query,
                         url.fragment)
         # Minify to remove comments, load JSON, and normalize it
-        return cls.normalize_json(json.loads(jsmin(raw_data)), relative_url)
+        return RegionSet.normalize_json(json.loads(jsmin(raw_data)), relative_url)
 
     @staticmethod
     def normalize_json(data, relative_url):

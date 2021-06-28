@@ -64,8 +64,8 @@ class PPM:
             raise ValueError(f'Unsupported URL: {filename}')
         return BytesIO(data)
 
-    @classmethod
-    def parse_PPM_header(cls, filename):
+    @staticmethod
+    def parse_PPM_header(filename):
         comments_re = re.compile('^#')
         width_re = re.compile('^width')
         height_re = re.compile('^height')
@@ -75,7 +75,7 @@ class PPM:
         version_re = re.compile('^version')
         header_terminator_re = re.compile('^<>$')
 
-        data = cls.get_raw_data(filename)
+        data = PPM.get_raw_data(filename)
         while True:
             line = data.readline().decode('utf-8')
             if comments_re.match(line):
@@ -118,7 +118,7 @@ class PPM:
         origin would be at self._data[0, 0, 3].
 
         """
-        header = self.parse_PPM_header(filename)
+        header = PPM.parse_PPM_header(filename)
         self._width = header['width']
         self._height = header['height']
         self._dim = header['dim']
