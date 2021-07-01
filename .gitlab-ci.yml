@@ -1,0 +1,44 @@
+stages:
+  - build
+  - test
+
+singularity:
+  stage: build
+  needs: []  # run immediately
+  script:
+    - cp -r . /tmp/ink-id
+    - singularity build inkid.sif scripts/singularity/inkid.def
+  tags:
+    - docker
+  image:
+    name: quay.io/singularity/singularity:v3.2.1
+    entrypoint: [""]
+  rules:
+    # prevent builds just because branch is tagged
+    - if: $CI_COMMIT_TAG
+      when: never
+    # don't run on the gitlab.com mirror
+    - if: '$CI_PROJECT_URL =~ /.*gitlab\.com.*/'
+      when: never
+    # only build on develop or when you manually start a job with the BUILD_NIGHTLY env var set to true
+    - if: '$CI_COMMIT_BRANCH == "develop" || $BUILD_NIGHTLY == "true"'
+
+
+.test:
+  stage: test
+  needs: []  # run immediately
+  before_script:
+    - python -m venv .venv
+    - source .venv/bin/activate
+    - pip install --upgrade pip
+    - pip install Cython numpy wheel
+    - pip install -e .
+  script:
+    - inkid-train-and-predict -h
+    - python -m unittest
+  tags:
+    - docker
+
+test:3.8:
+  extends: .test
+  image: python:3.8
