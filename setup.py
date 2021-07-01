@@ -20,6 +20,7 @@ setup(
         'autopep8',
         'configargparse',
         'Cython',
+        'dicttoxml',
         'gitpython',
         'humanize',
         'imageio',
