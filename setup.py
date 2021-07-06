@@ -27,7 +27,7 @@ setup(
         'jsmin',
         'mathutils',
         'matplotlib',
-        'Pillow',
+        'Pillow==8.2.0',  # Temporary due to bug in 8.3.0 https://github.com/pytorch/pytorch/issues/61125
         'pygifsicle',
         'pylint',
         'pywavelets',

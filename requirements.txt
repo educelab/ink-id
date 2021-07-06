@@ -20,7 +20,7 @@ humanize==3.10.0
 idna==2.10
 imageio==2.9.0
 imagesize==1.2.0
--e git+git@code.cs.uky.edu:seales-research/ink-id.git@18790aaf25cfb157ec7a8e521eef9966de033fd5#egg=inkid
+-e git+git@code.cs.uky.edu:seales-research/ink-id.git@56acf8d2b7d1a0b318cc10cb77febe670b9670b4#egg=inkid
 isort==5.9.1
 Jinja2==3.0.1
 joblib==1.0.1
@@ -35,7 +35,7 @@ mccabe==0.6.1
 numpy==1.21.0
 oauthlib==3.1.1
 packaging==21.0
-Pillow==8.3.0
+Pillow==8.2.0
 protobuf==3.17.3
 pyasn1==0.4.8
 pyasn1-modules==0.2.8
