@@ -482,7 +482,6 @@ def main():
     # Set up profiling
     if args.profiling:
         context_manager = torch.profiler.profile(
-            activities=[torch.profiler.ProfilerActivity.CPU, torch.profiler.ProfilerActivity.CUDA],
             record_shapes=True, with_stack=True,
             schedule=torch.profiler.schedule(
                 wait=10,  # Wait ten batches before doing anything
