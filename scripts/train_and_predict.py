@@ -13,7 +13,7 @@ kth training region, remove it from the training set, and add it to
 the prediction and validation sets for that run.
 
 """
-
+import contextlib
 import datetime
 import functools
 import itertools
@@ -200,6 +200,10 @@ def main():
     parser.add_argument('--skip-training', action='store_true')
     parser.add_argument('--dataloaders-num-workers', metavar='n', type=int, default=None)
 
+    # Profiling
+    parser.add_argument('--no-profiling', action='store_false', dest='profiling',
+                        help='Disable PyTorch profiling during training')
+
     # Rclone
     parser.add_argument('--rclone-transfer-remote', metavar='remote', default=None,
                         help='if specified, and if matches the name of one of the directories in '
@@ -241,7 +245,8 @@ def main():
     os.makedirs(output_path)
 
     # Create TensorBoard writer
-    writer = SummaryWriter(os.path.join(output_path, 'tensorboard'))
+    tensorboard_path = os.path.join(output_path, 'tensorboard')
+    writer = SummaryWriter(tensorboard_path)
 
     # Configure logging
     # noinspection PyArgumentList
@@ -474,67 +479,89 @@ def main():
     metric_results = {metric: [] for metric in metrics}
     last_summary = time.time()
 
+    # Set up profiling
+    if args.profiling:
+        context_manager = torch.profiler.profile(
+            activities=[torch.profiler.ProfilerActivity.CPU, torch.profiler.ProfilerActivity.CUDA],
+            record_shapes=True, with_stack=True,
+            schedule=torch.profiler.schedule(
+                wait=10,  # Wait ten batches before doing anything
+                warmup=10,  # Profile ten batches, but don't actually record those results
+                active=10,  # Profile ten batches, and record those
+                repeat=1  # Only do this process once
+            ),
+            on_trace_ready=torch.profiler.tensorboard_trace_handler(tensorboard_path)
+        )
+    else:
+        context_manager = contextlib.nullcontext()
+
     # Run training loop
     if train_dl is not None and not args.skip_training:
         try:
-            for epoch in range(args.training_epochs):
-                model.train()  # Turn on training mode
-                total_batches = len(train_dl)
-                for batch_num, (xb, yb) in enumerate(train_dl):
-                    xb = xb.to(device)
-                    yb = yb.to(device)
-                    pred = model(xb)
-                    if args.label_type == 'ink_classes':
-                        _, yb = yb.max(1)  # Argmax
-                    for metric, fn in metrics.items():
-                        metric_results[metric].append(fn(pred, yb))
+            with context_manager:
+                for epoch in range(args.training_epochs):
+                    model.train()  # Turn on training mode
+                    total_batches = len(train_dl)
+                    for batch_num, (xb, yb) in enumerate(train_dl):
+                        with torch.profiler.record_function(f'train_batch_{batch_num}'):
+                            xb = xb.to(device)
+                            yb = yb.to(device)
+                            pred = model(xb)
+                            if args.label_type == 'ink_classes':
+                                _, yb = yb.max(1)  # Argmax
+                            for metric, fn in metrics.items():
+                                metric_results[metric].append(fn(pred, yb))
 
-                    metric_results['loss'][-1].backward()
-                    opt.step()
-                    opt.zero_grad()
+                            metric_results['loss'][-1].backward()
+                            opt.step()
+                            opt.zero_grad()
 
-                    if batch_num % args.summary_every_n_batches == 0:
-                        logging.info('Batch: {:>5d}/{:<5d} {} Seconds: {:5.3g}'.format(
-                            batch_num, total_batches,
-                            inkid.metrics.metrics_str(metric_results),
-                            time.time() - last_summary))
-                        for metric, result in inkid.metrics.metrics_dict(metric_results).items():
-                            writer.add_scalar('train_' + metric, result, epoch * len(train_dl) + batch_num)
-                            writer.flush()
-                        for result in metric_results.values():
-                            result.clear()
-                        last_summary = time.time()
+                            if batch_num % args.summary_every_n_batches == 0:
+                                logging.info('Batch: {:>5d}/{:<5d} {} Seconds: {:5.3g}'.format(
+                                    batch_num, total_batches,
+                                    inkid.metrics.metrics_str(metric_results),
+                                    time.time() - last_summary))
+                                for metric, result in inkid.metrics.metrics_dict(metric_results).items():
+                                    writer.add_scalar('train_' + metric, result, epoch * len(train_dl) + batch_num)
+                                    writer.flush()
+                                for result in metric_results.values():
+                                    result.clear()
+                                last_summary = time.time()
 
-                    if batch_num % args.checkpoint_every_n_batches == 0:
-                        # Save model checkpoint
-                        torch.save({
-                            'epoch': epoch,
-                            'batch': batch_num,
-                            'model_state_dict': model.state_dict(),
-                            'optimizer_state_dict': opt.state_dict()
-                        }, os.path.join(checkpoints_dir, f'checkpoint_{epoch}_{batch_num}.pt'))
+                            if batch_num % args.checkpoint_every_n_batches == 0:
+                                # Save model checkpoint
+                                torch.save({
+                                    'epoch': epoch,
+                                    'batch': batch_num,
+                                    'model_state_dict': model.state_dict(),
+                                    'optimizer_state_dict': opt.state_dict()
+                                }, os.path.join(checkpoints_dir, f'checkpoint_{epoch}_{batch_num}.pt'))
 
-                        # Periodic evaluation and prediction
-                        if val_dl is not None:
-                            logging.info('Evaluating on validation set... ')
-                            val_results = perform_validation(model, val_dl, metrics, device, args.label_type)
-                            for metric, result in inkid.metrics.metrics_dict(val_results).items():
-                                writer.add_scalar('val_' + metric, result, epoch * len(train_dl) + batch_num)
-                                writer.flush()
-                            logging.info(f'done ({inkid.metrics.metrics_str(val_results)})')
-                        else:
-                            logging.info('Empty validation set, skipping validation.')
+                                # Periodic evaluation and prediction
+                                if val_dl is not None:
+                                    logging.info('Evaluating on validation set... ')
+                                    val_results = perform_validation(model, val_dl, metrics, device, args.label_type)
+                                    for metric, result in inkid.metrics.metrics_dict(val_results).items():
+                                        writer.add_scalar('val_' + metric, result, epoch * len(train_dl) + batch_num)
+                                        writer.flush()
+                                    logging.info(f'done ({inkid.metrics.metrics_str(val_results)})')
+                                else:
+                                    logging.info('Empty validation set, skipping validation.')
 
-                        # Prediction image
-                        if pred_dl is not None:
-                            logging.info('Generating prediction image... ')
-                            generate_prediction_image(pred_dl, model, output_size, args.label_type, device,
-                                                      predictions_dir, f'{epoch}_{batch_num}', reconstruct_fn, regions,
-                                                      label_shape, args.prediction_averaging,
-                                                      args.prediction_grid_spacing)
-                            logging.info('done')
-                        else:
-                            logging.info('Empty prediction set, skipping prediction image generation.')
+                                # Prediction image
+                                if pred_dl is not None:
+                                    logging.info('Generating prediction image... ')
+                                    generate_prediction_image(pred_dl, model, output_size, args.label_type, device,
+                                                              predictions_dir, f'{epoch}_{batch_num}', reconstruct_fn,
+                                                              regions,
+                                                              label_shape, args.prediction_averaging,
+                                                              args.prediction_grid_spacing)
+                                    logging.info('done')
+                                else:
+                                    logging.info('Empty prediction set, skipping prediction image generation.')
+                            # Only advance profiler step if profiling is enabled (the context manager is not null)
+                            if isinstance(context_manager, torch.profiler.profile):
+                                context_manager.step()
         except KeyboardInterrupt:
             pass
 
