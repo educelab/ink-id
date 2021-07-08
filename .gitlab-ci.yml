@@ -8,7 +8,6 @@ singularity:
   script:
     - cp -r . /tmp/ink-id
     - singularity build inkid.sif scripts/singularity/inkid.def
-    - singularity run inkid.sif inkid-train-and-predict -h
   tags:
     - docker
   image:
