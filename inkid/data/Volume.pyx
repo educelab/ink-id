@@ -13,11 +13,10 @@ import mathutils
 import numpy as np
 cimport numpy as cnp
 from PIL import Image
-import pywt
 from tqdm import tqdm
 
 
-cdef BasisVectors get_basis_from_square(square_corners):
+cpdef BasisVectors get_basis_from_square(square_corners):
     top_left, top_right, bottom_left, bottom_right = np.array(square_corners)
 
     x_vec = ((top_right - top_left) + (bottom_right - bottom_left)) / 2.0
@@ -45,7 +44,7 @@ cdef BasisVectors get_basis_from_square(square_corners):
     return basis
 
 
-cdef BasisVectors get_component_vectors_from_normal(Float3 n):
+cpdef BasisVectors get_component_vectors_from_normal(Float3 n):
     """Get a subvolume oriented based on a surface normal vector.
 
     Calculate the rotation needed to align the z axis of the
