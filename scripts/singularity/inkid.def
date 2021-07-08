@@ -24,6 +24,8 @@ From: ubuntu:20.04
   # To make python3-pip available
   add-apt-repository -y universe
   apt update
+  # Temporary fix for https://github.com/pytorch/pytorch/issues/53452
+  apt install -y libncurses5
   # Python installs
   apt install -y python3.8-dev python3-pip
   pip3 install --upgrade pip
