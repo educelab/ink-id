@@ -1,4 +1,4 @@
-from setuptools import Extension, setup
+from setuptools import Extension, setup, find_packages
 
 from Cython.Build import cythonize
 import numpy as np
@@ -15,7 +15,7 @@ setup(
     url='https://code.vis.uky.edu/seales-research/ink-id',
     author='University of Kentucky',
     license='GPLv3',
-    packages=['inkid'],
+    packages=find_packages(include=['inkid', 'inkid.*']),
     install_requires=[
         'autopep8',
         'configargparse',
@@ -42,9 +42,9 @@ setup(
     ext_modules=cythonize(extensions, annotate=True),
     entry_points={
         'console_scripts': [
-            'inkid-train-and-predict = scripts.train_and_predict:main',
-            'inkid-summary = scripts.misc.create_summary_images:main',
-            'inkid-rclone-upload = scripts.misc.rclone_upload:main',
+            'inkid-train-and-predict = inkid.scripts.train_and_predict:main',
+            'inkid-summary = inkid.scripts.create_summary_images:main',
+            'inkid-rclone-upload = inkid.scripts.rclone_upload:main',
         ],
     },
     zip_safe=False,
