@@ -7,7 +7,7 @@ singularity:
   needs: []  # run immediately
   script:
     - cp -r . /tmp/ink-id
-    - singularity build inkid.sif scripts/singularity/inkid.def
+    - singularity build inkid.sif singularity/inkid.def
   tags:
     - docker
   image:
