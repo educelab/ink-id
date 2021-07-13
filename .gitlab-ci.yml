@@ -35,7 +35,6 @@ singularity:
     - python -m venv .venv
     - source .venv/bin/activate
     - pip install --upgrade pip
-    - pip install Cython numpy wheel
     - pip install -e .
   script:
     - inkid-train-and-predict -h
