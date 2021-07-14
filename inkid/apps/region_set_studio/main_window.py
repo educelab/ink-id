@@ -129,7 +129,11 @@ class MainWindow(QMainWindow):
         if not self._safe_to_close():
             return
         item = self.dataset_model.itemFromIndex(index)
-        editor = item.editor(self)
+        try:
+            editor = item.editor(self)
+        except DatasetError as err:
+            QMessageBox.critical(self, 'Error loading editor', str(err))
+            return
         if isinstance(editor, DatasetEditor):
             editor.saved.connect(self.reload_dataset)
         if (self.splitter.count() > 1):
