@@ -3,7 +3,7 @@
 from pathlib import Path
 from PySide6.QtCore import Slot, Qt, QModelIndex
 from PySide6.QtGui import QKeySequence
-from PySide6.QtWidgets import QMainWindow, QLabel, QFileDialog, QHBoxLayout, QWidget, QSplitter, QMessageBox
+from PySide6.QtWidgets import QMainWindow, QFileDialog, QSplitter, QMessageBox
 from .datasets import DatasetModel, DatasetTreeView, DatasetError
 
 
