@@ -3,7 +3,7 @@
 import os
 from pathlib import Path
 from typing import Optional
-from PySide6.QtCore import QObject, Slot
+from PySide6.QtCore import QObject, Slot, Signal
 from PySide6.QtGui import QStandardItemModel, QStandardItem
 from PySide6.QtWidgets import QTreeView, QAbstractItemView, QWidget, QVBoxLayout, QListWidget, QPushButton, QHBoxLayout, QFileDialog, QMessageBox
 
@@ -13,6 +13,8 @@ class DatasetError(RuntimeError):
 
 
 class DatasetEditor(QWidget):
+    saved = Signal(Path)
+
     def __init__(self, path: Path, parent: Optional[QObject]):
         super().__init__(parent)
         self._path = path
@@ -148,6 +150,7 @@ class DatasetEditor(QWidget):
             QMessageBox.critical(self, 'Failed to save file', str(err))
         self._tainted = False
         self.btn_save.setEnabled(False)
+        self.saved.emit(self._path)
 
     def tainted(self):
         return self._tainted
@@ -156,7 +159,11 @@ class DatasetEditor(QWidget):
 class DatasourceEditor(QWidget):
     def __init__(self, path: Path, parent: Optional[QObject]):
         super().__init__(parent)
-        self.path = path
+        self._path = path
+        self._tainted = False
+
+    def tainted(self):
+        return self._tainted
 
 
 class DatasetTreeView(QTreeView):
@@ -193,9 +200,9 @@ class DatasourceItem(QStandardItem):
 class DatasetModel(QStandardItemModel):
     def __init__(self, filename: str, parent: Optional[QObject]):
         super().__init__(parent)
-        self.path = Path(filename)
-        self.seen = []
-        self._load_dataset(self.invisibleRootItem(), self.path)
+        self._path = Path(filename)
+        self._seen = []
+        self._load_dataset(self.invisibleRootItem(), self._path)
         self.setHorizontalHeaderLabels(['Path'])
 
     def _load_dataset(self, parent_item: QStandardItem, path: Path, relative_to: Path = None):
@@ -213,9 +220,9 @@ class DatasetModel(QStandardItemModel):
             parent_item.appendRow(datasource_item)
             return
         # Make sure this item hasn't been seen before, and mark it as seen now
-        if str(path) in self.seen:
+        if str(path) in self._seen:
             raise DatasetError(f'Recursion loop detected on {path}')
-        self.seen.append(str(path))
+        self._seen.append(str(path))
         # All other files are to be treated as datasets with one or more children
         dataset_item = DatasetItem(path)
         parent_item.appendRow(dataset_item)
@@ -226,3 +233,6 @@ class DatasetModel(QStandardItemModel):
                         line.strip()), relative_to=path.parents[0])
         except OSError as os_err:
             raise DatasetError(os_err) from os_err
+
+    def path(self):
+        return self._path

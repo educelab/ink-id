@@ -4,7 +4,7 @@ from pathlib import Path
 from PySide6.QtCore import Slot, Qt, QModelIndex
 from PySide6.QtGui import QKeySequence
 from PySide6.QtWidgets import QMainWindow, QFileDialog, QSplitter, QMessageBox
-from .datasets import DatasetModel, DatasetTreeView, DatasetError
+from .datasets import DatasetModel, DatasetTreeView, DatasetError, DatasetEditor
 
 
 class MainWindow(QMainWindow):
@@ -53,6 +53,7 @@ class MainWindow(QMainWindow):
         try:
             self.dataset_model = DatasetModel(filename, parent=self)
             self.dataset_tree.setModel(self.dataset_model)
+            self.dataset_tree.expandAll()
             self.act_new_ds.setEnabled(False)
             self.act_open_ds.setEnabled(False)
             self.act_close_ds.setEnabled(True)
@@ -117,10 +118,20 @@ class MainWindow(QMainWindow):
         if self._safe_to_close():
             self.close()
 
+    @Slot(Path)
+    def reload_dataset(self, path: Path):
+        filename = str(self.dataset_model.path())
+        self.action_close_dataset()
+        self._load_dataset(filename)
+
     @Slot(QModelIndex)
     def open_editor(self, index):
+        if not self._safe_to_close():
+            return
         item = self.dataset_model.itemFromIndex(index)
         editor = item.editor(self)
+        if isinstance(editor, DatasetEditor):
+            editor.saved.connect(self.reload_dataset)
         if (self.splitter.count() > 1):
             self.splitter.replaceWidget(1, editor)
         else:
