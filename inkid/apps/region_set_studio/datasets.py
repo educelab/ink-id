@@ -98,7 +98,7 @@ class DatasetEditor(QWidget):
     @Slot(bool)
     def new_item(self, checked: bool = True):
         filename = QFileDialog.getSaveFileName(
-            self, 'New Datasource', dir=str(self._path.parents[0]), filter='Datasets (*.txt)')[0]
+            self, 'New Dataset', dir=str(self._path.parents[0]), filter='Datasets (*.txt)')[0]
         if len(filename) < 1:
             return
         path = Path(filename).with_suffix('.txt')
