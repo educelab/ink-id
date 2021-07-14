@@ -20,8 +20,8 @@ humanize==3.10.0
 idna==2.10
 imageio==2.9.0
 imagesize==1.2.0
--e git+git@code.cs.uky.edu:seales-research/ink-id.git@56acf8d2b7d1a0b318cc10cb77febe670b9670b4#egg=inkid
-isort==5.9.1
+-e git+git@code.cs.uky.edu:seales-research/ink-id.git@3d3bc9bff91d02dd11dccdb75319b8771ff65eca#egg=inkid
+isort==5.9.2
 Jinja2==3.0.1
 joblib==1.0.1
 jsmin==2.2.2
@@ -44,6 +44,7 @@ pygifsicle==1.0.4
 Pygments==2.9.0
 pylint==2.9.3
 pyparsing==2.4.7
+PySide6==6.1.2
 python-dateutil==2.8.1
 pytz==2021.1
 PyWavelets==1.1.1
@@ -52,10 +53,11 @@ requests-oauthlib==1.3.0
 rsa==4.7.2
 scikit-learn==0.24.2
 scipy==1.7.0
+shiboken6==6.1.2
 six==1.16.0
 smmap==4.0.0
 snowballstemmer==2.1.0
-Sphinx==4.0.3
+Sphinx==4.1.0
 sphinxcontrib-applehelp==1.0.2
 sphinxcontrib-devhelp==1.0.2
 sphinxcontrib-htmlhelp==2.0.0
@@ -65,7 +67,7 @@ sphinxcontrib-serializinghtml==1.1.5
 tensorboard==2.5.0
 tensorboard-data-server==0.6.1
 tensorboard-plugin-wit==1.8.0
-threadpoolctl==2.1.0
+threadpoolctl==2.2.0
 toml==0.10.2
 torch==1.9.0
 torch-summary==1.4.5
