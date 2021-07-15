@@ -148,21 +148,6 @@ def dict_to_xml(data):
     return dom.toprettyxml()
 
 
-def try_find_data_root():
-    candidate_directories = [
-        '$HOME/data/dri-datasets-drive',
-        '$PSCRATCH/seales_uksr/dri-datasets-drive',
-        '$HOME/data/mount/dri-datasets-drive',
-        '/Volumes/GoogleDrive/Shared drives/DRI Datasets'
-    ]
-    for candidate_directory in candidate_directories:
-        candidate_directory = os.path.expandvars(candidate_directory)
-        if os.path.exists(candidate_directory):
-            if os.path.exists(os.path.join(candidate_directory, 'InvisibleLibrary.txt')):
-                return candidate_directory
-    return None
-
-
 def perform_validation(model, dataloader, metrics, device, label_type):
     """Run the validation process using a model and dataloader, and return the results of all metrics."""
     model.eval()  # Turn off training mode for batch norm and dropout purposes
