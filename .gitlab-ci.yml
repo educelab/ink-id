@@ -35,7 +35,7 @@ singularity:
     - python -m venv .venv
     - source .venv/bin/activate
     - pip install --upgrade pip
-    - pip install -e .
+    - pip install .
   script:
     - inkid-train-and-predict -h
     - python -m unittest

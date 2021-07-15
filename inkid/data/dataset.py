@@ -6,6 +6,7 @@ import json
 import os
 from typing import Dict, List, Optional, Tuple
 
+import jsonschema
 import numpy as np
 from PIL import Image
 import torch
@@ -20,6 +21,7 @@ class DataSource(ABC):
         self.path = path
         with open(path, 'r') as f:
             source_json = json.load(f)
+            jsonschema.validate(source_json, inkid.ops.json_schema('dataSource0.1'))
         self._source_json = source_json
 
         self.feature_type: Optional[str] = None
@@ -66,26 +68,26 @@ class RegionSource(DataSource):
         """
         super().__init__(path)
 
-        for key in ['ppm', 'volume', 'mask', 'ink-label', 'rgb-label', 'volcart-texture-label']:
+        for key in ['ppm', 'volume', 'mask', 'ink_label', 'rgb_label', 'volcart_texture_label']:
             if self._source_json[key] is not None:
                 self._source_json[key] = self.make_path_absolute(self._source_json[key])
 
         self._ppm: inkid.data.PPM = inkid.data.PPM.from_path(self._source_json['ppm'])
         self._volume: inkid.data.Volume = inkid.data.Volume.from_path(self._source_json['volume'])
-        self._bounding_box: Optional[Tuple[int, int, int, int]] = self._source_json['bounding-box']
+        self._bounding_box: Optional[Tuple[int, int, int, int]] = self._source_json['bounding_box']
         if self._bounding_box is None:
             self._bounding_box = self.get_default_bounds()
-        self._invert_normal: bool = self._source_json['invert-normal']
+        self._invert_normals: bool = self._source_json['invert_normals']
 
         self._mask, self._ink_label, self._rgb_label, self._volcart_texture_label = None, None, None, None
         if self._source_json['mask'] is not None:
             self._mask = np.array(Image.open(self._source_json['mask']))
-        if self._source_json['ink-label'] is not None:
-            self._ink_label = np.array(Image.open(self._source_json['ink-label']))
-        if self._source_json['rgb-label'] is not None:
-            self._rgb_label = np.array(Image.open(self._source_json['rgb-label']))
-        if self._source_json['volcart-texture-label'] is not None:
-            self._volcart_texture_label = np.array(Image.open(self._source_json['volcart-texture-label']))
+        if self._source_json['ink_label'] is not None:
+            self._ink_label = np.array(Image.open(self._source_json['ink_label']))
+        if self._source_json['rgb_label'] is not None:
+            self._rgb_label = np.array(Image.open(self._source_json['rgb_label']))
+        if self._source_json['volcart_texture_label'] is not None:
+            self._volcart_texture_label = np.array(Image.open(self._source_json['volcart_texture_label']))
 
         self._points = list()
         self._points_list_needs_update: bool = True

@@ -1,6 +1,7 @@
 """Miscellaneous operations used in ink-id."""
 
 import itertools
+import json
 import logging
 import math
 import os
@@ -13,6 +14,8 @@ from PIL import Image
 import torch
 import torch.nn.functional as F
 from tqdm import tqdm
+
+import inkid
 
 
 def add_subvolume_args(parser):
@@ -213,3 +216,9 @@ def generate_prediction_images(dataloader, model, output_size, label_type, devic
     dataloader.dataset.save_predictions(predictions_dir, suffix)
     dataloader.dataset.reset_predictions()
     model.train()
+
+
+def json_schema(schema_name):
+    file_path = os.path.join(os.path.dirname(inkid.__file__), 'schemas', schema_name + '.schema.json')
+    with open(file_path, 'r') as f:
+        return json.load(f)
