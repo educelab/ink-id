@@ -15,36 +15,43 @@ class DatasetError(RuntimeError):
 
 
 class Datasource:
-    def __init__(self, path: Path):
+    def __init__(self, path: Path, schema_version='0.1', type_='volume'):
         self._path = path
+        self.setSchemaVersion(schema_version)
+        self.setType(type_)
+        self.setVolume(None)
+        self.setPPM(None)
+        self.setMask(None)
+        self.setInkLabel(None)
+        self.setRGBLabel(None)
+        self.setVCTLabel(None)
+        self.setInvertNormals(False)
+        self.setBoundingBox(None)
+
+    @staticmethod
+    def fromPath(path: Path):
+        datasource = Datasource(path)
         try:
-            with open(self._path) as f:
-                self._data = json.load(f)
-                self.setSchemaVersion(self._data['schema_version'])
-                self.setType(self._data['type'])
-                self.setVolume(self._data['volume'])
-                if self.getType() == 'region':
-                    self.setPPM(self._data['ppm'])
-                    self.setMask(self._data['mask'])
-                    self.setInkLabel(self._data['ink-label'])
-                    self.setRGBLabel(self._data['rgb-label'])
-                    self.setVCTLabel(self._data['volcart-texture-label'])
-                    self.setInvertNormals(self._data['invert-normals'])
-                    self.setBoundingBox(self._data['bounding-box'])
-                else:
-                    self.setPPM(None)
-                    self.setMask(None)
-                    self.setInkLabel(None)
-                    self.setRGBLabel(None)
-                    self.setVCTLabel(None)
-                    self.setInvertNormals(False)
-                    self.setBoundingBox(None)
+            with open(path) as f:
+                data = json.load(f)
+                datasource.setSchemaVersion(data['schema_version'])
+                datasource.setType(data['type'])
+                datasource.setVolume(data['volume'])
+                if datasource.getType() == 'region':
+                    datasource.setPPM(data['ppm'])
+                    datasource.setMask(data['mask'])
+                    datasource.setInkLabel(data['ink-label'])
+                    datasource.setRGBLabel(data['rgb-label'])
+                    datasource.setVCTLabel(data['volcart-texture-label'])
+                    datasource.setInvertNormals(data['invert-normals'])
+                    datasource.setBoundingBox(data['bounding-box'])
+                return datasource
         except OSError as os_error:
             raise DatasetError(
-                f'Failed to open datasource: {self._path}') from os_error
+                f'Failed to open datasource: {path}') from os_error
         except JSONDecodeError as json_error:
             raise DatasetError(
-                f'Failed to parse JSON for datasource: {self._path}') from json_error
+                f'Failed to parse JSON for datasource: {path}') from json_error
         except KeyError as key_error:
             raise DatasetError(
                 f'Expected element is missing: {key_error}') from key_error
@@ -262,16 +269,21 @@ class DatasetEditor(QWidget):
 
     @Slot(bool)
     def new_item(self, checked: bool = True):
-        # TODO: update function to allow JSON files to be created as well (empty object {} by default)
-        filename = QFileDialog.getSaveFileName(
-            self, 'New Dataset', dir=str(self._path.parents[0]), filter='Datasets (*.txt)')[0]
+        filename, filter_ = QFileDialog.getSaveFileName(
+            self, 'New Dataset or Datasource', dir=str(self._path.parents[0]), filter='Datasets (*.txt);;Datasources (*.json)')
         if len(filename) < 1:
             return
-        path = Path(filename).with_suffix('.txt')
         try:
-            # Create (or truncate) the file
-            with open(path, 'w'):
-                pass
+            if filter_.startswith('Datasets'):
+                path = Path(filename).with_suffix('.txt')
+                # Create (or truncate) the file
+                with open(path, 'w'):
+                    pass
+            else:
+                path = Path(filename).with_suffix('.json')
+                # Create (or truncate) the file with a new generic Datasource
+                datasource = Datasource(path)
+                datasource.save()
             self._add_items([str(path)])
         except OSError as err:
             QMessageBox.critical(self, 'Failed to save file', str(err))
@@ -371,7 +383,7 @@ class DatasourceEditor(QWidget):
         super().__init__(parent)
         self._path = path
         self._tainted = False
-        self._datasource = Datasource(path)
+        self._datasource = Datasource.fromPath(path)
 
         self.ds_schema_version = QLabel(self._datasource.getSchemaVersion())
 
