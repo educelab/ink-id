@@ -428,7 +428,6 @@ class DatasourceEditor(QWidget):
         self.form_layout.addRow('RGB Label', self.ds_rgb_label)
         self.form_layout.addRow('VC Texture Label', self.ds_vct_label)
 
-        self.update_fields()
         # bounding box
 
         self.save_btn = QPushButton('Save')
@@ -446,6 +445,7 @@ class DatasourceEditor(QWidget):
 
         h_layout = QHBoxLayout()
         h_layout.addWidget(splitter)
+        self.update_fields()
         self.setLayout(h_layout)
 
     def update_fields(self):
@@ -456,52 +456,61 @@ class DatasourceEditor(QWidget):
         self.ds_ink_label.setEnabled(region)
         self.ds_invert_normals.setEnabled(region)
         self.ds_vct_label.setEnabled(region)
+        self.save_btn.setEnabled(self._tainted)
 
     @Slot(bool)
     def save(self, checked: bool = False):
         self._datasource.save()
         self._tainted = False
+        self.update_fields()
 
     @Slot(int)
     def update_invert_normals(self, state: int):
         self._datasource.setInvertNormals(state > 0)
         self._tainted = True
+        self.update_fields()
 
     @Slot(str)
     def update_type(self, value: str):
         self._datasource.setType(value)
-        self.update_fields()
         self._tainted = True
+        self.update_fields()
 
     @Slot(str)
     def update_ppm(self, value: str):
         self._datasource.setPPM(value)
         self._tainted = True
+        self.update_fields()
 
     @Slot(str)
     def update_volume(self, value: str):
         self._datasource.setVolume(value)
         self._tainted = True
+        self.update_fields()
 
     @Slot(str)
     def update_mask(self, value: str):
         self._datasource.setMask(value)
         self._tainted = True
+        self.update_fields()
 
     @Slot(str)
     def update_ink_label(self, value: str):
         self._datasource.setInkLabel(value)
         self._tainted = True
+        self.update_fields()
 
     @Slot(str)
     def update_rgb_label(self, value: str):
         self._datasource.setRGBLabel(value)
         self._tainted = True
+        self.update_fields()
 
     @Slot(str)
     def update_vct_label(self, value: str):
         self._datasource.setVCTLabel(value)
         self._tainted = True
+        self.update_fields()
 
     def tainted(self):
         return self._tainted
