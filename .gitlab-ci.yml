@@ -32,6 +32,8 @@ singularity:
   stage: test
   needs: []  # run immediately
   before_script:
+    - apt -y update
+    - apt -y install libglvnd-dev # needed for Qt/GUI apps
     - python -m venv .venv
     - source .venv/bin/activate
     - pip install --upgrade pip
