@@ -437,16 +437,8 @@ class DatasourceEditor(QWidget):
         v_layout.addLayout(self.form_layout)
         v_layout.addWidget(self.save_btn)
 
-        generic = QWidget(self)
-        generic.setLayout(v_layout)
-
-        splitter = QSplitter(self)
-        splitter.addWidget(generic)
-
-        h_layout = QHBoxLayout()
-        h_layout.addWidget(splitter)
         self.update_fields()
-        self.setLayout(h_layout)
+        self.setLayout(v_layout)
 
     def update_fields(self):
         region = True if self._datasource.getType() == 'region' else False
