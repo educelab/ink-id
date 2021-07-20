@@ -390,7 +390,7 @@ class RegionBoundsWidget(QWidget):
         self.value = datasource.getBoundingBox()
         self._update_ghosts()
 
-        self.label = QLabel(str(self.value) if self.value else 'None')
+        self.label = QLabel(str(self.value))
         self.edit_btn = QPushButton('Edit')
         self.edit_btn.clicked.connect(self.edit_bounds)
         self.remove_btn = QPushButton(text='X', parent=self)
@@ -431,7 +431,7 @@ class RegionBoundsWidget(QWidget):
     @Slot(bool)
     def edit_bounds(self, checked: bool = False):
         self.value = [1, 2, 3, 4]  # TODO
-        self.label.setText(str(self.value) if self.value else 'None')
+        self.label.setText(str(self.value))
         self.remove_btn.setVisible(True)
         self.changed.emit(self.value)
 
