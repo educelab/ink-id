@@ -378,12 +378,78 @@ class FileBrowserWidget(QWidget):
         self.changed.emit(self.value)
 
 
+class RegionBoundsWidget(QWidget):
+    changed = Signal(list)
+
+    def __init__(self, path: Path, datasources_paths: list):
+        super().__init__()
+        self.path = path
+        self.datasources_paths = datasources_paths
+        datasource = Datasource.fromPath(path)
+        self.ppm = datasource.getPPM(True)
+        self.value = datasource.getBoundingBox()
+        self._update_ghosts()
+
+        self.label = QLabel(str(self.value) if self.value else 'None')
+        self.edit_btn = QPushButton('Edit')
+        self.edit_btn.clicked.connect(self.edit_bounds)
+        self.remove_btn = QPushButton(text='X', parent=self)
+        self.remove_btn.clicked.connect(self.remove_bounds)
+        h_layout = QHBoxLayout()
+        h_layout.addWidget(self.label, 1)
+        h_layout.addWidget(self.edit_btn)
+        h_layout.addWidget(self.remove_btn)
+        h_layout.setContentsMargins(0, 0, 0, 0)
+        self.edit_btn.setEnabled(self.ppm is not None)
+        self.remove_btn.setVisible(self.value is not None)
+        self.setLayout(h_layout)
+
+    def _update_ghosts(self):
+        ghosts = []
+        if self.ppm is None:
+            self._ghosts = ghosts
+            return
+        for ds_path in self.datasources_paths:
+            # Invalid datasources are skipped
+            try:
+                ds = Datasource.fromPath(Path(ds_path))
+            except DatasetError:
+                continue
+            # We skip ourself also
+            if ds.getPath() == self.path:
+                continue
+            # We add datasets which have a PPM matching us
+            if self.ppm == ds.getPPM(True):
+                ghosts.append(ds_path)
+        self._ghosts = ghosts
+
+    def setPPM(self, ppm_path: str):
+        self.ppm = ppm_path
+        self._update_ghosts()
+        self.edit_btn.setEnabled(self.ppm is not None)
+
+    @Slot(bool)
+    def edit_bounds(self, checked: bool = False):
+        self.value = [1, 2, 3, 4]  # TODO
+        self.label.setText(str(self.value) if self.value else 'None')
+        self.remove_btn.setVisible(True)
+        self.changed.emit(self.value)
+
+    @Slot(bool)
+    def remove_bounds(self, checked: bool = False):
+        self.value = None
+        self.label.setText(str(self.value))
+        self.remove_btn.setVisible(False)
+        self.changed.emit(self.value)
+
+
 class DatasourceEditor(QWidget):
-    def __init__(self, path: Path, parent: Optional[QObject]):
+    def __init__(self, path: Path, datasources_paths: list, parent: Optional[QObject]):
         super().__init__(parent)
         self._path = path
         self._tainted = False
         self._datasource = Datasource.fromPath(path)
+        self._datasources_paths = datasources_paths
 
         self.ds_schema_version = QLabel(self._datasource.getSchemaVersion())
 
@@ -417,6 +483,10 @@ class DatasourceEditor(QWidget):
         self.ds_invert_normals.setChecked(self._datasource.getInvertNormals())
         self.ds_invert_normals.stateChanged.connect(self.update_invert_normals)
 
+        self.ds_bounding_box = RegionBoundsWidget(
+            self._path, self._datasources_paths)
+        self.ds_bounding_box.changed.connect(self.update_bounding_box)
+
         self.form_layout = QFormLayout()
         self.form_layout.addRow('Schema Version', self.ds_schema_version)
         self.form_layout.addRow('Type', self.ds_type)
@@ -427,8 +497,7 @@ class DatasourceEditor(QWidget):
         self.form_layout.addRow('Ink Label', self.ds_ink_label)
         self.form_layout.addRow('RGB Label', self.ds_rgb_label)
         self.form_layout.addRow('VC Texture Label', self.ds_vct_label)
-
-        # bounding box
+        self.form_layout.addRow('Bounding Box', self.ds_bounding_box)
 
         self.save_btn = QPushButton('Save')
         self.save_btn.clicked.connect(self.save)
@@ -448,6 +517,7 @@ class DatasourceEditor(QWidget):
         self.ds_ink_label.setEnabled(region)
         self.ds_invert_normals.setEnabled(region)
         self.ds_vct_label.setEnabled(region)
+        self.ds_bounding_box.setEnabled(region)
         self.save_btn.setEnabled(self._tainted)
 
     @Slot(bool)
@@ -471,6 +541,7 @@ class DatasourceEditor(QWidget):
     @Slot(str)
     def update_ppm(self, value: str):
         self._datasource.setPPM(value)
+        self.ds_bounding_box.setPPM(self._datasource.getPPM(True))
         self._tainted = True
         self.update_fields()
 
@@ -501,6 +572,12 @@ class DatasourceEditor(QWidget):
     @Slot(str)
     def update_vct_label(self, value: str):
         self._datasource.setVCTLabel(value)
+        self._tainted = True
+        self.update_fields()
+
+    @Slot(list)
+    def update_bounding_box(self, value: list):
+        self._datasource.setBoundingBox(value)
         self._tainted = True
         self.update_fields()
 
@@ -536,7 +613,7 @@ class DatasourceItem(QStandardItem):
         return QStandardItem.UserType + 2
 
     def editor(self, parent: QObject):
-        return DatasourceEditor(self.path, parent=parent)
+        return DatasourceEditor(self.path, self.model().datasources(), parent=parent)
 
 
 class DatasetModel(QStandardItemModel):
@@ -544,6 +621,7 @@ class DatasetModel(QStandardItemModel):
         super().__init__(parent)
         self._path = Path(filename)
         self._seen = []
+        self._datasources = []
         self._load_dataset(self.invisibleRootItem(), self._path)
         self.setHorizontalHeaderLabels(['Path'])
 
@@ -560,6 +638,7 @@ class DatasetModel(QStandardItemModel):
         if path.suffix == '.json':
             datasource_item = DatasourceItem(path)
             parent_item.appendRow(datasource_item)
+            self._datasources.append(str(path))
             return
         # Make sure this item hasn't been seen before, and mark it as seen now
         if str(path) in self._seen:
@@ -578,3 +657,6 @@ class DatasetModel(QStandardItemModel):
 
     def path(self):
         return self._path
+
+    def datasources(self):
+        return self._datasources
