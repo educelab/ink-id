@@ -2,17 +2,14 @@
 from __future__ import annotations
 
 import logging
-import os
 import re
 import struct
 from typing import Dict, Optional
 
 import numpy as np
-import requests
-from PIL import Image
 from tqdm import tqdm
-from urllib.parse import urlsplit
-from io import BytesIO
+
+import inkid.ops
 
 
 class PPM:
@@ -36,22 +33,6 @@ class PPM:
 
         if not lazy_load:
             self.ensure_loaded()
-
-    @staticmethod
-    def get_raw_data(filename):
-        url = urlsplit(filename)
-        if url.scheme in ('http', 'https'):
-            response = requests.get(filename)
-            if response.status_code != 200:
-                raise ValueError(f'Unable to fetch URL '
-                                 f'(code={response.status_code}): {filename}')
-            data = response.content
-        elif url.scheme == '':
-            with open(filename, 'rb') as f:
-                data = f.read()
-        else:
-            raise ValueError(f'Unsupported URL: {filename}')
-        return BytesIO(data)
 
     def is_loaded(self):
         return self._data is not None
@@ -78,7 +59,9 @@ class PPM:
         version_re = re.compile('^version')
         header_terminator_re = re.compile('^<>$')
 
-        data = PPM.get_raw_data(filename)
+        width, height, dim, ordered, val_type, version = [None] * 6
+
+        data = inkid.ops.get_raw_data_from_file_or_url(filename)
         while True:
             line = data.readline().decode('utf-8')
             if comments_re.match(line):
@@ -126,7 +109,7 @@ class PPM:
 
         self._data = np.empty((self.height, self.width, self._dim))
 
-        data = PPM.get_raw_data(self._path)
+        data = inkid.ops.get_raw_data_from_file_or_url(self._path)
         header_terminator_re = re.compile('^<>$')
         while True:
             line = data.readline().decode('utf-8')

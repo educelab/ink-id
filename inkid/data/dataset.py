@@ -19,9 +19,14 @@ class DataSource(ABC):
 
     def __init__(self, path: str) -> None:
         self.path = path
-        with open(path, 'r') as f:
-            source_json = json.load(f)
-            jsonschema.validate(source_json, inkid.ops.json_schema('dataSource0.1'))
+        source_file_contents, relative_url = inkid.ops.get_raw_data_from_file_or_url(path, return_relative_url=True)
+        source_json = json.load(source_file_contents)
+        # Validate JSON fits schema
+        jsonschema.validate(source_json, inkid.ops.json_schema('dataSource0.1'))
+        # Normalize paths in JSON
+        for key in ['volume', 'ppm', 'mask', 'ink_label', 'rgb_label', 'volcart_texture_label']:
+            if key in source_json:
+                source_json[key] = inkid.ops.normalize_path(source_json[key], relative_url)
         self._source_json = source_json
 
         self.feature_type: Optional[str] = None
@@ -32,9 +37,6 @@ class DataSource(ABC):
 
     def data_dict(self):
         return self._source_json
-
-    def make_path_absolute(self, path: str) -> str:
-        return os.path.abspath(os.path.join(os.path.dirname(self.path), path))
 
     @abstractmethod
     def __len__(self):
@@ -67,10 +69,6 @@ class RegionSource(DataSource):
 
         """
         super().__init__(path)
-
-        for key in ['ppm', 'volume', 'mask', 'ink_label', 'rgb_label', 'volcart_texture_label']:
-            if self._source_json[key] is not None:
-                self._source_json[key] = self.make_path_absolute(self._source_json[key])
 
         self._ppm: inkid.data.PPM = inkid.data.PPM.from_path(self._source_json['ppm'])
         self._volume: inkid.data.Volume = inkid.data.Volume.from_path(self._source_json['volume'])

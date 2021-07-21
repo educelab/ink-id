@@ -1,8 +1,12 @@
 """Miscellaneous operations used in ink-id."""
 
 import itertools
+from io import BytesIO
 import json
 import logging
+import requests
+from urllib.parse import urlsplit, urlunsplit
+
 import math
 import os
 import subprocess
@@ -222,3 +226,48 @@ def json_schema(schema_name):
     file_path = os.path.join(os.path.dirname(inkid.__file__), 'schemas', schema_name + '.schema.json')
     with open(file_path, 'r') as f:
         return json.load(f)
+
+
+def get_raw_data_from_file_or_url(filename, return_relative_url=False):
+    """Return the raw file contents from a filename or URL.
+
+    Supports absolute and relative file paths as well as the http and https
+    protocols.
+    """
+    url = urlsplit(filename)
+    if url.scheme in ('http', 'https'):
+        response = requests.get(filename)
+        if response.status_code != 200:
+            raise ValueError(f'Unable to fetch URL '
+                             f'(code={response.status_code}): {filename}')
+        data = response.content
+    elif url.scheme == '':
+        with open(filename, 'rb') as f:
+            data = f.read()
+    else:
+        raise ValueError(f'Unsupported URL: {filename}')
+    relative_url = (url.scheme,
+                    url.netloc,
+                    os.path.dirname(url.path),
+                    url.query,
+                    url.fragment)
+    if return_relative_url:
+        return BytesIO(data), relative_url
+    else:
+        return BytesIO(data)
+
+
+def normalize_path(path, relative_url):
+    url = urlsplit(path)
+    # Leave existing URLs and absolute file paths alone
+    if url.scheme != '' or os.path.isabs(path):
+        return path
+    # For all others, we generate a new URL relative to the
+    # region set file itself. This handles all schemas as well
+    # as regular file paths.
+    new_url = list(relative_url)
+    new_url[2] = os.path.abspath(os.path.join(
+        new_url[2],
+        path
+    ))
+    return urlunsplit(new_url)
