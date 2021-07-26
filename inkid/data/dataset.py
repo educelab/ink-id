@@ -50,6 +50,11 @@ class DataSource(ABC):
     def from_path(path: str) -> DataSource:
         with open(path, 'r') as f:
             source_json = json.load(f)
+        if 'ppms' in source_json and 'regions' in source_json:
+            raise ValueError(f'Source file {path} uses the deprecated region set file format. '
+                             f'Please convert it to the updated data source format. '
+                             f'The following script can be used: \n\n'
+                             f'\tpython inkid/scripts/update_data_file.py {path}')
         if source_json.get('type') == 'region':
             return RegionSource(path)
         elif source_json.get('type') == 'volume':
@@ -320,6 +325,7 @@ class Dataset(torch.utils.data.Dataset):
         which allows direct input to a model.
 
     """
+
     def __init__(self, source_paths: List[str]) -> None:
         """Initialize the dataset given .json data source and/or .txt dataset paths.
 
