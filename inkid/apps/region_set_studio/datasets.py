@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Optional, List
 from PySide6.QtCore import QObject, Slot, Signal, Qt
 from PySide6.QtGui import QStandardItemModel, QStandardItem, QPixmap, QPen, QBrush
-from PySide6.QtWidgets import QTreeView, QAbstractItemView, QWidget, QVBoxLayout, QListWidget, QPushButton, QHBoxLayout, QFileDialog, QMessageBox, QGraphicsView, QSplitter, QFormLayout, QComboBox, QLabel, QCheckBox, QDialog, QGraphicsScene, QListWidgetItem, QGraphicsRectItem, QFrame, QGroupBox
+from PySide6.QtWidgets import QTreeView, QAbstractItemView, QWidget, QVBoxLayout, QListWidget, QPushButton, QHBoxLayout, QFileDialog, QMessageBox, QGraphicsView, QSplitter, QFormLayout, QComboBox, QLabel, QCheckBox, QDialog, QGraphicsScene, QListWidgetItem, QGraphicsRectItem, QFrame, QGroupBox, QSpinBox, QGraphicsItem
 
 
 def parse_ppm_header(filename):
@@ -420,6 +420,17 @@ class FileBrowserWidget(QWidget):
         self.changed.emit(self.value)
 
 
+class BoundingBoxGraphicsRect(QGraphicsRectItem):
+    def __init__(self):
+        super().__init__()
+        # self.setAcceptHoverEvents(True)
+        # self.setFlag(QGraphicsItem.ItemIsMovable, True)
+
+    def change_pos(self, x1, y1, x2, y2):
+        self.prepareGeometryChange()
+        self.setRect(x1, y1, x2 - x1, y2 - y1)
+
+
 class RegionBoundsDialog(QDialog):
     def __init__(self, parent, datasource: Datasource, ghosts: list):
         super().__init__(parent, Qt.Dialog)
@@ -444,6 +455,47 @@ class RegionBoundsDialog(QDialog):
         scene.setBackgroundBrush(QBrush(Qt.gray))
         scene.addRect(scene.sceneRect(), QPen(Qt.NoPen), QBrush(Qt.white))
         self.pixmap_item = scene.addPixmap(pixmap)
+
+        bbox_pen = QPen()
+        bbox_pen.setColor(Qt.green)
+        self.bounding_box_gfx = BoundingBoxGraphicsRect()
+        self.bounding_box_gfx.setPen(bbox_pen)
+
+        group_bounds = QGroupBox('Bounding Box')
+        bounds_layout = QFormLayout()
+        self.bounds_x1 = QSpinBox()
+        self.bounds_x1.setMaximum(self._ppm_data['width'] - 2)
+        self.bounds_x1.valueChanged.connect(self.change_pos)
+        self.bounds_y1 = QSpinBox()
+        self.bounds_y1.setMaximum(self._ppm_data['height'] - 2)
+        self.bounds_y1.valueChanged.connect(self.change_pos)
+        self.bounds_x2 = QSpinBox()
+        self.bounds_x2.setMaximum(self._ppm_data['width'] - 1)
+        self.bounds_x2.valueChanged.connect(self.change_pos)
+        self.bounds_y2 = QSpinBox()
+        self.bounds_y2.setMaximum(self._ppm_data['height'] - 1)
+        self.bounds_y2.valueChanged.connect(self.change_pos)
+        existing_bounds = self._datasource.getBoundingBox()
+        if existing_bounds is None:
+            self.bounds_x1.setValue(0)
+            self.bounds_y1.setValue(0)
+            self.bounds_x2.setValue(self._ppm_data['width'])
+            self.bounds_x2.setMinimum(1)
+            self.bounds_y2.setValue(self._ppm_data['height'])
+            self.bounds_y2.setMinimum(1)
+        else:
+            bx, by, bx2, by2 = existing_bounds
+            self.bounds_x1.setValue(bx)
+            self.bounds_y1.setValue(by)
+            self.bounds_x2.setValue(bx2)
+            self.bounds_x2.setMinimum(bx + 1)
+            self.bounds_y2.setValue(by2)
+            self.bounds_y2.setMinimum(by + 1)
+        bounds_layout.addRow('Left', self.bounds_x1)
+        bounds_layout.addRow('Top', self.bounds_y1)
+        bounds_layout.addRow('Right', self.bounds_x2)
+        bounds_layout.addRow('Bottom', self.bounds_y2)
+        group_bounds.setLayout(bounds_layout)
 
         underlay_list = QListWidget()
         underlay_list.currentItemChanged.connect(
@@ -486,12 +538,15 @@ class RegionBoundsDialog(QDialog):
             except DatasetError:
                 pass
 
+        scene.addItem(self.bounding_box_gfx)
+
         group_ghosts = QGroupBox('Ghosts')
         ghost_layout = QVBoxLayout()
         ghost_layout.addWidget(ghost_list)
         group_ghosts.setLayout(ghost_layout)
 
         v_layout = QVBoxLayout()
+        v_layout.addWidget(group_bounds)
         v_layout.addWidget(group_underlays)
         v_layout.addWidget(group_ghosts)
         v_layout.addLayout(btns_layout)
@@ -537,8 +592,27 @@ class RegionBoundsDialog(QDialog):
     def action_cancel(self, checked: bool = False):
         self.reject()
 
+    def _update_rect_size_constraints(self):
+        self.bounds_x1.setMinimum(0)
+        self.bounds_x1.setMaximum(self._ppm_data['width'] - 2)
+
+        self.bounds_y1.setMinimum(0)
+        self.bounds_y1.setMaximum(self._ppm_data['height'] - 2)
+
+        self.bounds_x2.setMinimum(self.bounds_x1.value() + 1)
+        self.bounds_x2.setMaximum(self._ppm_data['width'] - 1)
+
+        self.bounds_y2.setMinimum(self.bounds_y1.value() + 1)
+        self.bounds_y2.setMaximum(self._ppm_data['height'] - 1)
+
+    @Slot(int)
+    def change_pos(self, value):
+        self._update_rect_size_constraints()
+        self.bounding_box_gfx.change_pos(self.bounds_x1.value(
+        ), self.bounds_y1.value(), self.bounds_x2.value(), self.bounds_y2.value())
+
     def value(self):
-        return [10, 20, 30, 40]  # TODO
+        return [self.bounds_x1.value(), self.bounds_y1.value(), self.bounds_x2.value(), self.bounds_y2.value()]
 
 
 class RegionBoundsWidget(QWidget):
