@@ -3,11 +3,53 @@
 import os
 import json
 from json.decoder import JSONDecodeError
+import re
 from pathlib import Path
 from typing import Optional, List
 from PySide6.QtCore import QObject, Slot, Signal, Qt
-from PySide6.QtGui import QStandardItemModel, QStandardItem
-from PySide6.QtWidgets import QTreeView, QAbstractItemView, QWidget, QVBoxLayout, QListWidget, QPushButton, QHBoxLayout, QFileDialog, QMessageBox, QGraphicsView, QSplitter, QFormLayout, QComboBox, QLabel, QCheckBox
+from PySide6.QtGui import QStandardItemModel, QStandardItem, QPixmap, QPen, QBrush
+from PySide6.QtWidgets import QTreeView, QAbstractItemView, QWidget, QVBoxLayout, QListWidget, QPushButton, QHBoxLayout, QFileDialog, QMessageBox, QGraphicsView, QSplitter, QFormLayout, QComboBox, QLabel, QCheckBox, QDialog, QGraphicsScene, QListWidgetItem, QGraphicsRectItem, QFrame, QGroupBox
+
+
+def parse_ppm_header(filename):
+    comments_re = re.compile('^#')
+    width_re = re.compile('^width')
+    height_re = re.compile('^height')
+    dim_re = re.compile('^dim')
+    ordered_re = re.compile('^ordered')
+    type_re = re.compile('^type')
+    version_re = re.compile('^version')
+    header_terminator_re = re.compile('^<>$')
+
+    with open(filename, 'rb') as f:
+        while True:
+            line = f.readline().decode('utf-8')
+            if comments_re.match(line):
+                pass
+            elif width_re.match(line):
+                width = int(line.split(': ')[1])
+            elif height_re.match(line):
+                height = int(line.split(': ')[1])
+            elif dim_re.match(line):
+                dim = int(line.split(': ')[1])
+            elif ordered_re.match(line):
+                ordered = line.split(': ')[1].strip() == 'true'
+            elif type_re.match(line):
+                val_type = line.split(': ')[1].strip()
+                assert val_type in ['double']
+            elif version_re.match(line):
+                version = line.split(': ')[1].strip()
+            elif header_terminator_re.match(line):
+                break
+
+    return {
+        'width': width,
+        'height': height,
+        'dim': dim,
+        'ordered': ordered,
+        'type': val_type,
+        'version': version
+    }
 
 
 class DatasetError(RuntimeError):
@@ -378,6 +420,127 @@ class FileBrowserWidget(QWidget):
         self.changed.emit(self.value)
 
 
+class RegionBoundsDialog(QDialog):
+    def __init__(self, parent, datasource: Datasource, ghosts: list):
+        super().__init__(parent, Qt.Dialog)
+        self._datasource = datasource
+        self._ghosts = ghosts
+        self._ppm_data = parse_ppm_header(self._datasource.getPPM(True))
+
+        self.setWindowTitle('Edit Bounding Box')
+
+        btn_apply = QPushButton('Apply')
+        btn_apply.clicked.connect(self.action_apply)
+        btn_cancel = QPushButton('Cancel')
+        btn_cancel.clicked.connect(self.action_cancel)
+        btns_layout = QHBoxLayout()
+        btns_layout.addWidget(btn_apply)
+        btns_layout.addWidget(btn_cancel)
+
+        pixmap = QPixmap()
+        scene = QGraphicsScene()
+        scene.setSceneRect(
+            0, 0, self._ppm_data['width'], self._ppm_data['height'])
+        scene.setBackgroundBrush(QBrush(Qt.gray))
+        scene.addRect(scene.sceneRect(), QPen(Qt.NoPen), QBrush(Qt.white))
+        self.pixmap_item = scene.addPixmap(pixmap)
+
+        underlay_list = QListWidget()
+        underlay_list.currentItemChanged.connect(
+            self.underlay_selection_changed)
+        for underlay in [self._datasource.getMask(True), self._datasource.getInkLabel(True), self._datasource.getRGBLabel(True)]:
+            if underlay is None:
+                continue
+            relpath = self._datasource.makeRelative(underlay)
+            item = QListWidgetItem(relpath)
+            pixmap = QPixmap(underlay)
+            item.setData(Qt.UserRole + 1, pixmap)
+            underlay_list.addItem(item)
+
+        group_underlays = QGroupBox('Visualization Underlays')
+        underlay_layout = QVBoxLayout()
+        underlay_layout.addWidget(underlay_list)
+        group_underlays.setLayout(underlay_layout)
+
+        ghost_list = QListWidget()
+        ghost_list.itemChanged.connect(self.ghost_changed)
+        ghost_list.currentItemChanged.connect(self.ghost_selection_changed)
+        self.ghost_pen = QPen()
+        self.ghost_pen.setColor(Qt.red)
+        self.ghost_pen_selected = QPen()
+        self.ghost_pen_selected.setColor(Qt.blue)
+        for ghost_path in self._ghosts:
+            try:
+                ds = Datasource.fromPath(ghost_path)
+                relpath = self._datasource.makeRelative(ghost_path)
+                item = QListWidgetItem(f'{ds.getBoundingBox()} from {relpath}')
+                item.setCheckState(Qt.Checked)
+                ghost_list.addItem(item)
+
+                bx, by, bx2, by2 = ds.getBoundingBox()
+
+                rect = QGraphicsRectItem(bx, by, bx2 - bx, by2 - by)
+                rect.setPen(self.ghost_pen)
+                scene.addItem(rect)
+                item.setData(Qt.UserRole + 1, rect)
+            except DatasetError:
+                pass
+
+        group_ghosts = QGroupBox('Ghosts')
+        ghost_layout = QVBoxLayout()
+        ghost_layout.addWidget(ghost_list)
+        group_ghosts.setLayout(ghost_layout)
+
+        v_layout = QVBoxLayout()
+        v_layout.addWidget(group_underlays)
+        v_layout.addWidget(group_ghosts)
+        v_layout.addLayout(btns_layout)
+
+        generic = QWidget()
+        generic.setLayout(v_layout)
+
+        gfx = QGraphicsView()
+        gfx.setScene(scene)
+
+        splitter = QSplitter()
+        splitter.addWidget(gfx)
+        splitter.addWidget(generic)
+
+        h_layout = QHBoxLayout()
+        h_layout.addWidget(splitter)
+        self.setLayout(h_layout)
+
+    @Slot(QListWidgetItem)
+    def ghost_changed(self, item: QListWidgetItem):
+        checked = item.checkState() == Qt.Checked
+        data = item.data(Qt.UserRole + 1)
+        data.setVisible(checked)
+
+    @Slot(QListWidgetItem, QListWidgetItem)
+    def ghost_selection_changed(self, current: QListWidgetItem, previous: QListWidgetItem):
+        if previous is not None:
+            data = previous.data(Qt.UserRole + 1)
+            data.setPen(self.ghost_pen)
+        data = current.data(Qt.UserRole + 1)
+        data.setPen(self.ghost_pen_selected)
+
+    @Slot(QListWidgetItem, QListWidgetItem)
+    def underlay_selection_changed(self, current: QListWidgetItem, previous: QListWidgetItem):
+        data = current.data(Qt.UserRole + 1)
+        self.pixmap_item.setPixmap(data)
+
+    @Slot(bool)
+    def action_apply(self, checked: bool = False):
+        self.accept()
+
+    @Slot(bool)
+    def action_cancel(self, checked: bool = False):
+        self.reject()
+
+    def value(self):
+        return [10, 20, 30, 40]  # TODO
+
+
 class RegionBoundsWidget(QWidget):
     changed = Signal(list)
 
@@ -428,10 +591,12 @@ class RegionBoundsWidget(QWidget):
 
     @Slot(bool)
     def edit_bounds(self, checked: bool = False):
-        self.value = [1, 2, 3, 4]  # TODO
-        self.label.setText(str(self.value))
-        self.remove_btn.setVisible(True)
-        self.changed.emit(self.value)
+        dialog = RegionBoundsDialog(self, self.datasource, self._ghosts)
+        if dialog.exec() == QDialog.Accepted:
+            self.value = dialog.value()
+            self.label.setText(str(self.value))
+            self.remove_btn.setVisible(True)
+            self.changed.emit(self.value)
 
     @Slot(bool)
     def remove_bounds(self, checked: bool = False):
