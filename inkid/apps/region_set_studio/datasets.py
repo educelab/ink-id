@@ -381,12 +381,10 @@ class FileBrowserWidget(QWidget):
 class RegionBoundsWidget(QWidget):
     changed = Signal(list)
 
-    def __init__(self, path: Path, datasources_paths: list):
+    def __init__(self, datasource: Datasource, datasources_paths: list):
         super().__init__()
-        self.path = path
+        self.datasource = datasource
         self.datasources_paths = datasources_paths
-        datasource = Datasource.fromPath(path)
-        self.ppm = datasource.getPPM(True)
         self.value = datasource.getBoundingBox()
         self._update_ghosts()
 
@@ -400,13 +398,14 @@ class RegionBoundsWidget(QWidget):
         h_layout.addWidget(self.edit_btn)
         h_layout.addWidget(self.remove_btn)
         h_layout.setContentsMargins(0, 0, 0, 0)
-        self.edit_btn.setEnabled(self.ppm is not None)
+        self.edit_btn.setEnabled(self.datasource.getPPM() is not None)
         self.remove_btn.setVisible(self.value is not None)
         self.setLayout(h_layout)
 
     def _update_ghosts(self):
         ghosts = []
-        if self.ppm is None:
+        ppm = self.datasource.getPPM(True)
+        if ppm is None:
             self._ghosts = ghosts
             return
         for ds_path in self.datasources_paths:
@@ -416,17 +415,16 @@ class RegionBoundsWidget(QWidget):
             except DatasetError:
                 continue
             # We skip ourself also
-            if ds.getPath() == self.path:
+            if ds.getPath() == self.datasource.getPath():
                 continue
             # We add datasets which have a PPM matching us
-            if self.ppm == ds.getPPM(True):
+            if ppm == ds.getPPM(True):
                 ghosts.append(ds_path)
         self._ghosts = ghosts
 
-    def setPPM(self, ppm_path: str):
-        self.ppm = ppm_path
+    def ppm_changed(self):
+        self.edit_btn.setEnabled(self.datasource.getPPM() is not None)
         self._update_ghosts()
-        self.edit_btn.setEnabled(self.ppm is not None)
 
     @Slot(bool)
     def edit_bounds(self, checked: bool = False):
@@ -484,7 +482,7 @@ class DatasourceEditor(QWidget):
         self.ds_invert_normals.stateChanged.connect(self.update_invert_normals)
 
         self.ds_bounding_box = RegionBoundsWidget(
-            self._path, self._datasources_paths)
+            self._datasource, self._datasources_paths)
         self.ds_bounding_box.changed.connect(self.update_bounding_box)
 
         self.form_layout = QFormLayout()
@@ -541,7 +539,7 @@ class DatasourceEditor(QWidget):
     @Slot(str)
     def update_ppm(self, value: str):
         self._datasource.setPPM(value)
-        self.ds_bounding_box.setPPM(self._datasource.getPPM(True))
+        self.ds_bounding_box.ppm_changed()
         self._tainted = True
         self.update_fields()
 
