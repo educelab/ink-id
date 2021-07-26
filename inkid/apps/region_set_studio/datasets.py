@@ -497,8 +497,8 @@ class RegionBoundsDialog(QDialog):
         bounds_layout.addRow('Bottom', self.bounds_y2)
         group_bounds.setLayout(bounds_layout)
 
-        underlay_list = QListWidget()
-        underlay_list.currentItemChanged.connect(
+        self.underlay_list = QListWidget()
+        self.underlay_list.currentItemChanged.connect(
             self.underlay_selection_changed)
         for underlay in [self._datasource.getMask(True), self._datasource.getInkLabel(True), self._datasource.getRGBLabel(True)]:
             if underlay is None:
@@ -507,11 +507,15 @@ class RegionBoundsDialog(QDialog):
             item = QListWidgetItem(relpath)
             pixmap = QPixmap(underlay)
             item.setData(Qt.UserRole + 1, pixmap)
-            underlay_list.addItem(item)
+            self.underlay_list.addItem(item)
+
+        self.browse_viz = QPushButton('Browse underlay images...')
+        self.browse_viz.clicked.connect(self.browse_underlays)
 
         group_underlays = QGroupBox('Visualization Underlays')
         underlay_layout = QVBoxLayout()
-        underlay_layout.addWidget(underlay_list)
+        underlay_layout.addWidget(self.browse_viz)
+        underlay_layout.addWidget(self.underlay_list)
         group_underlays.setLayout(underlay_layout)
 
         ghost_list = QListWidget()
@@ -604,6 +608,26 @@ class RegionBoundsDialog(QDialog):
 
         self.bounds_y2.setMinimum(self.bounds_y1.value() + 1)
         self.bounds_y2.setMaximum(self._ppm_data['height'] - 1)
+
+    @Slot(bool)
+    def browse_underlays(self, checked: bool = False):
+        filenames = QFileDialog.getOpenFileNames(self, 'Browse Images', str(self._datasource.getPath(
+        ).parents[0]), 'Image Files (*.png *.tif *.tiff *.jpg *.jpeg)')[0]
+        cnt = self.underlay_list.count()
+        for filename in filenames:
+            relpath = self._datasource.makeRelative(filename)
+            found_dup = False
+            for i in range(cnt):
+                x = self.underlay_list.item(i)
+                if x.text() == relpath:
+                    found_dup = True
+            if found_dup:
+                continue
+            item = QListWidgetItem(relpath)
+            pixmap = QPixmap(filename).copy(
+                0, 0, self._ppm_data['width'], self._ppm_data['height'])
+            item.setData(Qt.UserRole + 1, pixmap)
+            self.underlay_list.addItem(item)
 
     @Slot(int)
     def change_pos(self, value):
