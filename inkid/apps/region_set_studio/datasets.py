@@ -437,16 +437,25 @@ class RegionBoundsDialog(QDialog):
         self._datasource = datasource
         self._ghosts = ghosts
         self._ppm_data = parse_ppm_header(self._datasource.getPPM(True))
+        self._tainted = False
+        self._have_saved = False
+        self._selected_ghost_path = None
+        self._ghost_edit_on_close = False
 
         self.setWindowTitle('Edit Bounding Box')
 
-        btn_apply = QPushButton('Apply')
-        btn_apply.clicked.connect(self.action_apply)
-        btn_cancel = QPushButton('Cancel')
-        btn_cancel.clicked.connect(self.action_cancel)
+        self.btn_apply = QPushButton('Apply')
+        self.btn_apply.setEnabled(False)
+        self.btn_apply.clicked.connect(self.action_apply)
+        btn_close = QPushButton('Close')
+        btn_close.clicked.connect(self.action_close)
+        self.btn_close_edit_ghost = QPushButton('Close && Edit Ghost')
+        self.btn_close_edit_ghost.setEnabled(False)
+        self.btn_close_edit_ghost.clicked.connect(self.action_close_edit_ghost)
         btns_layout = QHBoxLayout()
-        btns_layout.addWidget(btn_apply)
-        btns_layout.addWidget(btn_cancel)
+        btns_layout.addWidget(self.btn_apply)
+        btns_layout.addWidget(btn_close)
+        btns_layout.addWidget(self.btn_close_edit_ghost)
 
         pixmap = QPixmap()
         scene = QGraphicsScene()
@@ -479,11 +488,14 @@ class RegionBoundsDialog(QDialog):
         if existing_bounds is None:
             self.bounds_x1.setValue(0)
             self.bounds_y1.setValue(0)
-            self.bounds_x2.setValue(self._ppm_data['width'])
+            self.bounds_x2.setValue(self._ppm_data['width'] - 1)
             self.bounds_x2.setMinimum(1)
-            self.bounds_y2.setValue(self._ppm_data['height'])
+            self.bounds_y2.setValue(self._ppm_data['height'] - 1)
             self.bounds_y2.setMinimum(1)
+            self._saved_value = [
+                0, 0, self._ppm_data['width'] - 1, self._ppm_data['height'] - 1]
         else:
+            self._saved_value = existing_bounds
             bx, by, bx2, by2 = existing_bounds
             self.bounds_x1.setValue(bx)
             self.bounds_y1.setValue(by)
@@ -491,6 +503,13 @@ class RegionBoundsDialog(QDialog):
             self.bounds_x2.setMinimum(bx + 1)
             self.bounds_y2.setValue(by2)
             self.bounds_y2.setMinimum(by + 1)
+            # Reset taint in this case when setting existing bounds so it
+            # doesn't trigger the "Apply" button when no real change has been
+            # made. When no bounds exist (the other section of this if
+            # condition), we leave the save button for the auto-generated
+            # bounds.
+            self._tainted = False
+            self.btn_apply.setEnabled(False)
         bounds_layout.addRow('Left', self.bounds_x1)
         bounds_layout.addRow('Top', self.bounds_y1)
         bounds_layout.addRow('Right', self.bounds_x2)
@@ -539,6 +558,7 @@ class RegionBoundsDialog(QDialog):
                 rect.setPen(self.ghost_pen)
                 scene.addItem(rect)
                 item.setData(Qt.UserRole + 1, rect)
+                item.setData(Qt.UserRole + 2, ghost_path)
             except DatasetError:
                 pass
 
@@ -567,6 +587,7 @@ class RegionBoundsDialog(QDialog):
 
         h_layout = QHBoxLayout()
         h_layout.addWidget(splitter)
+
         self.setLayout(h_layout)
 
     @Slot(QListWidgetItem)
@@ -580,8 +601,15 @@ class RegionBoundsDialog(QDialog):
         if previous is not None:
             data = previous.data(Qt.UserRole + 1)
             data.setPen(self.ghost_pen)
-        data = current.data(Qt.UserRole + 1)
-        data.setPen(self.ghost_pen_selected)
+        if current is not None:
+            data = current.data(Qt.UserRole + 1)
+            data.setPen(self.ghost_pen_selected)
+            full_path = current.data(Qt.UserRole + 2)
+            self._selected_ghost_path = current.data(Qt.UserRole + 2)
+            self.btn_close_edit_ghost.setEnabled(True)
+        else:
+            self._selected_ghost_path = None
+            self.btn_close_edit_ghost.setEnabled(False)
 
     @Slot(QListWidgetItem, QListWidgetItem)
     def underlay_selection_changed(self, current: QListWidgetItem, previous: QListWidgetItem):
@@ -590,11 +618,39 @@ class RegionBoundsDialog(QDialog):
 
     @Slot(bool)
     def action_apply(self, checked: bool = False):
-        self.accept()
+        self._have_saved = True
+        self._saved_value = [self.bounds_x1.value(), self.bounds_y1.value(
+        ), self.bounds_x2.value(), self.bounds_y2.value()]
+        self._tainted = False
+        self.btn_apply.setEnabled(False)
+
+    def _safe_to_close(self) -> bool:
+        if self._tainted:
+            discard_yorn = QMessageBox.question(self, 'Discard unsaved changes?',
+                                                'You have unsaved changes. Are you sure you want to discard them?')
+            if discard_yorn == QMessageBox.No:
+                return False
+        return True
+
+    def _close_dialog(self):
+        # Change return code depending if we have saved or not
+        if self._have_saved:
+            self.accept()
+        else:
+            self.reject()
 
     @Slot(bool)
-    def action_cancel(self, checked: bool = False):
-        self.reject()
+    def action_close(self, checked: bool = False):
+        if not self._safe_to_close():
+            return
+        self._close_dialog()
+
+    @Slot(bool)
+    def action_close_edit_ghost(self, checked: bool = False):
+        if not self._safe_to_close():
+            return
+        self._ghost_edit_on_close = True
+        self._close_dialog()
 
     def _update_rect_size_constraints(self):
         self.bounds_x1.setMinimum(0)
@@ -631,16 +687,22 @@ class RegionBoundsDialog(QDialog):
 
     @Slot(int)
     def change_pos(self, value):
+        self._tainted = True
+        self.btn_apply.setEnabled(True)
         self._update_rect_size_constraints()
         self.bounding_box_gfx.change_pos(self.bounds_x1.value(
         ), self.bounds_y1.value(), self.bounds_x2.value(), self.bounds_y2.value())
 
     def value(self):
-        return [self.bounds_x1.value(), self.bounds_y1.value(), self.bounds_x2.value(), self.bounds_y2.value()]
+        return self._saved_value
+
+    def ghost_to_edit(self):
+        return self._selected_ghost_path if self._ghost_edit_on_close else None
 
 
 class RegionBoundsWidget(QWidget):
     changed = Signal(list)
+    edit_ghost = Signal(str)
 
     def __init__(self, datasource: Datasource, datasources_paths: list):
         super().__init__()
@@ -662,6 +724,10 @@ class RegionBoundsWidget(QWidget):
         self.edit_btn.setEnabled(self.datasource.getPPM() is not None)
         self.remove_btn.setVisible(self.value is not None)
         self.setLayout(h_layout)
+
+    def launch_bounds_editor(self):
+        if self.edit_btn.isEnabled():
+            self.edit_bounds()
 
     def _update_ghosts(self):
         ghosts = []
@@ -695,6 +761,9 @@ class RegionBoundsWidget(QWidget):
             self.label.setText(str(self.value))
             self.remove_btn.setVisible(True)
             self.changed.emit(self.value)
+        ghost_to_edit = dialog.ghost_to_edit()
+        if ghost_to_edit is not None:
+            self.edit_ghost.emit(str(ghost_to_edit))
 
     @Slot(bool)
     def remove_bounds(self, checked: bool = False):
@@ -705,6 +774,8 @@ class RegionBoundsWidget(QWidget):
 
 
 class DatasourceEditor(QWidget):
+    switch_editors = Signal(str)
+
     def __init__(self, path: Path, datasources_paths: list, parent: Optional[QObject]):
         super().__init__(parent)
         self._path = path
@@ -747,6 +818,7 @@ class DatasourceEditor(QWidget):
         self.ds_bounding_box = RegionBoundsWidget(
             self._datasource, self._datasources_paths)
         self.ds_bounding_box.changed.connect(self.update_bounding_box)
+        self.ds_bounding_box.edit_ghost.connect(self.switch_files)
 
         self.form_layout = QFormLayout()
         self.form_layout.addRow('Schema Version', self.ds_schema_version)
@@ -769,6 +841,9 @@ class DatasourceEditor(QWidget):
 
         self.update_fields()
         self.setLayout(v_layout)
+
+    def launch_bounds_editor(self):
+        self.ds_bounding_box.launch_bounds_editor()
 
     def update_fields(self):
         region = True if self._datasource.getType() == 'region' else False
@@ -842,6 +917,15 @@ class DatasourceEditor(QWidget):
         self._tainted = True
         self.update_fields()
 
+    @Slot(str)
+    def switch_files(self, filename: str):
+        if self._tainted:
+            save_yorn = QMessageBox.question(self, 'Save changes?',
+                                             'You are about to edit a different file, but you have unsaved changes. Would you like to save these changes before leaving?')
+            if save_yorn == QMessageBox.Yes:
+                self.save()
+        self.switch_editors.emit(filename)
+
     def tainted(self):
         return self._tainted
 
@@ -883,6 +967,7 @@ class DatasetModel(QStandardItemModel):
         self._path = Path(filename)
         self._seen = []
         self._datasources = []
+        self._datasource_index_map = {}
         self._load_dataset(self.invisibleRootItem(), self._path)
         self.setHorizontalHeaderLabels(['Path'])
 
@@ -900,6 +985,7 @@ class DatasetModel(QStandardItemModel):
             datasource_item = DatasourceItem(path)
             parent_item.appendRow(datasource_item)
             self._datasources.append(str(path))
+            self._datasource_index_map[str(path)] = datasource_item.index()
             return
         # Make sure this item hasn't been seen before, and mark it as seen now
         if str(path) in self._seen:
@@ -915,6 +1001,11 @@ class DatasetModel(QStandardItemModel):
                         line.strip()), relative_to=path.parents[0])
         except OSError as os_err:
             raise DatasetError(os_err) from os_err
+
+    def path_to_index(self, path: str):
+        if path not in self._datasource_index_map:
+            return None
+        return self._datasource_index_map[path]
 
     def path(self):
         return self._path

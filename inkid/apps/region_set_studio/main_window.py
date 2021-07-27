@@ -4,7 +4,7 @@ from pathlib import Path
 from PySide6.QtCore import Slot, Qt, QModelIndex
 from PySide6.QtGui import QKeySequence
 from PySide6.QtWidgets import QMainWindow, QFileDialog, QSplitter, QMessageBox
-from .datasets import DatasetModel, DatasetTreeView, DatasetError, DatasetEditor
+from .datasets import DatasetModel, DatasetTreeView, DatasetError, DatasetEditor, DatasourceEditor
 
 
 class MainWindow(QMainWindow):
@@ -124,19 +124,33 @@ class MainWindow(QMainWindow):
         self.action_close_dataset()
         self._load_dataset(filename)
 
-    @Slot(QModelIndex)
-    def open_editor(self, index):
-        if not self._safe_to_close():
-            return
+    def _open_editor_common(self, index: QModelIndex, open_bounds_editor: bool = False):
         item = self.dataset_model.itemFromIndex(index)
         try:
             editor = item.editor(self)
         except DatasetError as err:
             QMessageBox.critical(self, 'Error loading editor', str(err))
             return
+        self.dataset_tree.setCurrentIndex(index)
         if isinstance(editor, DatasetEditor):
             editor.saved.connect(self.reload_dataset)
+        elif isinstance(editor, DatasourceEditor):
+            editor.switch_editors.connect(self.switch_editors)
         if (self.splitter.count() > 1):
             self.splitter.replaceWidget(1, editor)
         else:
             self.splitter.addWidget(editor)
+        if open_bounds_editor and isinstance(editor, DatasourceEditor):
+            editor.launch_bounds_editor()
+
+    @Slot(QModelIndex)
+    def open_editor(self, index):
+        if not self._safe_to_close():
+            return
+        self._open_editor_common(index)
+
+    @Slot(str)
+    def switch_editors(self, filename: str):
+        index = self.dataset_model.path_to_index(filename)
+        if index is not None:
+            self._open_editor_common(index, open_bounds_editor=True)
