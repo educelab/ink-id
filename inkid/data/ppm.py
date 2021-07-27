@@ -94,14 +94,14 @@ class PPM:
         }
 
     def load_ppm_data(self):
-        """Read a PPM file and store the data in the PPM object.
+        """Read the PPM file data and store the it in the PPM object.
 
         The data is stored in an internal array indexed by [y, x, idx]
         where idx is an index into an array of size dim.
 
         Example: For a PPM of dimension 6 to store 3D points and
         normals, the first component of the normal vector for the PPM
-        origin would be at self._data[0, 0, 3]. TODO update
+        origin would be at self._data[0, 0, 3].
 
         """
         logging.info(f'Loading PPM data for {self._path} with width {self.width}, '
@@ -127,41 +127,6 @@ class PPM:
     def get_point_with_normal(self, ppm_x, ppm_y):
         self.ensure_loaded()
         return self._data[ppm_y][ppm_x]
-
-    # TODO reimplement model_3d_to_2d with new dataset thing. make sure square corners use shape_microns
-    # def point_to_subvolume(self, point, subvolume_shape_voxels, subvolume_shape_microns,
-    #                        out_of_bounds=None, move_along_normal=None,
-    #                        jitter_max=None, augment_subvolume=None,
-    #                        method=None, normalize=None,
-    #                        model_3d_to_2d=None):
-    #     ppm_x, ppm_y = point
-    #     x, y, z, n_x, n_y, n_z = self.get_point_with_normal(ppm_x, ppm_y)
-    #     square_corners = None
-    #     if model_3d_to_2d:
-    #         square_corners = []
-    #         y_d, x_d = np.array([subvolume_shape_voxels[1], subvolume_shape_voxels[2]]) // 2
-    #         if 0 <= x - x_d and x + x_d < self._width and 0 <= y - y_d and y + y_d < self._height:
-    #             # Top left
-    #             square_corners.append(self.get_point_with_normal(ppm_x - x_d, ppm_y - y_d)[0:3])
-    #             # Top right
-    #             square_corners.append(self.get_point_with_normal(ppm_x + x_d, ppm_y - y_d)[0:3])
-    #             # Bottom left
-    #             square_corners.append(self.get_point_with_normal(ppm_x - x_d, ppm_y + y_d)[0:3])
-    #             # Bottom right
-    #             square_corners.append(self.get_point_with_normal(ppm_x + x_d, ppm_y + y_d)[0:3])
-    #     return self._volume.get_subvolume(
-    #         (x, y, z),
-    #         subvolume_shape_voxels,
-    #         subvolume_shape_microns,
-    #         normal=(n_x, n_y, n_z),
-    #         out_of_bounds=out_of_bounds,
-    #         move_along_normal=move_along_normal,
-    #         jitter_max=jitter_max,
-    #         augment_subvolume=augment_subvolume,
-    #         method=method,
-    #         normalize=normalize,
-    #         square_corners=square_corners,
-    #     )
 
     def scale_down_by(self, scale_factor):
         self.ensure_loaded()

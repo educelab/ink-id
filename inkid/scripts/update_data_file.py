@@ -1,6 +1,18 @@
+"""Script to update a provided data file to the latest format.
+
+The data source files now have schema version numbers, so an outdated data source file will be updated to the latest.
+
+The older region set file format could specify multiple regions across multiple PPMs. When a region set file is
+provided, a new data source file is created for each of the regions in that file, and a dataset file is created for
+each of the training, validation, and prediction sets defined in the region set file.
+
+"""
+
 import argparse
 import json
 import os
+
+from jsmin import jsmin
 
 import inkid
 
@@ -67,9 +79,14 @@ def main():
 
     if file_extension == '.json':
         raw_data = inkid.ops.get_raw_data_from_file_or_url(args.input)
-        json_data = json.loads(raw_data.read())
+        minified = jsmin(raw_data.read().decode('UTF-8'))
+        json_data = json.loads(minified)
         if 'ppms' in json_data and 'regions' in json_data:
             update_old_region_set_file_format(args.input, json_data)
+        elif 'schema_version' in json_data:
+            raise NotImplementedError(f'Not sure how to update v{json_data["schema_version"]} data source files')
+        else:
+            raise RuntimeError('Input .json file does not match any expected input formats')
     else:
         raise RuntimeError(f'Not sure how to convert {file_extension} files')
 

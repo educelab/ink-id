@@ -1,16 +1,11 @@
 """Train and predict using subvolumes.
 
-This script will read a RegionSet JSON file and create a RegionSet for
-training, validation, and prediction. It will then run the training
-process, validating and predicting along the way as defined by the
-RegionSet and the parameters file.
+This script reads data source files and then runs a training process, with intermediate validation and predictions
+made as defined by the data and provided arguments.
 
-The optional value k can be passed in order to use this script for
-k-fold cross validation (and prediction in this case). To do that,
-create a RegionSet of entirely training regions, and then pass an
-index k to this script via the command line argument. It will take the
-kth training region, remove it from the training set, and add it to
-the prediction and validation sets for that run. TODO update
+The optional value --cross-validate-on <n> can be passed to use this script for k-fold cross validation (and
+prediction in this case). The nth data source from the training dataset will be removed from the training dataset and
+added to those for validation and prediction.
 
 """
 
@@ -42,7 +37,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
 
     # Needed files
-    parser.add_argument('output', metavar='path', help='output directory')
+    parser.add_argument('output', metavar='output', help='output directory')
     parser.add_argument('--training-set', metavar='path', nargs='*', help='training dataset(s)', default=[])
     parser.add_argument('--validation-set', metavar='path', nargs='*', help='validation dataset(s)', default=[])
     parser.add_argument('--prediction-set', metavar='path', nargs='*', help='prediction dataset(s)', default=[])
@@ -297,7 +292,7 @@ def main():
         logging.error('Label type not recognized: {}'.format(args.label_type))
         return
 
-    train_ds.set_for_all_sources('label_type', args.label_type)  # TODO should all this stuff just be in init
+    train_ds.set_for_all_sources('label_type', args.label_type)  # TODO should all this stuff just be in init?
     train_ds.set_for_all_sources('label_args', label_args)
     val_ds.set_for_all_sources('label_type', args.label_type)
     val_ds.set_for_all_sources('label_args', label_args)

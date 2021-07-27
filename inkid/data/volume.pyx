@@ -431,7 +431,7 @@ cdef class Volume:
             method: String to indicate how to get the volume data.
 
         Returns:
-            A numpy array of the requested shape. TODO is the array type consistent?
+            A np.float32 array of the requested shape.
 
         """
         assert len(center) == 3

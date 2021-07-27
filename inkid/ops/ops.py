@@ -223,6 +223,7 @@ def generate_prediction_images(dataloader, model, output_size, label_type, devic
 
 
 def json_schema(schema_name):
+    """Return the JSON schema of the specified name from the inkid/schemas directory."""
     file_path = os.path.join(os.path.dirname(inkid.__file__), 'schemas', schema_name + '.schema.json')
     with open(file_path, 'r') as f:
         return json.load(f)
@@ -233,6 +234,7 @@ def get_raw_data_from_file_or_url(filename, return_relative_url=False):
 
     Supports absolute and relative file paths as well as the http and https
     protocols.
+
     """
     url = urlsplit(filename)
     if url.scheme in ('http', 'https'):
@@ -258,6 +260,7 @@ def get_raw_data_from_file_or_url(filename, return_relative_url=False):
 
 
 def normalize_path(path, relative_url):
+    """Normalize path to be absolute and with URL where appropriate."""
     url = urlsplit(path)
     # Leave existing URLs and absolute file paths alone
     if url.scheme != '' or os.path.isabs(path):

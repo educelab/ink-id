@@ -20,14 +20,16 @@ class DataSource(ABC):
     def __init__(self, path: str) -> None:
         self.path = path
         source_file_contents, relative_url = inkid.ops.get_raw_data_from_file_or_url(path, return_relative_url=True)
-        source_json = json.load(source_file_contents)
+        source_json: Dict = json.load(source_file_contents)
         # Validate JSON fits schema
         jsonschema.validate(source_json, inkid.ops.json_schema('dataSource0.1'))
+        # Save original source
+        self.source_json: Dict = source_json.copy()
         # Normalize paths in JSON
         for key in ['volume', 'ppm', 'mask', 'ink_label', 'rgb_label', 'volcart_texture_label']:
             if key in source_json:
                 source_json[key] = inkid.ops.normalize_path(source_json[key], relative_url)
-        self._source_json = source_json
+        self.data_dict: Dict = source_json
 
         self.feature_type: Optional[str] = None
         self.feature_args: Dict = dict()
@@ -35,19 +37,22 @@ class DataSource(ABC):
         self.label_type: Optional[str] = None
         self.label_args: Dict = dict()
 
-    def data_dict(self):
-        return self._source_json
-
     @abstractmethod
     def __len__(self):
-        pass
+        raise NotImplementedError
 
     @abstractmethod
     def __getitem__(self, item):
-        pass
+        raise NotImplementedError
 
     @staticmethod
     def from_path(path: str) -> DataSource:
+        """Check first whether this is a region or volume data source, then instantiate accordingly.
+
+        Also checks to make sure the old region set file format was not provided. If it was,
+        a message is issued telling the user how to update the file format.
+
+        """
         with open(path, 'r') as f:
             source_json = json.load(f)
         if 'ppms' in source_json and 'regions' in source_json:
@@ -63,41 +68,41 @@ class DataSource(ABC):
             raise ValueError(f'Source file {path} does not specify valid "type" of "region" or "volume"')
 
 
-RegionPoint = Tuple[str, int, int]
-
-
 class RegionSource(DataSource):
+    """A region source generates subvolumes and labels from a region (bounding box) on a PPM.
+
+    (x, y) are always in the PPM space, not this region's bounding box space.
+
+    """
     def __init__(self, path: str) -> None:
-        """TODO
-
-        (x, y) are always in PPM space not this region space
-
-        """
         super().__init__(path)
 
-        self._ppm: inkid.data.PPM = inkid.data.PPM.from_path(self._source_json['ppm'])
-        self._volume: inkid.data.Volume = inkid.data.Volume.from_path(self._source_json['volume'])
-        self._bounding_box: Optional[Tuple[int, int, int, int]] = self._source_json['bounding_box']
-        if self._bounding_box is None:
-            self._bounding_box = self.get_default_bounds()
-        self._invert_normals: bool = self._source_json['invert_normals']
+        # Initialize region's PPM, volume, etc
+        self._ppm: inkid.data.PPM = inkid.data.PPM.from_path(self.data_dict['ppm'])
+        self._volume: inkid.data.Volume = inkid.data.Volume.from_path(self.data_dict['volume'])
+        self.bounding_box: Tuple[int, int, int, int] = self.data_dict['bounding_box'] or self.get_default_bounds()
+        self._invert_normals: bool = self.data_dict['invert_normals']
 
+        # Mask and label images
         self._mask, self._ink_label, self._rgb_label, self._volcart_texture_label = None, None, None, None
-        if self._source_json['mask'] is not None:
-            self._mask = np.array(Image.open(self._source_json['mask']))
-        if self._source_json['ink_label'] is not None:
-            self._ink_label = np.array(Image.open(self._source_json['ink_label']))
-        if self._source_json['rgb_label'] is not None:
-            self._rgb_label = np.array(Image.open(self._source_json['rgb_label']))
-        if self._source_json['volcart_texture_label'] is not None:
-            self._volcart_texture_label = np.array(Image.open(self._source_json['volcart_texture_label']))
+        if self.data_dict['mask'] is not None:
+            self._mask = np.array(Image.open(self.data_dict['mask']))
+        if self.data_dict['ink_label'] is not None:
+            self._ink_label = np.array(Image.open(self.data_dict['ink_label']))
+        if self.data_dict['rgb_label'] is not None:
+            self._rgb_label = np.array(Image.open(self.data_dict['rgb_label']))
+        if self.data_dict['volcart_texture_label'] is not None:
+            self._volcart_texture_label = np.array(Image.open(self.data_dict['volcart_texture_label']))
 
+        # This region generates points, here we create the empty list
         self._points = list()
+        # Mark that this list needs updating so that it will be filled before being accessed
         self._points_list_needs_update: bool = True
 
         self.grid_spacing = 1
         self.specify_inkness = None
 
+        # Prediction images
         self._ink_classes_prediction_image = np.zeros((self._ppm.height, self._ppm.width), np.uint16)
         self._ink_classes_prediction_image_written_to = False
         self._rgb_values_prediction_image = np.zeros((self._ppm.height, self._ppm.width, 3), np.uint8)
@@ -120,7 +125,7 @@ class RegionSource(DataSource):
         # Read that value from PPM
         x, y, z, n_x, n_y, n_z = self._ppm.get_point_with_normal(surface_x, surface_y)
         # Get the feature metadata (useful for e.g. knowing where this feature came from on the surface)
-        feature_metadata: RegionPoint = (self.path, surface_x, surface_y)
+        feature_metadata = (self.path, surface_x, surface_y)
         # Get the feature
         feature = None
         if self.feature_type == 'subvolume_3dcnn':
@@ -143,7 +148,7 @@ class RegionSource(DataSource):
             )
             feature = inkid.ops.get_descriptive_statistics(subvolume)
         elif self.feature_type is not None:
-            raise ValueError(f'Unknown feature_type: {self.feature_type} set for InkidRegionSource'
+            raise ValueError(f'Unknown feature_type: {self.feature_type} set for region source'
                              f' {self.path}')
         # Get the label
         label = None
@@ -158,7 +163,7 @@ class RegionSource(DataSource):
                 **self.label_args
             )
         elif self.label_type is not None:
-            raise ValueError(f'Unknown label_type: {self.label_type} set for InkidRegionSource'
+            raise ValueError(f'Unknown label_type: {self.label_type} set for region source'
                              f' {self.path}')
         if label is None:
             return feature_metadata, feature
@@ -166,8 +171,9 @@ class RegionSource(DataSource):
             return feature_metadata, feature, label
 
     def update_points_list(self) -> None:
+        """Update the list of points after changes to the bounding box, grid spacing, or some other options."""
         self._points = list()
-        x0, y0, x1, y1 = self._bounding_box
+        x0, y0, x1, y1 = self.bounding_box
         for y in range(y0, y1, self.grid_spacing):
             for x in range(x0, x1, self.grid_spacing):
                 if self.specify_inkness is not None:
@@ -249,7 +255,12 @@ class RegionSource(DataSource):
         return label
 
     def store_prediction(self, x, y, prediction, label_type):
-        """TODO prediction shape [v, y, x]"""
+        """Store an incoming prediction in the corresponding prediction image buffer.
+
+        The incoming predictions have shape [d, h, w]. When h and w are both 1, a prediction has been provided for
+        a single point rather than a rectangular region.
+
+        """
         # Repeat prediction to fill grid square so prediction image is not single pixels in sea of blackness
         if prediction.shape[1] == 1 and prediction.shape[2] == 1:
             prediction = np.repeat(prediction, repeats=self.grid_spacing, axis=1)
@@ -279,6 +290,7 @@ class RegionSource(DataSource):
                     raise ValueError(f'Unknown label_type: {label_type} used for prediction')
 
     def save_predictions(self, directory, suffix):
+        """Write the buffered prediction images to disk."""
         if not os.path.exists(directory):
             os.makedirs(directory)
 
@@ -299,6 +311,7 @@ class RegionSource(DataSource):
             )
 
     def reset_predictions(self):
+        """Reset the prediction image buffers."""
         self._ink_classes_prediction_image = np.zeros((self._ppm.height, self._ppm.width), np.uint16)
         self._ink_classes_prediction_image_written_to = False
         self._rgb_values_prediction_image = np.zeros((self._ppm.height, self._ppm.width, 3), np.uint8)
@@ -306,23 +319,28 @@ class RegionSource(DataSource):
 
 
 class VolumeSource(DataSource):
+    """A volume data source generates subvolumes and possibly labels from anywhere in a volume.
+
+    The points are not restricted to a particular surface, PPM, or segmentation.
+
+    """
     def __init__(self, path: str) -> None:
         super().__init__(path)
 
     def __len__(self):
-        pass
+        raise NotImplementedError
 
     def __getitem__(self, item):
-        pass
+        raise NotImplementedError
 
 
 class Dataset(torch.utils.data.Dataset):
     """A PyTorch Dataset to serve inkid features and labels.
 
-        An inkid dataset is a PyTorch Dataset which maintains a set of inkid data
-        sources. Each source generates features (e.g. subvolumes) and possibly labels
-        (e.g. ink presence). A PyTorch Dataloader can be created from this Dataset,
-        which allows direct input to a model.
+    An inkid dataset is a PyTorch Dataset which maintains a set of inkid data
+    sources. Each source generates features (e.g. subvolumes) and possibly labels
+    (e.g. ink presence). A PyTorch Dataloader can be created from this Dataset,
+    which allows direct input to a model.
 
     """
 
@@ -335,6 +353,7 @@ class Dataset(torch.utils.data.Dataset):
 
         Args:
             source_paths: A list of .txt dataset or .json data source file paths.
+
         """
         # Convert the list of paths to a list of InkidDataSources
         source_paths = self.expand_data_sources(source_paths)
@@ -386,7 +405,7 @@ class Dataset(torch.utils.data.Dataset):
             if item < source_len:
                 return source[item]
             item -= source_len
-        raise IndexError()
+        raise IndexError
 
     def regions(self) -> List[RegionSource]:
         return [source for source in self.sources if isinstance(source, RegionSource)]
@@ -405,7 +424,7 @@ class Dataset(torch.utils.data.Dataset):
         return [source.path for source in self.sources]
 
     def data_dict(self):
-        return {source.path: source.data_dict() for source in self.sources}
+        return {source.path: source.data_dict for source in self.sources}
 
     def set_for_all_sources(self, attribute: str, value):
         for source in self.sources:
