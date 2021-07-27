@@ -167,15 +167,15 @@ class Subvolume3DUNet(torch.nn.Module):
 
         pool_kernel_size = 2
         pool_stride = 2
-        pool_padding = 0 # Not listed in paper
+        pool_padding = 0  # Not listed in paper
 
         upconv_kernel_size = 2
         upconv_stride = 2
-        upconv_padding = 0 # Not listed in paper
+        upconv_padding = 0  # Not listed in paper
 
         final_conv_kernel_size = 1
-        final_conv_stride = 1 # Not listed in paper, but stride 1 makes size work out
-        final_conv_padding = 0 # Not listed in paper
+        final_conv_stride = 1  # Not listed in paper, but stride 1 makes size work out
+        final_conv_padding = 0  # Not listed in paper
 
         channels = starting_channels
 
@@ -193,45 +193,45 @@ class Subvolume3DUNet(torch.nn.Module):
         for i in range(4):
             if i > 0:
                 self._encoder_modules.append(
-                        torch.nn.MaxPool3d(kernel_size=pool_kernel_size,
-                                           stride=pool_stride,
-                                           padding=pool_padding))
+                    torch.nn.MaxPool3d(kernel_size=pool_kernel_size,
+                                       stride=pool_stride,
+                                       padding=pool_padding))
             self._encoder_modules.append(
-                    self._ConvBlock(in_channels=channels if i > 0 else in_channels,
-                                    out_channels=channels,
-                                    bn_momentum=bn_momentum))
+                self._ConvBlock(in_channels=channels if i > 0 else in_channels,
+                                out_channels=channels,
+                                bn_momentum=bn_momentum))
             self._encoder_modules.append(
-                    self._ConvBlock(in_channels=channels,
-                                    out_channels=channels * 2,
-                                    bn_momentum=bn_momentum))
+                self._ConvBlock(in_channels=channels,
+                                out_channels=channels * 2,
+                                bn_momentum=bn_momentum))
             channels *= 2
 
         # Build the right side of the "U" shape (decoder)
         for i in range(3):
             self._decoder_modules.append(
-                    torch.nn.ConvTranspose3d(in_channels=channels,
-                                             out_channels=channels,
-                                             kernel_size=upconv_kernel_size,
-                                             stride=upconv_stride,
-                                             padding=upconv_padding))
+                torch.nn.ConvTranspose3d(in_channels=channels,
+                                         out_channels=channels,
+                                         kernel_size=upconv_kernel_size,
+                                         stride=upconv_stride,
+                                         padding=upconv_padding))
             channels //= 2
             self._decoder_modules.append(
-                    self._ConvBlock(in_channels=channels * 3,
-                                    out_channels=channels,
-                                    bn_momentum=bn_momentum))
+                self._ConvBlock(in_channels=channels * 3,
+                                out_channels=channels,
+                                bn_momentum=bn_momentum))
 
             self._decoder_modules.append(
-                    self._ConvBlock(in_channels=channels,
-                                    out_channels=channels,
-                                    bn_momentum=bn_momentum))
+                self._ConvBlock(in_channels=channels,
+                                out_channels=channels,
+                                bn_momentum=bn_momentum))
 
         # Final decoder simple convolution (decoder)
         self._decoder_modules.append(
-                torch.nn.Conv3d(in_channels=channels,
-                                out_channels=out_channels,
-                                kernel_size=final_conv_kernel_size,
-                                stride=final_conv_stride,
-                                padding=final_conv_padding))
+            torch.nn.Conv3d(in_channels=channels,
+                            out_channels=out_channels,
+                            kernel_size=final_conv_kernel_size,
+                            stride=final_conv_stride,
+                            padding=final_conv_padding))
 
     def forward(self, x):
         if self._in_channels > 1:
@@ -239,14 +239,14 @@ class Subvolume3DUNet(torch.nn.Module):
 
         # 0-indexed layers where shortcut/concatenation lines should appear on
         # both the encoder and decoder sides of the network.
-        ENCODER_SHORTCUT_LAYERS = (1, 4, 7)
-        DECODER_SHORTCUT_LAYERS = (0, 3, 6)
+        encoder_shortcut_layers = (1, 4, 7)
+        decoder_shortcut_layers = (0, 3, 6)
 
         concat_lines = []
 
         for i, layer in enumerate(self._encoder_modules):
             x = layer(x)
-            if i in ENCODER_SHORTCUT_LAYERS:
+            if i in encoder_shortcut_layers:
                 concat_lines.append(x)
 
         # If we're not supposed to run the decoder section, just return now.
@@ -255,7 +255,7 @@ class Subvolume3DUNet(torch.nn.Module):
 
         for i, layer in enumerate(self._decoder_modules):
             x = layer(x)
-            if i in DECODER_SHORTCUT_LAYERS:
+            if i in decoder_shortcut_layers:
                 x = torch.cat((concat_lines.pop(), x), dim=1)
 
         return x

@@ -1,0 +1,12 @@
+{
+  "schema_version": "0.1",
+  "type": "region",
+  "volume": "../volumes/20200526145449",
+  "ppm": "../paths/20200526152035/textSurface.ppm",
+  "mask": "../paths/20200526152035/textSurface_mask.png",
+  "invert_normals": false,
+  "bounding_box": null,
+  "ink_label": "../paths/20200526152035/textSurface_ink-mask.png",
+  "rgb_label": "../paths/20200526152035/textSurface_rgb-mask.png",
+  "volcart_texture_label": null
+}
