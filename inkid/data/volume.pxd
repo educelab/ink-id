@@ -1,3 +1,5 @@
+# cython: language_level=3
+
 ctypedef unsigned short uint16
 
 cdef struct Int3:

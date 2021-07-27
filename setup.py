@@ -3,8 +3,11 @@ from Cython.Build import cythonize
 import numpy as np
 
 extensions = [
-    Extension('inkid.data.Volume', ['inkid/data/Volume.pyx'],
-              include_dirs=[np.get_include()]),
+    Extension(
+        'inkid.data.volume',
+        ['inkid/data/volume.pyx'],
+        include_dirs=[np.get_include()]
+    ),
 ]
 
 setup(
