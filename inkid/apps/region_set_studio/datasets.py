@@ -82,11 +82,11 @@ class Datasource:
                 if datasource.getType() == 'region':
                     datasource.setPPM(data['ppm'])
                     datasource.setMask(data['mask'])
-                    datasource.setInkLabel(data['ink-label'])
-                    datasource.setRGBLabel(data['rgb-label'])
-                    datasource.setVCTLabel(data['volcart-texture-label'])
-                    datasource.setInvertNormals(data['invert-normals'])
-                    datasource.setBoundingBox(data['bounding-box'])
+                    datasource.setInkLabel(data['ink_label'])
+                    datasource.setRGBLabel(data['rgb_label'])
+                    datasource.setVCTLabel(data['volcart_texture_label'])
+                    datasource.setInvertNormals(data['invert_normals'])
+                    datasource.setBoundingBox(data['bounding_box'])
                 return datasource
         except OSError as os_error:
             raise DatasetError(
@@ -113,12 +113,12 @@ class Datasource:
         data['volume'] = self.getVolume()
         if self.getType() == 'region':
             data['ppm'] = self.getPPM()
-            data['invert-normals'] = self.getInvertNormals()
+            data['invert_normals'] = self.getInvertNormals()
             data['mask'] = self.getMask()
-            data['ink-label'] = self.getInkLabel()
-            data['rgb-label'] = self.getRGBLabel()
-            data['volcart-texture-label'] = self.getVCTLabel()
-            data['bounding-box'] = self.getBoundingBox()
+            data['ink_label'] = self.getInkLabel()
+            data['rgb_label'] = self.getRGBLabel()
+            data['volcart_texture_label'] = self.getVCTLabel()
+            data['bounding_box'] = self.getBoundingBox()
         data_out = json.dumps(data, indent=4)
         try:
             with open(self._path, 'w') as f:
@@ -134,7 +134,7 @@ class Datasource:
         return self._path
 
     def setSchemaVersion(self, value: str):
-        if value is None or value not in ('0.1'):
+        if value is None or value not in '0.1':
             raise DatasetError(f'Schema not supported: {value}')
         self._schema_version = value
 
