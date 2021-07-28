@@ -55,7 +55,7 @@ def main():
     parser.add_argument('--model-3d-to-2d', action='store_true',
                         help='Use semi-fully convolutional model (which removes a dimension) with 2d labels per '
                              'subvolume')
-    parser.add_argument('--loss', choices=['cross_entropy'], default='cross_entropy')
+    parser.add_argument('--loss', choices=['cross_entropy', 'mse'], default='cross_entropy')
 
     # Subvolumes
     inkid.ops.add_subvolume_args(parser)
@@ -273,6 +273,7 @@ def main():
         metrics = {
             'loss': {
                 'cross_entropy': nn.CrossEntropyLoss(),
+                'mse': nn.MSELoss(),
             }[args.loss],
             'accuracy': inkid.metrics.accuracy,
             'precision': inkid.metrics.precision,
