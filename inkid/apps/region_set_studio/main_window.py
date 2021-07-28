@@ -2,7 +2,7 @@
 
 from pathlib import Path
 from PySide6.QtCore import Slot, Qt, QModelIndex
-from PySide6.QtGui import QKeySequence
+from PySide6.QtGui import QKeySequence, QScreen
 from PySide6.QtWidgets import QMainWindow, QFileDialog, QSplitter, QMessageBox
 from .datasets import DatasetModel, DatasetTreeView, DatasetError, DatasetEditor, DatasourceEditor
 
@@ -16,8 +16,8 @@ class MainWindow(QMainWindow):
         self._create_menus()
         self._create_central_widget()
         self.setWindowTitle('Region Set Studio')
-        # self.resize(QDesktopWidget().availableGeometry(self).size() * 0.75)
-        self.showMaximized()
+        self.resize(self.screen().availableSize() * 0.75)
+        self.show()
 
     def _create_menus(self):
         menu_bar = self.menuBar()
