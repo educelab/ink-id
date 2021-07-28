@@ -70,7 +70,7 @@ def main():
 
     # Network architecture
     parser.add_argument('--model', default='original', help='model to run against',
-                        choices=['original', '3dunet_full', '3dunet_half'])
+                        choices=['original', '3dunet_full', '3dunet_half', 'autoencoder'])
     parser.add_argument('--learning-rate', metavar='n', type=float, default=0.001)
     parser.add_argument('--drop-rate', metavar='n', type=float, default=0.5)
     parser.add_argument('--batch-norm-momentum', metavar='n', type=float, default=0.9)
@@ -330,13 +330,13 @@ def main():
     # Create the model for training
     if args.feature_type == 'subvolume_3dcnn':
         in_channels = 1
-        if args.model == 'original':
+        if args.model in ['original', 'autoencoder']:
             encoder = inkid.model.Subvolume3DcnnEncoder(args.subvolume_shape_voxels,
                                                         args.batch_norm_momentum,
                                                         args.no_batch_norm,
                                                         args.filters,
                                                         in_channels)
-        elif args.model in ('3dunet_full', '3dunet_half'):
+        elif args.model in ['3dunet_full', '3dunet_half']:
             encoder = inkid.model.Subvolume3DUNet(args.subvolume_shape_voxels,
                                                   args.batch_norm_momentum,
                                                   args.unet_starting_channels,
@@ -345,7 +345,12 @@ def main():
         else:
             logging.error(f'Model {args.model} is invalid for feature type {args.feature_type}.')
             return
-        if args.model_3d_to_2d:
+        if args.model == 'autoencoder':
+            decoder = inkid.model.Subvolume3DcnnDecoder(args.batch_norm_momentum,
+                                                        args.no_batch_norm,
+                                                        args.filters,
+                                                        in_channels)
+        elif args.model_3d_to_2d:
             decoder = inkid.model.ConvolutionalInkDecoder(args.filters, output_size)
         else:
             decoder = inkid.model.LinearInkDecoder(args.drop_rate, encoder.output_shape, output_size)
@@ -407,9 +412,12 @@ def main():
                     for batch_num, (_, xb, yb) in enumerate(train_dl):
                         with torch.profiler.record_function(f'train_batch_{batch_num}'):
                             xb = xb.to(device)
-                            yb = yb.to(device)
+                            if args.model == 'autoencoder':
+                                yb = xb.clone()
+                            else:
+                                yb = yb.to(device)
                             pred = model(xb)
-                            if args.label_type == 'ink_classes':
+                            if args.label_type == 'ink_classes' and args.model != 'autoencoder':
                                 _, yb = yb.max(1)  # Argmax
                             for metric, fn in metrics.items():
                                 metric_results[metric].append(fn(pred, yb))
