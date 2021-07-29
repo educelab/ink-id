@@ -525,6 +525,8 @@ cdef class Volume:
 
         # Convert to float
         subvolume = np.asarray(subvolume, np.float32)
+        # Normalize to [0, 1]
+        subvolume *= 1.0 / np.iinfo(np.uint16).max
         # Add singleton dimension for number of channels
         subvolume = np.expand_dims(subvolume, 0)
 
