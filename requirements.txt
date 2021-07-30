@@ -14,15 +14,15 @@ dicttoxml==1.7.4
 docutils==0.17.1
 gitdb==4.0.7
 GitPython==3.1.18
-google-auth==1.33.1
-google-auth-oauthlib==0.4.4
+google-auth==1.34.0
+google-auth-oauthlib==0.4.5
 grpcio==1.39.0
 humanize==3.10.0
 idna==3.2
 imageio==2.9.0
 imagesize==1.2.0
--e git+git@code.cs.uky.edu:seales-research/ink-id.git@36e8542d38baa53326e5ecfe712ad0d7a133bc10#egg=inkid
-isort==5.9.2
+-e git+ssh://git@code.cs.uky.edu/seales-research/ink-id.git@ecf25befa71898ed9d8a7107b5c301f24b6fef39#egg=inkid
+isort==5.9.3
 Jinja2==3.0.1
 joblib==1.0.1
 jsmin==2.2.2
@@ -31,20 +31,20 @@ kiwisolver==1.3.1
 lazy-object-proxy==1.6.0
 Markdown==3.3.4
 MarkupSafe==2.0.1
-mathutils==2.81.2
 matplotlib==3.4.2
 mccabe==0.6.1
 numpy==1.21.1
 oauthlib==3.1.1
 packaging==21.0
 Pillow==8.2.0
+pkg_resources==0.0.0
 protobuf==3.17.3
 pyasn1==0.4.8
 pyasn1-modules==0.2.8
 pycodestyle==2.7.0
 pygifsicle==1.0.4
 Pygments==2.9.0
-pylint==2.9.5
+pylint==2.9.6
 pyparsing==2.4.7
 pyrsistent==0.18.0
 python-dateutil==2.8.2

@@ -10,11 +10,31 @@ import os
 import random
 from typing import Dict
 
-import mathutils
 import numpy as np
 cimport numpy as cnp
 from PIL import Image
 from tqdm import tqdm
+
+cdef Float3 normalize(Float3 vec):
+    return vec / np.linalg.norm(vec)
+
+
+# Note: expects vectors to be normalized
+cdef rotation_between_vecs_to_quat(Float3 vec_a, Float3 vec_b):
+    cdef Float3 axis
+    # TODO LEFT OFF converting these
+    #  https://gitlab.com/ideasman42/blender-mathutils/-/blob/master/src/blenlib/intern/math_rotation.c
+
+cdef vector_rotation_difference(Float3 vec_a, Float3 vec_b):
+    assert 3 <= len(vec_a) <= 4
+    assert 3 <= len(vec_b) <= 4
+
+    vec_a = normalize(vec_a)
+    vec_b = normalize(vec_b)
+
+    quat = rotation_between_vecs_to_quat(vec_a, vec_b)
+
+    return quat
 
 
 cpdef BasisVectors get_basis_from_square(square_corners):
@@ -24,9 +44,9 @@ cpdef BasisVectors get_basis_from_square(square_corners):
     y_vec = ((bottom_left - top_left) + (bottom_right - top_right)) / 2.0
     z_vec = np.cross(x_vec, y_vec)
 
-    x_vec = mathutils.Vector(x_vec.tolist()).normalized()
-    y_vec = mathutils.Vector(y_vec.tolist()).normalized()
-    z_vec = mathutils.Vector(z_vec.tolist()).normalized()
+    x_vec = normalize(x_vec)
+    y_vec = normalize(y_vec)
+    z_vec = normalize(z_vec)
 
     cdef BasisVectors basis
 
@@ -57,12 +77,13 @@ cpdef BasisVectors get_component_vectors_from_normal(Float3 n):
     https://docs.blender.org/api/blender_python_api_current/mathutils.html
 
     """
-    x_vec = mathutils.Vector([1, 0, 0])
-    y_vec = mathutils.Vector([0, 1, 0])
-    z_vec = mathutils.Vector([0, 0, 1])
-    normal = mathutils.Vector([n.x, n.y, n.z]).normalized()
+    x_vec = np.array([1, 0, 0])
+    y_vec = np.array([0, 1, 0])
+    z_vec = np.array([0, 0, 1])
+    normal = np.array([n.x, n.y, n.z])
+    normal = normalize(normal)
 
-    quaternion = z_vec.rotation_difference(normal)
+    quaternion = vector_rotation_difference(z_vec, normal)
 
     x_vec.rotate(quaternion)
     y_vec.rotate(quaternion)
@@ -220,7 +241,7 @@ cdef class Volume:
         assert len(center) == 3
         assert len(normal) == 3
 
-        normal = mathutils.Vector(normal).normalized()
+        normal = normalize(normal)
 
         if out_of_bounds is None:
             out_of_bounds = 'all_zeros'
@@ -448,9 +469,9 @@ cdef class Volume:
         # TODO if empty return zeros?
 
         if normal is None:
-            normal = mathutils.Vector((0, 0, 1))
+            normal = np.array([0, 0, 1])
         else:
-            normal = mathutils.Vector(normal).normalized()
+            normal = normalize(normal)
 
         if out_of_bounds is None:
             out_of_bounds = 'all_zeros'
