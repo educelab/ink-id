@@ -107,7 +107,11 @@ cdef Float4 unit_qt():
     return q
 
 cdef int axis_dominant_v3_single(Float3 v):
-    # TODO LEFT OFF
+    cdef float x, y, z
+    x = abs(v.x)
+    y = abs(v.y)
+    z = abs(v.z)
+    return (0 if x > z else 2) if (x > y) else (1 if y > z else 2)
 
 # Calculates p - a perpendicular vector to v
 cdef Float3 ortho_v3_v3(Float3 v):
@@ -127,6 +131,10 @@ cdef Float3 ortho_v3_v3(Float3 v):
         p.y = v.z
         p.z = -v.x - v.y
     return p
+
+cdef Float4 axis_angle_to_quat(Float3 axis, float angle):
+    cdef Float4 nor
+    nor = # TODO LEFT OFF
 
 # Note: expects vectors to be normalized
 cdef Float4 rotation_between_vecs_to_quat(Float3 v1, Float3 v2):
