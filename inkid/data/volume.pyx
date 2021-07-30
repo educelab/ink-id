@@ -8,6 +8,7 @@ cimport libc.math as math
 import logging
 import os
 import random
+import sys
 from typing import Dict
 
 import numpy as np
@@ -15,19 +16,36 @@ cimport numpy as cnp
 from PIL import Image
 from tqdm import tqdm
 
-cdef Float3 normalize(Float3 vec):
-    return vec / np.linalg.norm(vec)
+cdef float norm(Float3 vec):
+    return (vec.x**2 + vec.y**2 + vec.z**2)**(1./2)
 
+cdef Float3 normalize(Float3 vec):
+    cdef float n
+    cdef Float3 normalized
+    n = norm(vec)
+    normalized.x = vec.x / n
+    normalized.y = vec.y / n
+    normalized.z = vec.z / n
+    return normalized
+
+cdef Float3 cross(Float3 vec_a, Float3 vec_b):
+    cdef Float3 res
+    res.x = vec_a.y * vec_b.z - vec_a.z * vec_b.y
+    res.y = vec_a.z * vec_b.x - vec_a.x * vec_b.z
+    res.z = vec_a.x * vec_b.y - vec_a.y * vec_b.x
+    return res
 
 # Note: expects vectors to be normalized
-cdef rotation_between_vecs_to_quat(Float3 vec_a, Float3 vec_b):
+cdef Float4 rotation_between_vecs_to_quat(Float3 vec_a, Float3 vec_b):
     cdef Float3 axis
-    # TODO LEFT OFF converting these
-    #  https://gitlab.com/ideasman42/blender-mathutils/-/blob/master/src/blenlib/intern/math_rotation.c
+    cdef float angle
+    cdef Float4 q
+    axis = cross(vec_a, vec_b)
+    if norm(axis) > sys.float_info.epsilon:
+        angle = 0  # TODO LEFT OFF https://gitlab.com/ideasman42/blender-mathutils/-/blob/master/src/blenlib/intern/math_rotation.c#L508
 
-cdef vector_rotation_difference(Float3 vec_a, Float3 vec_b):
-    assert 3 <= len(vec_a) <= 4
-    assert 3 <= len(vec_b) <= 4
+cdef Float4 vector_rotation_difference(Float3 vec_a, Float3 vec_b):
+    cdef Float4 quat
 
     vec_a = normalize(vec_a)
     vec_b = normalize(vec_b)

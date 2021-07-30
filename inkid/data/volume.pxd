@@ -12,6 +12,12 @@ cdef struct Float3:
     float y
     float z
 
+cdef struct Float4:
+    float a
+    float b
+    float c
+    float d
+
 cdef struct BasisVectors:
     Float3 x
     Float3 y
