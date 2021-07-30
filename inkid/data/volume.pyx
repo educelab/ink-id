@@ -35,14 +35,118 @@ cdef Float3 cross(Float3 vec_a, Float3 vec_b):
     res.z = vec_a.x * vec_b.y - vec_a.y * vec_b.x
     return res
 
+cdef float dot_v3v3(Float3 a, Float3 b):
+    return a.x * b.x + a.y * b.y + a.z * b.z
+
+cdef float saasin(float fac):
+    if fac <= -1.0:
+        return -math.pi / 2.0
+    elif fac >= 1.0:
+        return float(math.pi / 2.0)
+    else:
+        return math.asin(fac)
+
+cdef float len_v3v3(Float3 a, Float3 b):
+    cdef Float3 d
+    d = sub_v3_v3v3(b, a)
+    return len_v3(d)
+
+cdef float len_v3(Float3 a):
+    return math.sqrt(dot_v3v3(a, a))
+
+cdef Float3 sub_v3_v3v3(Float3 a, Float3 b):
+    cdef Float3 r
+    r.x = a.x - b.x
+    r.y = a.y - b.y
+    r.z = a.z - b.z
+    return r
+
+cdef negate_v3(Float3 v):
+    cdef Float3 r
+    r.x = -v.x
+    r.y = -v.y
+    r.z = -v.z
+    return r
+
+cdef float angle_normalized_v3v3(Float3 v1, Float3 v2):
+    cdef Float3 v2_n
+    # This is the same as acos(dot_v3v3(v1, v2)), but more accurate
+    if dot_v3v3(v1, v2) >= 0.0:
+        return 2.0 * saasin(len_v3v3(v1, v2) / 2.0)
+    else:
+        v2_n = negate_v3(v2)
+        return math.pi - 2.0 * saasin(len_v3v3(v1, v2_n) / 2.0)
+
+cdef Float3 mul_v3_v3(Float3 a, float f):
+    cdef Float3 r
+    r.x = a.x * f
+    r.y = a.y * f
+    r.z = a.z * f
+    return r
+
+cdef Float4 axis_angle_normalized_to_quat(Float3 axis, float angle):
+    cdef float phi, si, co
+    cdef Float4 q
+    cdef Float3 t
+    phi = 0.5 * angle
+    si = math.sinf(phi)
+    co = math.cosf(phi)
+    q.a = co
+    t = mul_v3_v3(axis, si)
+    q.b = t.x
+    q.c = t.y
+    q.d = t.z
+    return q
+
+cdef Float4 unit_qt():
+    cdef Float4 q
+    q.a = 1.0
+    q.b = 0.0
+    q.c = 0.0
+    q.d = 0.0
+    return q
+
+cdef int axis_dominant_v3_single(Float3 v):
+    # TODO LEFT OFF
+
+# Calculates p - a perpendicular vector to v
+cdef Float3 ortho_v3_v3(Float3 v):
+    cdef Float3 p
+    cdef int axis
+    axis = axis_dominant_v3_single(v)
+    if axis == 0:
+        p.x = -v.y - v.z
+        p.y = v.x
+        p.z = v.x
+    elif axis == 1:
+        p.x = v.y
+        p.y = -v.x - v.z
+        p.z = v.y
+    elif axis == 2:
+        p.x = v.z
+        p.y = v.z
+        p.z = -v.x - v.y
+    return p
+
 # Note: expects vectors to be normalized
-cdef Float4 rotation_between_vecs_to_quat(Float3 vec_a, Float3 vec_b):
+cdef Float4 rotation_between_vecs_to_quat(Float3 v1, Float3 v2):
     cdef Float3 axis
     cdef float angle
     cdef Float4 q
-    axis = cross(vec_a, vec_b)
+    axis = cross(v1, v2)
     if norm(axis) > sys.float_info.epsilon:
-        angle = 0  # TODO LEFT OFF https://gitlab.com/ideasman42/blender-mathutils/-/blob/master/src/blenlib/intern/math_rotation.c#L508
+        angle = angle_normalized_v3v3(v1, v2)
+        return axis_angle_normalized_to_quat(axis, angle)
+    else:
+        # Degenerate case
+        if dot_v3v3(v1, v2) > 0.0:
+            # Same vectors, zero rotation
+            return unit_qt()
+        else:
+            # Colinear but opposed vectors, 180 rotation
+            axis = ortho_v3_v3(v1)
+            return axis_angle_to_quat(axis, math.pi)
+
 
 cdef Float4 vector_rotation_difference(Float3 vec_a, Float3 vec_b):
     cdef Float4 quat
