@@ -63,7 +63,7 @@ From: ubuntu:20.04
   Building the container:
     - The ink-id git repository must exist at /tmp/ink-id on the host machine before building the container. Cloning using https is recommended so that the repository can be manipulated after container creation using your username and password instead of needing ssh keys on the container. After this clone, you can check out a different branch or make changes if desired, but this can also be done after the container is built.
     - Example command sequence to build fresh container:
-      `cd <path_to_ink-id>/scripts/singularity`
+      `cd <path_to_ink-id>/singularity`
       `rm -rf /tmp/ink-id`
       `git clone --branch develop https://code.cs.uky.edu/seales-research/ink-id.git /tmp/ink-id`
       `sudo singularity build inkid.sif inkid.def`
@@ -82,7 +82,7 @@ From: ubuntu:20.04
     - Any script or shell usage should first source the virtualenv: `. /usr/local/dri/ink-id/.venv/bin/activate`
     - It is possible to use an overlay to allow one to check out another branch, pull recent changes, or make local edits to ink-id code. To create and use an overlay: `dd if=/dev/zero of=inkid.overlay bs=1M count=500 && mkfs.ext3 inkid.overlay; singularity shell --overlay inkid.overlay inkid.sif` (see Singularity documentation on persistent overlays). If the overlay directory is deleted or not specified when using the container, the changes will be gone and the checkout of ink-id built into the container will be present.
     - You can use `git config` to set your name and email after creating an overlay so you get accurate commit authorship.
-    - It is recommended to use the included `ink-id/scripts/singularity/submit.sh` to run a job, which already activate the virtual environment.
+    - It is recommended to use the included `ink-id/singularity/submit.sh` to run a job, which already activate the virtual environment.
     - Example usage with sbatch:
       `sbatch -p <partition> --time=<timelimit> submit.sh ...  # Submit jobs using the container`
 

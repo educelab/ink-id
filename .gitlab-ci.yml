@@ -7,7 +7,7 @@ singularity:
   needs: []  # run immediately
   script:
     - cp -r . /tmp/ink-id
-    - singularity build inkid.sif scripts/singularity/inkid.def
+    - singularity build inkid.sif singularity/inkid.def
   tags:
     - docker
   image:
@@ -35,7 +35,6 @@ singularity:
     - python -m venv .venv
     - source .venv/bin/activate
     - pip install --upgrade pip
-    - pip install Cython numpy wheel
     - pip install -e .
   script:
     - inkid-train-and-predict -h

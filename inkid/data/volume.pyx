@@ -1,4 +1,4 @@
-# cython: boundscheck=False
+# cython: language_level=3, boundscheck=False
 """
 Define the Volume class to represent volumetric data.
 """
@@ -8,6 +8,7 @@ cimport libc.math as math
 import logging
 import os
 import random
+from typing import Dict
 
 import mathutils
 import numpy as np
@@ -106,6 +107,15 @@ cdef class Volume:
     cdef int shape_z, shape_y, shape_x
     cdef dict _metadata
     cdef float _voxelsize
+
+    initialized_volumes: Dict[str, Volume] = dict()
+
+    @classmethod
+    def from_path(cls, path: str) -> Volume:
+        if path in cls.initialized_volumes:
+            return cls.initialized_volumes[path]
+        cls.initialized_volumes[path] = Volume(path)
+        return cls.initialized_volumes[path]
     
     def __init__(self, slices_path):
         """Initialize a volume using a path to the slices directory.
@@ -118,31 +128,33 @@ cdef class Volume:
         files, so it must be a directory with only image files.
 
         """
-        slices_abs_path = os.path.abspath(slices_path)
-
         # Load metadata
         self._metadata = dict()
-        metadata_filename = os.path.join(slices_abs_path, 'meta.json')
+        metadata_filename = os.path.join(slices_path, 'meta.json')
         if not os.path.exists(metadata_filename):
-            logging.warning(f'No volume meta.json file found in {slices_abs_path}')
+            raise FileNotFoundError(f'No volume meta.json file found in {slices_path}')
         else:
             with open(metadata_filename) as f:
                 self._metadata = json.loads(f.read())
-        self._voxelsize = self._metadata.get('voxelsize')
+        self._voxelsize = self._metadata['voxelsize']
+        self.shape_z = self._metadata['slices']
+        self.shape_y = self._metadata['height']
+        self.shape_x = self._metadata['width']
 
         # Get list of slice image filenames
         slice_files = []
-        for root, dirs, files in os.walk(slices_abs_path):
+        for root, dirs, files in os.walk(slices_path):
             for filename in files:
                 # Make sure it is not a hidden file and it's a
                 # .tif. In the future we might add other formats.
                 if filename[0] != '.' and os.path.splitext(filename)[1] == '.tif':
                     slice_files.append(os.path.join(root, filename))
         slice_files.sort()
+        assert len(slice_files) == self.shape_z
 
         # Load slice images into volume
         data, w, h, d = None, 0, 0, 0
-        logging.info('Loading volume slices from {}...'.format(slices_abs_path))
+        logging.info('Loading volume slices from {}...'.format(slices_path))
         for slice_i, slice_file in tqdm(list(enumerate(slice_files))):
             if data is None:
                 w, h = Image.open(slice_file).size
@@ -152,12 +164,9 @@ cdef class Volume:
         print()
         self._data_view = data
         logging.info('Loaded volume {} with shape (z, y, x) = {}'.format(
-            slices_abs_path,
+            slices_path,
             data.shape
         ))
-        self.shape_z = data.shape[0]
-        self.shape_y = data.shape[1]
-        self.shape_x = data.shape[2]
 
     cdef unsigned short intensity_at(self, int x, int y, int z) nogil:
         """Get the intensity value at a voxel position."""
@@ -393,7 +402,7 @@ cdef class Volume:
 
     def get_subvolume(self, center, shape_voxels, shape_microns, normal,
                       out_of_bounds, move_along_normal, jitter_max,
-                      augment_subvolume, method, normalize, square_corners):
+                      augment_subvolume, method, normalize=False, square_corners=None):
         """Get a subvolume from a center point and normal vector.
 
         At the time of writing, this function very closely resembles
@@ -422,7 +431,7 @@ cdef class Volume:
             method: String to indicate how to get the volume data.
 
         Returns:
-            A numpy array of the requested shape. TODO is the array type consistent?
+            A np.float32 array of the requested shape.
 
         """
         assert len(center) == 3
@@ -512,7 +521,11 @@ cdef class Volume:
             subvolume = subvolume - subvolume.mean()
             subvolume = subvolume / subvolume.std()
 
-
         assert subvolume.shape == tuple(shape_voxels)
+
+        # Convert to float
+        subvolume = np.asarray(subvolume, np.float32)
+        # Add singleton dimension for number of channels
+        subvolume = np.expand_dims(subvolume, 0)
 
         return subvolume

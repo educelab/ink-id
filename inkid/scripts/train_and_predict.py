@@ -1,22 +1,17 @@
 """Train and predict using subvolumes.
 
-This script will read a RegionSet JSON file and create a RegionSet for
-training, validation, and prediction. It will then run the training
-process, validating and predicting along the way as defined by the
-RegionSet and the parameters file.
+This script reads data source files and then runs a training process, with intermediate validation and predictions
+made as defined by the data and provided arguments.
 
-The optional value k can be passed in order to use this script for
-k-fold cross validation (and prediction in this case). To do that,
-create a RegionSet of entirely training regions, and then pass an
-index k to this script via the command line argument. It will take the
-kth training region, remove it from the training set, and add it to
-the prediction and validation sets for that run.
+The optional value --cross-validate-on <n> can be passed to use this script for k-fold cross validation (and
+prediction in this case). The nth data source from the training dataset will be removed from the training dataset and
+added to those for validation and prediction.
 
 """
+
+import argparse
 import contextlib
 import datetime
-import functools
-import itertools
 import json
 import logging
 import multiprocessing
@@ -25,130 +20,38 @@ import sys
 import time
 import timeit
 
-import configargparse
 import git
-import numpy as np
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 import torchsummary
-from tqdm import tqdm
 
 import inkid
-
-
-def perform_validation(model, dataloader, metrics, device, label_type):
-    """Run the validation process using a model and dataloader, and return the results of all metrics."""
-    model.eval()  # Turn off training mode for batch norm and dropout purposes
-    with torch.no_grad():
-        metric_results = {metric: [] for metric in metrics}
-        for xb, yb in tqdm(dataloader):
-            pred = model(xb.to(device))
-            yb = yb.to(device)
-            if label_type == 'ink_classes':
-                _, yb = yb.max(1)  # Argmax
-            for metric, fn in metrics.items():
-                metric_results[metric].append(fn(pred, yb))
-    model.train()
-    return metric_results
-
-
-def generate_prediction_image(dataloader, model, output_size, label_type, device, predictions_dir, suffix,
-                              reconstruct_fn, region_set, label_shape, prediction_averaging, grid_spacing):
-    """Helper function to generate a prediction image given a model and dataloader, and save it to a file."""
-    if label_shape == (1, 1):
-        pred_shape = (grid_spacing, grid_spacing)
-    else:
-        pred_shape = label_shape
-    predictions = np.empty(shape=(0, output_size, pred_shape[0], pred_shape[1]))
-    points = np.empty(shape=(0, 3))
-    model.eval()  # Turn off training mode for batch norm and dropout purposes
-    with torch.no_grad():
-        for pxb, pts in tqdm(dataloader):
-            # Smooth predictions via augmentation. Augment each subvolume 8-fold via rotations and flips
-            if prediction_averaging:
-                rotations = range(4)
-                flips = [False, True]
-            else:
-                rotations = [0]
-                flips = [False]
-            batch_preds = np.zeros((0, pxb.shape[0], output_size, pred_shape[0], pred_shape[1]))
-            for rotation, flip in itertools.product(rotations, flips):
-                # Example pxb.shape = [64, 1, 48, 48, 48] (BxCxDxHxW)
-                # Augment via rotation and flip
-                aug_pxb = pxb.rot90(rotation, [3, 4])
-                if flip:
-                    aug_pxb = aug_pxb.flip(4)
-                pred = model(aug_pxb.to(device))
-                if label_type == 'ink_classes':
-                    pred = F.softmax(pred, dim=1)
-                pred = pred.cpu()
-                # Example pred.shape = [64, 2, 48, 48] (BxCxHxW)
-                # Undo flip and rotation
-                if flip:
-                    pred = pred.flip(3)
-                pred = pred.rot90(-rotation, [2, 3])
-                pred = np.expand_dims(pred.numpy(), axis=0)
-                # Example pred.shape = [1, 64, 2, 48, 48] (BxCxHxW)
-                # Repeat prediction to fill grid square so prediction image is not single pixels in sea of blackness
-                if label_shape == (1, 1):
-                    pred = np.repeat(pred, repeats=grid_spacing, axis=3)
-                    pred = np.repeat(pred, repeats=grid_spacing, axis=4)
-                # Save this augmentation to the batch totals
-                batch_preds = np.append(batch_preds, pred, axis=0)
-            # Average over batch of predictions after augmentation
-            batch_pred = batch_preds.mean(0)
-            pts = pts.numpy()
-            # Add batch of predictions to list
-            predictions = np.append(predictions, batch_pred, axis=0)
-            points = np.append(points, pts, axis=0)
-    model.train()
-    for prediction, point in zip(predictions, points):
-        region_id, x, y = point
-        reconstruct_fn([int(region_id)], [prediction], [[int(x), int(y)]])
-    region_set.save_predictions(predictions_dir, suffix)
-    region_set.reset_predictions()
 
 
 def main():
     """Run the training and prediction process."""
     start = timeit.default_timer()
 
-    parser = configargparse.ArgumentParser(
-        description=__doc__,
-        default_config_files=[inkid.ops.default_arguments_file()],
-    )
+    parser = argparse.ArgumentParser(description=__doc__)
+
     # Needed files
-    parser.add_argument('data', metavar='infile', help='input data file (JSON or PPM)')
-    parser.add_argument('output', metavar='outfile', help='output directory')
+    parser.add_argument('output', metavar='output', help='output directory')
+    parser.add_argument('--training-set', metavar='path', nargs='*', help='training dataset(s)', default=[])
+    parser.add_argument('--validation-set', metavar='path', nargs='*', help='validation dataset(s)', default=[])
+    parser.add_argument('--prediction-set', metavar='path', nargs='*', help='prediction dataset(s)', default=[])
 
-    # Config file so the user can have various configs saved for e.g. different scans that are often processed
-    parser.add_argument('-c', '--config-file', metavar='path', is_config_file=True,
-                        help='file of pre-specified arguments (in addition to pre-loaded defaults)')
-
-    # Region set modifications
-    parser.add_argument('-k', metavar='num', default=None, type=int,
-                        help='index of region to use for prediction and validation')
-    parser.add_argument('--override-volume-slices-dir', metavar='path', default=None,
-                        help='override directory for all volume slices (only works if there is '
-                             'only one volume in the region set file)')
+    # Dataset modifications
+    parser.add_argument('--cross-validate-on', metavar='n', default=None, type=int,
+                        help='remove the nth source from the flattened set of all training data sources, and '
+                             'add this set to the validation and prediction sets')
 
     # Method
-    parser.add_argument('--feature-type', metavar='name', default='subvolume_3dcnn',
-                        help='type of feature model is built on',
-                        choices=[
-                            'subvolume_3dcnn',
-                            'voxel_vector_1dcnn',
-                            'descriptive_statistics',
-                        ])
-    parser.add_argument('--label-type', metavar='name', default='ink_classes',
-                        help='type of label to train',
-                        choices=[
-                            'ink_classes',
-                            'rgb_values',
-                        ])
+    parser.add_argument('--feature-type', default='subvolume_3dcnn', help='type of input features',
+                        choices=['subvolume_3dcnn', 'voxel_vector_1dcnn', 'descriptive_statistics'])
+    parser.add_argument('--label-type', default='ink_classes', help='type of labels',
+                        choices=['ink_classes', 'rgb_values'])
     parser.add_argument('--model-3d-to-2d', action='store_true',
                         help='Use semi-fully convolutional model (which removes a dimension) with 2d labels per '
                              'subvolume')
@@ -158,44 +61,38 @@ def main():
     inkid.ops.add_subvolume_args(parser)
 
     # Voxel vectors
-    parser.add_argument('--length-in-each-direction', metavar='n', type=int,
+    parser.add_argument('--length-in-each-direction', metavar='n', type=int, default=8,
                         help='length of voxel vector in each direction along normal')
 
     # Data organization/augmentation
-    parser.add_argument('--jitter-max', metavar='n', type=int)
-    parser.add_argument('--augmentation', action='store_true', dest='augmentation')
-    parser.add_argument('--no-augmentation', action='store_false', dest='augmentation')
+    parser.add_argument('--jitter-max', metavar='n', type=int, default=4)
+    parser.add_argument('--no-augmentation', action='store_true')
 
     # Network architecture
-    parser.add_argument('--model', metavar='name', default='original',
-                        help='model to run against',
-                        choices=[
-                            'original',
-                            '3dunet_full',
-                            '3dunet_half'
-                        ])
-    parser.add_argument('--learning-rate', metavar='n', type=float)
-    parser.add_argument('--drop-rate', metavar='n', type=float)
-    parser.add_argument('--batch-norm-momentum', metavar='n', type=float)
+    parser.add_argument('--model', default='original', help='model to run against',
+                        choices=['original', '3dunet_full', '3dunet_half'])
+    parser.add_argument('--learning-rate', metavar='n', type=float, default=0.001)
+    parser.add_argument('--drop-rate', metavar='n', type=float, default=0.5)
+    parser.add_argument('--batch-norm-momentum', metavar='n', type=float, default=0.9)
     parser.add_argument('--no-batch-norm', action='store_true')
-    parser.add_argument('--filters', metavar='n', nargs='*', type=int,
+    parser.add_argument('--filters', metavar='n', nargs='*', type=int, default=[32, 16, 8, 4],
                         help='number of filters for each convolution layer')
-    parser.add_argument('--unet-starting-channels', metavar='n', type=int,
+    parser.add_argument('--unet-starting-channels', metavar='n', type=int, default=32,
                         help='number of channels to start with in 3D-UNet')
     parser.add_argument('--load-weights-from', metavar='path', default=None,
-                        help='Pretrained model checkpoint to initialize network')
+                        help='pretrained model checkpoint to initialize network')
 
     # Run configuration
-    parser.add_argument('--batch-size', metavar='n', type=int)
+    parser.add_argument('--batch-size', metavar='n', type=int, default=32)
     parser.add_argument('--training-max-samples', metavar='n', type=int, default=None)
-    parser.add_argument('--training-epochs', metavar='n', type=int, default=None)
-    parser.add_argument('--prediction-grid-spacing', metavar='n', type=int,
+    parser.add_argument('--training-epochs', metavar='n', type=int, default=1)
+    parser.add_argument('--prediction-grid-spacing', metavar='n', type=int, default=4,
                         help='prediction points will be taken from an NxN grid')
     parser.add_argument('--prediction-averaging', action='store_true',
-                        help='Average multiple predictions based on rotated and flipped input subvolumes')
-    parser.add_argument('--validation-max-samples', metavar='n', type=int)
-    parser.add_argument('--summary-every-n-batches', metavar='n', type=int)
-    parser.add_argument('--checkpoint-every-n-batches', metavar='n', type=int)
+                        help='average multiple predictions based on rotated and flipped input subvolumes')
+    parser.add_argument('--validation-max-samples', metavar='n', type=int, default=5000)
+    parser.add_argument('--summary-every-n-batches', metavar='n', type=int, default=10)
+    parser.add_argument('--checkpoint-every-n-batches', metavar='n', type=int, default=5000)
     parser.add_argument('--final-prediction-on-all', action='store_true')
     parser.add_argument('--skip-training', action='store_true')
     parser.add_argument('--dataloaders-num-workers', metavar='n', type=int, default=None)
@@ -212,24 +109,26 @@ def main():
 
     args = parser.parse_args()
 
-    # Make sure both input and output are provided
-    if args.data is None and args.output is None:
-        parser.print_help()
-        return
+    # Argument makes more sense as a negative, variable makes more sense as a positive
+    args.augmentation = not args.no_augmentation
 
-    # If this is one of a k-fold cross-validation job, then append k to the output path
-    # Whether or not that is the case, go ahead and create the output directory
-    if args.k is None:
+    # Make sure some sort of input is provided, else there is nothing to do
+    if len(args.training_set) == 0 and len(args.prediction_set) == 0 and len(args.validation_set) == 0:
+        raise ValueError('At least one of --training-set, --prediction-set, or --validation-set '
+                         'must be specified.')
+
+    # If this is part of a cross-validation job, append n (--cross-validate-on) to the output path
+    if args.cross_validate_on is None:
         dir_name = datetime.datetime.today().strftime('%Y-%m-%d_%H.%M.%S')
     else:
-        dir_name = datetime.datetime.today().strftime('%Y-%m-%d_%H.%M.%S') + '_' + str(args.k)
+        dir_name = datetime.datetime.today().strftime('%Y-%m-%d_%H.%M.%S') + '_' + str(args.cross_validate_on)
     output_path = os.path.join(args.output, dir_name)
 
     # If this is not a cross-validation job, then the defined output dir should be empty.
-    # If this is a cross-validation job, that directory might have output from other
+    # If this is a cross-validation job, that directory is allowed to have output from other
     # cross-validation splits, but not this one
     if os.path.isdir(args.output):
-        if args.k is None:
+        if args.cross_validate_on is None:
             if len(os.listdir(args.output)) > 0:
                 logging.error(f'Provided output directory must be empty: {args.output}')
                 return
@@ -237,8 +136,8 @@ def main():
             dirs_in_output = [os.path.join(args.output, f) for f in os.listdir(args.output)]
             dirs_in_output = list(filter(os.path.isdir, dirs_in_output))
             for job_dir in dirs_in_output:
-                if job_dir.endswith(f'_{args.k}'):
-                    logging.error(f'Cross-validation directory for same k already exists '
+                if job_dir.endswith(f'_{args.cross_validate_on}'):
+                    logging.error(f'Cross-validation directory for same hold-out set already exists '
                                   f'in output directory: {job_dir}')
                     return
 
@@ -270,31 +169,29 @@ def main():
     checkpoints_dir = os.path.join(output_path, 'checkpoints')
     os.makedirs(checkpoints_dir)
 
-    # Transform the JSON input file into a region set
-    region_data = inkid.data.RegionSet.get_data_from_file_or_url(args.data)
+    train_ds = inkid.data.Dataset(args.training_set)
+    val_ds = inkid.data.Dataset(args.validation_set)
+    pred_ds = inkid.data.Dataset(args.prediction_set)
 
-    # Override volume slices directory (iff only one volume specified in the region set)
-    if args.override_volume_slices_dir is not None:
-        volume_dirs_seen = set()
-        for ppm in region_data['ppms']:
-            volume_dirs_seen.add(region_data['ppms'][ppm]['volume'])
-            if len(volume_dirs_seen) > 1:
-                raise ValueError('--override-volume-slices-dir only '
-                                 'permitted if there is one volume in the region set')
-        for ppm in region_data['ppms']:
-            region_data['ppms'][ppm]['volume'] = args.override_volume_slices_dir
+    # If k-fold job, remove nth region from training and put in prediction/validation sets
+    if args.cross_validate_on is not None:
+        nth_region_path: str = train_ds.regions()[args.cross_validate_on].path
+        train_ds.remove_source(nth_region_path)
+        val_ds.sources.append(inkid.data.RegionSource(nth_region_path))
+        pred_ds.sources.append(inkid.data.RegionSource(nth_region_path))
 
-    # If k-fold job, remove kth region from training and put in prediction/validation sets
-    if args.k is not None:
-        k_region = region_data['regions']['training'].pop(int(args.k))
-        region_data['regions']['prediction'].append(k_region)
-        region_data['regions']['validation'].append(k_region)
-
-    # Now that we have made all these changes to the region data, create a region set from this data
-    regions = inkid.data.RegionSet(region_data)
+    pred_ds.set_regions_grid_spacing(args.prediction_grid_spacing)
 
     # Create metadata dict
-    metadata = {'Arguments': vars(args), 'Region set': region_data, 'Command': ' '.join(sys.argv)}
+    metadata = {
+        'Arguments': vars(args),
+        'Data': {
+            'training': train_ds.data_dict(),
+            'validation': val_ds.data_dict(),
+            'prediction': pred_ds.data_dict(),
+        },
+        'Command': ' '.join(sys.argv)
+    }
 
     # Add git hash to metadata if inside a git repository
     try:
@@ -310,55 +207,58 @@ def main():
     if 'SLURM_JOB_NAME' in os.environ:
         metadata['SLURM Job Name'] = os.getenv('SLURM_JOB_NAME')
 
-    # Diagnostic printing
+    # Print metadata for logging and diagnostics
     logging.info('\n' + json.dumps(metadata, indent=4, sort_keys=False))
 
-    # Write preliminary metadata to file
+    # Write preliminary metadata to file (will be updated when job completes)
     with open(os.path.join(output_path, 'metadata.json'), 'w') as metadata_file:
         metadata_file.write(json.dumps(metadata, indent=4, sort_keys=False))
 
     # Define the feature inputs to the network
     if args.feature_type == 'subvolume_3dcnn':
-        point_to_subvolume_input = functools.partial(
-            regions.point_to_subvolume_input,
-            subvolume_shape_voxels=args.subvolume_shape_voxels,
-            subvolume_shape_microns=args.subvolume_shape_microns,
+        subvolume_args = dict(
+            shape_voxels=args.subvolume_shape_voxels,
+            shape_microns=args.subvolume_shape_microns,
             out_of_bounds='all_zeros',
             move_along_normal=args.move_along_normal,
             method=args.subvolume_method,
             normalize=args.normalize_subvolumes,
-            model_3d_to_2d=args.model_3d_to_2d,
         )
-        training_features_fn = functools.partial(
-            point_to_subvolume_input,
+        train_feature_args = subvolume_args.copy()
+        train_feature_args.update(
             augment_subvolume=args.augmentation,
             jitter_max=args.jitter_max,
         )
-        validation_features_fn = functools.partial(
-            point_to_subvolume_input,
+        val_feature_args = subvolume_args.copy()
+        val_feature_args.update(
             augment_subvolume=False,
             jitter_max=0,
         )
-        prediction_features_fn = validation_features_fn
+        pred_feature_args = val_feature_args.copy()
     elif args.feature_type == 'voxel_vector_1dcnn':
-        training_features_fn = functools.partial(
-            regions.point_to_voxel_vector_input,
+        train_feature_args = dict(
             length_in_each_direction=args.length_in_each_direction,
             out_of_bounds='all_zeros',
         )
-        validation_features_fn = training_features_fn
-        prediction_features_fn = training_features_fn
+        val_feature_args = train_feature_args.copy()
+        pred_feature_args = train_feature_args.copy()
     elif args.feature_type == 'descriptive_statistics':
-        training_features_fn = functools.partial(
-            regions.point_to_descriptive_statistics,
+        train_feature_args = dict(
             subvolume_shape_voxels=args.subvolume_shape_voxels,
             subvolume_shape_microns=args.subvolume_shape_microns
         )
-        validation_features_fn = training_features_fn
-        prediction_features_fn = training_features_fn
+        val_feature_args = train_feature_args.copy()
+        pred_feature_args = train_feature_args.copy()
     else:
         logging.error('Feature type not recognized: {}'.format(args.feature_type))
         return
+
+    train_ds.set_for_all_sources('feature_type', args.feature_type)
+    train_ds.set_for_all_sources('feature_args', train_feature_args)
+    val_ds.set_for_all_sources('feature_type', args.feature_type)
+    val_ds.set_for_all_sources('feature_args', val_feature_args)
+    pred_ds.set_for_all_sources('feature_type', args.feature_type)
+    pred_ds.set_for_all_sources('feature_args', pred_feature_args)
 
     # Define the labels
     if args.model_3d_to_2d:
@@ -366,7 +266,9 @@ def main():
     else:
         label_shape = (1, 1)
     if args.label_type == 'ink_classes':
-        label_fn = functools.partial(regions.point_to_ink_classes_label, shape=label_shape)
+        label_args = dict(
+            shape=label_shape
+        )
         output_size = 2
         metrics = {
             'loss': {
@@ -378,28 +280,29 @@ def main():
             'fbeta': inkid.metrics.fbeta,
             'auc': inkid.metrics.auc
         }
-        reconstruct_fn = regions.reconstruct_predicted_ink_classes
     elif args.label_type == 'rgb_values':
-        label_fn = functools.partial(regions.point_to_rgb_values_label, shape=label_shape)
+        label_args = dict(
+            shape=label_shape
+        )
         output_size = 3
         metrics = {
             'loss': nn.SmoothL1Loss(reduction='mean')
         }
-        reconstruct_fn = regions.reconstruct_predicted_rgb
     else:
         logging.error('Label type not recognized: {}'.format(args.label_type))
         return
 
-    # Define the datasets
-    train_ds = inkid.data.PointsDataset(regions, ['training'], training_features_fn, label_fn)
+    train_ds.set_for_all_sources('label_type', args.label_type)  # TODO should all this stuff just be in init?
+    train_ds.set_for_all_sources('label_args', label_args)
+    val_ds.set_for_all_sources('label_type', args.label_type)
+    val_ds.set_for_all_sources('label_args', label_args)
+    # pred_ds does not generate labels, left as None
+
     if args.training_max_samples is not None:
         train_ds = inkid.ops.take_from_dataset(train_ds, args.training_max_samples)
-    val_ds = inkid.data.PointsDataset(regions, ['validation'], validation_features_fn, label_fn)
     # Only take n samples for validation, not the entire region
     if args.validation_max_samples is not None:
         val_ds = inkid.ops.take_from_dataset(val_ds, args.validation_max_samples)
-    pred_ds = inkid.data.PointsDataset(regions, ['prediction'], prediction_features_fn, lambda p: p,
-                                       grid_spacing=args.prediction_grid_spacing)
 
     if args.dataloaders_num_workers is None:
         args.dataloaders_num_workers = multiprocessing.cpu_count()
@@ -422,7 +325,7 @@ def main():
     if device.type == 'cuda':
         logging.info('    ' + torch.cuda.get_device_name(0))
         logging.info(f'    Memory Allocated: {round(torch.cuda.memory_allocated(0) / 1024 ** 3, 1)} GB')
-        logging.info(f'    Memory Cached:    {round(torch.cuda.memory_cached(0) / 1024 ** 3, 1)} GB')
+        logging.info(f'    Memory Cached:    {round(torch.cuda.memory_reserved(0) / 1024 ** 3, 1)} GB')
 
     # Create the model for training
     if args.feature_type == 'subvolume_3dcnn':
@@ -462,8 +365,8 @@ def main():
     # Show model in TensorBoard
     try:
         if train_dl is not None:
-            inputs, _ = next(iter(train_dl))
-            writer.add_graph(model, inputs)
+            _, features, _ = next(iter(train_dl))
+            writer.add_graph(model, features)
             writer.flush()
     except RuntimeError:
         logging.warning('Unable to add model graph to TensorBoard, skipping this step')
@@ -501,7 +404,7 @@ def main():
                 for epoch in range(args.training_epochs):
                     model.train()  # Turn on training mode
                     total_batches = len(train_dl)
-                    for batch_num, (xb, yb) in enumerate(train_dl):
+                    for batch_num, (_, xb, yb) in enumerate(train_dl):
                         with torch.profiler.record_function(f'train_batch_{batch_num}'):
                             xb = xb.to(device)
                             yb = yb.to(device)
@@ -516,10 +419,9 @@ def main():
                             opt.zero_grad()
 
                             if batch_num % args.summary_every_n_batches == 0:
-                                logging.info('Batch: {:>5d}/{:<5d} {} Seconds: {:5.3g}'.format(
-                                    batch_num, total_batches,
-                                    inkid.metrics.metrics_str(metric_results),
-                                    time.time() - last_summary))
+                                logging.info(f'Batch: {batch_num:>5d}/{total_batches:<5d} '
+                                             f'{inkid.metrics.metrics_str(metric_results)} '
+                                             f'Seconds: {time.time() - last_summary:5.3g}')
                                 for metric, result in inkid.metrics.metrics_dict(metric_results).items():
                                     writer.add_scalar('train_' + metric, result, epoch * len(train_dl) + batch_num)
                                     writer.flush()
@@ -539,7 +441,8 @@ def main():
                                 # Periodic evaluation and prediction
                                 if val_dl is not None:
                                     logging.info('Evaluating on validation set... ')
-                                    val_results = perform_validation(model, val_dl, metrics, device, args.label_type)
+                                    val_results = inkid.ops.perform_validation(model, val_dl, metrics, device,
+                                                                               args.label_type)
                                     for metric, result in inkid.metrics.metrics_dict(val_results).items():
                                         writer.add_scalar('val_' + metric, result, epoch * len(train_dl) + batch_num)
                                         writer.flush()
@@ -550,11 +453,10 @@ def main():
                                 # Prediction image
                                 if pred_dl is not None:
                                     logging.info('Generating prediction image... ')
-                                    generate_prediction_image(pred_dl, model, output_size, args.label_type, device,
-                                                              predictions_dir, f'{epoch}_{batch_num}', reconstruct_fn,
-                                                              regions,
-                                                              label_shape, args.prediction_averaging,
-                                                              args.prediction_grid_spacing)
+                                    inkid.ops.generate_prediction_images(pred_dl, model, output_size, args.label_type,
+                                                                         device,
+                                                                         predictions_dir, f'{epoch}_{batch_num}',
+                                                                         args.prediction_averaging)
                                     logging.info('done')
                                 else:
                                     logging.info('Empty prediction set, skipping prediction image generation.')
@@ -567,15 +469,16 @@ def main():
     # Run a final prediction on all regions
     if args.final_prediction_on_all:
         try:
-            final_pred_ds = inkid.data.PointsDataset(regions, ['prediction', 'training', 'validation'],
-                                                     prediction_features_fn, lambda p: p,
-                                                     grid_spacing=args.prediction_grid_spacing)
+            all_sources = list(set(args.training_set + args.validation_set + args.prediction_set))
+            final_pred_ds = inkid.data.Dataset(all_sources)
+            final_pred_ds.set_for_all_sources('feature_type', args.feature_type)
+            final_pred_ds.set_for_all_sources('feature_args', pred_feature_args)
+            final_pred_ds.set_regions_grid_spacing(args.prediction_grid_spacing)
             if len(final_pred_ds) > 0:
                 final_pred_dl = DataLoader(final_pred_ds, batch_size=args.batch_size * 2, shuffle=False,
                                            num_workers=args.dataloaders_num_workers)
-                generate_prediction_image(final_pred_dl, model, output_size, args.label_type, device,
-                                          predictions_dir, 'final', reconstruct_fn, regions, label_shape,
-                                          args.prediction_averaging, args.prediction_grid_spacing)
+                inkid.ops.generate_prediction_images(final_pred_dl, model, output_size, args.label_type, device,
+                                                     predictions_dir, 'final', args.prediction_averaging)
         # Perform finishing touches even if cut short
         except KeyboardInterrupt:
             pass
@@ -584,7 +487,7 @@ def main():
     try:
         if val_dl is not None:
             logging.info('Performing final evaluation on validation set... ')
-            val_results = perform_validation(model, val_dl, metrics, device, args.label_type)
+            val_results = inkid.ops.perform_validation(model, val_dl, metrics, device, args.label_type)
             metadata['Final validation metrics'] = inkid.metrics.metrics_dict(val_results)
             logging.info(f'done ({inkid.metrics.metrics_str(val_results)})')
         else:
