@@ -41,10 +41,6 @@ singularity:
     - python -m unittest
   tags:
     - docker
-  rules:
-    # don't run on the gitlab.com mirror
-    - if: '$CI_PROJECT_URL =~ /.*gitlab\.com.*/'
-      when: never
 
 test:3.8:
   extends: .test
