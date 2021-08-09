@@ -28,6 +28,36 @@ cdef Float3 normalize(Float3 vec):
     normalized.z = vec.z / n
     return normalized
 
+cdef Float3 mul_v3_v3fl(Float3 a, float f):
+    cdef Float3 r
+    r.x = a.x * f
+    r.y = a.y * f
+    r.z = a.z * f
+    return r
+
+cdef Float3 zero_v3():
+    cdef Float3 r
+    r.x = 0.0
+    r.y = 0.0
+    r.z = 0.0
+    return r
+
+cdef float normalize_v3_v3_length(Float3 r, Float3 a, float unit_length):
+    cdef float d
+    d = dot_v3v3(a, a)
+
+    # a larger value causes normalize errors in a scaled down models with camera extreme close
+    if d < 1.0e-35:
+        d = math.sqrt(d)
+        r = mul_v3_v3fl(a, unit_length / d)
+    else:
+        r = zero_v3()
+        d = 0.0
+    return d
+
+cdef float normalize_v3_v3(Float3 r, Float3 a):
+    return normalize_v3_v3_length(r, a, 1.0)
+
 cdef Float3 cross(Float3 vec_a, Float3 vec_b):
     cdef Float3 res
     res.x = vec_a.y * vec_b.z - vec_a.z * vec_b.y
@@ -61,7 +91,7 @@ cdef Float3 sub_v3_v3v3(Float3 a, Float3 b):
     r.z = a.z - b.z
     return r
 
-cdef negate_v3(Float3 v):
+cdef Float3 negate_v3(Float3 v):
     cdef Float3 r
     r.x = -v.x
     r.y = -v.y
@@ -89,8 +119,8 @@ cdef Float4 axis_angle_normalized_to_quat(Float3 axis, float angle):
     cdef Float4 q
     cdef Float3 t
     phi = 0.5 * angle
-    si = math.sinf(phi)
-    co = math.cosf(phi)
+    si = math.sin(phi)
+    co = math.cos(phi)
     q.a = co
     t = mul_v3_v3(axis, si)
     q.b = t.x
@@ -133,8 +163,13 @@ cdef Float3 ortho_v3_v3(Float3 v):
     return p
 
 cdef Float4 axis_angle_to_quat(Float3 axis, float angle):
-    cdef Float4 nor
-    nor = # TODO LEFT OFF
+    cdef Float3 nor
+    cdef Float4 q
+    if normalize_v3_v3(nor, axis) != 0.0:
+        q = axis_angle_normalized_to_quat(nor, angle)
+    else:
+        q = unit_qt()
+    return q
 
 # Note: expects vectors to be normalized
 cdef Float4 rotation_between_vecs_to_quat(Float3 v1, Float3 v2):
@@ -168,29 +203,39 @@ cdef Float4 vector_rotation_difference(Float3 vec_a, Float3 vec_b):
 
 
 cpdef BasisVectors get_basis_from_square(square_corners):
+    cdef BasisVectors basis
+    cdef Float3 x_vec, y_vec, z_vec
+
     top_left, top_right, bottom_left, bottom_right = np.array(square_corners)
 
-    x_vec = ((top_right - top_left) + (bottom_right - bottom_left)) / 2.0
-    y_vec = ((bottom_left - top_left) + (bottom_right - top_right)) / 2.0
-    z_vec = np.cross(x_vec, y_vec)
+    x_vec_np = ((top_right - top_left) + (bottom_right - bottom_left)) / 2.0
+    y_vec_np = ((bottom_left - top_left) + (bottom_right - top_right)) / 2.0
+
+    x_vec.x = x_vec_np[0]
+    x_vec.y = x_vec_np[1]
+    x_vec.z = x_vec_np[2]
+
+    y_vec.x = y_vec_np[0]
+    y_vec.y = y_vec_np[1]
+    y_vec.z = y_vec_np[2]
+
+    z_vec = cross(x_vec, y_vec)
 
     x_vec = normalize(x_vec)
     y_vec = normalize(y_vec)
     z_vec = normalize(z_vec)
 
-    cdef BasisVectors basis
+    basis.x.x = x_vec.x
+    basis.x.y = x_vec.y
+    basis.x.z = x_vec.z
 
-    basis.x.x = x_vec[0]
-    basis.x.y = x_vec[1]
-    basis.x.z = x_vec[2]
+    basis.y.x = y_vec.x
+    basis.y.y = y_vec.y
+    basis.y.z = y_vec.z
 
-    basis.y.x = y_vec[0]
-    basis.y.y = y_vec[1]
-    basis.y.z = y_vec[2]
-
-    basis.z.x = z_vec[0]
-    basis.z.y = z_vec[1]
-    basis.z.z = z_vec[2]
+    basis.z.x = z_vec.x
+    basis.z.y = z_vec.y
+    basis.z.z = z_vec.z
 
     return basis
 
