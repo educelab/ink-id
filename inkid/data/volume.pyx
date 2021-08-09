@@ -150,7 +150,6 @@ cdef void rotation_between_vecs_to_quat(float q[4], const float v1[3], const flo
             axis_angle_to_quat(q, axis, <float>math.M_PI)
 
 cdef void vector_rotation_difference(float q[4], const float vec_a_in[3], const float vec_b_in[3]):
-    cdef float quat[4]
     cdef float vec_a[3]
     cdef float vec_b[3]
     copy_v3_v3(vec_a, vec_a_in)
@@ -159,7 +158,7 @@ cdef void vector_rotation_difference(float q[4], const float vec_a_in[3], const 
     normalize_v3(vec_a)
     normalize_v3(vec_b)
 
-    rotation_between_vecs_to_quat(quat, vec_a, vec_b)
+    rotation_between_vecs_to_quat(q, vec_a, vec_b)
 
 cdef void copy_qt_qt(float q1[4], const float q2[4]):
     q1[0] = q2[0]
