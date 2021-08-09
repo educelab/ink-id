@@ -250,17 +250,14 @@ cdef void rotate(float out[3], const float vec[3], const float quaternion[4]):
 
     mul_m3_v3(rmat, out)
 
-cpdef float norm(Float3 vec):
-    return (vec.x**2 + vec.y**2 + vec.z**2)**(1./2)
+cpdef norm(vec):
+    vec = np.array(vec)
+    return (vec[0]**2 + vec[1]**2 + vec[2]**2)**(1./2)
 
-cpdef normalize_fl3(Float3 vec):
-    cdef float n
-    cdef Float3 normalized
+cpdef normalize_fl3(vec):
+    vec = np.array(vec)
     n = norm(vec)
-    normalized.x = vec.x / n
-    normalized.y = vec.y / n
-    normalized.z = vec.z / n
-    return normalized
+    return vec / n
 
 cpdef BasisVectors get_basis_from_square(square_corners):
     cdef BasisVectors basis
@@ -719,7 +716,7 @@ cdef class Volume:
         if normal is None:
             normal = np.array([0, 0, 1])
         else:
-            normal = normalize_fl3(normal) # TODO LEFT OFF get this to work
+            normal = normalize_fl3(normal)
 
         if out_of_bounds is None:
             out_of_bounds = 'all_zeros'
