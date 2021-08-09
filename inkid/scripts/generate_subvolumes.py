@@ -76,7 +76,7 @@ def main():
     concatenated_subvolumes = np.zeros(concatenated_shape)
 
     counter = 0
-    for subvolume in input_dl:
+    for _, subvolume in input_dl:
         if counter >= args.number:
             break
         subvolume = subvolume.numpy()[0][0]
