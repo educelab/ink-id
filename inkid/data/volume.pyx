@@ -250,10 +250,10 @@ cdef void rotate(float out[3], const float vec[3], const float quaternion[4]):
 
     mul_m3_v3(rmat, out)
 
-cdef float norm(Float3 vec):
+cpdef float norm(Float3 vec):
     return (vec.x**2 + vec.y**2 + vec.z**2)**(1./2)
 
-cdef Float3 normalize(Float3 vec):
+cpdef normalize_fl3(Float3 vec):
     cdef float n
     cdef Float3 normalized
     n = norm(vec)
@@ -489,7 +489,7 @@ cdef class Volume:
         assert len(center) == 3
         assert len(normal) == 3
 
-        normal = normalize(normal)
+        normal = normalize_fl3(normal)
 
         if out_of_bounds is None:
             out_of_bounds = 'all_zeros'
@@ -719,7 +719,7 @@ cdef class Volume:
         if normal is None:
             normal = np.array([0, 0, 1])
         else:
-            normal = normalize(normal)
+            normal = normalize_fl3(normal) # TODO LEFT OFF get this to work
 
         if out_of_bounds is None:
             out_of_bounds = 'all_zeros'
