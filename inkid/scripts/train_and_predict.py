@@ -369,9 +369,6 @@ def main():
         model_dict.update(pretrained_dict)
         model.load_state_dict(model_dict)
 
-    # Move model to device (possibly GPU)
-    model = model.to(device)
-
     # Show model in TensorBoard
     try:
         if train_dl is not None:
@@ -380,6 +377,9 @@ def main():
             writer.flush()
     except RuntimeError:
         logging.warning('Unable to add model graph to TensorBoard, skipping this step')
+
+    # Move model to device (possibly GPU)
+    model = model.to(device)
 
     # Print summary of model
     shape = (in_channels,) + tuple(args.subvolume_shape_voxels)
