@@ -8,6 +8,10 @@ extensions = [
         ['inkid/data/volume.pyx'],
         include_dirs=[np.get_include()]
     ),
+    Extension(
+        'inkid.data.mathutils',
+        ['inkid/data/mathutils.pyx']
+    )
 ]
 
 setup(

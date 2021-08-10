@@ -10,25 +10,47 @@ import os
 import random
 from typing import Dict
 
-import mathutils
 import numpy as np
 cimport numpy as cnp
 from PIL import Image
 from tqdm import tqdm
 
+cimport inkid.data.mathutils as mathutils
 
-cdef BasisVectors get_basis_from_square(square_corners):
+cpdef norm(vec):
+    vec = np.array(vec)
+    return (vec[0]**2 + vec[1]**2 + vec[2]**2)**(1./2)
+
+cpdef normalize_fl3(vec):
+    vec = np.array(vec)
+    n = norm(vec)
+    return vec / n
+
+cpdef BasisVectors get_basis_from_square(square_corners):
+    cdef BasisVectors basis
+    cdef float x_vec[3]
+    cdef float y_vec[3]
+    cdef float z_vec[3]
+    mathutils.zero_v3(z_vec)
+
     top_left, top_right, bottom_left, bottom_right = np.array(square_corners)
 
-    x_vec = ((top_right - top_left) + (bottom_right - bottom_left)) / 2.0
-    y_vec = ((bottom_left - top_left) + (bottom_right - top_right)) / 2.0
-    z_vec = np.cross(x_vec, y_vec)
+    x_vec_np = ((top_right - top_left) + (bottom_right - bottom_left)) / 2.0
+    y_vec_np = ((bottom_left - top_left) + (bottom_right - top_right)) / 2.0
 
-    x_vec = mathutils.Vector(x_vec.tolist()).normalized()
-    y_vec = mathutils.Vector(y_vec.tolist()).normalized()
-    z_vec = mathutils.Vector(z_vec.tolist()).normalized()
+    x_vec[0] = x_vec_np[0]
+    x_vec[1] = x_vec_np[1]
+    x_vec[2] = x_vec_np[2]
 
-    cdef BasisVectors basis
+    y_vec[0] = y_vec_np[0]
+    y_vec[1] = y_vec_np[1]
+    y_vec[2] = y_vec_np[2]
+
+    mathutils.cross_v3_v3v3(z_vec, x_vec, y_vec)
+
+    mathutils.normalize_v3(x_vec)
+    mathutils.normalize_v3(y_vec)
+    mathutils.normalize_v3(z_vec)
 
     basis.x.x = x_vec[0]
     basis.x.y = x_vec[1]
@@ -45,7 +67,7 @@ cdef BasisVectors get_basis_from_square(square_corners):
     return basis
 
 
-cdef BasisVectors get_component_vectors_from_normal(Float3 n):
+cpdef BasisVectors get_component_vectors_from_normal(const Float3 n):
     """Get a subvolume oriented based on a surface normal vector.
 
     Calculate the rotation needed to align the z axis of the
@@ -57,23 +79,35 @@ cdef BasisVectors get_component_vectors_from_normal(Float3 n):
     https://docs.blender.org/api/blender_python_api_current/mathutils.html
 
     """
-    x_vec = mathutils.Vector([1, 0, 0])
-    y_vec = mathutils.Vector([0, 1, 0])
-    z_vec = mathutils.Vector([0, 0, 1])
-    normal = mathutils.Vector([n.x, n.y, n.z]).normalized()
-
-    quaternion = z_vec.rotation_difference(normal)
-
-    x_vec.rotate(quaternion)
-    y_vec.rotate(quaternion)
-    z_vec.rotate(quaternion)
-
     cdef BasisVectors basis
-    
+    cdef float x_vec[3]
+    cdef float y_vec[3]
+    cdef float z_vec[3]
+    cdef float normal[3]
+    cdef float quaternion[4]
+
+    mathutils.zero_v3(x_vec)
+    x_vec[0] = 1.0
+    mathutils.zero_v3(y_vec)
+    y_vec[1] = 1.0
+    mathutils.zero_v3(z_vec)
+    z_vec[2] = 1.0
+
+    normal[0] = n.x
+    normal[1] = n.y
+    normal[2] = n.z
+    mathutils.normalize_v3(normal)
+
+    mathutils.vector_rotation_difference(quaternion, z_vec, normal)
+
+    mathutils.rotate(x_vec, x_vec, quaternion)
+    mathutils.rotate(y_vec, y_vec, quaternion)
+    mathutils.rotate(z_vec, z_vec, quaternion)
+
     basis.x.x = x_vec[0]
     basis.x.y = x_vec[1]
     basis.x.z = x_vec[2]
-    
+
     basis.y.x = y_vec[0]
     basis.y.y = y_vec[1]
     basis.y.z = y_vec[2]
@@ -220,7 +254,7 @@ cdef class Volume:
         assert len(center) == 3
         assert len(normal) == 3
 
-        normal = mathutils.Vector(normal).normalized()
+        normal = normalize_fl3(normal)
 
         if out_of_bounds is None:
             out_of_bounds = 'all_zeros'
@@ -448,9 +482,9 @@ cdef class Volume:
         # TODO if empty return zeros?
 
         if normal is None:
-            normal = mathutils.Vector((0, 0, 1))
+            normal = np.array([0, 0, 1])
         else:
-            normal = mathutils.Vector(normal).normalized()
+            normal = normalize_fl3(normal)
 
         if out_of_bounds is None:
             out_of_bounds = 'all_zeros'
