@@ -12,17 +12,11 @@ cdef struct Float3:
     float y
     float z
 
-cdef struct Float4:
-    float a
-    float b
-    float c
-    float d
-
 cdef struct BasisVectors:
     Float3 x
     Float3 y
     Float3 z
 
-cdef BasisVectors get_component_vectors_from_normal(Float3 n)
+cpdef BasisVectors get_component_vectors_from_normal(Float3 n)
 
-cdef BasisVectors get_basis_from_square(square_corners)
+cpdef BasisVectors get_basis_from_square(square_corners)

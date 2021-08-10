@@ -24,7 +24,7 @@ Pipfile*
 test/
 
 # Cython
-inkid/data/volume.html
+inkid/data/*.html
 *.c
 *.so
 
