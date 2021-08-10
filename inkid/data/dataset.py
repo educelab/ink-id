@@ -151,7 +151,7 @@ class RegionSource(DataSource):
             raise ValueError(f'Unknown feature_type: {self.feature_type} set for region source'
                              f' {self.path}')
         # Get the label
-        label = None
+        label = np.nan  # Cannot return NoneType from PyTorch dataloader. Next best thing.
         if self.label_type == 'ink_classes':
             label = self.point_to_ink_classes_label(
                 (surface_x, surface_y),
@@ -165,10 +165,7 @@ class RegionSource(DataSource):
         elif self.label_type is not None:
             raise ValueError(f'Unknown label_type: {self.label_type} set for region source'
                              f' {self.path}')
-        if label is None:
-            return feature_metadata, feature
-        else:
-            return feature_metadata, feature, label
+        return feature_metadata, feature, label
 
     def update_points_list(self) -> None:
         """Update the list of points after changes to the bounding box, grid spacing, or some other options."""

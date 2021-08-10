@@ -13,6 +13,7 @@ import subprocess
 from xml.dom.minidom import parseString
 
 from dicttoxml import dicttoxml
+from matplotlib import cm
 import numpy as np
 from PIL import Image
 import torch
@@ -176,7 +177,7 @@ def generate_prediction_images(dataloader, model, output_size, label_type, devic
     """Helper function to generate a prediction image given a model and dataloader, and save it to a file."""
     model.eval()  # Turn off training mode for batch norm and dropout purposes
     with torch.no_grad():
-        for batch_metadata, batch_features in tqdm(dataloader):
+        for batch_metadata, batch_features, _ in tqdm(dataloader):
             # Smooth predictions via augmentation. Augment each subvolume 8-fold via rotations and flips
             if prediction_averaging:
                 rotations = range(4)
@@ -274,3 +275,53 @@ def normalize_path(path, relative_url):
         path
     ))
     return urlunsplit(new_url)
+
+
+def color_map_float_image(img, cmap='gray'):
+    # TODO LEFT OFF I don't like the way the images look from the IAA-1032a dataset. Maybe this is the culprit.
+    color_map = cm.get_cmap(cmap)
+    return Image.fromarray(np.uint8(color_map(img) * 255))
+
+
+def subvolume_to_sample_img(subvolume, padding, background_color):
+    z_shape, y_shape, x_shape = subvolume.shape
+
+    # Get central slices
+    slices = []
+    z_idx: int = z_shape // 2
+    slices.append(color_map_float_image(subvolume[z_idx, :, :]))
+    y_idx: int = y_shape // 2
+    slices.append(color_map_float_image(subvolume[:, y_idx, :]))
+    x_idx: int = x_shape // 2
+    slices.append(color_map_float_image(subvolume[:, :, x_idx]))
+
+    width = sum([s.size[0] for s in slices]) + padding * (len(slices) - 1)
+    height = max([s.size[1] for s in slices])
+
+    img = Image.new('RGB', (width, height), background_color)
+    x_ctr = 0
+    for s in slices:
+        img.paste(s, (x_ctr, 0))
+        x_ctr += s.size[0] + padding
+
+    return img
+
+
+def save_sample_subvolumes_to_img(subvolumes, outdir, padding=10, background_color=(128, 128, 128)):
+    os.makedirs(outdir)
+    subvolumes = np.squeeze(subvolumes, axis=1)  # Remove channels axis
+
+    imgs = []
+    for subvolume in subvolumes:
+        imgs.append(subvolume_to_sample_img(subvolume, padding, background_color))
+
+    width = imgs[0].size[0] + padding * 2
+    height = imgs[0].size[1] * len(imgs) + padding * (len(imgs) + 1)
+
+    composite_img = Image.new('RGB', (width, height), background_color)
+
+    for i, img in enumerate(imgs):
+        composite_img.paste(img, (padding, img.size[1] * i + padding * (i + 1)))
+
+    outfile = os.path.join(outdir, 'sample_batch.png')
+    composite_img.save(outfile)

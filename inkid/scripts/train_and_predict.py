@@ -370,11 +370,14 @@ def main():
         model.load_state_dict(model_dict)
 
     # Show model in TensorBoard and save sample subvolumes
+    sample_dl = train_dl or pred_dl or None
     try:
-        if train_dl is not None:
-            _, features, _ = next(iter(train_dl))
+        if sample_dl is not None:
+            _, features, _ = next(iter(sample_dl))
             writer.add_graph(model, features)
             writer.flush()
+            if args.feature_type == 'subvolume':
+                inkid.ops.save_sample_subvolumes_to_img(features, os.path.join(output_path, 'subvolumes'))
     except RuntimeError:
         logging.warning('Unable to add model graph to TensorBoard, skipping this step')
 
