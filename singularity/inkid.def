@@ -1,9 +1,9 @@
-Bootstrap: library
-From: ubuntu:20.04
+Bootstrap: docker
+From: ubuntu:21.04
 
 %labels
   MAINTAINER Stephen Parsons <stephen.parsons@uky.edu>, Mami Hayashida <mami.hayashida@uky.edu>
-  OS Ubuntu 20.04
+  OS Ubuntu 21.04
 
 %files
   /tmp/ink-id /usr/local/dri/ink-id
@@ -11,29 +11,22 @@ From: ubuntu:20.04
 %post
   # Give read/write access in ink-id (so it can later be edited using a persistent overlay)
   chmod --recursive a+rw /usr/local/dri/ink-id
-  # Basic installs
+  # Basic installs (noninteractive so tzdata dependency install doesn't halt build with prompt)
   apt update
-  apt install -y git nano vim
+  DEBIAN_FRONTEND=noninteractive apt install -y git nano vim build-essential
   # Store git credentials for up to an hour (in overlay, not container) for convenience
   git config --global credential.helper cache
   git config --global credential.helper 'cache --timeout=3600'
   # To make add-apt-repository available
   apt install -y software-properties-common
-  # To make python3.8 available
-  add-apt-repository -y ppa:deadsnakes/ppa
-  # To make python3-pip available
-  add-apt-repository -y universe
-  apt update
   # Temporary fix for https://github.com/pytorch/pytorch/issues/53452
   apt install -y libncurses5
   # Python installs
-  apt install -y python3.8-dev python3-pip
-  pip3 install --upgrade pip
-  pip install --upgrade virtualenv
+  apt install -y python3.9-dev python3.9-venv
   # Needed for pygifsicle
   apt install -y gifsicle
   # Create a virtualenv for this project
-  virtualenv --python=python3.8 /usr/local/dri/ink-id/.venv
+  python3.9 -m venv /usr/local/dri/ink-id/.venv
   # Activate virtualenv
   . /usr/local/dri/ink-id/.venv/bin/activate
   # Update pip
