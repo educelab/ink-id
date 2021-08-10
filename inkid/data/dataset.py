@@ -128,13 +128,13 @@ class RegionSource(DataSource):
         feature_metadata = (self.path, surface_x, surface_y)
         # Get the feature
         feature = None
-        if self.feature_type == 'subvolume_3dcnn':
+        if self.feature_type == 'subvolume':
             feature = self._volume.get_subvolume(
                 center=(x, y, z),
                 normal=(n_x, n_y, n_z),
                 **self.feature_args
             )
-        elif self.feature_type == 'voxel_vector_1dcnn':
+        elif self.feature_type == 'voxel_vector':
             feature = self._volume.get_voxel_vector(
                 center=(x, y, z),
                 normal=(n_x, n_y, n_z),

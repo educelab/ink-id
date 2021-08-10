@@ -48,8 +48,8 @@ def main():
                              'add this set to the validation and prediction sets')
 
     # Method
-    parser.add_argument('--feature-type', default='subvolume_3dcnn', help='type of input features',
-                        choices=['subvolume_3dcnn', 'voxel_vector_1dcnn', 'descriptive_statistics'])
+    parser.add_argument('--feature-type', default='subvolume', help='type of input features',
+                        choices=['subvolume', 'voxel_vector', 'descriptive_statistics'])
     parser.add_argument('--label-type', default='ink_classes', help='type of labels',
                         choices=['ink_classes', 'rgb_values'])
     parser.add_argument('--model-3d-to-2d', action='store_true',
@@ -215,7 +215,7 @@ def main():
         metadata_file.write(json.dumps(metadata, indent=4, sort_keys=False))
 
     # Define the feature inputs to the network
-    if args.feature_type == 'subvolume_3dcnn':
+    if args.feature_type == 'subvolume':
         subvolume_args = dict(
             shape_voxels=args.subvolume_shape_voxels,
             shape_microns=args.subvolume_shape_microns,
@@ -235,7 +235,7 @@ def main():
             jitter_max=0,
         )
         pred_feature_args = val_feature_args.copy()
-    elif args.feature_type == 'voxel_vector_1dcnn':
+    elif args.feature_type == 'voxel_vector':
         train_feature_args = dict(
             length_in_each_direction=args.length_in_each_direction,
             out_of_bounds='all_zeros',
@@ -329,7 +329,7 @@ def main():
         logging.info(f'    Memory Cached:    {round(torch.cuda.memory_reserved(0) / 1024 ** 3, 1)} GB')
 
     # Create the model for training
-    if args.feature_type == 'subvolume_3dcnn':
+    if args.feature_type == 'subvolume':
         in_channels = 1
         if args.model in ['original', 'autoencoder']:
             encoder = inkid.model.Subvolume3DcnnEncoder(args.subvolume_shape_voxels,
@@ -369,7 +369,7 @@ def main():
         model_dict.update(pretrained_dict)
         model.load_state_dict(model_dict)
 
-    # Show model in TensorBoard
+    # Show model in TensorBoard and save sample subvolumes
     try:
         if train_dl is not None:
             _, features, _ = next(iter(train_dl))
