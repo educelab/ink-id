@@ -277,43 +277,74 @@ def normalize_path(path, relative_url):
     return urlunsplit(new_url)
 
 
-def color_map_float_image(img, cmap='gray'):
-    # TODO LEFT OFF I don't like the way the images look from the IAA-1032a dataset. Maybe this is the culprit.
+def uint16_to_float32_normalized_0_1(img):
+    # Convert to float
+    img = np.asarray(img, np.float32)
+    # Normalize to [0, 1]
+    img *= 1.0 / np.iinfo(np.uint16).max
+    return img
+
+
+def color_map_float_image(img, cmap='turbo'):
     color_map = cm.get_cmap(cmap)
     return Image.fromarray(np.uint8(color_map(img) * 255))
 
 
-def subvolume_to_sample_img(subvolume, padding, background_color):
+def subvolume_to_sample_img(subvolume, volume, vol_coord, padding, background_color):
+    max_size = (300, 300)
     z_shape, y_shape, x_shape = subvolume.shape
 
-    # Get central slices
-    slices = []
-    z_idx: int = z_shape // 2
-    slices.append(color_map_float_image(subvolume[z_idx, :, :]))
-    y_idx: int = y_shape // 2
-    slices.append(color_map_float_image(subvolume[:, y_idx, :]))
-    x_idx: int = x_shape // 2
-    slices.append(color_map_float_image(subvolume[:, :, x_idx]))
+    sub_images = []
 
-    width = sum([s.size[0] for s in slices]) + padding * (len(slices) - 1)
-    height = max([s.size[1] for s in slices])
+    # Get central slices of subvolume
+    z_idx: int = z_shape // 2
+    sub_images.append(color_map_float_image(subvolume[z_idx, :, :]))
+    y_idx: int = y_shape // 2
+    sub_images.append(color_map_float_image(subvolume[:, y_idx, :]))
+    x_idx: int = x_shape // 2
+    sub_images.append(color_map_float_image(subvolume[:, :, x_idx]))
+
+    # Get intersection slices of volume
+    vol_x, vol_y, vol_z = vol_coord
+
+    vol_z_idx = int(vol_z)
+    vol_z_img = color_map_float_image(volume.z_slice(vol_z_idx))
+    vol_z_img.thumbnail(max_size)
+    sub_images.append(vol_z_img)
+    # TODO LEFT OFF add subvolume location marker to slice images
+
+    vol_y_idx = int(vol_y)
+    vol_y_img = color_map_float_image(volume.y_slice(vol_y_idx))
+    vol_y_img.thumbnail(max_size)
+    sub_images.append(vol_y_img)
+    
+    vol_x_idx = int(vol_x)
+    vol_x_img = color_map_float_image(volume.x_slice(vol_x_idx))
+    vol_x_img.thumbnail(max_size)
+    sub_images.append(vol_x_img)
+
+    width = sum([s.size[0] for s in sub_images]) + padding * (len(sub_images) - 1)
+    height = max([s.size[1] for s in sub_images])
 
     img = Image.new('RGB', (width, height), background_color)
     x_ctr = 0
-    for s in slices:
+    for s in sub_images:
         img.paste(s, (x_ctr, 0))
         x_ctr += s.size[0] + padding
 
     return img
 
 
-def save_sample_subvolumes_to_img(subvolumes, outdir, padding=10, background_color=(128, 128, 128)):
+def save_subvolume_batch_to_img(dataloader, outdir, padding=10, background_color=(128, 128, 128)):
     os.makedirs(outdir)
+
+    subvolume_metadatas, subvolumes, _ = next(iter(dataloader))
     subvolumes = np.squeeze(subvolumes, axis=1)  # Remove channels axis
 
     imgs = []
-    for subvolume in subvolumes:
-        imgs.append(subvolume_to_sample_img(subvolume, padding, background_color))
+    for source_path, _, _, vol_x, vol_y, vol_z, _, _, _, subvolume in zip(*subvolume_metadatas, subvolumes):
+        volume = dataloader.dataset.get_source(source_path).volume
+        imgs.append(subvolume_to_sample_img(subvolume, volume, (vol_x, vol_y, vol_z), padding, background_color))
 
     width = imgs[0].size[0] + padding * 2
     height = imgs[0].size[1] * len(imgs) + padding * (len(imgs) + 1)

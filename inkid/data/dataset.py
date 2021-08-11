@@ -79,7 +79,7 @@ class RegionSource(DataSource):
 
         # Initialize region's PPM, volume, etc
         self._ppm: inkid.data.PPM = inkid.data.PPM.from_path(self.data_dict['ppm'])
-        self._volume: inkid.data.Volume = inkid.data.Volume.from_path(self.data_dict['volume'])
+        self.volume: inkid.data.Volume = inkid.data.Volume.from_path(self.data_dict['volume'])
         self.bounding_box: Tuple[int, int, int, int] = self.data_dict['bounding_box'] or self.get_default_bounds()
         self._invert_normals: bool = self.data_dict['invert_normals']
 
@@ -125,23 +125,23 @@ class RegionSource(DataSource):
         # Read that value from PPM
         x, y, z, n_x, n_y, n_z = self._ppm.get_point_with_normal(surface_x, surface_y)
         # Get the feature metadata (useful for e.g. knowing where this feature came from on the surface)
-        feature_metadata = (self.path, surface_x, surface_y)
+        feature_metadata = (self.path, surface_x, surface_y, x, y, z, n_x, n_y, n_z)
         # Get the feature
         feature = None
         if self.feature_type == 'subvolume':
-            feature = self._volume.get_subvolume(
+            feature = self.volume.get_subvolume(
                 center=(x, y, z),
                 normal=(n_x, n_y, n_z),
                 **self.feature_args
             )
         elif self.feature_type == 'voxel_vector':
-            feature = self._volume.get_voxel_vector(
+            feature = self.volume.get_voxel_vector(
                 center=(x, y, z),
                 normal=(n_x, n_y, n_z),
                 **self.feature_args
             )
         elif self.feature_type == 'descriptive_statistics':
-            subvolume = self._volume.get_subvolume(
+            subvolume = self.volume.get_subvolume(
                 center=(x, y, z),
                 normal=(n_x, n_y, n_z),
                 **self.feature_args

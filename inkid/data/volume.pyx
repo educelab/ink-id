@@ -8,7 +8,7 @@ cimport libc.math as math
 import logging
 import os
 import random
-from typing import Dict
+from typing import Dict, Optional
 
 import numpy as np
 cimport numpy as cnp
@@ -16,6 +16,8 @@ from PIL import Image
 from tqdm import tqdm
 
 cimport inkid.data.mathutils as mathutils
+
+import inkid.ops
 
 cpdef norm(vec):
     vec = np.array(vec)
@@ -137,7 +139,7 @@ cdef class Volume:
     - Volume shapes are (z, y, x)
 
     """
-    cdef unsigned short [:, :, :] _data_view
+    cdef const unsigned short [:, :, :] _data_view
     cdef int shape_z, shape_y, shape_x
     cdef dict _metadata
     cdef float _voxelsize
@@ -201,6 +203,15 @@ cdef class Volume:
             slices_path,
             data.shape
         ))
+
+    def z_slice(self, idx):
+        return inkid.ops.uint16_to_float32_normalized_0_1(self._data_view[idx, :, :])
+
+    def y_slice(self, idx):
+        return inkid.ops.uint16_to_float32_normalized_0_1(self._data_view[:, idx, :])
+
+    def x_slice(self, idx):
+        return inkid.ops.uint16_to_float32_normalized_0_1(self._data_view[:, :, idx])
 
     cdef unsigned short intensity_at(self, int x, int y, int z) nogil:
         """Get the intensity value at a voxel position."""
@@ -557,10 +568,8 @@ cdef class Volume:
 
         assert subvolume.shape == tuple(shape_voxels)
 
-        # Convert to float
-        subvolume = np.asarray(subvolume, np.float32)
-        # Normalize to [0, 1]
-        subvolume *= 1.0 / np.iinfo(np.uint16).max
+        # Convert to float normalized to [0, 1]
+        subvolume = inkid.ops.uint16_to_float32_normalized_0_1(subvolume)
         # Add singleton dimension for number of channels
         subvolume = np.expand_dims(subvolume, 0)
 
