@@ -37,7 +37,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
 
     # Needed files
-    parser.add_argument('output', metavar='output', help='output directory')
+    parser.add_argument('--output', metavar='output', help='output directory', required=True)
     parser.add_argument('--training-set', metavar='path', nargs='*', help='training dataset(s)', default=[])
     parser.add_argument('--validation-set', metavar='path', nargs='*', help='validation dataset(s)', default=[])
     parser.add_argument('--prediction-set', metavar='path', nargs='*', help='prediction dataset(s)', default=[])

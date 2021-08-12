@@ -1,5 +1,4 @@
 import argparse
-import functools
 import math
 import numpy as np
 import os
@@ -26,10 +25,6 @@ def main():
     parser.add_argument('--augmentation', action='store_true', dest='augmentation')
     parser.add_argument('--no-augmentation', action='store_false', dest='augmentation')
 
-    # Data region
-    parser.add_argument('--leave-out-nth-source', metavar='num', default=None, type=int,
-                        help='index of data source to remove from input dataset')
-
     args = parser.parse_args()
 
     # Make sure some sort of input is provided, else there is nothing to do
@@ -39,11 +34,6 @@ def main():
     input_ds = inkid.data.Dataset(args.input_set)
 
     os.makedirs(args.output, exist_ok=True)
-
-    # If k-fold job, remove nth region from training and put in prediction/validation sets
-    if args.leave_out_nth_source is not None:
-        nth_region_path: str = input_ds.regions()[args.leave_out_nth_source].path
-        input_ds.remove_source(nth_region_path)
 
     subvolume_args = dict(
         shape_voxels=args.subvolume_shape_voxels,
