@@ -8,7 +8,7 @@ cachetools==4.2.2
 certifi==2021.5.30
 charset-normalizer==2.0.4
 cycler==0.10.0
-Cython==0.29.24
+Cython==3.0.0a9
 dicttoxml==1.7.4
 docutils==0.17.1
 gitdb==4.0.7
@@ -20,7 +20,7 @@ humanize==3.11.0
 idna==3.2
 imageio==2.9.0
 imagesize==1.2.0
--e git+ssh://git@code.cs.uky.edu/seales-research/ink-id.git@80e487d705387496bac05a338f22f7b20d25aeff#egg=inkid
+-e git+ssh://git@code.cs.uky.edu/seales-research/ink-id.git@d1565ba2d3a8ba84d18c5e2bee167e5b219115a3#egg=inkid
 isort==5.9.3
 Jinja2==3.0.1
 joblib==1.0.1

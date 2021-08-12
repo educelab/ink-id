@@ -46,7 +46,7 @@ def main():
         jitter_max=args.jitter_max,
     )
 
-    input_ds.set_for_all_sources('feature_type', 'subvolume_3dcnn')
+    input_ds.set_for_all_sources('feature_type', 'subvolume')
     input_ds.set_for_all_sources('feature_args', subvolume_args)
 
     seed = 42

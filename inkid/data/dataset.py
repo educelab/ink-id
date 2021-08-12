@@ -79,7 +79,7 @@ class RegionSource(DataSource):
 
         # Initialize region's PPM, volume, etc
         self._ppm: inkid.data.PPM = inkid.data.PPM.from_path(self.data_dict['ppm'])
-        self._volume: inkid.data.Volume = inkid.data.Volume.from_path(self.data_dict['volume'])
+        self.volume: inkid.data.Volume = inkid.data.Volume.from_path(self.data_dict['volume'])
         self.bounding_box: Tuple[int, int, int, int] = self.data_dict['bounding_box'] or self.get_default_bounds()
         self._invert_normals: bool = self.data_dict['invert_normals']
 
@@ -125,23 +125,23 @@ class RegionSource(DataSource):
         # Read that value from PPM
         x, y, z, n_x, n_y, n_z = self._ppm.get_point_with_normal(surface_x, surface_y)
         # Get the feature metadata (useful for e.g. knowing where this feature came from on the surface)
-        feature_metadata = (self.path, surface_x, surface_y)
+        feature_metadata = (self.path, surface_x, surface_y, x, y, z, n_x, n_y, n_z)
         # Get the feature
         feature = None
-        if self.feature_type == 'subvolume_3dcnn':
-            feature = self._volume.get_subvolume(
+        if self.feature_type == 'subvolume':
+            feature = self.volume.get_subvolume(
                 center=(x, y, z),
                 normal=(n_x, n_y, n_z),
                 **self.feature_args
             )
-        elif self.feature_type == 'voxel_vector_1dcnn':
-            feature = self._volume.get_voxel_vector(
+        elif self.feature_type == 'voxel_vector':
+            feature = self.volume.get_voxel_vector(
                 center=(x, y, z),
                 normal=(n_x, n_y, n_z),
                 **self.feature_args
             )
         elif self.feature_type == 'descriptive_statistics':
-            subvolume = self._volume.get_subvolume(
+            subvolume = self.volume.get_subvolume(
                 center=(x, y, z),
                 normal=(n_x, n_y, n_z),
                 **self.feature_args
@@ -151,7 +151,7 @@ class RegionSource(DataSource):
             raise ValueError(f'Unknown feature_type: {self.feature_type} set for region source'
                              f' {self.path}')
         # Get the label
-        label = None
+        label = np.nan  # Cannot return NoneType from PyTorch dataloader. Next best thing.
         if self.label_type == 'ink_classes':
             label = self.point_to_ink_classes_label(
                 (surface_x, surface_y),
@@ -165,10 +165,7 @@ class RegionSource(DataSource):
         elif self.label_type is not None:
             raise ValueError(f'Unknown label_type: {self.label_type} set for region source'
                              f' {self.path}')
-        if label is None:
-            return feature_metadata, feature
-        else:
-            return feature_metadata, feature, label
+        return feature_metadata, feature, label
 
     def update_points_list(self) -> None:
         """Update the list of points after changes to the bounding box, grid spacing, or some other options."""

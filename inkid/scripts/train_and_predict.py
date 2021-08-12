@@ -48,14 +48,14 @@ def main():
                              'add this set to the validation and prediction sets')
 
     # Method
-    parser.add_argument('--feature-type', default='subvolume_3dcnn', help='type of input features',
-                        choices=['subvolume_3dcnn', 'voxel_vector_1dcnn', 'descriptive_statistics'])
+    parser.add_argument('--feature-type', default='subvolume', help='type of input features',
+                        choices=['subvolume', 'voxel_vector', 'descriptive_statistics'])
     parser.add_argument('--label-type', default='ink_classes', help='type of labels',
                         choices=['ink_classes', 'rgb_values'])
     parser.add_argument('--model-3d-to-2d', action='store_true',
                         help='Use semi-fully convolutional model (which removes a dimension) with 2d labels per '
                              'subvolume')
-    parser.add_argument('--loss', choices=['cross_entropy'], default='cross_entropy')
+    parser.add_argument('--loss', choices=['cross_entropy', 'mse'], default='cross_entropy')
 
     # Subvolumes
     inkid.ops.add_subvolume_args(parser)
@@ -70,7 +70,7 @@ def main():
 
     # Network architecture
     parser.add_argument('--model', default='original', help='model to run against',
-                        choices=['original', '3dunet_full', '3dunet_half'])
+                        choices=['original', '3dunet_full', '3dunet_half', 'autoencoder'])
     parser.add_argument('--learning-rate', metavar='n', type=float, default=0.001)
     parser.add_argument('--drop-rate', metavar='n', type=float, default=0.5)
     parser.add_argument('--batch-norm-momentum', metavar='n', type=float, default=0.9)
@@ -215,7 +215,7 @@ def main():
         metadata_file.write(json.dumps(metadata, indent=4, sort_keys=False))
 
     # Define the feature inputs to the network
-    if args.feature_type == 'subvolume_3dcnn':
+    if args.feature_type == 'subvolume':
         subvolume_args = dict(
             shape_voxels=args.subvolume_shape_voxels,
             shape_microns=args.subvolume_shape_microns,
@@ -235,7 +235,7 @@ def main():
             jitter_max=0,
         )
         pred_feature_args = val_feature_args.copy()
-    elif args.feature_type == 'voxel_vector_1dcnn':
+    elif args.feature_type == 'voxel_vector':
         train_feature_args = dict(
             length_in_each_direction=args.length_in_each_direction,
             out_of_bounds='all_zeros',
@@ -273,6 +273,7 @@ def main():
         metrics = {
             'loss': {
                 'cross_entropy': nn.CrossEntropyLoss(),
+                'mse': nn.MSELoss(),
             }[args.loss],
             'accuracy': inkid.metrics.accuracy,
             'precision': inkid.metrics.precision,
@@ -328,15 +329,15 @@ def main():
         logging.info(f'    Memory Cached:    {round(torch.cuda.memory_reserved(0) / 1024 ** 3, 1)} GB')
 
     # Create the model for training
-    if args.feature_type == 'subvolume_3dcnn':
+    if args.feature_type == 'subvolume':
         in_channels = 1
-        if args.model == 'original':
+        if args.model in ['original', 'autoencoder']:
             encoder = inkid.model.Subvolume3DcnnEncoder(args.subvolume_shape_voxels,
                                                         args.batch_norm_momentum,
                                                         args.no_batch_norm,
                                                         args.filters,
                                                         in_channels)
-        elif args.model in ('3dunet_full', '3dunet_half'):
+        elif args.model in ['3dunet_full', '3dunet_half']:
             encoder = inkid.model.Subvolume3DUNet(args.subvolume_shape_voxels,
                                                   args.batch_norm_momentum,
                                                   args.unet_starting_channels,
@@ -345,7 +346,12 @@ def main():
         else:
             logging.error(f'Model {args.model} is invalid for feature type {args.feature_type}.')
             return
-        if args.model_3d_to_2d:
+        if args.model == 'autoencoder':
+            decoder = inkid.model.Subvolume3DcnnDecoder(args.batch_norm_momentum,
+                                                        args.no_batch_norm,
+                                                        args.filters,
+                                                        in_channels)
+        elif args.model_3d_to_2d:
             decoder = inkid.model.ConvolutionalInkDecoder(args.filters, output_size)
         else:
             decoder = inkid.model.LinearInkDecoder(args.drop_rate, encoder.output_shape, output_size)
@@ -356,20 +362,24 @@ def main():
 
     # Load pretrained weights if specified
     if args.load_weights_from is not None:
+        model_dict = model.state_dict()
         checkpoint = torch.load(args.load_weights_from)
-        model.load_state_dict(checkpoint['model_state_dict'])
+        pretrained_dict = checkpoint['model_state_dict']
+        pretrained_dict = {k: v for k, v in pretrained_dict.items() if k in model_dict}
+        model_dict.update(pretrained_dict)
+        model.load_state_dict(model_dict)
+
+    # Show model in TensorBoard and save sample subvolumes
+    sample_dl = train_dl or val_dl or pred_dl
+    if sample_dl is not None:
+        _, features, _ = next(iter(sample_dl))
+        writer.add_graph(model, features)
+        writer.flush()
+        if args.feature_type == 'subvolume':
+            inkid.ops.save_subvolume_batch_to_img(sample_dl, os.path.join(output_path, 'subvolumes'))
 
     # Move model to device (possibly GPU)
     model = model.to(device)
-
-    # Show model in TensorBoard
-    try:
-        if train_dl is not None:
-            _, features, _ = next(iter(train_dl))
-            writer.add_graph(model, features)
-            writer.flush()
-    except RuntimeError:
-        logging.warning('Unable to add model graph to TensorBoard, skipping this step')
 
     # Print summary of model
     shape = (in_channels,) + tuple(args.subvolume_shape_voxels)
@@ -407,9 +417,12 @@ def main():
                     for batch_num, (_, xb, yb) in enumerate(train_dl):
                         with torch.profiler.record_function(f'train_batch_{batch_num}'):
                             xb = xb.to(device)
-                            yb = yb.to(device)
+                            if args.model == 'autoencoder':
+                                yb = xb.clone()
+                            else:
+                                yb = yb.to(device)
                             pred = model(xb)
-                            if args.label_type == 'ink_classes':
+                            if args.label_type == 'ink_classes' and args.model != 'autoencoder':
                                 _, yb = yb.max(1)  # Argmax
                             for metric, fn in metrics.items():
                                 metric_results[metric].append(fn(pred, yb))
