@@ -36,14 +36,6 @@ def add_subvolume_args(parser):
                         help='normalize each subvolume to zero mean and unit variance')
 
 
-def visualize_batch(xb, yb):
-    xb, yb = xb.numpy(), yb.numpy()
-    xb = np.max(np.concatenate(np.squeeze(xb), 1), 0) / 255
-    yb = np.concatenate(yb, 1)[1] * 255
-    img = np.concatenate((xb, yb), 1)
-    Image.fromarray(img).show()
-
-
 def take_from_dataset(dataset, n_samples):
     """Take only n samples from a dataset to reduce the size."""
     if n_samples < len(dataset):
@@ -290,7 +282,8 @@ def float_0_1_to_cmap_rgb_uint8(img, cmap='turbo'):
     return Image.fromarray(np.uint8(color_map(img) * 255))
 
 
-def subvolume_to_sample_img(subvolume, volume, vol_coord, padding, background_color, include_vol_slices=True):
+def subvolume_to_sample_img(subvolume, volume, vol_coord, padding, background_color,
+                            autoencoded_subvolume=None, include_vol_slices=True):
     max_size = (300, 300)
     red = (255, 0, 0)
     z_shape, y_shape, x_shape = subvolume.shape
@@ -336,6 +329,11 @@ def subvolume_to_sample_img(subvolume, volume, vol_coord, padding, background_co
             vol_sub_img.thumbnail(max_size)
             sub_images.append(vol_sub_img)
 
+    if autoencoded_subvolume is not None:
+        sub_images.append(float_0_1_to_cmap_rgb_uint8(autoencoded_subvolume[z_idx, :, :]))
+        sub_images.append(float_0_1_to_cmap_rgb_uint8(autoencoded_subvolume[:, y_idx, :]))
+        sub_images.append(float_0_1_to_cmap_rgb_uint8(autoencoded_subvolume[:, :, x_idx]))
+
     width = sum([s.size[0] for s in sub_images]) + padding * (len(sub_images) - 1)
     height = max([s.size[1] for s in sub_images])
 
@@ -348,17 +346,34 @@ def subvolume_to_sample_img(subvolume, volume, vol_coord, padding, background_co
     return img
 
 
-def save_subvolume_batch_to_img(dataloader, outdir, padding=10, background_color=(128, 128, 128)):
-    os.makedirs(outdir)
+def save_subvolume_batch_to_img(model, device, dataloader, outdir, padding=10, background_color=(128, 128, 128),
+                                include_autoencoded=False, iteration=None, include_vol_slices=True):
+    os.makedirs(outdir, exist_ok=True)
 
     subvolume_metadatas, subvolumes, _ = next(iter(dataloader))
+    if include_autoencoded:
+        model.eval()  # Turn off training mode for batch norm and dropout purposes
+        with torch.no_grad():
+            outputs = model(subvolumes.to(device)).cpu()
+            outputs = np.squeeze(outputs, axis=1)
+        model.train()
+    else:
+        outputs = [None] * len(subvolumes)
     subvolumes = np.squeeze(subvolumes, axis=1)  # Remove channels axis
 
     imgs = []
-    for source_path, _, _, vol_x, vol_y, vol_z, _, _, _, subvolume in zip(*subvolume_metadatas, subvolumes):
+    for source_path, _, _, vol_x, vol_y, vol_z, _, _, _, subvolume, output \
+            in zip(*subvolume_metadatas, subvolumes, outputs):
         volume = dataloader.dataset.get_source(source_path).volume
-        imgs.append(subvolume_to_sample_img(subvolume, volume,
-                                            (vol_x, vol_y, vol_z), padding, background_color))
+        imgs.append(subvolume_to_sample_img(
+            subvolume,
+            volume,
+            (vol_x, vol_y, vol_z),
+            padding,
+            background_color,
+            autoencoded_subvolume=output,
+            include_vol_slices=include_vol_slices
+        ))
 
     width = imgs[0].size[0] + padding * 2
     height = imgs[0].size[1] * len(imgs) + padding * (len(imgs) + 1)
@@ -368,5 +383,8 @@ def save_subvolume_batch_to_img(dataloader, outdir, padding=10, background_color
     for i, img in enumerate(imgs):
         composite_img.paste(img, (padding, img.size[1] * i + padding * (i + 1)))
 
-    outfile = os.path.join(outdir, 'sample_batch.png')
+    outfile = os.path.join(outdir, f'sample_batch')
+    if iteration is not None:
+        outfile += f'_{iteration}'
+    outfile += '.png'
     composite_img.save(outfile)

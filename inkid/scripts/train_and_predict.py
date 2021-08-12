@@ -376,7 +376,7 @@ def main():
         writer.add_graph(model, features)
         writer.flush()
         if args.feature_type == 'subvolume':
-            inkid.ops.save_subvolume_batch_to_img(sample_dl, os.path.join(output_path, 'subvolumes'))
+            inkid.ops.save_subvolume_batch_to_img(model, device, sample_dl, os.path.join(output_path, 'subvolumes'))
 
     # Move model to device (possibly GPU)
     model = model.to(device)
@@ -473,6 +473,15 @@ def main():
                                     logging.info('done')
                                 else:
                                     logging.info('Empty prediction set, skipping prediction image generation.')
+
+                                # Visualize autoencoder outputs
+                                if args.model == 'autoencoder':
+                                    logging.info('Visualizing autoencoder outputs...')
+                                    inkid.ops.save_subvolume_batch_to_img(
+                                        model, device, train_dl, os.path.join(output_path, 'subvolumes'),
+                                        include_autoencoded=True, iteration=batch_num, include_vol_slices=False
+                                    )
+                                    logging.info('done')
                             # Only advance profiler step if profiling is enabled (the context manager is not null)
                             if isinstance(context_manager, torch.profiler.profile):
                                 context_manager.step()
