@@ -205,13 +205,22 @@ cdef class Volume:
         ))
 
     def z_slice(self, int idx):
-        return inkid.ops.uint16_to_float32_normalized_0_1(self._data_view[idx, :, :])
+        if 0 <= idx < self.shape_z:
+            return inkid.ops.uint16_to_float32_normalized_0_1(self._data_view[idx, :, :])
+        else:
+            return np.zeros((self.shape_y, self.shape_x), dtype=np.float32)
 
     def y_slice(self, int idx):
-        return inkid.ops.uint16_to_float32_normalized_0_1(self._data_view[:, idx, :])
+        if 0 <= idx < self.shape_y:
+            return inkid.ops.uint16_to_float32_normalized_0_1(self._data_view[:, idx, :])
+        else:
+            return np.zeros((self.shape_z, self.shape_x), dtype=np.float32)
 
     def x_slice(self, int idx):
-        return inkid.ops.uint16_to_float32_normalized_0_1(self._data_view[:, :, idx])
+        if 0 <= idx < self.shape_x:
+            return inkid.ops.uint16_to_float32_normalized_0_1(self._data_view[:, :, idx])
+        else:
+            return np.zeros((self.shape_z, self.shape_y), dtype=np.float32)
 
     cdef unsigned short intensity_at(self, int x, int y, int z) nogil:
         """Get the intensity value at a voxel position."""
