@@ -47,7 +47,7 @@ A script is also included for running a training job and/or generating predictio
 ::
 
    $ inkid-train-and-predict
-   usage: inkid-train-and-predict [output] [options]
+   usage: inkid-train-and-predict [options]
 
 Examples
 --------
@@ -71,7 +71,7 @@ from the training set and added to the validation and prediction sets. Example:
    $ inkid-train-and-predict --training-set ~/data/dri-datasets-drive/LunateSigma/grid-2x5.txt \
         --cross-validate-on 7 \
         --final-prediction-on-all \
-        ~/data/LunateSigmaGridTest00
+        --output ~/data/LunateSigmaGridTest00
 
 It is possible to schedule all of these jobs with one command if using SLURM's ``sbatch``. Example:
 
@@ -84,7 +84,7 @@ It is possible to schedule all of these jobs with one command if using SLURM's `
         --prediction-grid-spacing 2 \
         --label-type rgb_values \
         --subvolume-shape-microns 300 20 20 \
-        /pscratch/seales_uksr/dri-experiments-drive/inkid/results/DummyTest/check_gpu/03
+        --output /pscratch/seales_uksr/dri-experiments-drive/inkid/results/DummyTest/check_gpu/03
 
 After performing a run for each value of ``--cross-validate-on``, each will have created a subdirectory of output.
 
@@ -126,7 +126,7 @@ will make that clear without having to wait for large volumes to load. Example:
         --prediction-grid-spacing 2 \
         --label-type rgb_values \
         --cross-validate-on 0 \
-        ~/temp/test00
+        --output ~/temp/test00
 
 Texture a region using an existing trained model (important parts: ``--model`` and ``--skip-training``:
 
@@ -141,7 +141,7 @@ Texture a region using an existing trained model (important parts: ``--model`` a
         --label-type rgb_values \
         --skip-training \
         --model $PSCRATCH/seales_uksr/dri-experiments-drive/inkid/results/MS910/p60/initial/09/2021-02-08_09.15.07/checkpoints/checkpoint_0_175000.pt \
-        $PSCRATCH/seales_uksr/dri-experiments-drive/inkid/results/MS910/p60/fromSavedWeights/02
+        --output $PSCRATCH/seales_uksr/dri-experiments-drive/inkid/results/MS910/p60/fromSavedWeights/02
 
 Contributing
 ============
