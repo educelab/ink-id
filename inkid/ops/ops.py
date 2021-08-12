@@ -15,7 +15,7 @@ from xml.dom.minidom import parseString
 from dicttoxml import dicttoxml
 from matplotlib import cm
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageDraw
 import torch
 import torch.nn.functional as F
 from tqdm import tqdm
@@ -285,43 +285,56 @@ def uint16_to_float32_normalized_0_1(img):
     return img
 
 
-def color_map_float_image(img, cmap='turbo'):
+def float_0_1_to_cmap_rgb_uint8(img, cmap='turbo'):
     color_map = cm.get_cmap(cmap)
     return Image.fromarray(np.uint8(color_map(img) * 255))
 
 
-def subvolume_to_sample_img(subvolume, volume, vol_coord, padding, background_color):
+def subvolume_to_sample_img(subvolume, volume, vol_coord, padding, background_color, include_vol_slices=True):
     max_size = (300, 300)
+    red = (255, 0, 0)
     z_shape, y_shape, x_shape = subvolume.shape
 
     sub_images = []
 
     # Get central slices of subvolume
     z_idx: int = z_shape // 2
-    sub_images.append(color_map_float_image(subvolume[z_idx, :, :]))
+    sub_images.append(float_0_1_to_cmap_rgb_uint8(subvolume[z_idx, :, :]))
     y_idx: int = y_shape // 2
-    sub_images.append(color_map_float_image(subvolume[:, y_idx, :]))
+    sub_images.append(float_0_1_to_cmap_rgb_uint8(subvolume[:, y_idx, :]))
     x_idx: int = x_shape // 2
-    sub_images.append(color_map_float_image(subvolume[:, :, x_idx]))
+    sub_images.append(float_0_1_to_cmap_rgb_uint8(subvolume[:, :, x_idx]))
 
-    # Get intersection slices of volume
-    vol_x, vol_y, vol_z = vol_coord
-
-    vol_z_idx = int(vol_z)
-    vol_z_img = color_map_float_image(volume.z_slice(vol_z_idx))
-    vol_z_img.thumbnail(max_size)
-    sub_images.append(vol_z_img)
-    # TODO LEFT OFF add subvolume location marker to slice images
-
-    vol_y_idx = int(vol_y)
-    vol_y_img = color_map_float_image(volume.y_slice(vol_y_idx))
-    vol_y_img.thumbnail(max_size)
-    sub_images.append(vol_y_img)
-    
-    vol_x_idx = int(vol_x)
-    vol_x_img = color_map_float_image(volume.x_slice(vol_x_idx))
-    vol_x_img.thumbnail(max_size)
-    sub_images.append(vol_x_img)
+    if include_vol_slices:
+        # Get intersection slices of volume for each axis
+        for axis in (0, 1, 2):  # x, y, z
+            # Get slice image from volume
+            vol_slice_idx = vol_coord[axis]
+            if axis == 0:
+                vol_slice = volume.x_slice(vol_slice_idx)
+            elif axis == 1:
+                vol_slice = volume.y_slice(vol_slice_idx)
+            else:
+                vol_slice = volume.z_slice(vol_slice_idx)
+            # Color map
+            vol_sub_img = float_0_1_to_cmap_rgb_uint8(vol_slice)
+            # Draw crosshairs around subvolume
+            draw = ImageDraw.Draw(vol_sub_img)
+            # Find (x, y) coordinates in this slice image space
+            subvolume_img_x_y = list(vol_coord).copy()
+            subvolume_img_x_y.pop(axis)
+            x, y = subvolume_img_x_y
+            w, h = vol_sub_img.size
+            # Draw lines through that (x, y) but don't draw them at the center, so the actual spot is not obscured
+            r = max(vol_sub_img.size) // 50
+            width = max(vol_sub_img.size) // 100
+            draw.line([(0, y), (x - r, y)], fill=red, width=width)  # Left of (x, y)
+            draw.line([(x + r, y), (w, y)], fill=red, width=width)  # Right of (x, y)
+            draw.line([(x, 0), (x, y - r)], fill=red, width=width)  # Above (x, y)
+            draw.line([(x, y + r), (x, h)], fill=red, width=width)  # Below (x, y)
+            # Reduce size and add to list of images for this subvolume
+            vol_sub_img.thumbnail(max_size)
+            sub_images.append(vol_sub_img)
 
     width = sum([s.size[0] for s in sub_images]) + padding * (len(sub_images) - 1)
     height = max([s.size[1] for s in sub_images])
@@ -344,7 +357,8 @@ def save_subvolume_batch_to_img(dataloader, outdir, padding=10, background_color
     imgs = []
     for source_path, _, _, vol_x, vol_y, vol_z, _, _, _, subvolume in zip(*subvolume_metadatas, subvolumes):
         volume = dataloader.dataset.get_source(source_path).volume
-        imgs.append(subvolume_to_sample_img(subvolume, volume, (vol_x, vol_y, vol_z), padding, background_color))
+        imgs.append(subvolume_to_sample_img(subvolume, volume,
+                                            (vol_x, vol_y, vol_z), padding, background_color))
 
     width = imgs[0].size[0] + padding * 2
     height = imgs[0].size[1] * len(imgs) + padding * (len(imgs) + 1)
