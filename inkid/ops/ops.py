@@ -13,8 +13,9 @@ import subprocess
 from xml.dom.minidom import parseString
 
 from dicttoxml import dicttoxml
+from matplotlib import cm
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageDraw
 import torch
 import torch.nn.functional as F
 from tqdm import tqdm
@@ -176,7 +177,7 @@ def generate_prediction_images(dataloader, model, output_size, label_type, devic
     """Helper function to generate a prediction image given a model and dataloader, and save it to a file."""
     model.eval()  # Turn off training mode for batch norm and dropout purposes
     with torch.no_grad():
-        for batch_metadata, batch_features in tqdm(dataloader):
+        for batch_metadata, batch_features, _ in tqdm(dataloader):
             # Smooth predictions via augmentation. Augment each subvolume 8-fold via rotations and flips
             if prediction_averaging:
                 rotations = range(4)
@@ -274,3 +275,98 @@ def normalize_path(path, relative_url):
         path
     ))
     return urlunsplit(new_url)
+
+
+def uint16_to_float32_normalized_0_1(img):
+    # Convert to float
+    img = np.asarray(img, np.float32)
+    # Normalize to [0, 1]
+    img *= 1.0 / np.iinfo(np.uint16).max
+    return img
+
+
+def float_0_1_to_cmap_rgb_uint8(img, cmap='turbo'):
+    color_map = cm.get_cmap(cmap)
+    return Image.fromarray(np.uint8(color_map(img) * 255))
+
+
+def subvolume_to_sample_img(subvolume, volume, vol_coord, padding, background_color, include_vol_slices=True):
+    max_size = (300, 300)
+    red = (255, 0, 0)
+    z_shape, y_shape, x_shape = subvolume.shape
+
+    sub_images = []
+
+    # Get central slices of subvolume
+    z_idx: int = z_shape // 2
+    sub_images.append(float_0_1_to_cmap_rgb_uint8(subvolume[z_idx, :, :]))
+    y_idx: int = y_shape // 2
+    sub_images.append(float_0_1_to_cmap_rgb_uint8(subvolume[:, y_idx, :]))
+    x_idx: int = x_shape // 2
+    sub_images.append(float_0_1_to_cmap_rgb_uint8(subvolume[:, :, x_idx]))
+
+    if include_vol_slices:
+        # Get intersection slices of volume for each axis
+        for axis in (0, 1, 2):  # x, y, z
+            # Get slice image from volume
+            vol_slice_idx = vol_coord[axis]
+            if axis == 0:
+                vol_slice = volume.x_slice(vol_slice_idx)
+            elif axis == 1:
+                vol_slice = volume.y_slice(vol_slice_idx)
+            else:
+                vol_slice = volume.z_slice(vol_slice_idx)
+            # Color map
+            vol_sub_img = float_0_1_to_cmap_rgb_uint8(vol_slice)
+            # Draw crosshairs around subvolume
+            draw = ImageDraw.Draw(vol_sub_img)
+            # Find (x, y) coordinates in this slice image space
+            subvolume_img_x_y = list(vol_coord).copy()
+            subvolume_img_x_y.pop(axis)
+            x, y = subvolume_img_x_y
+            w, h = vol_sub_img.size
+            # Draw lines through that (x, y) but don't draw them at the center, so the actual spot is not obscured
+            r = max(vol_sub_img.size) // 50
+            width = max(vol_sub_img.size) // 100
+            draw.line([(0, y), (x - r, y)], fill=red, width=width)  # Left of (x, y)
+            draw.line([(x + r, y), (w, y)], fill=red, width=width)  # Right of (x, y)
+            draw.line([(x, 0), (x, y - r)], fill=red, width=width)  # Above (x, y)
+            draw.line([(x, y + r), (x, h)], fill=red, width=width)  # Below (x, y)
+            # Reduce size and add to list of images for this subvolume
+            vol_sub_img.thumbnail(max_size)
+            sub_images.append(vol_sub_img)
+
+    width = sum([s.size[0] for s in sub_images]) + padding * (len(sub_images) - 1)
+    height = max([s.size[1] for s in sub_images])
+
+    img = Image.new('RGB', (width, height), background_color)
+    x_ctr = 0
+    for s in sub_images:
+        img.paste(s, (x_ctr, 0))
+        x_ctr += s.size[0] + padding
+
+    return img
+
+
+def save_subvolume_batch_to_img(dataloader, outdir, padding=10, background_color=(128, 128, 128)):
+    os.makedirs(outdir)
+
+    subvolume_metadatas, subvolumes, _ = next(iter(dataloader))
+    subvolumes = np.squeeze(subvolumes, axis=1)  # Remove channels axis
+
+    imgs = []
+    for source_path, _, _, vol_x, vol_y, vol_z, _, _, _, subvolume in zip(*subvolume_metadatas, subvolumes):
+        volume = dataloader.dataset.get_source(source_path).volume
+        imgs.append(subvolume_to_sample_img(subvolume, volume,
+                                            (vol_x, vol_y, vol_z), padding, background_color))
+
+    width = imgs[0].size[0] + padding * 2
+    height = imgs[0].size[1] * len(imgs) + padding * (len(imgs) + 1)
+
+    composite_img = Image.new('RGB', (width, height), background_color)
+
+    for i, img in enumerate(imgs):
+        composite_img.paste(img, (padding, img.size[1] * i + padding * (i + 1)))
+
+    outfile = os.path.join(outdir, 'sample_batch.png')
+    composite_img.save(outfile)

@@ -8,7 +8,7 @@ cimport libc.math as math
 import logging
 import os
 import random
-from typing import Dict
+from typing import Dict, Optional
 
 import numpy as np
 cimport numpy as cnp
@@ -16,6 +16,8 @@ from PIL import Image
 from tqdm import tqdm
 
 cimport inkid.data.mathutils as mathutils
+
+import inkid.ops
 
 cpdef norm(vec):
     vec = np.array(vec)
@@ -137,12 +139,12 @@ cdef class Volume:
     - Volume shapes are (z, y, x)
 
     """
-    cdef unsigned short [:, :, :] _data_view
+    cdef const unsigned short [:, :, :] _data_view
     cdef int shape_z, shape_y, shape_x
     cdef dict _metadata
-    cdef float _voxelsize
+    cdef float _voxelsize_um
 
-    initialized_volumes: Dict[str, Volume] = dict()
+    initialized_volumes = dict()  # Dict[str, Volume]
 
     @classmethod
     def from_path(cls, path: str) -> Volume:
@@ -170,7 +172,7 @@ cdef class Volume:
         else:
             with open(metadata_filename) as f:
                 self._metadata = json.loads(f.read())
-        self._voxelsize = self._metadata['voxelsize']
+        self._voxelsize_um = self._metadata['voxelsize']
         self.shape_z = self._metadata['slices']
         self.shape_y = self._metadata['height']
         self.shape_x = self._metadata['width']
@@ -201,6 +203,15 @@ cdef class Volume:
             slices_path,
             data.shape
         ))
+
+    def z_slice(self, int idx):
+        return inkid.ops.uint16_to_float32_normalized_0_1(self._data_view[idx, :, :])
+
+    def y_slice(self, int idx):
+        return inkid.ops.uint16_to_float32_normalized_0_1(self._data_view[:, idx, :])
+
+    def x_slice(self, int idx):
+        return inkid.ops.uint16_to_float32_normalized_0_1(self._data_view[:, :, idx])
 
     cdef unsigned short intensity_at(self, int x, int y, int z) nogil:
         """Get the intensity value at a voxel position."""
@@ -344,9 +355,9 @@ cdef class Volume:
         subvolume_voxel_size_microns.y = shape_microns.y / shape_voxels.y
         subvolume_voxel_size_microns.z = shape_microns.z / shape_voxels.z
 
-        subvolume_voxel_size_volume_voxel_size_ratio.x = subvolume_voxel_size_microns.x / self._voxelsize
-        subvolume_voxel_size_volume_voxel_size_ratio.y = subvolume_voxel_size_microns.y / self._voxelsize
-        subvolume_voxel_size_volume_voxel_size_ratio.z = subvolume_voxel_size_microns.z / self._voxelsize
+        subvolume_voxel_size_volume_voxel_size_ratio.x = subvolume_voxel_size_microns.x / self._voxelsize_um
+        subvolume_voxel_size_volume_voxel_size_ratio.y = subvolume_voxel_size_microns.y / self._voxelsize_um
+        subvolume_voxel_size_volume_voxel_size_ratio.z = subvolume_voxel_size_microns.z / self._voxelsize_um
         
         for z in range(shape_voxels.z):
             for y in range(shape_voxels.y):
@@ -393,9 +404,9 @@ cdef class Volume:
         subvolume_voxel_size_microns.y = shape_microns.y / shape_voxels.y
         subvolume_voxel_size_microns.z = shape_microns.z / shape_voxels.z
 
-        subvolume_voxel_size_volume_voxel_size_ratio.x = subvolume_voxel_size_microns.x / self._voxelsize
-        subvolume_voxel_size_volume_voxel_size_ratio.y = subvolume_voxel_size_microns.y / self._voxelsize
-        subvolume_voxel_size_volume_voxel_size_ratio.z = subvolume_voxel_size_microns.z / self._voxelsize
+        subvolume_voxel_size_volume_voxel_size_ratio.x = subvolume_voxel_size_microns.x / self._voxelsize_um
+        subvolume_voxel_size_volume_voxel_size_ratio.y = subvolume_voxel_size_microns.y / self._voxelsize_um
+        subvolume_voxel_size_volume_voxel_size_ratio.z = subvolume_voxel_size_microns.z / self._voxelsize_um
         
         for z in range(shape_voxels.z):
             for y in range(shape_voxels.y):
@@ -474,7 +485,7 @@ cdef class Volume:
         # If shape_microns not specified, fall back to the old method
         # (spatial extent based only on number of voxels and not voxel size)
         if shape_microns is None:
-            shape_microns = list(np.array(shape_voxels) * self._voxelsize)
+            shape_microns = list(np.array(shape_voxels) * self._voxelsize_um)
 
         assert len(shape_microns) == 3
 
@@ -557,8 +568,8 @@ cdef class Volume:
 
         assert subvolume.shape == tuple(shape_voxels)
 
-        # Convert to float
-        subvolume = np.asarray(subvolume, np.float32)
+        # Convert to float normalized to [0, 1]
+        subvolume = inkid.ops.uint16_to_float32_normalized_0_1(subvolume)
         # Add singleton dimension for number of channels
         subvolume = np.expand_dims(subvolume, 0)
 
