@@ -48,7 +48,6 @@ def main():
                              'add this set to the validation and prediction sets')
 
     # Method
-    parser.add_argument('--feature-type', default='subvolume', help='type of input features', choices=['subvolume'])
     parser.add_argument('--label-type', default='ink_classes', help='type of labels',
                         choices=['ink_classes', 'rgb_values'])
     parser.add_argument('--model-3d-to-2d', action='store_true',
@@ -210,35 +209,28 @@ def main():
         metadata_file.write(json.dumps(metadata, indent=4, sort_keys=False))
 
     # Define the feature inputs to the network
-    if args.feature_type == 'subvolume':
-        subvolume_args = dict(
-            shape_voxels=args.subvolume_shape_voxels,
-            shape_microns=args.subvolume_shape_microns,
-            out_of_bounds='all_zeros',
-            move_along_normal=args.move_along_normal,
-            method=args.subvolume_method,
-            normalize=args.normalize_subvolumes,
-        )
-        train_feature_args = subvolume_args.copy()
-        train_feature_args.update(
-            augment_subvolume=args.augmentation,
-            jitter_max=args.jitter_max,
-        )
-        val_feature_args = subvolume_args.copy()
-        val_feature_args.update(
-            augment_subvolume=False,
-            jitter_max=0,
-        )
-        pred_feature_args = val_feature_args.copy()
-    else:
-        logging.error('Feature type not recognized: {}'.format(args.feature_type))
-        return
+    subvolume_args = dict(
+        shape_voxels=args.subvolume_shape_voxels,
+        shape_microns=args.subvolume_shape_microns,
+        out_of_bounds='all_zeros',
+        move_along_normal=args.move_along_normal,
+        method=args.subvolume_method,
+        normalize=args.normalize_subvolumes,
+    )
+    train_feature_args = subvolume_args.copy()
+    train_feature_args.update(
+        augment_subvolume=args.augmentation,
+        jitter_max=args.jitter_max,
+    )
+    val_feature_args = subvolume_args.copy()
+    val_feature_args.update(
+        augment_subvolume=False,
+        jitter_max=0,
+    )
+    pred_feature_args = val_feature_args.copy()
 
-    train_ds.set_for_all_sources('feature_type', args.feature_type)
     train_ds.set_for_all_sources('feature_args', train_feature_args)
-    val_ds.set_for_all_sources('feature_type', args.feature_type)
     val_ds.set_for_all_sources('feature_args', val_feature_args)
-    pred_ds.set_for_all_sources('feature_type', args.feature_type)
     pred_ds.set_for_all_sources('feature_args', pred_feature_args)
 
     # Define the labels
@@ -310,36 +302,32 @@ def main():
         logging.info(f'    Memory Cached:    {round(torch.cuda.memory_reserved(0) / 1024 ** 3, 1)} GB')
 
     # Create the model for training
-    if args.feature_type == 'subvolume':
-        in_channels = 1
-        if args.model in ['original', 'autoencoder']:
-            encoder = inkid.model.Subvolume3DcnnEncoder(args.subvolume_shape_voxels,
-                                                        args.batch_norm_momentum,
-                                                        args.no_batch_norm,
-                                                        args.filters,
-                                                        in_channels)
-        elif args.model in ['3dunet_full', '3dunet_half']:
-            encoder = inkid.model.Subvolume3DUNet(args.subvolume_shape_voxels,
-                                                  args.batch_norm_momentum,
-                                                  args.unet_starting_channels,
-                                                  in_channels,
-                                                  decode=(args.model == '3dunet_full'))
-        else:
-            logging.error(f'Model {args.model} is invalid for feature type {args.feature_type}.')
-            return
-        if args.model == 'autoencoder':
-            decoder = inkid.model.Subvolume3DcnnDecoder(args.batch_norm_momentum,
-                                                        args.no_batch_norm,
-                                                        args.filters,
-                                                        in_channels)
-        elif args.model_3d_to_2d:
-            decoder = inkid.model.ConvolutionalInkDecoder(args.filters, output_size)
-        else:
-            decoder = inkid.model.LinearInkDecoder(args.drop_rate, encoder.output_shape, output_size)
-        model = torch.nn.Sequential(encoder, decoder)
+    in_channels = 1
+    if args.model in ['original', 'autoencoder']:
+        encoder = inkid.model.Subvolume3DcnnEncoder(args.subvolume_shape_voxels,
+                                                    args.batch_norm_momentum,
+                                                    args.no_batch_norm,
+                                                    args.filters,
+                                                    in_channels)
+    elif args.model in ['3dunet_full', '3dunet_half']:
+        encoder = inkid.model.Subvolume3DUNet(args.subvolume_shape_voxels,
+                                              args.batch_norm_momentum,
+                                              args.unet_starting_channels,
+                                              in_channels,
+                                              decode=(args.model == '3dunet_full'))
     else:
-        logging.error('Feature type: {} does not have a model implementation.'.format(args.feature_type))
+        logging.error(f'Unrecognized model {args.model}')
         return
+    if args.model == 'autoencoder':
+        decoder = inkid.model.Subvolume3DcnnDecoder(args.batch_norm_momentum,
+                                                    args.no_batch_norm,
+                                                    args.filters,
+                                                    in_channels)
+    elif args.model_3d_to_2d:
+        decoder = inkid.model.ConvolutionalInkDecoder(args.filters, output_size)
+    else:
+        decoder = inkid.model.LinearInkDecoder(args.drop_rate, encoder.output_shape, output_size)
+    model = torch.nn.Sequential(encoder, decoder)
 
     # Load pretrained weights if specified
     if args.load_weights_from is not None:
@@ -356,8 +344,7 @@ def main():
         _, features, _ = next(iter(sample_dl))
         writer.add_graph(model, features)
         writer.flush()
-        if args.feature_type == 'subvolume':
-            inkid.ops.save_subvolume_batch_to_img(model, device, sample_dl, os.path.join(output_path, 'subvolumes'))
+        inkid.ops.save_subvolume_batch_to_img(model, device, sample_dl, os.path.join(output_path, 'subvolumes'))
 
     # Move model to device (possibly GPU)
     model = model.to(device)
@@ -474,7 +461,6 @@ def main():
         try:
             all_sources = list(set(args.training_set + args.validation_set + args.prediction_set))
             final_pred_ds = inkid.data.Dataset(all_sources)
-            final_pred_ds.set_for_all_sources('feature_type', args.feature_type)
             final_pred_ds.set_for_all_sources('feature_args', pred_feature_args)
             final_pred_ds.set_regions_grid_spacing(args.prediction_grid_spacing)
             if len(final_pred_ds) > 0:

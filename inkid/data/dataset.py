@@ -31,7 +31,6 @@ class DataSource(ABC):
                 source_json[key] = inkid.ops.normalize_path(source_json[key], relative_url)
         self.data_dict: Dict = source_json
 
-        self.feature_type: Optional[str] = None
         self.feature_args: Dict = dict()
 
         self.label_type: Optional[str] = None
@@ -127,16 +126,11 @@ class RegionSource(DataSource):
         # Get the feature metadata (useful for e.g. knowing where this feature came from on the surface)
         feature_metadata = (self.path, surface_x, surface_y, x, y, z, n_x, n_y, n_z)
         # Get the feature
-        feature = None
-        if self.feature_type == 'subvolume':
-            feature = self.volume.get_subvolume(
-                center=(x, y, z),
-                normal=(n_x, n_y, n_z),
-                **self.feature_args
-            )
-        elif self.feature_type is not None:
-            raise ValueError(f'Unknown feature_type: {self.feature_type} set for region source'
-                             f' {self.path}')
+        feature = self.volume.get_subvolume(
+            center=(x, y, z),
+            normal=(n_x, n_y, n_z),
+            **self.feature_args
+        )
         # Get the label
         label = np.nan  # Cannot return NoneType from PyTorch dataloader. Next best thing.
         if self.label_type == 'ink_classes':
