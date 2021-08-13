@@ -134,19 +134,6 @@ class RegionSource(DataSource):
                 normal=(n_x, n_y, n_z),
                 **self.feature_args
             )
-        elif self.feature_type == 'voxel_vector':
-            feature = self.volume.get_voxel_vector(
-                center=(x, y, z),
-                normal=(n_x, n_y, n_z),
-                **self.feature_args
-            )
-        elif self.feature_type == 'descriptive_statistics':
-            subvolume = self.volume.get_subvolume(
-                center=(x, y, z),
-                normal=(n_x, n_y, n_z),
-                **self.feature_args
-            )
-            feature = inkid.ops.get_descriptive_statistics(subvolume)
         elif self.feature_type is not None:
             raise ValueError(f'Unknown feature_type: {self.feature_type} set for region source'
                              f' {self.path}')

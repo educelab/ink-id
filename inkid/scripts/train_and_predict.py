@@ -48,8 +48,7 @@ def main():
                              'add this set to the validation and prediction sets')
 
     # Method
-    parser.add_argument('--feature-type', default='subvolume', help='type of input features',
-                        choices=['subvolume', 'voxel_vector', 'descriptive_statistics'])
+    parser.add_argument('--feature-type', default='subvolume', help='type of input features', choices=['subvolume'])
     parser.add_argument('--label-type', default='ink_classes', help='type of labels',
                         choices=['ink_classes', 'rgb_values'])
     parser.add_argument('--model-3d-to-2d', action='store_true',
@@ -59,10 +58,6 @@ def main():
 
     # Subvolumes
     inkid.ops.add_subvolume_args(parser)
-
-    # Voxel vectors
-    parser.add_argument('--length-in-each-direction', metavar='n', type=int, default=8,
-                        help='length of voxel vector in each direction along normal')
 
     # Data organization/augmentation
     parser.add_argument('--jitter-max', metavar='n', type=int, default=4)
@@ -235,20 +230,6 @@ def main():
             jitter_max=0,
         )
         pred_feature_args = val_feature_args.copy()
-    elif args.feature_type == 'voxel_vector':
-        train_feature_args = dict(
-            length_in_each_direction=args.length_in_each_direction,
-            out_of_bounds='all_zeros',
-        )
-        val_feature_args = train_feature_args.copy()
-        pred_feature_args = train_feature_args.copy()
-    elif args.feature_type == 'descriptive_statistics':
-        train_feature_args = dict(
-            subvolume_shape_voxels=args.subvolume_shape_voxels,
-            subvolume_shape_microns=args.subvolume_shape_microns
-        )
-        val_feature_args = train_feature_args.copy()
-        pred_feature_args = train_feature_args.copy()
     else:
         logging.error('Feature type not recognized: {}'.format(args.feature_type))
         return
