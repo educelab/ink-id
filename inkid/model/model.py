@@ -351,3 +351,19 @@ class Subvolume3DUNet(torch.nn.Module):
             x = self.bn(x)
             x = self.relu(x)
             return x
+
+
+class AutoencoderAndInkClassifier(torch.nn.Module):
+    def __init__(self, subvolume_shape, batch_norm_momentum, no_batch_norm, filters, drop_rate):
+        super().__init__()
+        self.encoder = Subvolume3DcnnEncoder(subvolume_shape, batch_norm_momentum, no_batch_norm, filters,
+                                             in_channels=1)
+        self.ink_decoder = LinearInkDecoder(drop_rate, self.encoder.output_shape, output_neurons=2)
+        self.autoencoder_decoder = Subvolume3DcnnDecoder(batch_norm_momentum, no_batch_norm, filters, in_channels=1)
+
+    def forward(self, x):
+        x = self.encoder(x)
+        autoencoded = self.autoencoder_decoder(x)
+        ink = self.ink_decoder(x)
+
+        return autoencoded, ink

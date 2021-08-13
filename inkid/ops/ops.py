@@ -155,11 +155,14 @@ def perform_validation(model, dataloader, metrics, device, label_type):
         metric_results = {metric: [] for metric in metrics}
         for _, xb, yb in tqdm(dataloader):
             pred = model(xb.to(device))
+            if isinstance(pred, tuple):
+                pred = pred[1]
             yb = yb.to(device)
             if label_type == 'ink_classes':
                 _, yb = yb.max(1)  # Argmax
             for metric, fn in metrics.items():
-                metric_results[metric].append(fn(pred, yb))
+                if metric not in ['ae_loss', 'loss']:
+                    metric_results[metric].append(fn(pred, yb))
     model.train()
     return metric_results
 
@@ -185,6 +188,8 @@ def generate_prediction_images(dataloader, model, output_size, label_type, devic
                 if flip:
                     aug_pxb = aug_pxb.flip(4)
                 pred = model(aug_pxb.to(device))
+                if isinstance(pred, tuple):
+                    pred = pred[1]
                 if label_type == 'ink_classes':
                     pred = F.softmax(pred, dim=1)
                 pred = pred.cpu()
@@ -202,7 +207,7 @@ def generate_prediction_images(dataloader, model, output_size, label_type, devic
             # Average over batch of predictions after augmentation
             batch_pred = batch_preds.mean(0)
             # Separate these three lists
-            source_paths, xs, ys = batch_metadata
+            source_paths, xs, ys, _, _, _, _, _, _ = batch_metadata
             for prediction, source_path, x, y in zip(batch_pred, source_paths, xs, ys):
                 dataloader.dataset.get_source(source_path).store_prediction(
                     int(x),
@@ -354,7 +359,10 @@ def save_subvolume_batch_to_img(model, device, dataloader, outdir, padding=10, b
     if include_autoencoded:
         model.eval()  # Turn off training mode for batch norm and dropout purposes
         with torch.no_grad():
-            outputs = model(subvolumes.to(device)).cpu()
+            outputs = model(subvolumes.to(device))
+            if isinstance(outputs, tuple):
+                outputs = outputs[0]
+            outputs = outputs.cpu()
             outputs = np.squeeze(outputs, axis=1)
         model.train()
     else:

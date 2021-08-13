@@ -64,7 +64,8 @@ def main():
 
     # Network architecture
     parser.add_argument('--model', default='original', help='model to run against',
-                        choices=['original', '3dunet_full', '3dunet_half', 'autoencoder'])
+                        choices=['original', '3dunet_full', '3dunet_half', 'autoencoder',
+                                 'AutoencoderAndInkClassifier'])
     parser.add_argument('--learning-rate', metavar='n', type=float, default=0.001)
     parser.add_argument('--drop-rate', metavar='n', type=float, default=0.5)
     parser.add_argument('--batch-norm-momentum', metavar='n', type=float, default=0.9)
@@ -248,6 +249,8 @@ def main():
                 'cross_entropy': nn.CrossEntropyLoss(),
                 'mse': nn.MSELoss(),
             }[args.loss],
+            'ae_loss': nn.MSELoss(),
+            'ink_loss': nn.CrossEntropyLoss(),
             'accuracy': inkid.metrics.accuracy,
             'precision': inkid.metrics.precision,
             'recall': inkid.metrics.recall,
@@ -303,31 +306,38 @@ def main():
 
     # Create the model for training
     in_channels = 1
-    if args.model in ['original', 'autoencoder']:
-        encoder = inkid.model.Subvolume3DcnnEncoder(args.subvolume_shape_voxels,
-                                                    args.batch_norm_momentum,
-                                                    args.no_batch_norm,
-                                                    args.filters,
-                                                    in_channels)
-    elif args.model in ['3dunet_full', '3dunet_half']:
-        encoder = inkid.model.Subvolume3DUNet(args.subvolume_shape_voxels,
-                                              args.batch_norm_momentum,
-                                              args.unet_starting_channels,
-                                              in_channels,
-                                              decode=(args.model == '3dunet_full'))
+    if args.model == 'AutoencoderAndInkClassifier':
+        model = inkid.model.AutoencoderAndInkClassifier(args.subvolume_shape_voxels,
+                                                        args.batch_norm_momentum,
+                                                        args.no_batch_norm,
+                                                        args.filters,
+                                                        args.drop_rate)
     else:
-        logging.error(f'Unrecognized model {args.model}')
-        return
-    if args.model == 'autoencoder':
-        decoder = inkid.model.Subvolume3DcnnDecoder(args.batch_norm_momentum,
-                                                    args.no_batch_norm,
-                                                    args.filters,
-                                                    in_channels)
-    elif args.model_3d_to_2d:
-        decoder = inkid.model.ConvolutionalInkDecoder(args.filters, output_size)
-    else:
-        decoder = inkid.model.LinearInkDecoder(args.drop_rate, encoder.output_shape, output_size)
-    model = torch.nn.Sequential(encoder, decoder)
+        if args.model in ['original', 'autoencoder']:
+            encoder = inkid.model.Subvolume3DcnnEncoder(args.subvolume_shape_voxels,
+                                                        args.batch_norm_momentum,
+                                                        args.no_batch_norm,
+                                                        args.filters,
+                                                        in_channels)
+        elif args.model in ['3dunet_full', '3dunet_half']:
+            encoder = inkid.model.Subvolume3DUNet(args.subvolume_shape_voxels,
+                                                  args.batch_norm_momentum,
+                                                  args.unet_starting_channels,
+                                                  in_channels,
+                                                  decode=(args.model == '3dunet_full'))
+        else:
+            logging.error(f'Unrecognized model {args.model}')
+            return
+        if args.model == 'autoencoder':
+            decoder = inkid.model.Subvolume3DcnnDecoder(args.batch_norm_momentum,
+                                                        args.no_batch_norm,
+                                                        args.filters,
+                                                        in_channels)
+        elif args.model_3d_to_2d:
+            decoder = inkid.model.ConvolutionalInkDecoder(args.filters, output_size)
+        else:
+            decoder = inkid.model.LinearInkDecoder(args.drop_rate, encoder.output_shape, output_size)
+        model = torch.nn.Sequential(encoder, decoder)
 
     # Load pretrained weights if specified
     if args.load_weights_from is not None:
@@ -387,14 +397,26 @@ def main():
                             xb = xb.to(device)
                             if args.model == 'autoencoder':
                                 yb = xb.clone()
+                            elif args.model == 'AutoencoderAndInkClassifier':
+                                yb = (xb.clone(), yb.to(device))
                             else:
                                 yb = yb.to(device)
                             pred = model(xb)
                             if args.label_type == 'ink_classes' and args.model != 'autoencoder':
-                                _, yb = yb.max(1)  # Argmax
-                            for metric, fn in metrics.items():
-                                metric_results[metric].append(fn(pred, yb))
-
+                                if args.model == 'AutoencoderAndInkClassifier':
+                                    yb = (yb[0], yb[1].max(1)[1])
+                                else:
+                                    _, yb = yb.max(1)  # Argmax
+                            if args.model == 'AutoencoderAndInkClassifier':
+                                ae_loss = metrics['ae_loss'](pred[0], yb[0])
+                                ink_loss = metrics['ink_loss'](pred[1], yb[1])
+                                loss = ae_loss + ink_loss
+                                metric_results['ae_loss'].append(ae_loss)
+                                metric_results['ink_loss'].append(ink_loss)
+                                metric_results['loss'].append(loss)
+                            else:
+                                for metric, fn in metrics.items():
+                                    metric_results[metric].append(fn(pred, yb))
                             metric_results['loss'][-1].backward()
                             opt.step()
                             opt.zero_grad()
@@ -423,7 +445,7 @@ def main():
                                 if val_dl is not None:
                                     logging.info('Evaluating on validation set... ')
                                     val_results = inkid.ops.perform_validation(model, val_dl, metrics, device,
-                                                                               args.label_type)
+                                                                               args.label_type)  # TODO broken call
                                     for metric, result in inkid.metrics.metrics_dict(val_results).items():
                                         writer.add_scalar('val_' + metric, result, epoch * len(train_dl) + batch_num)
                                         writer.flush()
@@ -437,15 +459,15 @@ def main():
                                     inkid.ops.generate_prediction_images(pred_dl, model, output_size, args.label_type,
                                                                          device,
                                                                          predictions_dir, f'{epoch}_{batch_num}',
-                                                                         args.prediction_averaging)
+                                                                         args.prediction_averaging)  # TODO broken call
                                     logging.info('done')
                                 else:
                                     logging.info('Empty prediction set, skipping prediction image generation.')
 
                                 # Visualize autoencoder outputs
-                                if args.model == 'autoencoder':
+                                if args.model in ['autoencoder', 'AutoencoderAndInkClassifier']:
                                     logging.info('Visualizing autoencoder outputs...')
-                                    inkid.ops.save_subvolume_batch_to_img(
+                                    inkid.ops.save_subvolume_batch_to_img(  # TODO broken call
                                         model, device, train_dl, os.path.join(output_path, 'subvolumes'),
                                         include_autoencoded=True, iteration=batch_num, include_vol_slices=False
                                     )
