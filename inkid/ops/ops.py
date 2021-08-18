@@ -1,10 +1,14 @@
 """Miscellaneous operations used in ink-id."""
 
+from collections import namedtuple
 import itertools
+import inspect
 from io import BytesIO
 import json
 import logging
 import requests
+import sys
+from typing import Any
 from urllib.parse import urlsplit, urlunsplit
 
 import math
@@ -153,7 +157,9 @@ def perform_validation(model, dataloader, metrics, device, label_type):
     model.eval()  # Turn off training mode for batch norm and dropout purposes
     with torch.no_grad():
         metric_results = {metric: [] for metric in metrics}
-        for _, xb, yb in tqdm(dataloader):
+        for batch in tqdm(dataloader):
+            xb = batch['feature']
+            yb = batch['label']
             pred = model(xb.to(device))
             if isinstance(pred, tuple):
                 pred = pred[1]
@@ -162,7 +168,7 @@ def perform_validation(model, dataloader, metrics, device, label_type):
                 _, yb = yb.max(1)  # Argmax
             for metric, fn in metrics.items():
                 if metric not in ['ae_loss', 'loss']:
-                    metric_results[metric].append(fn(pred, yb))
+                    metric_results[metric].append(fn(pred['ink_classes'], yb))
     model.train()
     return metric_results
 
@@ -172,7 +178,9 @@ def generate_prediction_images(dataloader, model, output_size, label_type, devic
     """Helper function to generate a prediction image given a model and dataloader, and save it to a file."""
     model.eval()  # Turn off training mode for batch norm and dropout purposes
     with torch.no_grad():
-        for batch_metadata, batch_features, _ in tqdm(dataloader):
+        for batch in tqdm(dataloader):
+            batch_metadata = batch['feature_metadata']
+            batch_features = batch['feature']
             # Smooth predictions via augmentation. Augment each subvolume 8-fold via rotations and flips
             if prediction_averaging:
                 rotations = range(4)
@@ -188,10 +196,11 @@ def generate_prediction_images(dataloader, model, output_size, label_type, devic
                 if flip:
                     aug_pxb = aug_pxb.flip(4)
                 pred = model(aug_pxb.to(device))
-                if isinstance(pred, tuple):
-                    pred = pred[1]
                 if label_type == 'ink_classes':
+                    pred = pred['ink_classes']
                     pred = F.softmax(pred, dim=1)
+                elif label_type == 'rgb_values':
+                    pred = pred['rgb_values']
                 pred = pred.cpu()
                 # Example pred.shape = [64, 2, 48, 48] (BxCxHxW)
                 # Undo flip and rotation
@@ -355,31 +364,28 @@ def save_subvolume_batch_to_img(model, device, dataloader, outdir, padding=10, b
                                 include_autoencoded=False, iteration=None, include_vol_slices=True):
     os.makedirs(outdir, exist_ok=True)
 
-    subvolume_metadatas, subvolumes, _ = next(iter(dataloader))
+    batch = next(iter(dataloader))
     if include_autoencoded:
         model.eval()  # Turn off training mode for batch norm and dropout purposes
         with torch.no_grad():
-            outputs = model(subvolumes.to(device))
-            if isinstance(outputs, tuple):
-                outputs = outputs[0]
-            outputs = outputs.cpu()
-            outputs = np.squeeze(outputs, axis=1)
+            autoencodeds = model(batch['feature'].to(device))['autoencoded']
+            autoencodeds = autoencodeds.cpu()
+            autoencodeds = np.squeeze(autoencodeds, axis=1)
         model.train()
     else:
-        outputs = [None] * len(subvolumes)
-    subvolumes = np.squeeze(subvolumes, axis=1)  # Remove channels axis
+        autoencodeds = [None] * len(batch['feature'])
+    subvolumes = np.squeeze(batch['feature'], axis=1)  # Remove channels axis
 
     imgs = []
-    for source_path, _, _, vol_x, vol_y, vol_z, _, _, _, subvolume, output \
-            in zip(*subvolume_metadatas, subvolumes, outputs):
-        volume = dataloader.dataset.get_source(source_path).volume
+    for i, (subvolume, autoencoded) in enumerate(zip(subvolumes, autoencodeds)):
+        volume = dataloader.dataset.get_source(batch['feature_metadata'].path[i]).volume
         imgs.append(subvolume_to_sample_img(
             subvolume,
             volume,
-            (vol_x, vol_y, vol_z),
+            (batch['feature_metadata'].x[i], batch['feature_metadata'].y[i], batch['feature_metadata'].z[i]),
             padding,
             background_color,
-            autoencoded_subvolume=output,
+            autoencoded_subvolume=autoencoded,
             include_vol_slices=include_vol_slices
         ))
 
@@ -396,3 +402,26 @@ def save_subvolume_batch_to_img(model, device, dataloader, outdir, padding=10, b
         outfile += f'_{iteration}'
     outfile += '.png'
     composite_img.save(outfile)
+
+
+# Automatically get the current list of classes in inkid.model https://stackoverflow.com/a/1796247
+def model_choices():
+    return [s for (s, _) in inspect.getmembers(sys.modules['inkid.model'], inspect.isclass)]
+
+
+# https://discuss.pytorch.org/t/a-tensorboard-problem-about-use-add-graph-method-for-deeplab-v3-in-torchvision/95808/2
+class ImmutableOutputModelWrapper(torch.nn.Module):
+    def __init__(self, model: torch.nn.Module) -> None:
+        super().__init__()
+        self.model = model
+
+    def forward(self, x: torch.Tensor) -> Any:
+        x = self.model(x)
+
+        if isinstance(x, dict):
+            x_named_tuple = namedtuple('ModelEndpoints', sorted(x.keys()))
+            x = x_named_tuple(**x)
+        elif isinstance(x, list):
+            x = tuple(x)
+
+        return x

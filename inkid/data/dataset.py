@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections import namedtuple
 import json
 import os
 from typing import Dict, List, Optional, Tuple
@@ -12,6 +13,13 @@ from PIL import Image
 import torch
 
 import inkid
+
+
+FeatureMetadata = namedtuple(
+    'FeatureMetadata',
+    ('path', 'surface_x', 'surface_y', 'x', 'y', 'z', 'n_x', 'n_y', 'n_z'),
+    defaults=None,
+)
 
 
 class DataSource(ABC):
@@ -124,7 +132,7 @@ class RegionSource(DataSource):
         # Read that value from PPM
         x, y, z, n_x, n_y, n_z = self._ppm.get_point_with_normal(surface_x, surface_y)
         # Get the feature metadata (useful for e.g. knowing where this feature came from on the surface)
-        feature_metadata = (self.path, surface_x, surface_y, x, y, z, n_x, n_y, n_z)
+        feature_metadata = FeatureMetadata(self.path, surface_x, surface_y, x, y, z, n_x, n_y, n_z)
         # Get the feature
         feature = self.volume.get_subvolume(
             center=(x, y, z),
@@ -146,7 +154,11 @@ class RegionSource(DataSource):
         elif self.label_type is not None:
             raise ValueError(f'Unknown label_type: {self.label_type} set for region source'
                              f' {self.path}')
-        return feature_metadata, feature, label
+        return {
+            'feature_metadata': feature_metadata,
+            'feature': feature,
+            'label': label,
+        }
 
     def update_points_list(self) -> None:
         """Update the list of points after changes to the bounding box, grid spacing, or some other options."""

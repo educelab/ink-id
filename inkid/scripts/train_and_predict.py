@@ -49,11 +49,11 @@ def main():
 
     # Method
     parser.add_argument('--label-type', default='ink_classes', help='type of labels',
-                        choices=['ink_classes', 'rgb_values'])
+                        choices=['ink_classes', 'rgb_values'])  # TODO remove
     parser.add_argument('--model-3d-to-2d', action='store_true',
                         help='Use semi-fully convolutional model (which removes a dimension) with 2d labels per '
-                             'subvolume')
-    parser.add_argument('--loss', choices=['cross_entropy', 'mse'], default='cross_entropy')
+                             'subvolume')  # TODO remove
+    parser.add_argument('--loss', choices=['cross_entropy', 'mse'], default='cross_entropy')  # TODO specify
 
     # Subvolumes
     inkid.ops.add_subvolume_args(parser)
@@ -63,9 +63,7 @@ def main():
     parser.add_argument('--no-augmentation', action='store_true')
 
     # Network architecture
-    parser.add_argument('--model', default='original', help='model to run against',
-                        choices=['original', '3dunet_full', '3dunet_half', 'autoencoder',
-                                 'AutoencoderAndInkClassifier'])
+    parser.add_argument('--model', default='original', help='model to run against', choices=inkid.ops.model_choices())
     parser.add_argument('--learning-rate', metavar='n', type=float, default=0.001)
     parser.add_argument('--drop-rate', metavar='n', type=float, default=0.5)
     parser.add_argument('--batch-norm-momentum', metavar='n', type=float, default=0.9)
@@ -123,11 +121,7 @@ def main():
     # If this is a cross-validation job, that directory is allowed to have output from other
     # cross-validation splits, but not this one
     if os.path.isdir(args.output):
-        if args.cross_validate_on is None:
-            if len(os.listdir(args.output)) > 0:
-                logging.error(f'Provided output directory must be empty: {args.output}')
-                return
-        else:
+        if args.cross_validate_on is not None:
             dirs_in_output = [os.path.join(args.output, f) for f in os.listdir(args.output)]
             dirs_in_output = list(filter(os.path.isdir, dirs_in_output))
             for job_dir in dirs_in_output:
@@ -306,38 +300,26 @@ def main():
 
     # Create the model for training
     in_channels = 1
-    if args.model == 'AutoencoderAndInkClassifier':
-        model = inkid.model.AutoencoderAndInkClassifier(args.subvolume_shape_voxels,
-                                                        args.batch_norm_momentum,
-                                                        args.no_batch_norm,
-                                                        args.filters,
-                                                        args.drop_rate)
-    else:
-        if args.model in ['original', 'autoencoder']:
-            encoder = inkid.model.Subvolume3DcnnEncoder(args.subvolume_shape_voxels,
-                                                        args.batch_norm_momentum,
-                                                        args.no_batch_norm,
-                                                        args.filters,
-                                                        in_channels)
-        elif args.model in ['3dunet_full', '3dunet_half']:
-            encoder = inkid.model.Subvolume3DUNet(args.subvolume_shape_voxels,
-                                                  args.batch_norm_momentum,
-                                                  args.unet_starting_channels,
-                                                  in_channels,
-                                                  decode=(args.model == '3dunet_full'))
-        else:
-            logging.error(f'Unrecognized model {args.model}')
-            return
-        if args.model == 'autoencoder':
-            decoder = inkid.model.Subvolume3DcnnDecoder(args.batch_norm_momentum,
-                                                        args.no_batch_norm,
-                                                        args.filters,
-                                                        in_channels)
-        elif args.model_3d_to_2d:
-            decoder = inkid.model.ConvolutionalInkDecoder(args.filters, output_size)
-        else:
-            decoder = inkid.model.LinearInkDecoder(args.drop_rate, encoder.output_shape, output_size)
-        model = torch.nn.Sequential(encoder, decoder)
+    model = {
+        'Autoencoder': inkid.model.Autoencoder(
+            args.subvolume_shape_voxels, args.batch_norm_momentum, args.no_batch_norm, args.filters
+        ),
+        'AutoencoderAndInkClassifier': inkid.model.AutoencoderAndInkClassifier(
+            args.subvolume_shape_voxels, args.batch_norm_momentum, args.no_batch_norm, args.filters, args.drop_rate
+        ),
+        'InkClassifier3DCNN': inkid.model.InkClassifier3DCNN(
+            args.subvolume_shape_voxels, args.batch_norm_momentum, args.no_batch_norm, args.filters, args.drop_rate
+        ),
+        'InkClassifier3DUNet': inkid.model.InkClassifier3DUNet(
+            args.subvolume_shape_voxels, args.batch_norm_momentum, args.unet_starting_channels, in_channels,
+            args.drop_rate),
+        'InkClassifier3DUNetHalf': inkid.model.InkClassifier3DUNetHalf(
+            args.subvolume_shape_voxels, args.batch_norm_momentum, args.unet_starting_channels, in_channels,
+            args.drop_rate),
+        'RGB3DCNN': inkid.model.RGB3DCNN(
+            args.subvolume_shape_voxels, args.batch_norm_momentum, args.no_batch_norm, args.filters, args.drop_rate
+        ),
+    }[args.model]
 
     # Load pretrained weights if specified
     if args.load_weights_from is not None:
@@ -351,8 +333,8 @@ def main():
     # Show model in TensorBoard and save sample subvolumes
     sample_dl = train_dl or val_dl or pred_dl
     if sample_dl is not None:
-        _, features, _ = next(iter(sample_dl))
-        writer.add_graph(model, features)
+        features = next(iter(sample_dl))['feature']
+        writer.add_graph(inkid.ops.ImmutableOutputModelWrapper(model), features)
         writer.flush()
         inkid.ops.save_subvolume_batch_to_img(model, device, sample_dl, os.path.join(output_path, 'subvolumes'))
 
@@ -392,10 +374,12 @@ def main():
                 for epoch in range(args.training_epochs):
                     model.train()  # Turn on training mode
                     total_batches = len(train_dl)
-                    for batch_num, (_, xb, yb) in enumerate(train_dl):
+                    for batch_num, batch in enumerate(train_dl):
+                        xb = batch['feature']
+                        yb = batch['label']
                         with torch.profiler.record_function(f'train_batch_{batch_num}'):
                             xb = xb.to(device)
-                            if args.model == 'autoencoder':
+                            if args.model == 'autoencoder':  # TODO clean up section
                                 yb = xb.clone()
                             elif args.model == 'AutoencoderAndInkClassifier':
                                 yb = (xb.clone(), yb.to(device))
@@ -407,9 +391,9 @@ def main():
                                     yb = (yb[0], yb[1].max(1)[1])
                                 else:
                                     _, yb = yb.max(1)  # Argmax
-                            if args.model == 'AutoencoderAndInkClassifier':
-                                ae_loss = metrics['ae_loss'](pred[0], yb[0])
-                                ink_loss = metrics['ink_loss'](pred[1], yb[1])
+                            if args.model == 'AutoencoderAndInkClassifier':  # TODO clean up metrics
+                                ae_loss = metrics['ae_loss'](pred['autoencoded'], yb[0])
+                                ink_loss = metrics['ink_loss'](pred['ink_classes'], yb[1])
                                 loss = ae_loss + ink_loss
                                 metric_results['ae_loss'].append(ae_loss)
                                 metric_results['ink_loss'].append(ink_loss)
@@ -445,7 +429,7 @@ def main():
                                 if val_dl is not None:
                                     logging.info('Evaluating on validation set... ')
                                     val_results = inkid.ops.perform_validation(model, val_dl, metrics, device,
-                                                                               args.label_type)  # TODO broken call
+                                                                               args.label_type)
                                     for metric, result in inkid.metrics.metrics_dict(val_results).items():
                                         writer.add_scalar('val_' + metric, result, epoch * len(train_dl) + batch_num)
                                         writer.flush()
@@ -459,7 +443,7 @@ def main():
                                     inkid.ops.generate_prediction_images(pred_dl, model, output_size, args.label_type,
                                                                          device,
                                                                          predictions_dir, f'{epoch}_{batch_num}',
-                                                                         args.prediction_averaging)  # TODO broken call
+                                                                         args.prediction_averaging)
                                     logging.info('done')
                                 else:
                                     logging.info('Empty prediction set, skipping prediction image generation.')
@@ -467,7 +451,7 @@ def main():
                                 # Visualize autoencoder outputs
                                 if args.model in ['autoencoder', 'AutoencoderAndInkClassifier']:
                                     logging.info('Visualizing autoencoder outputs...')
-                                    inkid.ops.save_subvolume_batch_to_img(  # TODO broken call
+                                    inkid.ops.save_subvolume_batch_to_img(
                                         model, device, train_dl, os.path.join(output_path, 'subvolumes'),
                                         include_autoencoded=True, iteration=batch_num, include_vol_slices=False
                                     )
