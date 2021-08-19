@@ -205,13 +205,22 @@ cdef class Volume:
         ))
 
     def z_slice(self, int idx):
-        return inkid.ops.uint16_to_float32_normalized_0_1(self._data_view[idx, :, :])
+        if 0 <= idx < self.shape_z:
+            return inkid.ops.uint16_to_float32_normalized_0_1(self._data_view[idx, :, :])
+        else:
+            return np.zeros((self.shape_y, self.shape_x), dtype=np.float32)
 
     def y_slice(self, int idx):
-        return inkid.ops.uint16_to_float32_normalized_0_1(self._data_view[:, idx, :])
+        if 0 <= idx < self.shape_y:
+            return inkid.ops.uint16_to_float32_normalized_0_1(self._data_view[:, idx, :])
+        else:
+            return np.zeros((self.shape_z, self.shape_x), dtype=np.float32)
 
     def x_slice(self, int idx):
-        return inkid.ops.uint16_to_float32_normalized_0_1(self._data_view[:, :, idx])
+        if 0 <= idx < self.shape_x:
+            return inkid.ops.uint16_to_float32_normalized_0_1(self._data_view[:, :, idx])
+        else:
+            return np.zeros((self.shape_z, self.shape_y), dtype=np.float32)
 
     cdef unsigned short intensity_at(self, int x, int y, int z) nogil:
         """Get the intensity value at a voxel position."""
@@ -259,33 +268,6 @@ cdef class Volume:
 
         c = <unsigned short>(c0 * (1 - dz) + c1 * dz)
         return c
-
-    def get_voxel_vector(self, center, normal, length_in_each_direction, out_of_bounds):
-        """Get a voxel vector from within the volume."""
-        assert len(center) == 3
-        assert len(normal) == 3
-
-        normal = normalize_fl3(normal)
-
-        if out_of_bounds is None:
-            out_of_bounds = 'all_zeros'
-        assert out_of_bounds in ['all_zeros', 'partial_zeros', 'index_error']
-
-        center = np.array(center)
-
-        voxel_vector = []
-
-        try:
-            for i in range(-length_in_each_direction, length_in_each_direction + 1):
-                x, y, z = center + i * normal
-                voxel_vector.append(self.interpolate_at(x, y, z))
-            return voxel_vector
-
-        except IndexError:
-            if out_of_bounds == 'all_zeros':
-                return [0.0] * (length_in_each_direction * 2 + 1)
-            else:
-                raise IndexError
 
     cpdef get_subvolume_snap_to_axis_aligned(self,
                                              center,

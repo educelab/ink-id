@@ -30,6 +30,10 @@ import torchsummary
 import inkid
 
 
+class NoTrainingLossError(RuntimeError):
+    pass
+
+
 def main():
     """Run the training and prediction process."""
     start = timeit.default_timer()
@@ -48,29 +52,19 @@ def main():
                              'add this set to the validation and prediction sets')
 
     # Method
-    parser.add_argument('--feature-type', default='subvolume', help='type of input features',
-                        choices=['subvolume', 'voxel_vector', 'descriptive_statistics'])
-    parser.add_argument('--label-type', default='ink_classes', help='type of labels',
-                        choices=['ink_classes', 'rgb_values'])
     parser.add_argument('--model-3d-to-2d', action='store_true',
                         help='Use semi-fully convolutional model (which removes a dimension) with 2d labels per '
                              'subvolume')
-    parser.add_argument('--loss', choices=['cross_entropy', 'mse'], default='cross_entropy')
 
     # Subvolumes
     inkid.ops.add_subvolume_args(parser)
-
-    # Voxel vectors
-    parser.add_argument('--length-in-each-direction', metavar='n', type=int, default=8,
-                        help='length of voxel vector in each direction along normal')
 
     # Data organization/augmentation
     parser.add_argument('--jitter-max', metavar='n', type=int, default=4)
     parser.add_argument('--no-augmentation', action='store_true')
 
     # Network architecture
-    parser.add_argument('--model', default='original', help='model to run against',
-                        choices=['original', '3dunet_full', '3dunet_half', 'autoencoder'])
+    parser.add_argument('--model', default='original', help='model to run against', choices=inkid.ops.model_choices())
     parser.add_argument('--learning-rate', metavar='n', type=float, default=0.001)
     parser.add_argument('--drop-rate', metavar='n', type=float, default=0.5)
     parser.add_argument('--batch-norm-momentum', metavar='n', type=float, default=0.9)
@@ -128,11 +122,7 @@ def main():
     # If this is a cross-validation job, that directory is allowed to have output from other
     # cross-validation splits, but not this one
     if os.path.isdir(args.output):
-        if args.cross_validate_on is None:
-            if len(os.listdir(args.output)) > 0:
-                logging.error(f'Provided output directory must be empty: {args.output}')
-                return
-        else:
+        if args.cross_validate_on is not None:
             dirs_in_output = [os.path.join(args.output, f) for f in os.listdir(args.output)]
             dirs_in_output = list(filter(os.path.isdir, dirs_in_output))
             for job_dir in dirs_in_output:
@@ -215,87 +205,88 @@ def main():
         metadata_file.write(json.dumps(metadata, indent=4, sort_keys=False))
 
     # Define the feature inputs to the network
-    if args.feature_type == 'subvolume':
-        subvolume_args = dict(
-            shape_voxels=args.subvolume_shape_voxels,
-            shape_microns=args.subvolume_shape_microns,
-            out_of_bounds='all_zeros',
-            move_along_normal=args.move_along_normal,
-            method=args.subvolume_method,
-            normalize=args.normalize_subvolumes,
-        )
-        train_feature_args = subvolume_args.copy()
-        train_feature_args.update(
-            augment_subvolume=args.augmentation,
-            jitter_max=args.jitter_max,
-        )
-        val_feature_args = subvolume_args.copy()
-        val_feature_args.update(
-            augment_subvolume=False,
-            jitter_max=0,
-        )
-        pred_feature_args = val_feature_args.copy()
-    elif args.feature_type == 'voxel_vector':
-        train_feature_args = dict(
-            length_in_each_direction=args.length_in_each_direction,
-            out_of_bounds='all_zeros',
-        )
-        val_feature_args = train_feature_args.copy()
-        pred_feature_args = train_feature_args.copy()
-    elif args.feature_type == 'descriptive_statistics':
-        train_feature_args = dict(
-            subvolume_shape_voxels=args.subvolume_shape_voxels,
-            subvolume_shape_microns=args.subvolume_shape_microns
-        )
-        val_feature_args = train_feature_args.copy()
-        pred_feature_args = train_feature_args.copy()
-    else:
-        logging.error('Feature type not recognized: {}'.format(args.feature_type))
-        return
+    subvolume_args = dict(
+        shape_voxels=args.subvolume_shape_voxels,
+        shape_microns=args.subvolume_shape_microns,
+        out_of_bounds='all_zeros',
+        move_along_normal=args.move_along_normal,
+        method=args.subvolume_method,
+        normalize=args.normalize_subvolumes,
+    )
+    train_feature_args = subvolume_args.copy()
+    train_feature_args.update(
+        augment_subvolume=args.augmentation,
+        jitter_max=args.jitter_max,
+    )
+    val_feature_args = subvolume_args.copy()
+    val_feature_args.update(
+        augment_subvolume=False,
+        jitter_max=0,
+    )
+    pred_feature_args = val_feature_args.copy()
 
-    train_ds.set_for_all_sources('feature_type', args.feature_type)
     train_ds.set_for_all_sources('feature_args', train_feature_args)
-    val_ds.set_for_all_sources('feature_type', args.feature_type)
     val_ds.set_for_all_sources('feature_args', val_feature_args)
-    pred_ds.set_for_all_sources('feature_type', args.feature_type)
     pred_ds.set_for_all_sources('feature_args', pred_feature_args)
 
-    # Define the labels
+    # Create the model for training
+    in_channels = 1
+    model = {
+        'Autoencoder': inkid.model.Autoencoder(
+            args.subvolume_shape_voxels, args.batch_norm_momentum, args.no_batch_norm, args.filters
+        ),
+        'AutoencoderAndInkClassifier': inkid.model.AutoencoderAndInkClassifier(
+            args.subvolume_shape_voxels, args.batch_norm_momentum, args.no_batch_norm, args.filters, args.drop_rate
+        ),
+        'InkClassifier3DCNN': inkid.model.InkClassifier3DCNN(
+            args.subvolume_shape_voxels, args.batch_norm_momentum, args.no_batch_norm, args.filters, args.drop_rate
+        ),
+        'InkClassifier3DUNet': inkid.model.InkClassifier3DUNet(
+            args.subvolume_shape_voxels, args.batch_norm_momentum, args.unet_starting_channels, in_channels,
+            args.drop_rate),
+        'InkClassifier3DUNetHalf': inkid.model.InkClassifier3DUNetHalf(
+            args.subvolume_shape_voxels, args.batch_norm_momentum, args.unet_starting_channels, in_channels,
+            args.drop_rate),
+        'RGB3DCNN': inkid.model.RGB3DCNN(
+            args.subvolume_shape_voxels, args.batch_norm_momentum, args.no_batch_norm, args.filters, args.drop_rate
+        ),
+    }[args.model]
+
+    # Define the labels and metrics
     if args.model_3d_to_2d:
         label_shape = (args.subvolume_shape_voxels[1], args.subvolume_shape_voxels[2])
     else:
         label_shape = (1, 1)
-    if args.label_type == 'ink_classes':
-        label_args = dict(
+    metrics = {}
+    label_args = {}
+    if 'ink_classes' in model.labels:
+        label_args['ink_classes'] = dict(
             shape=label_shape
         )
-        output_size = 2
-        metrics = {
-            'loss': {
-                'cross_entropy': nn.CrossEntropyLoss(),
-                'mse': nn.MSELoss(),
-            }[args.loss],
+        metrics['ink_classes'] = {
+            'loss': nn.CrossEntropyLoss(),
             'accuracy': inkid.metrics.accuracy,
             'precision': inkid.metrics.precision,
             'recall': inkid.metrics.recall,
             'fbeta': inkid.metrics.fbeta,
-            'auc': inkid.metrics.auc
+            'auc': inkid.metrics.auc,
         }
-    elif args.label_type == 'rgb_values':
-        label_args = dict(
+    if 'rgb_values' in model.labels:
+        label_args['rgb_values'] = dict(
             shape=label_shape
         )
-        output_size = 3
-        metrics = {
-            'loss': nn.SmoothL1Loss(reduction='mean')
+        metrics['rgb_values'] = {
+            'loss': nn.SmoothL1Loss(reduction='mean'),
         }
-    else:
-        logging.error('Label type not recognized: {}'.format(args.label_type))
-        return
+    if 'autoencoded' in model.labels:
+        metrics['autoencoded'] = {
+            'loss': nn.MSELoss(),
+        }
+    metric_results = {label_type: {metric: [] for metric in metrics[label_type]} for label_type in metrics}
 
-    train_ds.set_for_all_sources('label_type', args.label_type)  # TODO should all this stuff just be in init?
+    train_ds.set_for_all_sources('label_types', model.labels)  # TODO should all this stuff just be in init?
     train_ds.set_for_all_sources('label_args', label_args)
-    val_ds.set_for_all_sources('label_type', args.label_type)
+    val_ds.set_for_all_sources('label_types', model.labels)
     val_ds.set_for_all_sources('label_args', label_args)
     # pred_ds does not generate labels, left as None
 
@@ -328,38 +319,6 @@ def main():
         logging.info(f'    Memory Allocated: {round(torch.cuda.memory_allocated(0) / 1024 ** 3, 1)} GB')
         logging.info(f'    Memory Cached:    {round(torch.cuda.memory_reserved(0) / 1024 ** 3, 1)} GB')
 
-    # Create the model for training
-    if args.feature_type == 'subvolume':
-        in_channels = 1
-        if args.model in ['original', 'autoencoder']:
-            encoder = inkid.model.Subvolume3DcnnEncoder(args.subvolume_shape_voxels,
-                                                        args.batch_norm_momentum,
-                                                        args.no_batch_norm,
-                                                        args.filters,
-                                                        in_channels)
-        elif args.model in ['3dunet_full', '3dunet_half']:
-            encoder = inkid.model.Subvolume3DUNet(args.subvolume_shape_voxels,
-                                                  args.batch_norm_momentum,
-                                                  args.unet_starting_channels,
-                                                  in_channels,
-                                                  decode=(args.model == '3dunet_full'))
-        else:
-            logging.error(f'Model {args.model} is invalid for feature type {args.feature_type}.')
-            return
-        if args.model == 'autoencoder':
-            decoder = inkid.model.Subvolume3DcnnDecoder(args.batch_norm_momentum,
-                                                        args.no_batch_norm,
-                                                        args.filters,
-                                                        in_channels)
-        elif args.model_3d_to_2d:
-            decoder = inkid.model.ConvolutionalInkDecoder(args.filters, output_size)
-        else:
-            decoder = inkid.model.LinearInkDecoder(args.drop_rate, encoder.output_shape, output_size)
-        model = torch.nn.Sequential(encoder, decoder)
-    else:
-        logging.error('Feature type: {} does not have a model implementation.'.format(args.feature_type))
-        return
-
     # Load pretrained weights if specified
     if args.load_weights_from is not None:
         model_dict = model.state_dict()
@@ -372,11 +331,10 @@ def main():
     # Show model in TensorBoard and save sample subvolumes
     sample_dl = train_dl or val_dl or pred_dl
     if sample_dl is not None:
-        _, features, _ = next(iter(sample_dl))
-        writer.add_graph(model, features)
+        features = next(iter(sample_dl))['feature']
+        writer.add_graph(inkid.ops.ImmutableOutputModelWrapper(model), features)
         writer.flush()
-        if args.feature_type == 'subvolume':
-            inkid.ops.save_subvolume_batch_to_img(sample_dl, os.path.join(output_path, 'subvolumes'))
+        inkid.ops.save_subvolume_batch_to_img(model, device, sample_dl, os.path.join(output_path, 'subvolumes'))
 
     # Move model to device (possibly GPU)
     model = model.to(device)
@@ -389,7 +347,6 @@ def main():
     # Define optimizer
     opt = torch.optim.Adam(model.parameters(), lr=args.learning_rate)
 
-    metric_results = {metric: [] for metric in metrics}
     last_summary = time.time()
 
     # Set up profiling
@@ -414,20 +371,29 @@ def main():
                 for epoch in range(args.training_epochs):
                     model.train()  # Turn on training mode
                     total_batches = len(train_dl)
-                    for batch_num, (_, xb, yb) in enumerate(train_dl):
+                    for batch_num, batch in enumerate(train_dl):
+                        xb = batch['feature']
                         with torch.profiler.record_function(f'train_batch_{batch_num}'):
                             xb = xb.to(device)
-                            if args.model == 'autoencoder':
-                                yb = xb.clone()
+                            preds = model(xb)
+                            loss = None
+                            for label_type in model.labels:
+                                yb = xb.clone() if label_type == 'autoencoded' else batch[label_type].to(device)
+                                if label_type == 'ink_classes':
+                                    _, yb = yb.max(1)  # Argmax
+                                pred = preds[label_type]
+                                for metric, fn in metrics[label_type].items():
+                                    metric_result = fn(pred, yb)
+                                    metric_results[label_type][metric].append(metric_result)
+                                    if metric == 'loss':
+                                        if loss is not None:
+                                            loss += metric_result
+                                        else:
+                                            loss = metric_result
+                            if loss is not None:
+                                loss.backward()
                             else:
-                                yb = yb.to(device)
-                            pred = model(xb)
-                            if args.label_type == 'ink_classes' and args.model != 'autoencoder':
-                                _, yb = yb.max(1)  # Argmax
-                            for metric, fn in metrics.items():
-                                metric_results[metric].append(fn(pred, yb))
-
-                            metric_results['loss'][-1].backward()
+                                raise NoTrainingLossError('Training is running, but no loss function encountered')
                             opt.step()
                             opt.zero_grad()
 
@@ -438,8 +404,9 @@ def main():
                                 for metric, result in inkid.metrics.metrics_dict(metric_results).items():
                                     writer.add_scalar('train_' + metric, result, epoch * len(train_dl) + batch_num)
                                     writer.flush()
-                                for result in metric_results.values():
-                                    result.clear()
+                                for metrics_for_label in metric_results.values():
+                                    for single_metric_results in metrics_for_label.values():
+                                        single_metric_results.clear()
                                 last_summary = time.time()
 
                             if batch_num % args.checkpoint_every_n_batches == 0:
@@ -454,8 +421,7 @@ def main():
                                 # Periodic evaluation and prediction
                                 if val_dl is not None:
                                     logging.info('Evaluating on validation set... ')
-                                    val_results = inkid.ops.perform_validation(model, val_dl, metrics, device,
-                                                                               args.label_type)
+                                    val_results = inkid.ops.perform_validation(model, val_dl, metrics, device)
                                     for metric, result in inkid.metrics.metrics_dict(val_results).items():
                                         writer.add_scalar('val_' + metric, result, epoch * len(train_dl) + batch_num)
                                         writer.flush()
@@ -466,13 +432,21 @@ def main():
                                 # Prediction image
                                 if pred_dl is not None:
                                     logging.info('Generating prediction image... ')
-                                    inkid.ops.generate_prediction_images(pred_dl, model, output_size, args.label_type,
-                                                                         device,
-                                                                         predictions_dir, f'{epoch}_{batch_num}',
-                                                                         args.prediction_averaging)
+                                    inkid.ops.generate_prediction_images(
+                                        pred_dl, model, device, predictions_dir, f'{epoch}_{batch_num}',
+                                        args.prediction_averaging)
                                     logging.info('done')
                                 else:
                                     logging.info('Empty prediction set, skipping prediction image generation.')
+
+                                # Visualize autoencoder outputs
+                                if args.model in ['autoencoder', 'AutoencoderAndInkClassifier']:
+                                    logging.info('Visualizing autoencoder outputs...')
+                                    inkid.ops.save_subvolume_batch_to_img(
+                                        model, device, train_dl, os.path.join(output_path, 'subvolumes'),
+                                        include_autoencoded=True, iteration=batch_num, include_vol_slices=False
+                                    )
+                                    logging.info('done')
                             # Only advance profiler step if profiling is enabled (the context manager is not null)
                             if isinstance(context_manager, torch.profiler.profile):
                                 context_manager.step()
@@ -484,13 +458,12 @@ def main():
         try:
             all_sources = list(set(args.training_set + args.validation_set + args.prediction_set))
             final_pred_ds = inkid.data.Dataset(all_sources)
-            final_pred_ds.set_for_all_sources('feature_type', args.feature_type)
             final_pred_ds.set_for_all_sources('feature_args', pred_feature_args)
             final_pred_ds.set_regions_grid_spacing(args.prediction_grid_spacing)
             if len(final_pred_ds) > 0:
                 final_pred_dl = DataLoader(final_pred_ds, batch_size=args.batch_size * 2, shuffle=False,
                                            num_workers=args.dataloaders_num_workers)
-                inkid.ops.generate_prediction_images(final_pred_dl, model, output_size, args.label_type, device,
+                inkid.ops.generate_prediction_images(final_pred_dl, model, device,
                                                      predictions_dir, 'final', args.prediction_averaging)
         # Perform finishing touches even if cut short
         except KeyboardInterrupt:
@@ -500,7 +473,7 @@ def main():
     try:
         if val_dl is not None:
             logging.info('Performing final evaluation on validation set... ')
-            val_results = inkid.ops.perform_validation(model, val_dl, metrics, device, args.label_type)
+            val_results = inkid.ops.perform_validation(model, val_dl, metrics, device)
             metadata['Final validation metrics'] = inkid.metrics.metrics_dict(val_results)
             logging.info(f'done ({inkid.metrics.metrics_str(val_results)})')
         else:

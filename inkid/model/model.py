@@ -351,3 +351,93 @@ class Subvolume3DUNet(torch.nn.Module):
             x = self.bn(x)
             x = self.relu(x)
             return x
+
+
+class Autoencoder(torch.nn.Module):
+    def __init__(self, subvolume_shape, batch_norm_momentum, no_batch_norm, filters):
+        super().__init__()
+        self.encoder = Subvolume3DcnnEncoder(subvolume_shape, batch_norm_momentum, no_batch_norm, filters,
+                                             in_channels=1)
+        self.decoder = Subvolume3DcnnDecoder(batch_norm_momentum, no_batch_norm, filters, in_channels=1)
+        self.labels = ['autoencoded']
+
+    def forward(self, x):
+        return {
+            'autoencoded': self.decoder(self.encoder(x)),
+        }
+
+
+class AutoencoderAndInkClassifier(torch.nn.Module):
+    def __init__(self, subvolume_shape, batch_norm_momentum, no_batch_norm, filters, drop_rate):
+        super().__init__()
+        self.encoder = Subvolume3DcnnEncoder(subvolume_shape, batch_norm_momentum, no_batch_norm, filters,
+                                             in_channels=1)
+        self.ink_decoder = LinearInkDecoder(drop_rate, self.encoder.output_shape, output_neurons=2)
+        self.autoencoder_decoder = Subvolume3DcnnDecoder(batch_norm_momentum, no_batch_norm, filters, in_channels=1)
+        self.labels = ['autoencoded', 'ink_classes']
+
+    def forward(self, x):
+        x = self.encoder(x)
+        autoencoded = self.autoencoder_decoder(x)
+        ink = self.ink_decoder(x)
+
+        return {
+            'autoencoded': autoencoded,
+            'ink_classes': ink,
+        }
+
+
+class InkClassifier3DCNN(torch.nn.Module):
+    def __init__(self, subvolume_shape, batch_norm_momentum, no_batch_norm, filters, drop_rate):
+        super().__init__()
+        self.encoder = Subvolume3DcnnEncoder(subvolume_shape, batch_norm_momentum, no_batch_norm, filters,
+                                             in_channels=1)
+        self.decoder = LinearInkDecoder(drop_rate, self.encoder.output_shape, output_neurons=2)
+        self.labels = ['ink_classes']
+
+    def forward(self, x):
+        return {
+            'ink_classes': self.decoder(self.encoder(x)),
+        }
+
+
+class InkClassifier3DUNet(torch.nn.Module):
+    def __init__(self, subvolume_shape_voxels, batch_norm_momentum, unet_starting_channels, in_channels, drop_rate):
+        super().__init__()
+        self.encoder = Subvolume3DUNet(subvolume_shape_voxels, batch_norm_momentum, unet_starting_channels, in_channels,
+                                       decode=True)
+        self.decoder = LinearInkDecoder(drop_rate, self.encoder.output_shape, output_neurons=2)
+        self.labels = ['ink_classes']
+
+    def forward(self, x):
+        return {
+            'ink_classes': self.decoder(self.encoder(x)),
+        }
+
+
+class InkClassifier3DUNetHalf(torch.nn.Module):
+    def __init__(self, subvolume_shape_voxels, batch_norm_momentum, unet_starting_channels, in_channels, drop_rate):
+        super().__init__()
+        self.encoder = Subvolume3DUNet(subvolume_shape_voxels, batch_norm_momentum, unet_starting_channels, in_channels,
+                                       decode=False)
+        self.decoder = LinearInkDecoder(drop_rate, self.encoder.output_shape, output_neurons=2)
+        self.labels = ['ink_classes']
+
+    def forward(self, x):
+        return {
+            'ink_classes': self.decoder(self.encoder(x)),
+        }
+
+
+class RGB3DCNN(torch.nn.Module):
+    def __init__(self, subvolume_shape, batch_norm_momentum, no_batch_norm, filters, drop_rate):
+        super().__init__()
+        self.encoder = Subvolume3DcnnEncoder(subvolume_shape, batch_norm_momentum, no_batch_norm, filters,
+                                             in_channels=1)
+        self.decoder = LinearInkDecoder(drop_rate, self.encoder.output_shape, output_neurons=3)
+        self.labels = ['rgb_values']
+
+    def forward(self, x):
+        return {
+            'rgb_values': self.decoder(self.encoder(x)),
+        }

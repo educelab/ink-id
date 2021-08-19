@@ -1,10 +1,14 @@
 """Miscellaneous operations used in ink-id."""
 
+from collections import namedtuple
 import itertools
+import inspect
 from io import BytesIO
 import json
 import logging
 import requests
+import sys
+from typing import Any
 from urllib.parse import urlsplit, urlunsplit
 
 import math
@@ -34,14 +38,6 @@ def add_subvolume_args(parser):
                         help='number of voxels to move along normal vector before sampling a subvolume')
     parser.add_argument('--normalize-subvolumes', action='store_true',
                         help='normalize each subvolume to zero mean and unit variance')
-
-
-def visualize_batch(xb, yb):
-    xb, yb = xb.numpy(), yb.numpy()
-    xb = np.max(np.concatenate(np.squeeze(xb), 1), 0) / 255
-    yb = np.concatenate(yb, 1)[1] * 255
-    img = np.concatenate((xb, yb), 1)
-    Image.fromarray(img).show()
 
 
 def take_from_dataset(dataset, n_samples):
@@ -156,68 +152,77 @@ def dict_to_xml(data):
     return dom.toprettyxml()
 
 
-def perform_validation(model, dataloader, metrics, device, label_type):
+def perform_validation(model, dataloader, metrics, device):
     """Run the validation process using a model and dataloader, and return the results of all metrics."""
     model.eval()  # Turn off training mode for batch norm and dropout purposes
     with torch.no_grad():
-        metric_results = {metric: [] for metric in metrics}
-        for _, xb, yb in tqdm(dataloader):
-            pred = model(xb.to(device))
-            yb = yb.to(device)
-            if label_type == 'ink_classes':
-                _, yb = yb.max(1)  # Argmax
-            for metric, fn in metrics.items():
-                metric_results[metric].append(fn(pred, yb))
+        metric_results = {label_type: {metric: [] for metric in metrics[label_type]} for label_type in metrics}
+        for batch in tqdm(dataloader):
+            xb = batch['feature'].to(device)
+            preds = model(xb)
+            for label_type in model.labels:
+                yb = xb.clone() if label_type == 'autoencoded' else batch[label_type].to(device)
+                if label_type == 'ink_classes':
+                    _, yb = yb.max(1)
+                pred = preds[label_type]
+                for metric, fn in metrics[label_type].items():
+                    metric_result = fn(pred, yb)
+                    metric_results[label_type][metric].append(metric_result)
     model.train()
     return metric_results
 
 
-def generate_prediction_images(dataloader, model, output_size, label_type, device, predictions_dir, suffix,
-                               prediction_averaging):
+def generate_prediction_images(dataloader, model, device, predictions_dir, suffix, prediction_averaging):
     """Helper function to generate a prediction image given a model and dataloader, and save it to a file."""
     model.eval()  # Turn off training mode for batch norm and dropout purposes
     with torch.no_grad():
-        for batch_metadata, batch_features, _ in tqdm(dataloader):
-            # Smooth predictions via augmentation. Augment each subvolume 8-fold via rotations and flips
-            if prediction_averaging:
-                rotations = range(4)
-                flips = [False, True]
-            else:
-                rotations = [0]
-                flips = [False]
-            batch_preds = None
-            for rotation, flip in itertools.product(rotations, flips):
-                # Example batch_features.shape = [64, 1, 48, 48, 48] (BxCxDxHxW)
-                # Augment via rotation and flip
-                aug_pxb = batch_features.rot90(rotation, [3, 4])
-                if flip:
-                    aug_pxb = aug_pxb.flip(4)
-                pred = model(aug_pxb.to(device))
-                if label_type == 'ink_classes':
-                    pred = F.softmax(pred, dim=1)
-                pred = pred.cpu()
-                # Example pred.shape = [64, 2, 48, 48] (BxCxHxW)
-                # Undo flip and rotation
-                if flip:
-                    pred = pred.flip(3)
-                pred = pred.rot90(-rotation, [2, 3])
-                pred = np.expand_dims(pred.numpy(), axis=0)
-                # Example pred.shape = [1, 64, 2, 48, 48] (BxCxHxW)
-                # Save this augmentation to the batch totals
-                if batch_preds is None:
-                    batch_preds = np.zeros((0, batch_features.shape[0], output_size, pred.shape[3], pred.shape[4]))
-                batch_preds = np.append(batch_preds, pred, axis=0)
-            # Average over batch of predictions after augmentation
-            batch_pred = batch_preds.mean(0)
-            # Separate these three lists
-            source_paths, xs, ys = batch_metadata
-            for prediction, source_path, x, y in zip(batch_pred, source_paths, xs, ys):
-                dataloader.dataset.get_source(source_path).store_prediction(
-                    int(x),
-                    int(y),
-                    prediction,
-                    label_type
-                )
+        for batch in tqdm(dataloader):
+            batch_metadata = batch['feature_metadata']
+            batch_features = batch['feature']
+            # Only do those label types actually included in model output
+            for label_type in {'ink_classes', 'rgb_classes'}.intersection(model.labels):
+                output_size = 2 if label_type == 'ink_classes' else 3
+                # Smooth predictions via augmentation. Augment each subvolume 8-fold via rotations and flips
+                if prediction_averaging:
+                    rotations = range(4)
+                    flips = [False, True]
+                else:
+                    rotations = [0]
+                    flips = [False]
+                batch_preds = None
+                for rotation, flip in itertools.product(rotations, flips):
+                    # Example batch_features.shape = [64, 1, 48, 48, 48] (BxCxDxHxW)
+                    # Augment via rotation and flip
+                    aug_pxb = batch_features.rot90(rotation, [3, 4])
+                    if flip:
+                        aug_pxb = aug_pxb.flip(4)
+                    preds = model(aug_pxb.to(device))
+                    pred = preds[label_type]
+                    if label_type == 'ink_classes':
+                        pred = F.softmax(pred, dim=1)
+                    pred = pred.cpu()
+                    # Example pred.shape = [64, 2, 48, 48] (BxCxHxW)
+                    # Undo flip and rotation
+                    if flip:
+                        pred = pred.flip(3)
+                    pred = pred.rot90(-rotation, [2, 3])
+                    pred = np.expand_dims(pred.numpy(), axis=0)
+                    # Example pred.shape = [1, 64, 2, 48, 48] (BxCxHxW)
+                    # Save this augmentation to the batch totals
+                    if batch_preds is None:
+                        batch_preds = np.zeros((0, batch_features.shape[0], output_size, pred.shape[3], pred.shape[4]))
+                    batch_preds = np.append(batch_preds, pred, axis=0)
+                # Average over batch of predictions after augmentation
+                batch_pred = batch_preds.mean(0)
+                # Separate these three lists
+                source_paths, xs, ys, _, _, _, _, _, _ = batch_metadata
+                for prediction, source_path, x, y in zip(batch_pred, source_paths, xs, ys):
+                    dataloader.dataset.get_source(source_path).store_prediction(
+                        int(x),
+                        int(y),
+                        prediction,
+                        label_type
+                    )
     dataloader.dataset.save_predictions(predictions_dir, suffix)
     dataloader.dataset.reset_predictions()
     model.train()
@@ -290,7 +295,8 @@ def float_0_1_to_cmap_rgb_uint8(img, cmap='turbo'):
     return Image.fromarray(np.uint8(color_map(img) * 255))
 
 
-def subvolume_to_sample_img(subvolume, volume, vol_coord, padding, background_color, include_vol_slices=True):
+def subvolume_to_sample_img(subvolume, volume, vol_coord, padding, background_color,
+                            autoencoded_subvolume=None, include_vol_slices=True):
     max_size = (300, 300)
     red = (255, 0, 0)
     z_shape, y_shape, x_shape = subvolume.shape
@@ -336,6 +342,11 @@ def subvolume_to_sample_img(subvolume, volume, vol_coord, padding, background_co
             vol_sub_img.thumbnail(max_size)
             sub_images.append(vol_sub_img)
 
+    if autoencoded_subvolume is not None:
+        sub_images.append(float_0_1_to_cmap_rgb_uint8(autoencoded_subvolume[z_idx, :, :]))
+        sub_images.append(float_0_1_to_cmap_rgb_uint8(autoencoded_subvolume[:, y_idx, :]))
+        sub_images.append(float_0_1_to_cmap_rgb_uint8(autoencoded_subvolume[:, :, x_idx]))
+
     width = sum([s.size[0] for s in sub_images]) + padding * (len(sub_images) - 1)
     height = max([s.size[1] for s in sub_images])
 
@@ -348,17 +359,34 @@ def subvolume_to_sample_img(subvolume, volume, vol_coord, padding, background_co
     return img
 
 
-def save_subvolume_batch_to_img(dataloader, outdir, padding=10, background_color=(128, 128, 128)):
-    os.makedirs(outdir)
+def save_subvolume_batch_to_img(model, device, dataloader, outdir, padding=10, background_color=(128, 128, 128),
+                                include_autoencoded=False, iteration=None, include_vol_slices=True):
+    os.makedirs(outdir, exist_ok=True)
 
-    subvolume_metadatas, subvolumes, _ = next(iter(dataloader))
-    subvolumes = np.squeeze(subvolumes, axis=1)  # Remove channels axis
+    batch = next(iter(dataloader))
+    if include_autoencoded:
+        model.eval()  # Turn off training mode for batch norm and dropout purposes
+        with torch.no_grad():
+            autoencodeds = model(batch['feature'].to(device))['autoencoded']
+            autoencodeds = autoencodeds.cpu()
+            autoencodeds = np.squeeze(autoencodeds, axis=1)
+        model.train()
+    else:
+        autoencodeds = [None] * len(batch['feature'])
+    subvolumes = np.squeeze(batch['feature'], axis=1)  # Remove channels axis
 
     imgs = []
-    for source_path, _, _, vol_x, vol_y, vol_z, _, _, _, subvolume in zip(*subvolume_metadatas, subvolumes):
-        volume = dataloader.dataset.get_source(source_path).volume
-        imgs.append(subvolume_to_sample_img(subvolume, volume,
-                                            (vol_x, vol_y, vol_z), padding, background_color))
+    for i, (subvolume, autoencoded) in enumerate(zip(subvolumes, autoencodeds)):
+        volume = dataloader.dataset.get_source(batch['feature_metadata'].path[i]).volume
+        imgs.append(subvolume_to_sample_img(
+            subvolume,
+            volume,
+            (batch['feature_metadata'].x[i], batch['feature_metadata'].y[i], batch['feature_metadata'].z[i]),
+            padding,
+            background_color,
+            autoencoded_subvolume=autoencoded,
+            include_vol_slices=include_vol_slices
+        ))
 
     width = imgs[0].size[0] + padding * 2
     height = imgs[0].size[1] * len(imgs) + padding * (len(imgs) + 1)
@@ -368,5 +396,31 @@ def save_subvolume_batch_to_img(dataloader, outdir, padding=10, background_color
     for i, img in enumerate(imgs):
         composite_img.paste(img, (padding, img.size[1] * i + padding * (i + 1)))
 
-    outfile = os.path.join(outdir, 'sample_batch.png')
+    outfile = os.path.join(outdir, f'sample_batch')
+    if iteration is not None:
+        outfile += f'_{iteration}'
+    outfile += '.png'
     composite_img.save(outfile)
+
+
+# Automatically get the current list of classes in inkid.model https://stackoverflow.com/a/1796247
+def model_choices():
+    return [s for (s, _) in inspect.getmembers(sys.modules['inkid.model'], inspect.isclass)]
+
+
+# https://discuss.pytorch.org/t/a-tensorboard-problem-about-use-add-graph-method-for-deeplab-v3-in-torchvision/95808/2
+class ImmutableOutputModelWrapper(torch.nn.Module):
+    def __init__(self, model: torch.nn.Module) -> None:
+        super().__init__()
+        self.model = model
+
+    def forward(self, x: torch.Tensor) -> Any:
+        x = self.model(x)
+
+        if isinstance(x, dict):
+            x_named_tuple = namedtuple('ModelEndpoints', sorted(x.keys()))
+            x = x_named_tuple(**x)
+        elif isinstance(x, list):
+            x = tuple(x)
+
+        return x

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections import namedtuple
 import json
 import os
 from typing import Dict, List, Optional, Tuple
@@ -12,6 +13,13 @@ from PIL import Image
 import torch
 
 import inkid
+
+
+FeatureMetadata = namedtuple(
+    'FeatureMetadata',
+    ('path', 'surface_x', 'surface_y', 'x', 'y', 'z', 'n_x', 'n_y', 'n_z'),
+    defaults=None,
+)
 
 
 class DataSource(ABC):
@@ -31,10 +39,9 @@ class DataSource(ABC):
                 source_json[key] = inkid.ops.normalize_path(source_json[key], relative_url)
         self.data_dict: Dict = source_json
 
-        self.feature_type: Optional[str] = None
         self.feature_args: Dict = dict()
 
-        self.label_type: Optional[str] = None
+        self.label_types: List[str] = []
         self.label_args: Dict = dict()
 
     @abstractmethod
@@ -125,47 +132,29 @@ class RegionSource(DataSource):
         # Read that value from PPM
         x, y, z, n_x, n_y, n_z = self._ppm.get_point_with_normal(surface_x, surface_y)
         # Get the feature metadata (useful for e.g. knowing where this feature came from on the surface)
-        feature_metadata = (self.path, surface_x, surface_y, x, y, z, n_x, n_y, n_z)
+        feature_metadata = FeatureMetadata(self.path, surface_x, surface_y, x, y, z, n_x, n_y, n_z)
         # Get the feature
-        feature = None
-        if self.feature_type == 'subvolume':
-            feature = self.volume.get_subvolume(
-                center=(x, y, z),
-                normal=(n_x, n_y, n_z),
-                **self.feature_args
-            )
-        elif self.feature_type == 'voxel_vector':
-            feature = self.volume.get_voxel_vector(
-                center=(x, y, z),
-                normal=(n_x, n_y, n_z),
-                **self.feature_args
-            )
-        elif self.feature_type == 'descriptive_statistics':
-            subvolume = self.volume.get_subvolume(
-                center=(x, y, z),
-                normal=(n_x, n_y, n_z),
-                **self.feature_args
-            )
-            feature = inkid.ops.get_descriptive_statistics(subvolume)
-        elif self.feature_type is not None:
-            raise ValueError(f'Unknown feature_type: {self.feature_type} set for region source'
-                             f' {self.path}')
+        feature = self.volume.get_subvolume(
+            center=(x, y, z),
+            normal=(n_x, n_y, n_z),
+            **self.feature_args
+        )
+        item = {
+            'feature_metadata': feature_metadata,
+            'feature': feature,
+        }
         # Get the label
-        label = np.nan  # Cannot return NoneType from PyTorch dataloader. Next best thing.
-        if self.label_type == 'ink_classes':
-            label = self.point_to_ink_classes_label(
+        if 'ink_classes' in self.label_types:
+            item['ink_classes'] = self.point_to_ink_classes_label(
                 (surface_x, surface_y),
-                **self.label_args
+                **self.label_args['ink_classes']
             )
-        elif self.label_type == 'rgb_values':
-            label = self.point_to_rgb_values_label(
+        if 'rgb_values' in self.label_types:
+            item['rgb_values'] = self.point_to_rgb_values_label(
                 (surface_x, surface_y),
-                **self.label_args
+                **self.label_args['rgb_values']
             )
-        elif self.label_type is not None:
-            raise ValueError(f'Unknown label_type: {self.label_type} set for region source'
-                             f' {self.path}')
-        return feature_metadata, feature, label
+        return item
 
     def update_points_list(self) -> None:
         """Update the list of points after changes to the bounding box, grid spacing, or some other options."""
@@ -234,7 +223,7 @@ class RegionSource(DataSource):
             if 0 <= y_s < self._ink_label.shape[0] and 0 <= x_s < self._ink_label.shape[1]:
                 if self._ink_label[y_s, x_s] != 0:
                     label[:, y_idx, x_idx] = [0.0, 1.0]  # Mark this "ink"
-        return label
+        return torch.Tensor(label)
 
     def point_to_rgb_values_label(self, point, shape):
         assert self._rgb_label is not None
