@@ -30,6 +30,10 @@ import torchsummary
 import inkid
 
 
+class NoTrainingLossError(RuntimeError):
+    pass
+
+
 def main():
     """Run the training and prediction process."""
     start = timeit.default_timer()
@@ -48,12 +52,9 @@ def main():
                              'add this set to the validation and prediction sets')
 
     # Method
-    parser.add_argument('--label-type', default='ink_classes', help='type of labels',
-                        choices=['ink_classes', 'rgb_values'])  # TODO remove
     parser.add_argument('--model-3d-to-2d', action='store_true',
                         help='Use semi-fully convolutional model (which removes a dimension) with 2d labels per '
-                             'subvolume')  # TODO remove
-    parser.add_argument('--loss', choices=['cross_entropy', 'mse'], default='cross_entropy')  # TODO specify
+                             'subvolume')
 
     # Subvolumes
     inkid.ops.add_subvolume_args(parser)
@@ -228,44 +229,64 @@ def main():
     val_ds.set_for_all_sources('feature_args', val_feature_args)
     pred_ds.set_for_all_sources('feature_args', pred_feature_args)
 
-    # Define the labels
+    # Create the model for training
+    in_channels = 1
+    model = {
+        'Autoencoder': inkid.model.Autoencoder(
+            args.subvolume_shape_voxels, args.batch_norm_momentum, args.no_batch_norm, args.filters
+        ),
+        'AutoencoderAndInkClassifier': inkid.model.AutoencoderAndInkClassifier(
+            args.subvolume_shape_voxels, args.batch_norm_momentum, args.no_batch_norm, args.filters, args.drop_rate
+        ),
+        'InkClassifier3DCNN': inkid.model.InkClassifier3DCNN(
+            args.subvolume_shape_voxels, args.batch_norm_momentum, args.no_batch_norm, args.filters, args.drop_rate
+        ),
+        'InkClassifier3DUNet': inkid.model.InkClassifier3DUNet(
+            args.subvolume_shape_voxels, args.batch_norm_momentum, args.unet_starting_channels, in_channels,
+            args.drop_rate),
+        'InkClassifier3DUNetHalf': inkid.model.InkClassifier3DUNetHalf(
+            args.subvolume_shape_voxels, args.batch_norm_momentum, args.unet_starting_channels, in_channels,
+            args.drop_rate),
+        'RGB3DCNN': inkid.model.RGB3DCNN(
+            args.subvolume_shape_voxels, args.batch_norm_momentum, args.no_batch_norm, args.filters, args.drop_rate
+        ),
+    }[args.model]
+
+    # Define the labels and metrics
     if args.model_3d_to_2d:
         label_shape = (args.subvolume_shape_voxels[1], args.subvolume_shape_voxels[2])
     else:
         label_shape = (1, 1)
-    if args.label_type == 'ink_classes':
-        label_args = dict(
+    metrics = {}
+    label_args = {}
+    if 'ink_classes' in model.labels:
+        label_args['ink_classes'] = dict(
             shape=label_shape
         )
-        output_size = 2
-        metrics = {
-            'loss': {
-                'cross_entropy': nn.CrossEntropyLoss(),
-                'mse': nn.MSELoss(),
-            }[args.loss],
-            'ae_loss': nn.MSELoss(),
-            'ink_loss': nn.CrossEntropyLoss(),
+        metrics['ink_classes'] = {
+            'loss': nn.CrossEntropyLoss(),
             'accuracy': inkid.metrics.accuracy,
             'precision': inkid.metrics.precision,
             'recall': inkid.metrics.recall,
             'fbeta': inkid.metrics.fbeta,
-            'auc': inkid.metrics.auc
+            'auc': inkid.metrics.auc,
         }
-    elif args.label_type == 'rgb_values':
-        label_args = dict(
+    if 'rgb_values' in model.labels:
+        label_args['rgb_values'] = dict(
             shape=label_shape
         )
-        output_size = 3
-        metrics = {
-            'loss': nn.SmoothL1Loss(reduction='mean')
+        metrics['rgb_values'] = {
+            'loss': nn.SmoothL1Loss(reduction='mean'),
         }
-    else:
-        logging.error('Label type not recognized: {}'.format(args.label_type))
-        return
+    if 'autoencoded' in model.labels:
+        metrics['autoencoded'] = {
+            'loss': nn.MSELoss(),
+        }
+    metric_results = {label_type: {metric: [] for metric in metrics[label_type]} for label_type in metrics}
 
-    train_ds.set_for_all_sources('label_type', args.label_type)  # TODO should all this stuff just be in init?
+    train_ds.set_for_all_sources('label_types', model.labels)  # TODO should all this stuff just be in init?
     train_ds.set_for_all_sources('label_args', label_args)
-    val_ds.set_for_all_sources('label_type', args.label_type)
+    val_ds.set_for_all_sources('label_types', model.labels)
     val_ds.set_for_all_sources('label_args', label_args)
     # pred_ds does not generate labels, left as None
 
@@ -298,29 +319,6 @@ def main():
         logging.info(f'    Memory Allocated: {round(torch.cuda.memory_allocated(0) / 1024 ** 3, 1)} GB')
         logging.info(f'    Memory Cached:    {round(torch.cuda.memory_reserved(0) / 1024 ** 3, 1)} GB')
 
-    # Create the model for training
-    in_channels = 1
-    model = {
-        'Autoencoder': inkid.model.Autoencoder(
-            args.subvolume_shape_voxels, args.batch_norm_momentum, args.no_batch_norm, args.filters
-        ),
-        'AutoencoderAndInkClassifier': inkid.model.AutoencoderAndInkClassifier(
-            args.subvolume_shape_voxels, args.batch_norm_momentum, args.no_batch_norm, args.filters, args.drop_rate
-        ),
-        'InkClassifier3DCNN': inkid.model.InkClassifier3DCNN(
-            args.subvolume_shape_voxels, args.batch_norm_momentum, args.no_batch_norm, args.filters, args.drop_rate
-        ),
-        'InkClassifier3DUNet': inkid.model.InkClassifier3DUNet(
-            args.subvolume_shape_voxels, args.batch_norm_momentum, args.unet_starting_channels, in_channels,
-            args.drop_rate),
-        'InkClassifier3DUNetHalf': inkid.model.InkClassifier3DUNetHalf(
-            args.subvolume_shape_voxels, args.batch_norm_momentum, args.unet_starting_channels, in_channels,
-            args.drop_rate),
-        'RGB3DCNN': inkid.model.RGB3DCNN(
-            args.subvolume_shape_voxels, args.batch_norm_momentum, args.no_batch_norm, args.filters, args.drop_rate
-        ),
-    }[args.model]
-
     # Load pretrained weights if specified
     if args.load_weights_from is not None:
         model_dict = model.state_dict()
@@ -349,7 +347,6 @@ def main():
     # Define optimizer
     opt = torch.optim.Adam(model.parameters(), lr=args.learning_rate)
 
-    metric_results = {metric: [] for metric in metrics}
     last_summary = time.time()
 
     # Set up profiling
@@ -376,32 +373,27 @@ def main():
                     total_batches = len(train_dl)
                     for batch_num, batch in enumerate(train_dl):
                         xb = batch['feature']
-                        yb = batch['label']
                         with torch.profiler.record_function(f'train_batch_{batch_num}'):
                             xb = xb.to(device)
-                            if args.model == 'autoencoder':  # TODO clean up section
-                                yb = xb.clone()
-                            elif args.model == 'AutoencoderAndInkClassifier':
-                                yb = (xb.clone(), yb.to(device))
-                            else:
-                                yb = yb.to(device)
-                            pred = model(xb)
-                            if args.label_type == 'ink_classes' and args.model != 'autoencoder':
-                                if args.model == 'AutoencoderAndInkClassifier':
-                                    yb = (yb[0], yb[1].max(1)[1])
-                                else:
+                            preds = model(xb)
+                            loss = None
+                            for label_type in model.labels:
+                                yb = xb.clone() if label_type == 'autoencoded' else batch[label_type].to(device)
+                                if label_type == 'ink_classes':
                                     _, yb = yb.max(1)  # Argmax
-                            if args.model == 'AutoencoderAndInkClassifier':  # TODO clean up metrics
-                                ae_loss = metrics['ae_loss'](pred['autoencoded'], yb[0])
-                                ink_loss = metrics['ink_loss'](pred['ink_classes'], yb[1])
-                                loss = ae_loss + ink_loss
-                                metric_results['ae_loss'].append(ae_loss)
-                                metric_results['ink_loss'].append(ink_loss)
-                                metric_results['loss'].append(loss)
+                                pred = preds[label_type]
+                                for metric, fn in metrics[label_type].items():
+                                    metric_result = fn(pred, yb)
+                                    metric_results[label_type][metric].append(metric_result)
+                                    if metric == 'loss':
+                                        if loss is not None:
+                                            loss += metric_result
+                                        else:
+                                            loss = metric_result
+                            if loss is not None:
+                                loss.backward()
                             else:
-                                for metric, fn in metrics.items():
-                                    metric_results[metric].append(fn(pred, yb))
-                            metric_results['loss'][-1].backward()
+                                raise NoTrainingLossError('Training is running, but no loss function encountered')
                             opt.step()
                             opt.zero_grad()
 
@@ -412,8 +404,9 @@ def main():
                                 for metric, result in inkid.metrics.metrics_dict(metric_results).items():
                                     writer.add_scalar('train_' + metric, result, epoch * len(train_dl) + batch_num)
                                     writer.flush()
-                                for result in metric_results.values():
-                                    result.clear()
+                                for metrics_for_label in metric_results.values():
+                                    for single_metric_results in metrics_for_label.values():
+                                        single_metric_results.clear()
                                 last_summary = time.time()
 
                             if batch_num % args.checkpoint_every_n_batches == 0:
@@ -428,8 +421,7 @@ def main():
                                 # Periodic evaluation and prediction
                                 if val_dl is not None:
                                     logging.info('Evaluating on validation set... ')
-                                    val_results = inkid.ops.perform_validation(model, val_dl, metrics, device,
-                                                                               args.label_type)
+                                    val_results = inkid.ops.perform_validation(model, val_dl, metrics, device)
                                     for metric, result in inkid.metrics.metrics_dict(val_results).items():
                                         writer.add_scalar('val_' + metric, result, epoch * len(train_dl) + batch_num)
                                         writer.flush()
@@ -440,10 +432,9 @@ def main():
                                 # Prediction image
                                 if pred_dl is not None:
                                     logging.info('Generating prediction image... ')
-                                    inkid.ops.generate_prediction_images(pred_dl, model, output_size, args.label_type,
-                                                                         device,
-                                                                         predictions_dir, f'{epoch}_{batch_num}',
-                                                                         args.prediction_averaging)
+                                    inkid.ops.generate_prediction_images(
+                                        pred_dl, model, device, predictions_dir, f'{epoch}_{batch_num}',
+                                        args.prediction_averaging)
                                     logging.info('done')
                                 else:
                                     logging.info('Empty prediction set, skipping prediction image generation.')
@@ -472,7 +463,7 @@ def main():
             if len(final_pred_ds) > 0:
                 final_pred_dl = DataLoader(final_pred_ds, batch_size=args.batch_size * 2, shuffle=False,
                                            num_workers=args.dataloaders_num_workers)
-                inkid.ops.generate_prediction_images(final_pred_dl, model, output_size, args.label_type, device,
+                inkid.ops.generate_prediction_images(final_pred_dl, model, device,
                                                      predictions_dir, 'final', args.prediction_averaging)
         # Perform finishing touches even if cut short
         except KeyboardInterrupt:
@@ -482,7 +473,7 @@ def main():
     try:
         if val_dl is not None:
             logging.info('Performing final evaluation on validation set... ')
-            val_results = inkid.ops.perform_validation(model, val_dl, metrics, device, args.label_type)
+            val_results = inkid.ops.perform_validation(model, val_dl, metrics, device)
             metadata['Final validation metrics'] = inkid.metrics.metrics_dict(val_results)
             logging.info(f'done ({inkid.metrics.metrics_str(val_results)})')
         else:

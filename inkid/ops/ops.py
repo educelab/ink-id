@@ -152,78 +152,77 @@ def dict_to_xml(data):
     return dom.toprettyxml()
 
 
-def perform_validation(model, dataloader, metrics, device, label_type):
+def perform_validation(model, dataloader, metrics, device):
     """Run the validation process using a model and dataloader, and return the results of all metrics."""
     model.eval()  # Turn off training mode for batch norm and dropout purposes
     with torch.no_grad():
-        metric_results = {metric: [] for metric in metrics}
+        metric_results = {label_type: {metric: [] for metric in metrics[label_type]} for label_type in metrics}
         for batch in tqdm(dataloader):
-            xb = batch['feature']
-            yb = batch['label']
-            pred = model(xb.to(device))
-            if isinstance(pred, tuple):
-                pred = pred[1]
-            yb = yb.to(device)
-            if label_type == 'ink_classes':
-                _, yb = yb.max(1)  # Argmax
-            for metric, fn in metrics.items():
-                if metric not in ['ae_loss', 'loss']:
-                    metric_results[metric].append(fn(pred['ink_classes'], yb))
+            xb = batch['feature'].to(device)
+            preds = model(xb)
+            for label_type in model.labels:
+                yb = xb.clone() if label_type == 'autoencoded' else batch[label_type].to(device)
+                if label_type == 'ink_classes':
+                    _, yb = yb.max(1)
+                pred = preds[label_type]
+                for metric, fn in metrics[label_type].items():
+                    metric_result = fn(pred, yb)
+                    metric_results[label_type][metric].append(metric_result)
     model.train()
     return metric_results
 
 
-def generate_prediction_images(dataloader, model, output_size, label_type, device, predictions_dir, suffix,
-                               prediction_averaging):
+def generate_prediction_images(dataloader, model, device, predictions_dir, suffix, prediction_averaging):
     """Helper function to generate a prediction image given a model and dataloader, and save it to a file."""
     model.eval()  # Turn off training mode for batch norm and dropout purposes
     with torch.no_grad():
         for batch in tqdm(dataloader):
             batch_metadata = batch['feature_metadata']
             batch_features = batch['feature']
-            # Smooth predictions via augmentation. Augment each subvolume 8-fold via rotations and flips
-            if prediction_averaging:
-                rotations = range(4)
-                flips = [False, True]
-            else:
-                rotations = [0]
-                flips = [False]
-            batch_preds = None
-            for rotation, flip in itertools.product(rotations, flips):
-                # Example batch_features.shape = [64, 1, 48, 48, 48] (BxCxDxHxW)
-                # Augment via rotation and flip
-                aug_pxb = batch_features.rot90(rotation, [3, 4])
-                if flip:
-                    aug_pxb = aug_pxb.flip(4)
-                pred = model(aug_pxb.to(device))
-                if label_type == 'ink_classes':
-                    pred = pred['ink_classes']
-                    pred = F.softmax(pred, dim=1)
-                elif label_type == 'rgb_values':
-                    pred = pred['rgb_values']
-                pred = pred.cpu()
-                # Example pred.shape = [64, 2, 48, 48] (BxCxHxW)
-                # Undo flip and rotation
-                if flip:
-                    pred = pred.flip(3)
-                pred = pred.rot90(-rotation, [2, 3])
-                pred = np.expand_dims(pred.numpy(), axis=0)
-                # Example pred.shape = [1, 64, 2, 48, 48] (BxCxHxW)
-                # Save this augmentation to the batch totals
-                if batch_preds is None:
-                    batch_preds = np.zeros((0, batch_features.shape[0], output_size, pred.shape[3], pred.shape[4]))
-                batch_preds = np.append(batch_preds, pred, axis=0)
-            # Average over batch of predictions after augmentation
-            batch_pred = batch_preds.mean(0)
-            # Separate these three lists
-            source_paths, xs, ys, _, _, _, _, _, _ = batch_metadata
-            for prediction, source_path, x, y in zip(batch_pred, source_paths, xs, ys):
-                dataloader.dataset.get_source(source_path).store_prediction(
-                    int(x),
-                    int(y),
-                    prediction,
-                    label_type
-                )
+            # Only do those label types actually included in model output
+            for label_type in {'ink_classes', 'rgb_classes'}.intersection(model.labels):
+                output_size = 2 if label_type == 'ink_classes' else 3
+                # Smooth predictions via augmentation. Augment each subvolume 8-fold via rotations and flips
+                if prediction_averaging:
+                    rotations = range(4)
+                    flips = [False, True]
+                else:
+                    rotations = [0]
+                    flips = [False]
+                batch_preds = None
+                for rotation, flip in itertools.product(rotations, flips):
+                    # Example batch_features.shape = [64, 1, 48, 48, 48] (BxCxDxHxW)
+                    # Augment via rotation and flip
+                    aug_pxb = batch_features.rot90(rotation, [3, 4])
+                    if flip:
+                        aug_pxb = aug_pxb.flip(4)
+                    preds = model(aug_pxb.to(device))
+                    pred = preds[label_type]
+                    if label_type == 'ink_classes':
+                        pred = F.softmax(pred, dim=1)
+                    pred = pred.cpu()
+                    # Example pred.shape = [64, 2, 48, 48] (BxCxHxW)
+                    # Undo flip and rotation
+                    if flip:
+                        pred = pred.flip(3)
+                    pred = pred.rot90(-rotation, [2, 3])
+                    pred = np.expand_dims(pred.numpy(), axis=0)
+                    # Example pred.shape = [1, 64, 2, 48, 48] (BxCxHxW)
+                    # Save this augmentation to the batch totals
+                    if batch_preds is None:
+                        batch_preds = np.zeros((0, batch_features.shape[0], output_size, pred.shape[3], pred.shape[4]))
+                    batch_preds = np.append(batch_preds, pred, axis=0)
+                # Average over batch of predictions after augmentation
+                batch_pred = batch_preds.mean(0)
+                # Separate these three lists
+                source_paths, xs, ys, _, _, _, _, _, _ = batch_metadata
+                for prediction, source_path, x, y in zip(batch_pred, source_paths, xs, ys):
+                    dataloader.dataset.get_source(source_path).store_prediction(
+                        int(x),
+                        int(y),
+                        prediction,
+                        label_type
+                    )
     dataloader.dataset.save_predictions(predictions_dir, suffix)
     dataloader.dataset.reset_predictions()
     model.train()

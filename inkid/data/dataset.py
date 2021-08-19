@@ -41,7 +41,7 @@ class DataSource(ABC):
 
         self.feature_args: Dict = dict()
 
-        self.label_type: Optional[str] = None
+        self.label_types: List[str] = []
         self.label_args: Dict = dict()
 
     @abstractmethod
@@ -139,26 +139,22 @@ class RegionSource(DataSource):
             normal=(n_x, n_y, n_z),
             **self.feature_args
         )
-        # Get the label
-        label = np.nan  # Cannot return NoneType from PyTorch dataloader. Next best thing.
-        if self.label_type == 'ink_classes':
-            label = self.point_to_ink_classes_label(
-                (surface_x, surface_y),
-                **self.label_args
-            )
-        elif self.label_type == 'rgb_values':
-            label = self.point_to_rgb_values_label(
-                (surface_x, surface_y),
-                **self.label_args
-            )
-        elif self.label_type is not None:
-            raise ValueError(f'Unknown label_type: {self.label_type} set for region source'
-                             f' {self.path}')
-        return {
+        item = {
             'feature_metadata': feature_metadata,
             'feature': feature,
-            'label': label,
         }
+        # Get the label
+        if 'ink_classes' in self.label_types:
+            item['ink_classes'] = self.point_to_ink_classes_label(
+                (surface_x, surface_y),
+                **self.label_args['ink_classes']
+            )
+        if 'rgb_values' in self.label_types:
+            item['rgb_values'] = self.point_to_rgb_values_label(
+                (surface_x, surface_y),
+                **self.label_args['rgb_values']
+            )
+        return item
 
     def update_points_list(self) -> None:
         """Update the list of points after changes to the bounding box, grid spacing, or some other options."""
@@ -227,7 +223,7 @@ class RegionSource(DataSource):
             if 0 <= y_s < self._ink_label.shape[0] and 0 <= x_s < self._ink_label.shape[1]:
                 if self._ink_label[y_s, x_s] != 0:
                     label[:, y_idx, x_idx] = [0.0, 1.0]  # Mark this "ink"
-        return label
+        return torch.Tensor(label)
 
     def point_to_rgb_values_label(self, point, shape):
         assert self._rgb_label is not None
