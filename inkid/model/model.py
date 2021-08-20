@@ -32,8 +32,6 @@ class Subvolume3DcnnEncoder(torch.nn.Module):
         self._batch_norm = not no_batch_norm
         self._in_channels = in_channels
 
-        self.relu = torch.nn.ReLU()
-
         paddings = [1, 1, 1, 1]
         kernel_sizes = [3, 3, 3, 3]
         strides = [1, 2, 2, 2]
@@ -71,19 +69,19 @@ class Subvolume3DcnnEncoder(torch.nn.Module):
         if self._in_channels > 1:
             x = torch.squeeze(x)
         y = self.conv1(x)
-        y = self.relu(y)
+        y = torch.nn.functional.relu(y)
         if self._batch_norm:
             y = self.batch_norm1(y)
         y = self.conv2(y)
-        y = self.relu(y)
+        y = torch.nn.functional.relu(y)
         if self._batch_norm:
             y = self.batch_norm2(y)
         y = self.conv3(y)
-        y = self.relu(y)
+        y = torch.nn.functional.relu(y)
         if self._batch_norm:
             y = self.batch_norm3(y)
         y = self.conv4(y)
-        y = self.relu(y)
+        y = torch.nn.functional.relu(y)
         if self._batch_norm:
             y = self.batch_norm4(y)
 
@@ -96,8 +94,6 @@ class Subvolume3DcnnDecoder(torch.nn.Module):
 
         self._batch_norm = not no_batch_norm
         self._in_channels = in_channels
-
-        self.relu = torch.nn.ReLU()
 
         paddings = [1, 1, 1, 1]
         kernel_sizes = [3, 3, 3, 3]
@@ -137,19 +133,19 @@ class Subvolume3DcnnDecoder(torch.nn.Module):
 
     def forward(self, x):
         y = self.trans_conv1(x)
-        y = self.relu(y)
+        y = torch.nn.functional.relu(y)
         if self._batch_norm:
             y = self.batch_norm1(y)
         y = self.trans_conv2(y)
-        y = self.relu(y)
+        y = torch.nn.functional.relu(y)
         if self._batch_norm:
             y = self.batch_norm2(y)
         y = self.trans_conv3(y)
-        y = self.relu(y)
+        y = torch.nn.functional.relu(y)
         if self._batch_norm:
             y = self.batch_norm3(y)
         y = self.trans_conv4(y)
-        y = self.relu(y)
+        y = torch.nn.functional.relu(y)
         if self._batch_norm:
             y = self.batch_norm4(y)
 
@@ -163,7 +159,6 @@ class LinearInkDecoder(torch.nn.Module):
         self.fc = torch.nn.Linear(int(np.prod(input_shape)), output_neurons)
         self.dropout = torch.nn.Dropout(p=drop_rate)
 
-        self.relu = torch.nn.ReLU()
         self.flatten = torch.nn.Flatten()
 
     def forward(self, x):
@@ -344,12 +339,11 @@ class Subvolume3DUNet(torch.nn.Module):
                                         padding=padding)
             self.bn = torch.nn.BatchNorm3d(num_features=out_channels,
                                            momentum=bn_momentum)
-            self.relu = torch.nn.ReLU()
 
         def forward(self, x):
             x = self.conv(x)
             x = self.bn(x)
-            x = self.relu(x)
+            x = torch.nn.functional.relu(x)
             return x
 
 
