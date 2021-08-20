@@ -14,7 +14,6 @@ import torch
 
 import inkid
 
-
 FeatureMetadata = namedtuple(
     'FeatureMetadata',
     ('path', 'surface_x', 'surface_y', 'x', 'y', 'z', 'n_x', 'n_y', 'n_z'),
@@ -81,6 +80,7 @@ class RegionSource(DataSource):
     (x, y) are always in the PPM space, not this region's bounding box space.
 
     """
+
     def __init__(self, path: str) -> None:
         super().__init__(path)
 
@@ -310,6 +310,7 @@ class VolumeSource(DataSource):
     The points are not restricted to a particular surface, PPM, or segmentation.
 
     """
+
     def __init__(self, path: str) -> None:
         super().__init__(path)
 
@@ -330,7 +331,8 @@ class Dataset(torch.utils.data.Dataset):
 
     """
 
-    def __init__(self, source_paths: List[str]) -> None:
+    def __init__(self, source_paths: List[str], feature_args: Dict = None, label_types: Dict = None,
+                 label_args: Dict = None) -> None:
         """Initialize the dataset given .json data source and/or .txt dataset paths.
 
         This recursively expands any provided .txt dataset files until there is just a
@@ -346,6 +348,10 @@ class Dataset(torch.utils.data.Dataset):
         self.sources: List[DataSource] = list()
         for source_path in source_paths:
             self.sources.append(DataSource.from_path(source_path))
+
+        self.set_for_all_sources('feature_args', feature_args)
+        self.set_for_all_sources('label_types', label_types)
+        self.set_for_all_sources('label_args', label_args)
 
     def expand_data_sources(self, source_paths: List[str]) -> List[str]:
         """Expand list of .txt and .json filenames into flattened list of .json filenames.
@@ -402,9 +408,9 @@ class Dataset(torch.utils.data.Dataset):
                 return source
         return None
 
-    def remove_source(self, source_path: str) -> None:
+    def pop_source(self, source_path: str) -> DataSource:
         source_idx_to_remove: int = self.source_paths().index(source_path)
-        self.sources.pop(source_idx_to_remove)
+        return self.sources.pop(source_idx_to_remove)
 
     def source_paths(self) -> List[str]:
         return [source.path for source in self.sources]

@@ -64,7 +64,8 @@ def main():
     parser.add_argument('--no-augmentation', action='store_true')
 
     # Network architecture
-    parser.add_argument('--model', default='original', help='model to run against', choices=inkid.ops.model_choices())
+    parser.add_argument('--model', default='InkClassifier3DCNN', help='model to run against',
+                        choices=inkid.ops.model_choices())
     parser.add_argument('--learning-rate', metavar='n', type=float, default=0.001)
     parser.add_argument('--drop-rate', metavar='n', type=float, default=0.5)
     parser.add_argument('--batch-norm-momentum', metavar='n', type=float, default=0.9)
@@ -118,7 +119,6 @@ def main():
         dir_name = datetime.datetime.today().strftime('%Y-%m-%d_%H.%M.%S') + '_' + str(args.cross_validate_on)
     output_path = os.path.join(args.output, dir_name)
 
-    # If this is not a cross-validation job, then the defined output dir should be empty.
     # If this is a cross-validation job, that directory is allowed to have output from other
     # cross-validation splits, but not this one
     if os.path.isdir(args.output):
@@ -159,27 +159,9 @@ def main():
     checkpoints_dir = os.path.join(output_path, 'checkpoints')
     os.makedirs(checkpoints_dir)
 
-    train_ds = inkid.data.Dataset(args.training_set)
-    val_ds = inkid.data.Dataset(args.validation_set)
-    pred_ds = inkid.data.Dataset(args.prediction_set)
-
-    # If k-fold job, remove nth region from training and put in prediction/validation sets
-    if args.cross_validate_on is not None:
-        nth_region_path: str = train_ds.regions()[args.cross_validate_on].path
-        train_ds.remove_source(nth_region_path)
-        val_ds.sources.append(inkid.data.RegionSource(nth_region_path))
-        pred_ds.sources.append(inkid.data.RegionSource(nth_region_path))
-
-    pred_ds.set_regions_grid_spacing(args.prediction_grid_spacing)
-
     # Create metadata dict
     metadata = {
         'Arguments': vars(args),
-        'Data': {
-            'training': train_ds.data_dict(),
-            'validation': val_ds.data_dict(),
-            'prediction': pred_ds.data_dict(),
-        },
         'Command': ' '.join(sys.argv)
     }
 
@@ -196,13 +178,6 @@ def main():
         metadata['SLURM Job ID'] = os.getenv('SLURM_JOB_ID')
     if 'SLURM_JOB_NAME' in os.environ:
         metadata['SLURM Job Name'] = os.getenv('SLURM_JOB_NAME')
-
-    # Print metadata for logging and diagnostics
-    logging.info('\n' + json.dumps(metadata, indent=4, sort_keys=False))
-
-    # Write preliminary metadata to file (will be updated when job completes)
-    with open(os.path.join(output_path, 'metadata.json'), 'w') as metadata_file:
-        metadata_file.write(json.dumps(metadata, indent=4, sort_keys=False))
 
     # Define the feature inputs to the network
     subvolume_args = dict(
@@ -224,10 +199,6 @@ def main():
         jitter_max=0,
     )
     pred_feature_args = val_feature_args.copy()
-
-    train_ds.set_for_all_sources('feature_args', train_feature_args)
-    val_ds.set_for_all_sources('feature_args', val_feature_args)
-    pred_ds.set_for_all_sources('feature_args', pred_feature_args)
 
     # Create the model for training
     in_channels = 1
@@ -282,13 +253,37 @@ def main():
         metrics['autoencoded'] = {
             'loss': nn.MSELoss(),
         }
+    if 'vc_texture' in model.labels:
+        metrics['vc_texture'] = {
+            'loss': nn.SmoothL1Loss(),  # TODO LEFT OFF
+        }
     metric_results = {label_type: {metric: [] for metric in metrics[label_type]} for label_type in metrics}
 
-    train_ds.set_for_all_sources('label_types', model.labels)  # TODO should all this stuff just be in init?
-    train_ds.set_for_all_sources('label_args', label_args)
-    val_ds.set_for_all_sources('label_types', model.labels)
-    val_ds.set_for_all_sources('label_args', label_args)
-    # pred_ds does not generate labels, left as None
+    train_ds = inkid.data.Dataset(args.training_set, train_feature_args, model.labels, label_args)
+    val_ds = inkid.data.Dataset(args.validation_set, val_feature_args, model.labels, label_args)
+    pred_ds = inkid.data.Dataset(args.prediction_set, pred_feature_args, None, None)  # pred_ds has no labels
+
+    # If k-fold job, remove nth region from training and put in prediction/validation sets
+    if args.cross_validate_on is not None:
+        nth_region_path: str = train_ds.regions()[args.cross_validate_on].path
+        nth_region_source = train_ds.pop_source(nth_region_path)
+        val_ds.sources.append(nth_region_source)
+        pred_ds.sources.append(nth_region_source)
+
+    pred_ds.set_regions_grid_spacing(args.prediction_grid_spacing)
+
+    metadata['Data'] = {
+        'training': train_ds.data_dict(),
+        'validation': val_ds.data_dict(),
+        'prediction': pred_ds.data_dict(),
+    }
+
+    # Print metadata for logging and diagnostics
+    logging.info('\n' + json.dumps(metadata, indent=4, sort_keys=False))
+
+    # Write preliminary metadata to file (will be updated when job completes)
+    with open(os.path.join(output_path, 'metadata.json'), 'w') as metadata_file:
+        metadata_file.write(json.dumps(metadata, indent=4, sort_keys=False))
 
     if args.training_max_samples is not None:
         train_ds = inkid.ops.take_from_dataset(train_ds, args.training_max_samples)
@@ -376,7 +371,7 @@ def main():
                         with torch.profiler.record_function(f'train_batch_{batch_num}'):
                             xb = xb.to(device)
                             preds = model(xb)
-                            loss = None
+                            total_loss = None
                             for label_type in model.labels:
                                 yb = xb.clone() if label_type == 'autoencoded' else batch[label_type].to(device)
                                 if label_type == 'ink_classes':
@@ -386,12 +381,15 @@ def main():
                                     metric_result = fn(pred, yb)
                                     metric_results[label_type][metric].append(metric_result)
                                     if metric == 'loss':
-                                        if loss is not None:
-                                            loss += metric_result
+                                        if total_loss is None:
+                                            total_loss = metric_result
                                         else:
-                                            loss = metric_result
-                            if loss is not None:
-                                loss.backward()
+                                            total_loss = total_loss + metric_result
+                            if total_loss is not None:
+                                total_loss.backward()
+                                if 'total' not in metric_results:
+                                    metric_results['total'] = {'loss': []}
+                                metric_results['total']['loss'].append(total_loss)
                             else:
                                 raise NoTrainingLossError('Training is running, but no loss function encountered')
                             opt.step()
@@ -457,8 +455,7 @@ def main():
     if args.final_prediction_on_all:
         try:
             all_sources = list(set(args.training_set + args.validation_set + args.prediction_set))
-            final_pred_ds = inkid.data.Dataset(all_sources)
-            final_pred_ds.set_for_all_sources('feature_args', pred_feature_args)
+            final_pred_ds = inkid.data.Dataset(all_sources, pred_feature_args)
             final_pred_ds.set_regions_grid_spacing(args.prediction_grid_spacing)
             if len(final_pred_ds) > 0:
                 final_pred_dl = DataLoader(final_pred_ds, batch_size=args.batch_size * 2, shuffle=False,

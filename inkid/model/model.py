@@ -441,3 +441,25 @@ class RGB3DCNN(torch.nn.Module):
         return {
             'rgb_values': self.decoder(self.encoder(x)),
         }
+
+
+class InkClassifierCrossTaskVCTexture(torch.nn.Module):
+    def __init__(self, subvolume_shape, batch_norm_momentum, no_batch_norm, filters, drop_rate):
+        super().__init__()
+        hidden_neurons = 20
+        self.encoder = Subvolume3DcnnEncoder(subvolume_shape, batch_norm_momentum, no_batch_norm, filters,
+                                             in_channels=1)
+        self.decoder = LinearInkDecoder(drop_rate, self.encoder.output_shape, output_neurons=2)
+        self.cross_task1 = torch.nn.Linear(2, hidden_neurons)
+        self.cross_task2 = torch.nn.Linear(hidden_neurons, 1)
+        self.labels = ['ink_classes', 'vc_texture']
+
+    def forward(self, x):
+        x = self.encoder(x)
+        ink = self.decoder(x)
+        texture = self.cross_task2(self.cross_task1(ink))
+
+        return {
+            'ink_classes': ink,
+            'vc_texture': texture,
+        }
