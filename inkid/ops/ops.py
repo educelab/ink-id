@@ -160,6 +160,7 @@ def perform_validation(model, dataloader, metrics, device):
         for batch in tqdm(dataloader):
             xb = batch['feature'].to(device)
             preds = model(xb)
+            total_loss = None
             for label_type in model.labels:
                 yb = xb.clone() if label_type == 'autoencoded' else batch[label_type].to(device)
                 if label_type == 'ink_classes':
@@ -168,6 +169,15 @@ def perform_validation(model, dataloader, metrics, device):
                 for metric, fn in metrics[label_type].items():
                     metric_result = fn(pred, yb)
                     metric_results[label_type][metric].append(metric_result)
+                    if metric == 'loss':
+                        if total_loss is None:
+                            total_loss = metric_result
+                        else:
+                            total_loss = total_loss + metric_result
+            if total_loss is not None:
+                if 'total' not in metric_results:
+                    metric_results['total'] = {'loss': []}
+                metric_results['total']['loss'].append(total_loss)
     model.train()
     return metric_results
 
@@ -180,8 +190,12 @@ def generate_prediction_images(dataloader, model, device, predictions_dir, suffi
             batch_metadata = batch['feature_metadata']
             batch_features = batch['feature']
             # Only do those label types actually included in model output
-            for label_type in {'ink_classes', 'rgb_classes'}.intersection(model.labels):
-                output_size = 2 if label_type == 'ink_classes' else 3
+            for label_type in {'ink_classes', 'rgb_classes', 'volcart_texture'}.intersection(model.labels):
+                output_size = {
+                    'volcart_texture': 1,
+                    'ink_classes': 2,
+                    'rgb_values': 3,
+                }[label_type]
                 # Smooth predictions via augmentation. Augment each subvolume 8-fold via rotations and flips
                 if prediction_averaging:
                     rotations = range(4)

@@ -32,8 +32,6 @@ class Subvolume3DcnnEncoder(torch.nn.Module):
         self._batch_norm = not no_batch_norm
         self._in_channels = in_channels
 
-        self.relu = torch.nn.ReLU()
-
         paddings = [1, 1, 1, 1]
         kernel_sizes = [3, 3, 3, 3]
         strides = [1, 2, 2, 2]
@@ -71,19 +69,19 @@ class Subvolume3DcnnEncoder(torch.nn.Module):
         if self._in_channels > 1:
             x = torch.squeeze(x)
         y = self.conv1(x)
-        y = self.relu(y)
+        y = torch.nn.functional.relu(y)
         if self._batch_norm:
             y = self.batch_norm1(y)
         y = self.conv2(y)
-        y = self.relu(y)
+        y = torch.nn.functional.relu(y)
         if self._batch_norm:
             y = self.batch_norm2(y)
         y = self.conv3(y)
-        y = self.relu(y)
+        y = torch.nn.functional.relu(y)
         if self._batch_norm:
             y = self.batch_norm3(y)
         y = self.conv4(y)
-        y = self.relu(y)
+        y = torch.nn.functional.relu(y)
         if self._batch_norm:
             y = self.batch_norm4(y)
 
@@ -96,8 +94,6 @@ class Subvolume3DcnnDecoder(torch.nn.Module):
 
         self._batch_norm = not no_batch_norm
         self._in_channels = in_channels
-
-        self.relu = torch.nn.ReLU()
 
         paddings = [1, 1, 1, 1]
         kernel_sizes = [3, 3, 3, 3]
@@ -137,19 +133,19 @@ class Subvolume3DcnnDecoder(torch.nn.Module):
 
     def forward(self, x):
         y = self.trans_conv1(x)
-        y = self.relu(y)
+        y = torch.nn.functional.relu(y)
         if self._batch_norm:
             y = self.batch_norm1(y)
         y = self.trans_conv2(y)
-        y = self.relu(y)
+        y = torch.nn.functional.relu(y)
         if self._batch_norm:
             y = self.batch_norm2(y)
         y = self.trans_conv3(y)
-        y = self.relu(y)
+        y = torch.nn.functional.relu(y)
         if self._batch_norm:
             y = self.batch_norm3(y)
         y = self.trans_conv4(y)
-        y = self.relu(y)
+        y = torch.nn.functional.relu(y)
         if self._batch_norm:
             y = self.batch_norm4(y)
 
@@ -163,7 +159,6 @@ class LinearInkDecoder(torch.nn.Module):
         self.fc = torch.nn.Linear(int(np.prod(input_shape)), output_neurons)
         self.dropout = torch.nn.Dropout(p=drop_rate)
 
-        self.relu = torch.nn.ReLU()
         self.flatten = torch.nn.Flatten()
 
     def forward(self, x):
@@ -173,7 +168,7 @@ class LinearInkDecoder(torch.nn.Module):
         # Add some dimensions to match the dimensionality of label which is always 2D even if shape is (1, 1)
         y = torch.unsqueeze(y, 2)
         y = torch.unsqueeze(y, 3)
-        return y
+        return y  # (N, C, H, W)
 
 
 class ConvolutionalInkDecoder(torch.nn.Module):
@@ -344,12 +339,11 @@ class Subvolume3DUNet(torch.nn.Module):
                                         padding=padding)
             self.bn = torch.nn.BatchNorm3d(num_features=out_channels,
                                            momentum=bn_momentum)
-            self.relu = torch.nn.ReLU()
 
         def forward(self, x):
             x = self.conv(x)
             x = self.bn(x)
-            x = self.relu(x)
+            x = torch.nn.functional.relu(x)
             return x
 
 
@@ -440,4 +434,27 @@ class RGB3DCNN(torch.nn.Module):
     def forward(self, x):
         return {
             'rgb_values': self.decoder(self.encoder(x)),
+        }
+
+
+class InkClassifierCrossTaskVCTexture(torch.nn.Module):
+    def __init__(self, subvolume_shape, batch_norm_momentum, no_batch_norm, filters, drop_rate):
+        super().__init__()
+        hidden_neurons = 20
+        self.encoder = Subvolume3DcnnEncoder(subvolume_shape, batch_norm_momentum, no_batch_norm, filters,
+                                             in_channels=1)
+        self.decoder = LinearInkDecoder(drop_rate, self.encoder.output_shape, output_neurons=2)
+        self.cross_task1 = torch.nn.Linear(2, hidden_neurons)
+        self.cross_task2 = torch.nn.Linear(hidden_neurons, 1)
+        self.labels = ['ink_classes', 'volcart_texture']
+
+    def forward(self, x):
+        x = self.encoder(x)
+        ink = self.decoder(x)
+        permuted = ink.permute(0, 2, 3, 1)  # From (N, C, H, W) to (N, H, W, C)
+        texture = self.cross_task2(self.cross_task1(permuted))
+
+        return {
+            'ink_classes': ink,
+            'volcart_texture': texture,
         }
