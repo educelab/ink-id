@@ -173,7 +173,7 @@ class LinearInkDecoder(torch.nn.Module):
         # Add some dimensions to match the dimensionality of label which is always 2D even if shape is (1, 1)
         y = torch.unsqueeze(y, 2)
         y = torch.unsqueeze(y, 3)
-        return y
+        return y  # (N, C, H, W)
 
 
 class ConvolutionalInkDecoder(torch.nn.Module):
@@ -452,14 +452,15 @@ class InkClassifierCrossTaskVCTexture(torch.nn.Module):
         self.decoder = LinearInkDecoder(drop_rate, self.encoder.output_shape, output_neurons=2)
         self.cross_task1 = torch.nn.Linear(2, hidden_neurons)
         self.cross_task2 = torch.nn.Linear(hidden_neurons, 1)
-        self.labels = ['ink_classes', 'vc_texture']
+        self.labels = ['ink_classes', 'volcart_texture']
 
     def forward(self, x):
         x = self.encoder(x)
         ink = self.decoder(x)
-        texture = self.cross_task2(self.cross_task1(ink))
+        permuted = ink.permute(0, 2, 3, 1)  # From (N, C, H, W) to (N, H, W, C)
+        texture = self.cross_task2(self.cross_task1(permuted))
 
         return {
             'ink_classes': ink,
-            'vc_texture': texture,
+            'volcart_texture': texture,
         }

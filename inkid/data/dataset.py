@@ -99,7 +99,14 @@ class RegionSource(DataSource):
         if self.data_dict['rgb_label'] is not None:
             self._rgb_label = np.array(Image.open(self.data_dict['rgb_label']))
         if self.data_dict['volcart_texture_label'] is not None:
-            self._volcart_texture_label = np.array(Image.open(self.data_dict['volcart_texture_label']))
+            im = Image.open(self.data_dict['volcart_texture_label'])
+            self._volcart_texture_label = np.array(im).astype(np.float32)
+            # Assuming image is uint16 data but Pillow loads it as uint32 ('I')
+            assert im.mode == 'I'
+            # Make sure the data isn't actually greater than uint16
+            assert np.amax(self._volcart_texture_label) <= np.iinfo(np.uint16).max
+            # Normalize to [0.0, 1.0]
+            self._volcart_texture_label /= np.iinfo(np.uint16).max
 
         # This region generates points, here we create the empty list
         self._points = list()
@@ -114,6 +121,8 @@ class RegionSource(DataSource):
         self._ink_classes_prediction_image_written_to = False
         self._rgb_values_prediction_image = np.zeros((self._ppm.height, self._ppm.width, 3), np.uint8)
         self._rgb_values_prediction_image_written_to = False
+        self._volcart_texture_prediction_image = np.zeros((self._ppm.height, self._ppm.width), np.uint16)
+        self._volcart_texture_prediction_image_written_to = False
 
     @property
     def name(self) -> str:
@@ -153,6 +162,11 @@ class RegionSource(DataSource):
             item['rgb_values'] = self.point_to_rgb_values_label(
                 (surface_x, surface_y),
                 **self.label_args['rgb_values']
+            )
+        if 'volcart_texture' in self.label_types:
+            item['volcart_texture'] = self.point_to_volcart_texture_label(
+                (surface_x, surface_y),
+                **self.label_args['volcart_texture']
             )
         return item
 
@@ -240,6 +254,21 @@ class RegionSource(DataSource):
                 label[:, y_idx, x_idx] = self._rgb_label[y_s, x_s]
         return label
 
+    def point_to_volcart_texture_label(self, point, shape):
+        assert self._volcart_texture_label is not None
+        x, y = point
+        label = np.zeros((1,) + shape).astype(np.float32)
+        y_d, x_d = np.array(shape) // 2  # Calculate distance from center to edges of square we are sampling
+        # Iterate over label indices
+        for idx, _ in np.ndenumerate(label):
+            _, y_idx, x_idx = idx
+            y_s = y - y_d + y_idx  # Sample point is center minus distance (half edge length) plus label index
+            x_s = x - x_d + x_idx
+            # Bounds check to make sure inside PPM
+            if 0 <= y_s < self._volcart_texture_label.shape[0] and 0 <= x_s < self._volcart_texture_label.shape[1]:
+                label[0, y_idx, x_idx] = self._volcart_texture_label[y_s, x_s]
+        return label
+
     def store_prediction(self, x, y, prediction, label_type):
         """Store an incoming prediction in the corresponding prediction image buffer.
 
@@ -272,6 +301,10 @@ class RegionSource(DataSource):
                     v = np.clip(value, 0, np.iinfo(np.uint8).max)
                     self._rgb_values_prediction_image[y_s, x_s] = v
                     self._rgb_values_prediction_image_written_to = True
+                elif label_type == 'volcart_texture':
+                    v = value[0] * np.iinfo(np.uint16).max
+                    self._volcart_texture_prediction_image[y_s, x_s] = v
+                    self._volcart_texture_prediction_image_written_to = True
                 else:
                     raise ValueError(f'Unknown label_type: {label_type} used for prediction')
 
@@ -280,21 +313,16 @@ class RegionSource(DataSource):
         if not os.path.exists(directory):
             os.makedirs(directory)
 
-        im = None
+        filename_base = os.path.join(directory, '{}_prediction_{}_'.format(self.name, suffix))
         if self._ink_classes_prediction_image_written_to:
             im = Image.fromarray(self._ink_classes_prediction_image)
-        elif self._rgb_values_prediction_image_written_to:
+            im.save(filename_base + 'ink_classes.png')
+        if self._rgb_values_prediction_image_written_to:
             im = Image.fromarray(self._rgb_values_prediction_image)
-        if im is not None:
-            im.save(
-                os.path.join(
-                    directory,
-                    '{}_prediction_{}.png'.format(
-                        self.name,
-                        suffix,
-                    ),
-                ),
-            )
+            im.save(filename_base + 'rgb_values.png')
+        if self._volcart_texture_prediction_image_written_to:
+            im = Image.fromarray(self._volcart_texture_prediction_image)
+            im.save(filename_base + 'volcart_texture.png')
 
     def reset_predictions(self):
         """Reset the prediction image buffers."""
@@ -302,6 +330,8 @@ class RegionSource(DataSource):
         self._ink_classes_prediction_image_written_to = False
         self._rgb_values_prediction_image = np.zeros((self._ppm.height, self._ppm.width, 3), np.uint8)
         self._rgb_values_prediction_image_written_to = False
+        self._volcart_texture_prediction_image = np.zeros((self._ppm.height, self._ppm.width), np.uint16)
+        self._volcart_texture_prediction_image_written_to = False
 
 
 class VolumeSource(DataSource):

@@ -204,23 +204,21 @@ def main():
     in_channels = 1
     model = {
         'Autoencoder': inkid.model.Autoencoder(
-            args.subvolume_shape_voxels, args.batch_norm_momentum, args.no_batch_norm, args.filters
-        ),
+            args.subvolume_shape_voxels, args.batch_norm_momentum, args.no_batch_norm, args.filters),
         'AutoencoderAndInkClassifier': inkid.model.AutoencoderAndInkClassifier(
-            args.subvolume_shape_voxels, args.batch_norm_momentum, args.no_batch_norm, args.filters, args.drop_rate
-        ),
+            args.subvolume_shape_voxels, args.batch_norm_momentum, args.no_batch_norm, args.filters, args.drop_rate),
         'InkClassifier3DCNN': inkid.model.InkClassifier3DCNN(
-            args.subvolume_shape_voxels, args.batch_norm_momentum, args.no_batch_norm, args.filters, args.drop_rate
-        ),
+            args.subvolume_shape_voxels, args.batch_norm_momentum, args.no_batch_norm, args.filters, args.drop_rate),
         'InkClassifier3DUNet': inkid.model.InkClassifier3DUNet(
             args.subvolume_shape_voxels, args.batch_norm_momentum, args.unet_starting_channels, in_channels,
             args.drop_rate),
         'InkClassifier3DUNetHalf': inkid.model.InkClassifier3DUNetHalf(
             args.subvolume_shape_voxels, args.batch_norm_momentum, args.unet_starting_channels, in_channels,
             args.drop_rate),
+        'InkClassifierCrossTaskVCTexture': inkid.model.InkClassifierCrossTaskVCTexture(
+            args.subvolume_shape_voxels, args.batch_norm_momentum, args.no_batch_norm, args.filters, args.drop_rate),
         'RGB3DCNN': inkid.model.RGB3DCNN(
-            args.subvolume_shape_voxels, args.batch_norm_momentum, args.no_batch_norm, args.filters, args.drop_rate
-        ),
+            args.subvolume_shape_voxels, args.batch_norm_momentum, args.no_batch_norm, args.filters, args.drop_rate),
     }[args.model]
 
     # Define the labels and metrics
@@ -253,9 +251,12 @@ def main():
         metrics['autoencoded'] = {
             'loss': nn.MSELoss(),
         }
-    if 'vc_texture' in model.labels:
-        metrics['vc_texture'] = {
-            'loss': nn.SmoothL1Loss(),  # TODO LEFT OFF
+    if 'volcart_texture' in model.labels:
+        label_args['volcart_texture'] = dict(
+            shape=label_shape
+        )
+        metrics['volcart_texture'] = {
+            'loss': nn.SmoothL1Loss(),
         }
     metric_results = {label_type: {metric: [] for metric in metrics[label_type]} for label_type in metrics}
 

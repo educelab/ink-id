@@ -190,8 +190,12 @@ def generate_prediction_images(dataloader, model, device, predictions_dir, suffi
             batch_metadata = batch['feature_metadata']
             batch_features = batch['feature']
             # Only do those label types actually included in model output
-            for label_type in {'ink_classes', 'rgb_classes'}.intersection(model.labels):
-                output_size = 2 if label_type == 'ink_classes' else 3
+            for label_type in {'ink_classes', 'rgb_classes', 'volcart_texture'}.intersection(model.labels):
+                output_size = {
+                    'volcart_texture': 1,
+                    'ink_classes': 2,
+                    'rgb_values': 3,
+                }[label_type]
                 # Smooth predictions via augmentation. Augment each subvolume 8-fold via rotations and flips
                 if prediction_averaging:
                     rotations = range(4)
