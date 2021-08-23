@@ -66,6 +66,8 @@ def main():
     # Network architecture
     parser.add_argument('--model', default='InkClassifier3DCNN', help='model to run against',
                         choices=inkid.ops.model_choices())
+    parser.add_argument('--volcart-texture-loss-coefficient', default=100, type=float,
+                        help='Multiplicative weight of the volcart texture loss in any loss sums')
     parser.add_argument('--learning-rate', metavar='n', type=float, default=0.001)
     parser.add_argument('--drop-rate', metavar='n', type=float, default=0.5)
     parser.add_argument('--batch-norm-momentum', metavar='n', type=float, default=0.9)
@@ -256,7 +258,7 @@ def main():
             shape=label_shape
         )
         metrics['volcart_texture'] = {
-            'loss': nn.SmoothL1Loss(),
+            'loss': inkid.metrics.weight_loss(args.volcart_texture_loss_coefficient, nn.SmoothL1Loss()),
         }
     metric_results = {label_type: {metric: [] for metric in metrics[label_type]} for label_type in metrics}
 

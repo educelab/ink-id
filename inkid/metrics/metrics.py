@@ -65,3 +65,9 @@ def metrics_dict(metric_results):
 
 def metrics_str(metric_results):
     return ' '.join([k + ': ' + f'{v:5.2g}' for k, v in metrics_dict(metric_results).items()])
+
+
+def weight_loss(weight: float, loss: callable):
+    def new_loss_func(pred, yb):
+        return weight * loss(pred, yb)
+    return new_loss_func
