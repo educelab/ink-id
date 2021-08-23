@@ -1,6 +1,7 @@
 """Miscellaneous operations used in ink-id."""
 
 from collections import namedtuple
+from copy import deepcopy
 import itertools
 import inspect
 from io import BytesIO
@@ -214,7 +215,7 @@ def generate_prediction_images(dataloader, model, device, predictions_dir, suffi
                     pred = preds[label_type]
                     if label_type == 'ink_classes':
                         pred = F.softmax(pred, dim=1)
-                    pred = pred.cpu()
+                    pred = deepcopy(pred.cpu())  # https://github.com/pytorch/pytorch/issues/973#issuecomment-459398189
                     # Example pred.shape = [64, 2, 48, 48] (BxCxHxW)
                     # Undo flip and rotation
                     if flip:
