@@ -188,8 +188,9 @@ def generate_prediction_images(dataloader, model, device, predictions_dir, suffi
     model.eval()  # Turn off training mode for batch norm and dropout purposes
     with torch.no_grad():
         for batch in tqdm(dataloader):
-            batch_metadata = batch['feature_metadata']
-            batch_features = batch['feature']
+            batch_copy = deepcopy(batch)  # https://github.com/pytorch/pytorch/issues/973#issuecomment-459398189
+            batch_metadata = batch_copy['feature_metadata']
+            batch_features = batch_copy['feature']
             # Only do those label types actually included in model output
             for label_type in {'ink_classes', 'rgb_classes', 'volcart_texture'}.intersection(model.labels):
                 output_size = {
