@@ -192,7 +192,7 @@ def generate_prediction_images(dataloader, model, device, predictions_dir, suffi
             batch_metadata = batch_copy['feature_metadata']
             batch_features = batch_copy['feature']
             # Only do those label types actually included in model output
-            for label_type in {'ink_classes', 'rgb_classes', 'volcart_texture'}.intersection(model.labels):
+            for label_type in {'ink_classes', 'rgb_values', 'volcart_texture'}.intersection(model.labels):
                 output_size = {
                     'volcart_texture': 1,
                     'ink_classes': 2,
