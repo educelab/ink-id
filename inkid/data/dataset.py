@@ -380,8 +380,10 @@ class Dataset(torch.utils.data.Dataset):
             self.sources.append(DataSource.from_path(source_path))
 
         self.set_for_all_sources('feature_args', feature_args)
-        self.set_for_all_sources('label_types', label_types)
-        self.set_for_all_sources('label_args', label_args)
+        if label_types is not None:
+            self.set_for_all_sources('label_types', label_types)
+        if label_args is not None:
+            self.set_for_all_sources('label_args', label_args)
 
     def expand_data_sources(self, source_paths: List[str]) -> List[str]:
         """Expand list of .txt and .json filenames into flattened list of .json filenames.

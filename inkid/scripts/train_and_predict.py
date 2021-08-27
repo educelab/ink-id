@@ -264,7 +264,7 @@ def main():
 
     train_ds = inkid.data.Dataset(args.training_set, train_feature_args, model.labels, label_args)
     val_ds = inkid.data.Dataset(args.validation_set, val_feature_args, model.labels, label_args)
-    pred_ds = inkid.data.Dataset(args.prediction_set, pred_feature_args, None, None)  # pred_ds has no labels
+    pred_ds = inkid.data.Dataset(args.prediction_set, pred_feature_args)  # pred_ds has no labels
 
     # If k-fold job, remove nth region from training and put in prediction/validation sets
     if args.cross_validate_on is not None:
