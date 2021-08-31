@@ -10,14 +10,14 @@ import inkid
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('output', help='Directory to hold output subvolumes')
     parser.add_argument('--input-set', metavar='path', nargs='*', help='input dataset(s)', default=[])
+    parser.add_argument('--output', help='directory to hold output subvolumes')
     parser.add_argument('--number', '-n', metavar='N', default=4, type=int,
                         help='number of subvolumes to keep')
-    parser.add_argument('--ink', action='store_true', help='Restrict to points on ink areas')
-    parser.add_argument('--no-ink', action='store_true', help='Restrict to points not on ink areas')
+    parser.add_argument('--ink', action='store_true', help='restrict to points on ink areas')
+    parser.add_argument('--no-ink', action='store_true', help='restrict to points not on ink areas')
     parser.add_argument('--concat-subvolumes', action='store_true',
-                        help='Create one set of slices containing all subvolumes')
+                        help='create one set of slices containing all subvolumes')
     inkid.ops.add_subvolume_args(parser)
 
     # Data organization/augmentation
@@ -30,8 +30,6 @@ def main():
     # Make sure some sort of input is provided, else there is nothing to do
     if len(args.input_set) == 0:
         raise ValueError('Some --input-set must be specified.')
-
-    input_ds = inkid.data.Dataset(args.input_set)
 
     os.makedirs(args.output, exist_ok=True)
 
@@ -46,7 +44,7 @@ def main():
         jitter_max=args.jitter_max,
     )
 
-    input_ds.set_for_all_sources('feature_args', subvolume_args)
+    input_ds = inkid.data.Dataset(args.input_set, feature_args=subvolume_args)
 
     seed = 42
     np.random.seed(seed)
@@ -65,9 +63,10 @@ def main():
     concatenated_subvolumes = np.zeros(concatenated_shape)
 
     counter = 0
-    for _, subvolume in input_dl:
+    for batch in input_dl:
         if counter >= args.number:
             break
+        subvolume = batch['feature']
         subvolume = subvolume.numpy()[0][0]
         if args.concat_subvolumes:
             concat_x = (counter // square_side_length) * padded_shape_voxels[2]

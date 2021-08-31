@@ -68,14 +68,14 @@ def are_coordinates_within(p1, p2, distance):
 def save_volume_to_image_stack(volume, dirname):
     """Save a volume to a stack of .tif images.
 
-    Given a volume as a np.array and a directory name, save the volume
-    as a stack of .tif images in that directory, with filenames
-    starting at 0 and going up to the z height of the volume.
+    Given a volume as an np.array of [0, 1] floats and a directory name, save the volume as a stack of .tif images in
+    that directory, with filenames starting at 0 and going up to the z height of the volume.
 
     """
     os.makedirs(dirname, exist_ok=True)
     for z in range(volume.shape[0]):
         image = volume[z, :, :]
+        image *= np.iinfo(np.uint16).max  # Assume incoming [0, 1] floats
         image = image.astype(np.uint16)
         image = Image.fromarray(image)
         image.save(os.path.join(dirname, str(z) + '.tif'))
