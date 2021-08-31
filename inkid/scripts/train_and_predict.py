@@ -164,7 +164,8 @@ def main():
     # Create metadata dict
     metadata = {
         'Arguments': vars(args),
-        'Command': ' '.join(sys.argv)
+        'Command': ' '.join(sys.argv),
+        'Date': datetime.datetime.today().strftime('%Y-%m-%d-%H:%M:%S'),
     }
 
     # Add git hash to metadata if inside a git repository
