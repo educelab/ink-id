@@ -2,16 +2,17 @@ import argparse
 import math
 import numpy as np
 import os
+import sys
 
 import torch
 
 import inkid
 
 
-def main():
+def main(argv=None):
     parser = argparse.ArgumentParser()
     parser.add_argument('--input-set', metavar='path', nargs='*', help='input dataset(s)', default=[])
-    parser.add_argument('--output', help='directory to hold output subvolumes')
+    parser.add_argument('--output', help='directory to hold output subvolumes', required=True)
     parser.add_argument('--number', '-n', metavar='N', default=4, type=int,
                         help='number of subvolumes to keep')
     parser.add_argument('--ink', action='store_true', help='restrict to points on ink areas')
@@ -25,7 +26,7 @@ def main():
     parser.add_argument('--augmentation', action='store_true', dest='augmentation')
     parser.add_argument('--no-augmentation', action='store_false', dest='augmentation')
 
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     # Make sure some sort of input is provided, else there is nothing to do
     if len(args.input_set) == 0:

@@ -1,2 +1,0 @@
-DummyTest_grid1x2_row0_col0.json
-DummyTest_grid1x2_row0_col1.json

@@ -251,6 +251,10 @@ def json_schema(schema_name):
         return json.load(f)
 
 
+def dummy_volpkg_path():
+    return os.path.join(os.path.dirname(inkid.__file__), 'examples', 'DummyTest.volpkg')
+
+
 def get_raw_data_from_file_or_url(filename, return_relative_url=False):
     """Return the raw file contents from a filename or URL.
 

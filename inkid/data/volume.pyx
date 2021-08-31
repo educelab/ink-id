@@ -193,7 +193,9 @@ cdef class Volume:
         logging.info('Loading volume slices from {}...'.format(slices_path))
         for slice_i, slice_file in tqdm(list(enumerate(slice_files))):
             if data is None:
-                w, h = Image.open(slice_file).size
+                img = Image.open(slice_file)
+                w, h = img.size
+                img.close()
                 d = len(slice_files)
                 data = np.empty((d, h, w), dtype=np.uint16)
             data[slice_i, :, :] = np.array(Image.open(slice_file), dtype=np.uint16).copy()
