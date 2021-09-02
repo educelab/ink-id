@@ -161,6 +161,9 @@ def main():
     checkpoints_dir = os.path.join(output_path, 'checkpoints')
     os.makedirs(checkpoints_dir)
 
+    if args.dataloaders_num_workers is None:
+        args.dataloaders_num_workers = multiprocessing.cpu_count()
+
     # Create metadata dict
     metadata = {
         'Arguments': vars(args),
@@ -289,15 +292,17 @@ def main():
         metadata_file.write(json.dumps(metadata, indent=4, sort_keys=False))
 
     if args.training_max_samples is not None:
+        logging.info(f'Trimming training dataset to {args.training_max_samples} samples...')
         train_ds = inkid.ops.take_from_dataset(train_ds, args.training_max_samples)
+        logging.info('done')
     # Only take n samples for validation, not the entire region
     if args.validation_max_samples is not None:
+        logging.info(f'Trimming validation dataset to {args.validation_max_samples}...')
         val_ds = inkid.ops.take_from_dataset(val_ds, args.validation_max_samples)
-
-    if args.dataloaders_num_workers is None:
-        args.dataloaders_num_workers = multiprocessing.cpu_count()
+        logging.info('done')
 
     # Define the dataloaders which implement batching, shuffling, etc.
+    logging.info('Creating dataloaders...')
     train_dl, val_dl, pred_dl = None, None, None
     if len(train_ds) > 0:
         train_dl = DataLoader(train_ds, batch_size=args.batch_size, shuffle=True,
@@ -308,23 +313,26 @@ def main():
     if len(pred_ds) > 0:
         pred_dl = DataLoader(pred_ds, batch_size=args.batch_size * 2, shuffle=False,
                              num_workers=args.dataloaders_num_workers)
+    logging.info('done')
 
     # Specify the compute device for PyTorch purposes
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     logging.info(f'PyTorch device: {device}')
     if device.type == 'cuda':
-        logging.info('    ' + torch.cuda.get_device_name(0))
+        logging.info(f'    {torch.cuda.get_device_name(0)}')
         logging.info(f'    Memory Allocated: {round(torch.cuda.memory_allocated(0) / 1024 ** 3, 1)} GB')
         logging.info(f'    Memory Cached:    {round(torch.cuda.memory_reserved(0) / 1024 ** 3, 1)} GB')
 
     # Load pretrained weights if specified
     if args.load_weights_from is not None:
+        logging.info('Loading pretrained weights...')
         model_dict = model.state_dict()
         checkpoint = torch.load(args.load_weights_from)
         pretrained_dict = checkpoint['model_state_dict']
         pretrained_dict = {k: v for k, v in pretrained_dict.items() if k in model_dict}
         model_dict.update(pretrained_dict)
         model.load_state_dict(model_dict)
+        logging.info('done')
 
     # Show model in TensorBoard and save sample subvolumes
     sample_dl = train_dl or val_dl or pred_dl
@@ -457,6 +465,7 @@ def main():
     # Run a final prediction on all regions
     if args.final_prediction_on_all:
         try:
+            logging.info('Generating final prediction images... ')
             all_sources = list(set(args.training_set + args.validation_set + args.prediction_set))
             final_pred_ds = inkid.data.Dataset(all_sources, pred_feature_args)
             final_pred_ds.set_regions_grid_spacing(args.prediction_grid_spacing)
@@ -465,6 +474,7 @@ def main():
                                            num_workers=args.dataloaders_num_workers)
                 inkid.ops.generate_prediction_images(final_pred_dl, model, device,
                                                      predictions_dir, 'final', args.prediction_averaging)
+            logging.info('done')
         # Perform finishing touches even if cut short
         except KeyboardInterrupt:
             pass
