@@ -177,10 +177,9 @@ def main():
         metadata['Git hash'] = 'No git hash available (unable to find valid repository).'
 
     # Add SLURM info if it exists
-    if 'SLURM_JOB_ID' in os.environ:
-        metadata['SLURM Job ID'] = os.getenv('SLURM_JOB_ID')
-    if 'SLURM_JOB_NAME' in os.environ:
-        metadata['SLURM Job Name'] = os.getenv('SLURM_JOB_NAME')
+    for slurm_var in ['SLURM_JOB_ID', 'SLURM_JOB_NAME', 'SLURMD_NODENAME', 'SLURM_JOB_NODELIST']:
+        if slurm_var in os.environ:
+            metadata[slurm_var] = os.getenv(slurm_var)
 
     # Define the feature inputs to the network
     subvolume_args = dict(
