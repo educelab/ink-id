@@ -140,6 +140,9 @@ class RegionSource(DataSource):
         surface_x, surface_y = self._points[item]
         # Read that value from PPM
         x, y, z, n_x, n_y, n_z = self._ppm.get_point_with_normal(surface_x, surface_y)
+        # Invert normal if needed
+        if self._invert_normals:
+            n_x, n_y, n_z = -n_x, -n_y, -n_z
         # Get the feature metadata (useful for e.g. knowing where this feature came from on the surface)
         feature_metadata = FeatureMetadata(self.path, surface_x, surface_y, x, y, z, n_x, n_y, n_z)
         # Get the feature
