@@ -54,6 +54,8 @@ deploy:pypi:
   stage: deploy
   rules:
     - if: '$CI_COMMIT_TAG =~ /^v.*$/'
+  tags:
+    - docker
   image: python:3.9
   before_script:
     - python -m pip install --upgrade pip build setuptools wheel twine
