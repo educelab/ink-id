@@ -57,6 +57,12 @@ deploy:pypi:
   tags:
     - docker
   image: python:3.9
+  # https://docs.gitlab.com/ee/ci/variables/
+  # "Variables set in the GitLab UI are not passed down to service containers. To set them, assign them to variables in
+  # the UI, then re-assign them in your .gitlab-ci.yml."
+  variables:
+    TWINE_USERNAME: $TWINE_USERNAME
+    TWINE_PASSWORD: $TWINE_PASSWORD
   before_script:
     - python -m pip install --upgrade pip build setuptools wheel twine
   script:
