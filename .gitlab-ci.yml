@@ -37,8 +37,8 @@ singularity:
   image: quay.io/pypa/manylinux2014_x86_64
   script:
     - bash build/build-wheels.sh
-  env:
-    PLAT=manylinux2014_x86_64
+  variables:
+    PLAT: "manylinux2014_x86_64"
   artifacts:
     paths:
       - wheelhouse
