@@ -4,8 +4,7 @@ feat_cache/
 *.pyc
 *.sif
 
-*/lib.linux*
-*/temp.linux*
+build/
 dist/
 !inkid/data/
 *.egg-info
