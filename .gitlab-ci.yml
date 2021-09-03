@@ -36,10 +36,7 @@ singularity:
     - docker
   image: quay.io/pypa/manylinux2014_x86_64
   script:
-    - yum install -y suitesparse-devel
-    - ${PYBIN}/pip install -r requirements-build.txt
-    - ${PYBIN}/pip wheel . --no-deps -w wheelhouse
-    - auditwheel repair wheelhouse/*.whl
+    - "{$PYBIN}/pip" wheel . --no-deps -w wheelhouse/
   artifacts:
     paths:
       - wheelhouse
