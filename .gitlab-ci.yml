@@ -1,18 +1,19 @@
 stages:
   - build
   - test
+  - deploy
 
 singularity:
   stage: build
   needs: []  # run immediately
-  script:
-    - cp -r . /tmp/ink-id
-    - singularity build inkid.sif singularity/inkid.def
   tags:
     - docker
   image:
     name: quay.io/singularity/singularity:v3.2.1
     entrypoint: [""]
+  script:
+    - cp -r . /tmp/ink-id
+    - singularity build inkid.sif singularity/inkid.def
   artifacts:
     paths:
       - inkid.sif
@@ -27,10 +28,37 @@ singularity:
     # only build on develop or when you manually start a job with the BUILD_NIGHTLY env var set to true
     - if: '$CI_COMMIT_BRANCH == "develop" || $BUILD_NIGHTLY == "true"'
 
+# Build wheels for Linux
+.build/manylinux:
+  stage: build
+  needs: []
+  tags:
+    - docker
+  image: quay.io/pypa/manylinux2014_x86_64
+  script:
+    - yum install -y suitesparse-devel
+    - ${PYBIN}/pip install -r requirements-build.txt
+    - ${PYBIN}/pip wheel . --no-deps -w wheelhouse
+    - auditwheel repair wheelhouse/*.whl
+  artifacts:
+    paths:
+      - wheelhouse
+
+# Various Linux flavours on Python 3.8.
+build/manylinux/3.8:
+  extends: .build/manylinux
+  variables:
+    PYBIN: /opt/python/cp38-cp38/bin
+
+# Various Linux flavours on Python 3.9.
+build/manylinux/3.9:
+  extends: .build/manylinux
+  variables:
+    PYBIN: /opt/python/cp39-cp39/bin
 
 .test:
   stage: test
-  needs: []  # run immediately
+  needs: []
   before_script:
     - python -m venv .venv
     - source .venv/bin/activate
@@ -49,3 +77,14 @@ test:3.8:
 test:3.9:
   extends: .test
   image: python:3.9
+
+#deploy:pypi:
+#  stage: deploy
+#  rules:
+#    - if: '$CI_COMMIT_TAG =~ /^v.*$/'
+#  image: python:3.9
+#  before_script:
+#    - python -m pip install --upgrade pip build setuptools wheel twine
+#  script:
+#    - python -m build
+#    - python -m twine upload dist/*
