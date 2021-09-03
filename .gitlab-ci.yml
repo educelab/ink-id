@@ -36,7 +36,7 @@ singularity:
     - docker
   image: quay.io/pypa/manylinux2014_x86_64
   script:
-    - "{$PYBIN}/pip" wheel . --no-deps -w wheelhouse/
+    - $PYBIN/pip wheel . --no-deps -w wheelhouse/
   artifacts:
     paths:
       - wheelhouse
