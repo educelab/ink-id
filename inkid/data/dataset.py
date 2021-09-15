@@ -95,14 +95,15 @@ class RegionSource(DataSource):
         if self.data_dict['mask'] is not None:
             self._mask = np.array(Image.open(self.data_dict['mask']))
         if self.data_dict['ink_label'] is not None:
-            self._ink_label = np.array(Image.open(self.data_dict['ink_label']))
+            im = Image.open(self.data_dict['ink_label']).convert('L')  # Allow RGB mode images
+            self._ink_label = np.array(im)
         if self.data_dict['rgb_label'] is not None:
             self._rgb_label = np.array(Image.open(self.data_dict['rgb_label']))
         if self.data_dict['volcart_texture_label'] is not None:
             im = Image.open(self.data_dict['volcart_texture_label'])
-            self._volcart_texture_label = np.array(im).astype(np.float32)
             # Assuming image is uint16 data but Pillow loads it as uint32 ('I')
             assert im.mode == 'I'
+            self._volcart_texture_label = np.array(im).astype(np.float32)
             # Make sure the data isn't actually greater than uint16
             assert np.amax(self._volcart_texture_label) <= np.iinfo(np.uint16).max
             # Normalize to [0.0, 1.0]
