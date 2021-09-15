@@ -64,3 +64,40 @@ deploy:pypi:
   script:
     - python -m build --sdist
     - python -m twine upload dist/*
+
+test:pages:
+  stage: test
+  tags:
+    - docker
+  image: python:3.9
+  before_script:
+    - python -m venv .venv
+    - source .venv/bin/activate
+    - pip install --upgrade pip
+    - pip install -e .
+    - pip install --upgrade sphinx sphinx-rtd-theme
+  script:
+    - sphinx-build -b html docs/source public
+  only:
+    - branches
+  except:
+    - master
+
+deploy:pages:
+  stage: deploy
+  tags:
+    - docker
+  image: python:3.9
+  before_script:
+    - python -m venv .venv
+    - source .venv/bin/activate
+    - pip install --upgrade pip
+    - pip install -e .
+    - pip install --upgrade sphinx sphinx-rtd-theme
+  script:
+    - sphinx-build -b html docs/source public
+  artifacts:
+    paths:
+      - public
+  only:
+    - develop

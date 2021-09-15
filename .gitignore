@@ -6,6 +6,7 @@ feat_cache/
 
 build/
 dist/
+public/
 !inkid/data/
 *.egg-info
 .vscode

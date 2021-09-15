@@ -5,15 +5,19 @@ Subpackages
 -----------
 
 .. toctree::
+   :maxdepth: 4
 
-    inkid.model
-    inkid.ops
-    inkid.volumes
+   inkid.data
+   inkid.metrics
+   inkid.model
+   inkid.ops
+   inkid.schemas
+   inkid.volumes
 
 Module contents
 ---------------
 
 .. automodule:: inkid
-    :members:
-    :undoc-members:
-    :show-inheritance:
+   :members:
+   :undoc-members:
+   :show-inheritance:
