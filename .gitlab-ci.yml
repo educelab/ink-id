@@ -69,7 +69,7 @@ test:pages:
   stage: test
   tags:
     - docker
-  image: python3.9
+  image: python:3.9
   before_script:
     - pip install -U sphinx sphinx-rtd-theme
   script:
@@ -83,7 +83,7 @@ deploy:pages:
   stage: deploy
   tags:
     - docker
-  image: python3.9
+  image: python:3.9
   before_script:
     - pip install -U sphinx sphinx-rtd-theme
   script:
