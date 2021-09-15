@@ -100,4 +100,4 @@ deploy:pages:
     paths:
       - public
   only:
-    - master
+    - develop
