@@ -1,5 +1,5 @@
-ink-id
-======
+Modules
+=======
 
 .. toctree::
    :maxdepth: 4

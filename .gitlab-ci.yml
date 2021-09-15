@@ -64,3 +64,26 @@ deploy:pypi:
   script:
     - python -m build --sdist
     - python -m twine upload dist/*
+
+test:pages:
+  stage: test
+  before_script:
+    - pip install -U sphinx sphinx-rtd-theme
+  script:
+    - sphinx-build -b html docs/source public
+  only:
+    - branches
+  except:
+    - master
+
+deploy:pages:
+  stage: deploy
+  before_script:
+    - pip install -U sphinx sphinx-rtd-theme
+  script:
+    - sphinx-build -b html docs/source public
+  artifacts:
+    paths:
+      - public
+  only:
+    - master

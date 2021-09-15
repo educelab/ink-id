@@ -1,13 +1,13 @@
-inkid.volumes package
+inkid.metrics package
 =====================
 
 Submodules
 ----------
 
-inkid.volumes.volume\_protocol module
--------------------------------------
+inkid.metrics.metrics module
+----------------------------
 
-.. automodule:: inkid.volumes.volume_protocol
+.. automodule:: inkid.metrics.metrics
    :members:
    :undoc-members:
    :show-inheritance:
@@ -15,7 +15,7 @@ inkid.volumes.volume\_protocol module
 Module contents
 ---------------
 
-.. automodule:: inkid.volumes
+.. automodule:: inkid.metrics
    :members:
    :undoc-members:
    :show-inheritance:
