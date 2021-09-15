@@ -71,7 +71,11 @@ test:pages:
     - docker
   image: python:3.9
   before_script:
-    - pip install -U sphinx sphinx-rtd-theme
+    - python -m venv .venv
+    - source .venv/bin/activate
+    - pip install --upgrade pip
+    - pip install -e .
+    - pip install --upgrade sphinx sphinx-rtd-theme
   script:
     - sphinx-build -b html docs/source public
   only:
@@ -85,7 +89,11 @@ deploy:pages:
     - docker
   image: python:3.9
   before_script:
-    - pip install -U sphinx sphinx-rtd-theme
+    - python -m venv .venv
+    - source .venv/bin/activate
+    - pip install --upgrade pip
+    - pip install -e .
+    - pip install --upgrade sphinx sphinx-rtd-theme
   script:
     - sphinx-build -b html docs/source public
   artifacts:
