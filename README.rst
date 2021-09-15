@@ -12,6 +12,14 @@ Python >=3.8 is required.
 Installation
 ============
 
+``inkid`` is available `on PyPI <https://pypi.org/project/inkid/>`_ and can be installed via ``pip``:
+
+.. code-block:: bash
+
+    $ pip install inkid
+
+To install the source for development:
+
 .. code-block:: bash
 
     $ git clone https://code.cs.uky.edu/seales-research/ink-id.git && cd ink-id  # From code.cs server
@@ -40,7 +48,7 @@ The package can be used as a Python library:
    import inkid
 
    params = inkid.ops.json_schema('dataSource0.1')
-   regions = inkid.data.Dataset(['./training_dataset.txt'])
+   regions = inkid.data.Dataset([os.path.join(inkid.ops.dummy_volpkg_path(), 'working', 'DummyTest_grid1x2.txt')])
 
 A script is also included for running a training job and/or generating prediction images:
 
@@ -55,25 +63,26 @@ Examples
 SLURM Jobs
 ^^^^^^^^^^
 
-This code is often used in Singularity containers, run as SLURM jobs on a compute cluster.
+``inkid`` is often run on a compute cluster, scheduled by SLURM and run in a Singularity container.
 For documentation of this usage, see ``singularity/inkid.def``.
 
 K-Fold Cross Validation (and Prediction)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-``inkid/scripts/train_and_predict.py``typically takes a dataset files as input and trains on the specified training
-regions, validates on the validation regions, and predicts on the prediction regions. However if the
-``--cross-validate-on`` argument is passed, the behavior is slightly different. The nth training source will be removed
-from the training set and added to the validation and prediction sets. Example:
+``inkid/scripts/train_and_predict.py`` typically takes dataset files as input and trains on the specified training
+regions, validates on the validation regions, and predicts on the prediction regions.
+However if the ``--cross-validate-on`` argument is passed, the behavior is slightly different.
+The nth training region will be removed from the training set and added to the validation and prediction sets. Example:
 
 .. code-block:: bash
 
-   $ inkid-train-and-predict --training-set ~/data/dri-datasets-drive/LunateSigma/grid-2x5.txt \
-        --cross-validate-on 7 \
-        --final-prediction-on-all \
-        --output ~/data/LunateSigmaGridTest00
+   $ inkid-train-and-predict \
+       --training-set inkid/examples/DummyTest.volpkg/working/DummyTest_grid1x2.txt \
+       --output test \
+       --cross-validate-on 0
 
-It is possible to schedule all of these jobs with one command if using SLURM's ``sbatch``. Example:
+It is possible to schedule all of the k-fold jobs with one command if using SLURM's ``sbatch`` via the ``--array``
+argument. ``submit.sh`` creates a job for each array value, passing that value automatically to ``--cross-validate-on``:
 
 .. code-block:: bash
 
@@ -91,12 +100,12 @@ After performing a run for each value of ``--cross-validate-on``, each will have
 Generating Summary Images
 ^^^^^^^^^^^^^^^^^^^^^^^^^
 
-There is a script ``inkid/scripts/misc/create_summary_images.py`` that takes the parent output directory and will
+There is a script ``inkid/scripts/create_summary_images.py`` that takes the parent output directory and will
 generate various output images combining the cross-validation results. Example:
 
 .. code-block:: bash
 
-   $ python inkid/scripts/misc/add_k_fold_prediction_images.py ~/data/out/carbon_phantom_col1_test/
+   $ python inkid/scripts/create_summary_images.py ~/data/out/carbon_phantom_col1_test/
 
 Grid Training
 ^^^^^^^^^^^^^
@@ -106,7 +115,7 @@ k-fold cross-validation. There is a script to automatically create the grid data
 
 .. code-block:: bash
 
-   $ python inkid/scripts/split_region_into_grid.py ~/data/dri-datasets-drive/Dummy/DummyTest.volpkg/working/DummyTest.json 1 2
+   $ python inkid/scripts/split_region_into_grid.py inkid/examples/DummyTest.volpkg/working/DummyTest.json 1 2
 
 Then use this dataset for standard k-fold cross validation and prediction.
 
