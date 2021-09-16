@@ -50,7 +50,7 @@ test:3.9:
   extends: .test
   image: python:3.9
 
-deploy:pypi:
+pypi:
   stage: deploy
   rules:
     - if: '$CI_COMMIT_TAG =~ /^v.*$/'  # only run for tagged releases
@@ -83,7 +83,7 @@ test:pages:
   except:
     - master
 
-deploy:pages:
+pages:
   stage: deploy
   tags:
     - docker
