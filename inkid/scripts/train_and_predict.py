@@ -29,6 +29,10 @@ import torchsummary
 
 import inkid
 
+# Set to avoid `RuntimeError: received 0 items of ancdata` in dataloader from file_descriptor sharing hitting ulimit
+# https://github.com/pytorch/pytorch/issues/973
+torch.multiprocessing.set_sharing_strategy('file_system')
+
 
 class NoTrainingLossError(RuntimeError):
     pass
