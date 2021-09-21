@@ -20,13 +20,6 @@ from tqdm import tqdm
 
 import inkid
 
-# General note:
-# There is a lot of tedious string processing in this file. Parsing the
-# filenames to get the PPM, iteration, and epoch is annoying and fragile. It would
-# be better to use EXIF data or similar, perhaps integrated with Smeagol.
-# Or perhaps to develop the RegionSet class some more instead of relying so much
-# on directly reading the metadata dictionary.
-
 # We might issue this warning but only need to do it once
 already_warned_about_missing_label_images = False
 
@@ -39,10 +32,13 @@ YELLOW = (255, 255, 0)
 region_set_type_to_color = {'training': RED, 'prediction': YELLOW, 'validation': BLUE}
 
 
-# Return whether the given directory matches the expected structure for a job dir.
-# For example we often want a list of the k-fold subdirs in a directory but do not want
-# e.g. previous summary subdirs, or others.
 def is_job_dir(dirname):
+    """
+    Return whether this directory matches the expected structure for a job dir.
+
+    For example we often want a list of the k-fold subdirs in a directory but do not want e.g. previous summary
+    subdirs, or others.
+    """
     # k-fold job
     if is_k_fold_dir(dirname):
         return True
@@ -54,15 +50,18 @@ def is_job_dir(dirname):
     return False
 
 
-# Sometimes we want to know specifically if it is a k-fold job directory
 def is_k_fold_dir(dirname):
+    """Return whether this directory is a k-fold job directory."""
     dirname = os.path.basename(dirname)
     return re.match(r'.*\d\d\d\d-\d\d-\d\d_\d\d\.\d\d\.\d\d_(\d+)$', dirname)
 
 
-# Return which k-fold job this directory corresponds to (if any, -1 otherwise).
-# For the purpose of sorting a list of dirs based on job #.
 def k_from_dir(dirname):
+    """
+    Return which k-fold job this directory corresponds to (if any, -1 otherwise).
+
+    For the purpose of sorting a list of dirs based on job #.
+    """
     # Only has a valid k-fold # if it matches this particular format
     if is_k_fold_dir(dirname):
         # Return the last number in the dirname, which is the k-fold #
@@ -72,9 +71,14 @@ def k_from_dir(dirname):
         return -1
 
 
-# Return a set of all iterations encountered in a k-fold directory
-# Optionally restrict to those of only a particular PPM
 def iterations_in_job_dir(job_dir, ppm_name=None):
+    """
+    Return a set of all iterations encountered in a k-fold directory
+
+    Args:
+        job_dir: The job directory to search through.
+        ppm_name (str): Optionally restrict to those of only a particular PPM.
+    """
     iterations = set()
     # Look in predictions directory to get all iterations from prediction images
     pred_dir = os.path.join(job_dir, 'predictions')
@@ -146,9 +150,12 @@ def create_tensorboard_plots(base_dir, out_dir):
                 fig.savefig(os.path.join(out_dir, f'{title}.png'))
 
 
-# Return a prediction image of the specified iteration, job directory,
-# and PPM. If such an image does not exist return None
 def get_prediction_image(iteration, job_dir, region_name, prediction_type, return_latest_if_not_found=True):
+    """
+    Return a prediction image of the specified iteration, job directory, and PPM.
+
+    If such an image does not exist return None.
+    """
     filename = f'{region_name}_prediction_{iteration}_{prediction_type}.png'
     full_filename = os.path.join(job_dir, 'predictions', filename)
     img = None
@@ -447,7 +454,7 @@ def build_frame(iteration, job_dir_to_metadata, regions, prediction_type, max_si
                     img = img.convert('L')
                     img_data = np.array(img)
                     img = Image.fromarray(np.uint8(color_map(img_data) * 255))
-                # Only keep (via cropping) those regions we are interested in
+                # Only keep (via cropping) those regions that are of a set being displayed
                 new_img = Image.new('RGB', (img.width, img.height))
                 for region_set_type, regions in metadata['Data'].items():
                     if region_set_type in region_sets_to_include:
@@ -455,7 +462,8 @@ def build_frame(iteration, job_dir_to_metadata, regions, prediction_type, max_si
                             if metadata_region_info['bounding_box'] is None:
                                 metadata_region_info['bounding_box'] = (0, 0, img.width, img.height)
                             region_img = img.crop(metadata_region_info['bounding_box'])
-                            new_img.paste(region_img, (metadata_region_info['bounding_box'][0], metadata_region_info['bounding_box'][1]))
+                            new_img.paste(region_img, (
+                            metadata_region_info['bounding_box'][0], metadata_region_info['bounding_box'][1]))
                 # Similarly label those region sets requested
                 for region_set_type, regions in metadata['Data'].items():
                     if region_set_type in region_sets_to_label:
@@ -464,7 +472,8 @@ def build_frame(iteration, job_dir_to_metadata, regions, prediction_type, max_si
                                 metadata_region_info['bounding_box'] = (0, 0, img.width, img.height)
                             draw = ImageDraw.Draw(new_img)
                             color = region_set_type_to_color[region_set_type]
-                            draw.rectangle(metadata_region_info['bounding_box'], outline=color, fill=None, width=rectangle_line_width)
+                            draw.rectangle(metadata_region_info['bounding_box'], outline=color, fill=None,
+                                           width=rectangle_line_width)
                 # When merging all predictions for same PPM, we don't want to overwrite other
                 # predictions with the blank part of this image. So, only paste the parts of this
                 # image that actually have content.
@@ -787,16 +796,19 @@ def main():
         os.makedirs(color_maps_dir, exist_ok=True)
         for cmap in ['plasma', 'viridis', 'hot', 'inferno', 'seismic', 'Spectral', 'coolwarm', 'bwr']:
             print(f'\nCreating final static {prediction_type} image with all regions and color map: {cmap}...')
-            final_frame = build_frame(last_iteration_seen, job_dir_to_metadata, regions_found_in_metadata, prediction_type,
+            final_frame = build_frame(last_iteration_seen, job_dir_to_metadata, regions_found_in_metadata,
+                                      prediction_type,
                                       args.static_max_size, cmap_name=cmap, region_sets_to_label=['training'])
             final_frame.save(os.path.join(color_maps_dir, f'{prediction_type}_{last_iteration_seen}_all_{cmap}.png'))
             print('done.')
 
             print(f'\nCreating final static {prediction_type} image with prediction regions and color map: {cmap}...')
-            final_frame = build_frame(last_iteration_seen, job_dir_to_metadata, regions_found_in_metadata, prediction_type,
+            final_frame = build_frame(last_iteration_seen, job_dir_to_metadata, regions_found_in_metadata,
+                                      prediction_type,
                                       args.static_max_size, cmap_name=cmap, region_sets_to_include=['prediction'],
                                       merge_all_of_same_ppm=True)
-            final_frame.save(os.path.join(color_maps_dir, f'{prediction_type}_{last_iteration_seen}_prediction_{cmap}.png'))
+            final_frame.save(
+                os.path.join(color_maps_dir, f'{prediction_type}_{last_iteration_seen}_prediction_{cmap}.png'))
             print('done.')
 
         # Gifs
