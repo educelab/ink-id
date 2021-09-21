@@ -36,7 +36,7 @@ DARK_GRAY = (64, 64, 64)
 RED = (255, 0, 0)
 BLUE = (0, 0, 255)
 YELLOW = (255, 255, 0)
-region_type_to_color = {'training': RED, 'prediction': YELLOW, 'validation': BLUE}
+region_set_type_to_color = {'training': RED, 'prediction': YELLOW, 'validation': BLUE}
 
 
 # Return whether the given directory matches the expected structure for a job dir.
@@ -148,8 +148,8 @@ def create_tensorboard_plots(base_dir, out_dir):
 
 # Return a prediction image of the specified iteration, job directory,
 # and PPM. If such an image does not exist return None
-def get_prediction_image(iteration, job_dir, ppm_name, return_latest_if_not_found=True):
-    filename = f'{ppm_name}_prediction_{iteration}.png'
+def get_prediction_image(iteration, job_dir, region_name, prediction_type, return_latest_if_not_found=True):
+    filename = f'{region_name}_prediction_{iteration}_{prediction_type}.png'
     full_filename = os.path.join(job_dir, 'predictions', filename)
     img = None
     if os.path.isfile(full_filename):
@@ -158,7 +158,7 @@ def get_prediction_image(iteration, job_dir, ppm_name, return_latest_if_not_foun
         ret_iteration = None
         # We did not find original file. Check to see if the requested iteration
         # is greater than any we have. If so, return the greatest one we have.
-        iterations = iterations_in_job_dir(job_dir, ppm_name)
+        iterations = iterations_in_job_dir(job_dir, region_name)
         if len(iterations) == 0:
             return None
         if iteration == 'final':
@@ -174,7 +174,7 @@ def get_prediction_image(iteration, job_dir, ppm_name, return_latest_if_not_foun
             if len(numeric_iterations) > 0 and int_iteration > max(numeric_iterations):
                 ret_iteration = iterations[-1]
         if ret_iteration is not None:
-            filename = f'{ppm_name}_prediction_{ret_iteration}.png'
+            filename = f'{region_name}_prediction_{ret_iteration}.png'
             full_filename = os.path.join(job_dir, 'predictions', filename)
             if os.path.isfile(full_filename):
                 img = Image.open(full_filename)
@@ -214,12 +214,47 @@ def build_footer_img(width, height, iteration, label_type,
             (horizontal_offset, 0, horizontal_offset + divider_bar_size, height)
         )
         horizontal_offset += divider_bar_size
-    # Add iteration/batch #
+    # Add epoch
     draw = ImageDraw.Draw(footer)
     font_path = os.path.join(os.path.dirname(inkid.__file__), 'assets', 'fonts', 'Roboto-Regular.ttf')
     fontsize = 1
     font_regular = ImageFont.truetype(font_path, fontsize)
-    txt = 'training batch'
+    txt = 'eooch'  # Hack as I don't want it to care about 'p' sticking down
+    allowed_font_height = int((height - buffer_size * 3) / 2)
+    while font_regular.getsize(txt)[1] < allowed_font_height:
+        fontsize += 1
+        font_regular = ImageFont.truetype(font_path, fontsize)
+    fontsize -= 1
+    txt = 'epoch'
+    draw.text(
+        (horizontal_offset + buffer_size, buffer_size),
+        txt,
+        WHITE,
+        font=font_regular
+    )
+    font_w = font_regular.getsize(txt)[0] + 2 * buffer_size
+    font_path_black = os.path.join(os.path.dirname(inkid.__file__), 'assets', 'fonts', 'Roboto-Black.ttf')
+    font_black = ImageFont.truetype(font_path_black, fontsize)
+    epoch = '' if iteration == 'final' else re.search(r'(\d+)_\d+', iteration).group(1)
+    draw.text(
+        (horizontal_offset + buffer_size, allowed_font_height + 2 * buffer_size),
+        epoch,
+        WHITE,
+        font=font_black
+    )
+    horizontal_offset += font_w
+    # Add divider bar
+    footer.paste(
+        LIGHT_GRAY,
+        (horizontal_offset, 0, horizontal_offset + divider_bar_size, height)
+    )
+    horizontal_offset += divider_bar_size
+    # Add batch
+    draw = ImageDraw.Draw(footer)
+    font_path = os.path.join(os.path.dirname(inkid.__file__), 'assets', 'fonts', 'Roboto-Regular.ttf')
+    fontsize = 1
+    font_regular = ImageFont.truetype(font_path, fontsize)
+    txt = 'batch'
     allowed_font_height = int((height - buffer_size * 3) / 2)
     while font_regular.getsize(txt)[1] < allowed_font_height:
         fontsize += 1
@@ -234,11 +269,10 @@ def build_footer_img(width, height, iteration, label_type,
     font_w = font_regular.getsize(txt)[0] + 2 * buffer_size
     font_path_black = os.path.join(os.path.dirname(inkid.__file__), 'assets', 'fonts', 'Roboto-Black.ttf')
     font_black = ImageFont.truetype(font_path_black, fontsize)
-    if re.match(r'\d+_\d+', iteration):
-        iteration = re.search(r'\d+_(\d+)', iteration).group(1)
+    batch = 'final' if iteration == 'final' else re.search(r'\d+_(\d+)', iteration).group(1)
     draw.text(
         (horizontal_offset + buffer_size, allowed_font_height + 2 * buffer_size),
-        iteration,
+        batch,
         WHITE,
         font=font_black
     )
@@ -343,7 +377,7 @@ def build_footer_img(width, height, iteration, label_type,
             y0 -= int(buffer_size / 2)
             x1 += int(buffer_size / 2)
             y1 += int(buffer_size / 2)
-            color = region_type_to_color[region_type]
+            color = region_set_type_to_color[region_type]
             draw = ImageDraw.Draw(footer)
             draw.rectangle((x0, y0, x1, y1), outline=color, fill=None, width=int(height / 40))
     horizontal_offset += font_w + 2 * buffer_size
@@ -356,19 +390,19 @@ def build_footer_img(width, height, iteration, label_type,
     return footer
 
 
-def build_frame(iteration, job_dir_to_metadata, ppms, label_type, max_size=None,
-                regions_to_include=None, regions_to_label=None, cmap_name=None,
+def build_frame(iteration, job_dir_to_metadata, regions, prediction_type, max_size=None,
+                region_sets_to_include=None, region_sets_to_label=None, cmap_name=None,
                 merge_all_of_same_ppm=False):
     global already_warned_about_missing_label_images
 
-    if regions_to_include is None:
-        regions_to_include = ['training', 'prediction', 'validation']
-    if regions_to_label is None:
-        regions_to_label = []
+    if region_sets_to_include is None:
+        region_sets_to_include = ['training', 'prediction', 'validation']
+    if region_sets_to_label is None:
+        region_sets_to_label = []
 
     job_dirs = job_dir_to_metadata.keys()
-    col_width = max([ppm['size'][0] for ppm in ppms.values()])
-    row_heights = [ppm['size'][1] for ppm in ppms.values()]
+    col_width = max([region['ppm_size'][0] for region in regions.values()])
+    row_heights = [region['ppm_size'][1] for region in regions.values()]
     buffer_size = int(col_width / 10)
     if merge_all_of_same_ppm:
         width = col_width * 2 + buffer_size * 3  # Only need space for one result column plus label column
@@ -393,8 +427,9 @@ def build_frame(iteration, job_dir_to_metadata, ppms, label_type, max_size=None,
         # Get metadata for this job
         metadata = job_dir_to_metadata[job_dir]
         # Make each row of this column
-        for ppm_i, (ppm_name, ppm) in enumerate(ppms.items()):
-            img = get_prediction_image(iteration, job_dir, ppm_name)
+        for ppm_i, (region_filename, region_info) in enumerate(regions.items()):
+            region_name = os.path.splitext(os.path.basename(region_filename))[0]
+            img = get_prediction_image(iteration, job_dir, region_name, prediction_type)
             if img is not None:
                 if merge_all_of_same_ppm:
                     offset = (
@@ -411,25 +446,24 @@ def build_frame(iteration, job_dir_to_metadata, ppms, label_type, max_size=None,
                     img = img.convert('L')
                     img_data = np.array(img)
                     img = Image.fromarray(np.uint8(color_map(img_data) * 255))
-                # Only keep those regions we are interested in
+                # Only keep (via cropping) those regions we are interested in
                 new_img = Image.new('RGB', (img.width, img.height))
-                region_set = metadata['Region set']['regions']
-                for region_type, regions in region_set.items():
-                    if region_type in regions_to_include:
-                        for region in regions:
-                            if 'bounds' not in region:
-                                region['bounds'] = (0, 0, img.width, img.height)
-                            region_img = img.crop(region['bounds'])
-                            new_img.paste(region_img, (region['bounds'][0], region['bounds'][1]))
-                for region_type in regions_to_label:
-                    regions = region_set[region_type]
-                    for region in regions:
-                        if region['ppm'] == ppm_name:
-                            if 'bounds' not in region:
-                                region['bounds'] = (0, 0, img.width, img.height)
+                for region_set_type, regions in metadata['Data'].items():
+                    if region_set_type in region_sets_to_include:
+                        for metadata_region_info in regions.values():
+                            if metadata_region_info['bounding_box'] is None:
+                                metadata_region_info['bounding_box'] = (0, 0, img.width, img.height)
+                            region_img = img.crop(metadata_region_info['bounding_box'])
+                            new_img.paste(region_img, (metadata_region_info['bounding_box'][0], metadata_region_info['bounding_box'][1]))
+                # Similarly label those region sets requested
+                for region_set_type, regions in metadata['Data'].items():
+                    if region_set_type in region_sets_to_label:
+                        for metadata_region_info in regions.values():
+                            if metadata_region_info['bounding_box'] is None:
+                                metadata_region_info['bounding_box'] = (0, 0, img.width, img.height)
                             draw = ImageDraw.Draw(new_img)
-                            color = region_type_to_color[region_type]
-                            draw.rectangle(region['bounds'], outline=color, fill=None, width=rectangle_line_width)
+                            color = region_set_type_to_color[region_set_type]
+                            draw.rectangle(metadata_region_info['bounding_box'], outline=color, fill=None, width=rectangle_line_width)
                 # When merging all predictions for same PPM, we don't want to overwrite other
                 # predictions with the blank part of this image. So, only paste the parts of this
                 # image that actually have content.
@@ -438,14 +472,17 @@ def build_frame(iteration, job_dir_to_metadata, ppms, label_type, max_size=None,
                 frame.paste(new_img, offset, mask=mask)
 
     # Add label column
-    for ppm_i, ppm in enumerate(ppms.values()):
-        if label_type == 'rgb_values':
-            label_key = 'rgb-label'
-        elif label_type == 'ink_classes':
-            label_key = 'ink-label'
+    for ppm_i, region_info in enumerate(regions.values()):
+        if prediction_type == 'rgb_values':
+            label_key = 'rgb_label'
+        elif prediction_type == 'ink_classes':
+            label_key = 'ink_label'
+        elif prediction_type == 'volcart_texture':
+            label_key = 'volcart_texture_label'
         else:
+            warnings.warn(f'Unknown prediction type {prediction_type}', RuntimeWarning)
             break
-        label_img_path = ppm.get(label_key)
+        label_img_path = region_info.get(label_key)
         if label_img_path is not None:
             # Try getting label image file from recorded location (may not exist on this machine)
             label_img = None
@@ -557,8 +594,8 @@ def build_frame(iteration, job_dir_to_metadata, ppms, label_type, max_size=None,
     )
 
     # Add footer
-    footer = build_footer_img(width, footer_height, iteration, label_type,
-                              regions_to_include, regions_to_label, cmap_name)
+    footer = build_footer_img(width, footer_height, iteration, prediction_type,
+                              region_sets_to_include, region_sets_to_label, cmap_name)
     frame.paste(footer, (0, height - footer_height))
 
     # Downsize image while keeping aspect ratio
@@ -581,7 +618,7 @@ def create_animation(filename, fps, iterations, write_sequence, *args, **kwargs)
 def write_img_sequence(animation, outdir):
     if len(animation) == 0:
         return
-    print('\nWriting training image sequence to', outdir)
+    print('\nWriting image sequence to', outdir)
     prefix = os.path.join(outdir, "sequence_")
     for i, img in enumerate(animation):
         outfile = prefix + str(i) + ".png"
@@ -591,7 +628,7 @@ def write_img_sequence(animation, outdir):
 def write_gif(animation, outfile, fps=10):
     if len(animation) == 0:
         return
-    print('\nWriting training gif to', outfile)
+    print('\nWriting gif to', outfile)
     durations = [1 / fps] * len(animation)
     # Make the last frame hold for longer.
     durations[-1] = 5
@@ -612,8 +649,12 @@ def sort_iterations(iterations):
     has_final = 'final' in iterations
     if has_final:
         iterations.remove('final')
-    iterations = sorted(list(map(int, iterations)))
-    iterations = ['0_' + str(i) for i in iterations]
+    # Split strs (e.g. '5_6300') into int tuples (epoch, batch) (e.g. (5, 6300))
+    iterations = [(int(i.split('_')[0]), int(i.split('_')[1])) for i in iterations]
+    # Sort by epoch first, then batch number
+    iterations = sorted(iterations)
+    # Back to original strs now that they are sorted
+    iterations = [f'{i[0]}_{i[1]}' for i in iterations]
     if has_final:
         iterations.append('final')
     return iterations
@@ -643,10 +684,11 @@ def main():
     for d in job_dirs:
         print(f'\t{d}')
 
-    # Get PPM data, and list of all iterations encountered across jobs (some might have more than others)
+    # Get region data, and list of all iterations encountered across jobs (some might have more than others)
     # Start by storing a dict where we map the directory name to the metadata for that job
     job_dir_to_metadata = dict()
-    ppms_from_metadata = None
+    regions_found_in_metadata = dict()
+    iterations_encountered_by_prediction_type = dict()
     # Iterate through job dirs
     for job_dir in job_dirs:
         # Read the metadata file and store each of them (we need the region info
@@ -659,8 +701,9 @@ def main():
             metadata = json.loads(f.read())
             job_dir_to_metadata[job_dir] = metadata
 
-        # Useful to separately store just the PPM info (should be same across all jobs)
-        ppms_from_metadata = list(job_dir_to_metadata.values())[0]['Region set']['ppms']
+        # Useful to separately store just the region info (should be same across all jobs)
+        for region_dict in metadata['Data'].values():
+            regions_found_in_metadata.update(region_dict)
 
         # Look in predictions directory to get all iterations from prediction images
         pred_dir = os.path.join(job_dir, 'predictions')
@@ -670,96 +713,106 @@ def main():
             # Filter out those that do not match the desired name format
             names = list(filter(lambda name: re.match('.*_prediction_', name), names))
             for name in names:
-                # Get PPM filename from image filename
-                ppm_filename = re.search('(.*)_prediction_', name).group(1)
-                # Note PPM size based on image size. Would get this from the PPM file
+                # Get region name from image filename
+                region_name_from_pred_img = re.search('(.*)_prediction_', name).group(1)
+                # Note region's PPM size based on image size. Would get this from the PPM file
                 # headers, but those are not necessarily on the machine this script is run on.
-                for ppm_name, ppm in ppms_from_metadata.items():
-                    # Locate correct PPM in the metadata
-                    if ppm_name == ppm_filename:
+                for region_filename, region_info in regions_found_in_metadata.items():
+                    region_name = os.path.splitext(os.path.basename(region_filename))[0]
+                    # Locate correct region in the metadata
+                    if region_name == region_name_from_pred_img:
                         # Only add size information if we haven't already
-                        if 'size' not in ppm:
+                        if 'ppm_size' not in region_info:
                             image_path = os.path.join(pred_dir, name)
-                            ppm['size'] = Image.open(image_path).size
+                            region_info['ppm_size'] = Image.open(image_path).size
                         # Extract iteration name from each image
-                        if 'iterations' not in ppm:
-                            ppm['iterations'] = []
-                        iteration = None
-                        if re.match(r'.*_prediction_\d+_(\d+)', name):
-                            iteration = re.search(r'.*_prediction_\d+_(\d+)', name).group(1)
+                        if 'iterations_found' not in region_info:
+                            region_info['iterations_found'] = dict()
+                        iteration_str, prediction_type = None, None
+                        if re.match(r'.*_prediction_\d+_\d+', name):
+                            iteration_str = re.search(r'.*_prediction_(\d+_\d+)_.*\.png', name).group(1)
+                            prediction_type = re.search(r'.*_prediction_\d+_\d+_(.*)\.png', name).group(1)
                         elif re.match('.*_prediction_final', name):
-                            iteration = 'final'
-                        if iteration is not None and iteration not in ppm['iterations']:
-                            ppm['iterations'].append(iteration)
-    # Remove those PPMs that had no prediction images generated
-    ppms_from_metadata = {k: v for k, v in ppms_from_metadata.items() if 'size' in v}
-    print(f'\nFound PPMs with prediction images:')
-    for ppm in ppms_from_metadata.keys():
-        print(f'\t{ppm}, size: {ppms_from_metadata[ppm]["size"]}')
+                            iteration_str = 'final'
+                            prediction_type = re.search(r'.*_prediction_\d+_final_(.*)\.png', name).group(1)
+                        if prediction_type is not None and prediction_type not in region_info['iterations_found']:
+                            region_info['iterations_found'][prediction_type] = list()
+                            iterations_encountered_by_prediction_type[prediction_type] = dict()
+                        if iteration_str is not None and iteration_str not in region_info['iterations_found']:
+                            region_info['iterations_found'][prediction_type].append(iteration_str)
+    # Remove those regions that had no prediction images generated
+    regions_found_in_metadata = {k: v for k, v in regions_found_in_metadata.items() if 'ppm_size' in v}
+    print(f'\nFound regions with prediction images:')
+    for region_filename in regions_found_in_metadata.keys():
+        print(f'\t{region_filename}, size: {regions_found_in_metadata[region_filename]["ppm_size"]}')
 
-    encountered_iterations = set()
-    for ppm in ppms_from_metadata.values():
-        if 'iterations' in ppm:
-            for iteration in ppm['iterations']:
-                encountered_iterations.add(iteration)
-    encountered_iterations = sort_iterations(encountered_iterations)
-
-    label_type = metadata.get('Arguments').get('label_type')
+    # Organize the predictions encountered by prediction type, and sort each list
+    for prediction_type in iterations_encountered_by_prediction_type:
+        encountered_iterations = set()
+        for region_info in regions_found_in_metadata.values():
+            if 'iterations_found' in region_info:
+                for iteration_str in region_info['iterations_found'][prediction_type]:
+                    encountered_iterations.add(iteration_str)
+        iterations_encountered_by_prediction_type[prediction_type] = sort_iterations(encountered_iterations)
 
     # Tensorboard
     print('\nCreating Tensorboard plots...')
     create_tensorboard_plots(args.dir, out_dir)
     print('done.')
 
-    if len(encountered_iterations) == 0:
+    if not iterations_encountered_by_prediction_type:
         print('No iterations encountered in prediction folders. No images will be produced.')
         return
-    last_iteration_seen = encountered_iterations[-1]
 
-    # Static images
-    print('\nCreating final static image with all regions...')
-    final_frame = build_frame(last_iteration_seen, job_dir_to_metadata, ppms_from_metadata, label_type,
-                              args.static_max_size, regions_to_label=['training'])
-    final_frame.save(os.path.join(out_dir, f'{last_iteration_seen}_all.png'))
-    print('done.')
+    for prediction_type in iterations_encountered_by_prediction_type:
+        last_iteration_seen = iterations_encountered_by_prediction_type[prediction_type][-1]
 
-    print('\nCreating final static image with only prediction regions...')
-    final_frame = build_frame(last_iteration_seen, job_dir_to_metadata, ppms_from_metadata, label_type,
-                              args.static_max_size, regions_to_include=['prediction'],
-                              merge_all_of_same_ppm=True)
-    final_frame.save(os.path.join(out_dir, f'{last_iteration_seen}_prediction.png'))
-    print('done.')
-
-    # Color map images
-    color_maps_dir = os.path.join(out_dir, 'colormaps')
-    os.makedirs(color_maps_dir, exist_ok=True)
-    for cmap in ['plasma', 'viridis', 'hot', 'inferno', 'seismic', 'Spectral', 'coolwarm', 'bwr']:
-        print(f'\nCreating final static image with all regions and color map: {cmap}...')
-        final_frame = build_frame(last_iteration_seen, job_dir_to_metadata, ppms_from_metadata, label_type,
-                                  args.static_max_size, cmap_name=cmap, regions_to_label=['training'])
-        final_frame.save(os.path.join(color_maps_dir, f'{last_iteration_seen}_all_{cmap}.png'))
+        # Static images
+        print(f'\nCreating final static {prediction_type} image with all regions...')
+        final_frame = build_frame(last_iteration_seen, job_dir_to_metadata, regions_found_in_metadata, prediction_type,
+                                  args.static_max_size, region_sets_to_label=['training'])
+        final_frame.save(os.path.join(out_dir, f'{prediction_type}_{last_iteration_seen}_all.png'))
         print('done.')
 
-        print(f'\nCreating final static image with prediction regions and color map: {cmap}...')
-        final_frame = build_frame(last_iteration_seen, job_dir_to_metadata, ppms_from_metadata, label_type,
-                                  args.static_max_size, cmap_name=cmap, regions_to_include=['prediction'],
+        print(f'\nCreating final static {prediction_type} image with only prediction regions...')
+        final_frame = build_frame(last_iteration_seen, job_dir_to_metadata, regions_found_in_metadata, prediction_type,
+                                  args.static_max_size, region_sets_to_label=['prediction'],
                                   merge_all_of_same_ppm=True)
-        final_frame.save(os.path.join(color_maps_dir, f'{last_iteration_seen}_prediction_{cmap}.png'))
+        final_frame.save(os.path.join(out_dir, f'{prediction_type}_{last_iteration_seen}_prediction.png'))
         print('done.')
 
-    # Gifs
-    print('\nCreating animation with all regions:')
-    create_animation(os.path.join(out_dir, 'animation_all'), args.gif_fps, encountered_iterations,
-                     args.img_seq, job_dir_to_metadata,
-                     ppms_from_metadata, label_type, args.gif_max_size,
-                     regions_to_label=['training'])
+        # Color map images
+        color_maps_dir = os.path.join(out_dir, 'colormaps')
+        os.makedirs(color_maps_dir, exist_ok=True)
+        for cmap in ['plasma', 'viridis', 'hot', 'inferno', 'seismic', 'Spectral', 'coolwarm', 'bwr']:
+            print(f'\nCreating final static {prediction_type} image with all regions and color map: {cmap}...')
+            final_frame = build_frame(last_iteration_seen, job_dir_to_metadata, regions_found_in_metadata, prediction_type,
+                                      args.static_max_size, cmap_name=cmap, region_sets_to_label=['training'])
+            final_frame.save(os.path.join(color_maps_dir, f'{prediction_type}_{last_iteration_seen}_all_{cmap}.png'))
+            print('done.')
 
-    print('\nCreating animation with only prediction regions:')
-    create_animation(os.path.join(out_dir, 'animation_prediction'), args.gif_fps, encountered_iterations,
-                     args.img_seq, job_dir_to_metadata,
-                     ppms_from_metadata, label_type, args.gif_max_size,
-                     regions_to_include=['prediction'],
-                     merge_all_of_same_ppm=True)
+            print(f'\nCreating final static {prediction_type} image with prediction regions and color map: {cmap}...')
+            final_frame = build_frame(last_iteration_seen, job_dir_to_metadata, regions_found_in_metadata, prediction_type,
+                                      args.static_max_size, cmap_name=cmap, region_sets_to_include=['prediction'],
+                                      merge_all_of_same_ppm=True)
+            final_frame.save(os.path.join(color_maps_dir, f'{prediction_type}_{last_iteration_seen}_prediction_{cmap}.png'))
+            print('done.')
+
+        # Gifs
+        print(f'\nCreating {prediction_type} animation with all regions:')
+        create_animation(os.path.join(out_dir, f'{prediction_type}_animation_all'), args.gif_fps,
+                         iterations_encountered_by_prediction_type[prediction_type],
+                         args.img_seq, job_dir_to_metadata,
+                         regions_found_in_metadata, prediction_type, args.gif_max_size,
+                         region_sets_to_label=['training'])
+
+        print('\nCreating animation with only prediction regions:')
+        create_animation(os.path.join(out_dir, f'{prediction_type}_animation_prediction'), args.gif_fps,
+                         iterations_encountered_by_prediction_type[prediction_type],
+                         args.img_seq, job_dir_to_metadata,
+                         regions_found_in_metadata, prediction_type, args.gif_max_size,
+                         region_sets_to_include=['prediction'],
+                         merge_all_of_same_ppm=True)
 
 
 if __name__ == '__main__':

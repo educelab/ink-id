@@ -411,7 +411,8 @@ def main():
                             opt.zero_grad()
 
                             if batch_num % args.summary_every_n_batches == 0:
-                                logging.info(f'Batch: {batch_num:>5d}/{total_batches:<5d} '
+                                logging.info(f'Epoch: {epoch:>5d}/{args.training_epochs:<5d}'
+                                             f'Batch: {batch_num:>5d}/{total_batches:<5d} '
                                              f'{inkid.metrics.metrics_str(metric_results)} '
                                              f'Seconds: {time.time() - last_summary:5.3g}')
                                 for metric, result in inkid.metrics.metrics_dict(metric_results).items():

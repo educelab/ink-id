@@ -16,7 +16,7 @@ class TestScriptsTestCase(unittest.TestCase):
 
     def test_generate_subvolumes(self) -> None:
         generate_subvolumes.main([
-            '--input-set', os.path.join(dummy_volpkg_path(), 'working/DummyTest_grid1x2.txt'),
+            '--input-set', os.path.join(dummy_volpkg_path(), 'working', 'DummyTest_grid1x2.txt'),
             '--output', os.path.join(test_output_dir, 'subvolumes'),
         ])
 
