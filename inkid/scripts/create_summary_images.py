@@ -215,40 +215,41 @@ def build_footer_img(width, height, iteration, label_type,
         )
         horizontal_offset += divider_bar_size
     # Add epoch
-    draw = ImageDraw.Draw(footer)
-    font_path = os.path.join(os.path.dirname(inkid.__file__), 'assets', 'fonts', 'Roboto-Regular.ttf')
-    fontsize = 1
-    font_regular = ImageFont.truetype(font_path, fontsize)
-    txt = 'eooch'  # Hack as I don't want it to care about 'p' sticking down
-    allowed_font_height = int((height - buffer_size * 3) / 2)
-    while font_regular.getsize(txt)[1] < allowed_font_height:
-        fontsize += 1
+    if iteration != 'final':
+        draw = ImageDraw.Draw(footer)
+        font_path = os.path.join(os.path.dirname(inkid.__file__), 'assets', 'fonts', 'Roboto-Regular.ttf')
+        fontsize = 1
         font_regular = ImageFont.truetype(font_path, fontsize)
-    fontsize -= 1
-    txt = 'epoch'
-    draw.text(
-        (horizontal_offset + buffer_size, buffer_size),
-        txt,
-        WHITE,
-        font=font_regular
-    )
-    font_w = font_regular.getsize(txt)[0] + 2 * buffer_size
-    font_path_black = os.path.join(os.path.dirname(inkid.__file__), 'assets', 'fonts', 'Roboto-Black.ttf')
-    font_black = ImageFont.truetype(font_path_black, fontsize)
-    epoch = '' if iteration == 'final' else re.search(r'(\d+)_\d+', iteration).group(1)
-    draw.text(
-        (horizontal_offset + buffer_size, allowed_font_height + 2 * buffer_size),
-        epoch,
-        WHITE,
-        font=font_black
-    )
-    horizontal_offset += font_w
-    # Add divider bar
-    footer.paste(
-        LIGHT_GRAY,
-        (horizontal_offset, 0, horizontal_offset + divider_bar_size, height)
-    )
-    horizontal_offset += divider_bar_size
+        txt = 'eooch'  # Hack as I don't want it to care about 'p' sticking down
+        allowed_font_height = int((height - buffer_size * 3) / 2)
+        while font_regular.getsize(txt)[1] < allowed_font_height:
+            fontsize += 1
+            font_regular = ImageFont.truetype(font_path, fontsize)
+        fontsize -= 1
+        txt = 'epoch'
+        draw.text(
+            (horizontal_offset + buffer_size, buffer_size),
+            txt,
+            WHITE,
+            font=font_regular
+        )
+        font_w = font_regular.getsize(txt)[0] + 2 * buffer_size
+        font_path_black = os.path.join(os.path.dirname(inkid.__file__), 'assets', 'fonts', 'Roboto-Black.ttf')
+        font_black = ImageFont.truetype(font_path_black, fontsize)
+        epoch = '' if iteration == 'final' else re.search(r'(\d+)_\d+', iteration).group(1)
+        draw.text(
+            (horizontal_offset + buffer_size, allowed_font_height + 2 * buffer_size),
+            epoch,
+            WHITE,
+            font=font_black
+        )
+        horizontal_offset += font_w
+        # Add divider bar
+        footer.paste(
+            LIGHT_GRAY,
+            (horizontal_offset, 0, horizontal_offset + divider_bar_size, height)
+        )
+        horizontal_offset += divider_bar_size
     # Add batch
     draw = ImageDraw.Draw(footer)
     font_path = os.path.join(os.path.dirname(inkid.__file__), 'assets', 'fonts', 'Roboto-Regular.ttf')
