@@ -107,7 +107,7 @@ def get_descriptive_statistics(tensor):
     ])
 
 
-def rclone_transfer_to_remote(rclone_remote, output_path):
+def rclone_transfer_to_remote(rclone_remote, output_path, move=False):
     folders = []
     path = os.path.abspath(output_path)
     while True:
@@ -134,14 +134,25 @@ def rclone_transfer_to_remote(rclone_remote, output_path):
         while folders.pop(0) != rclone_remote:
             continue
 
-        command = [
-            'rclone',
-            'move',
-            '-v',
-            '--delete-empty-src-dirs',
-            output_path,
-            rclone_remote + ':' + os.path.join(*folders)
-        ]
+        if move:
+            command = [
+                'rclone',
+                '--transfers=32', '--checkers=16', '--drive-chunk-size=16384k', '--drive-upload-cutoff=16384k',
+                'move',
+                '-v',
+                '--delete-empty-src-dirs',
+                output_path,
+                rclone_remote + ':' + os.path.join(*folders)
+            ]
+        else:
+            command = [
+                'rclone',
+                '--transfers=32', '--checkers=16', '--drive-chunk-size=16384k', '--drive-upload-cutoff=16384k',
+                'copy',
+                '-v',
+                output_path,
+                rclone_remote + ':' + os.path.join(*folders)
+            ]
         logging.info(' '.join(command))
         subprocess.call(command)
 
