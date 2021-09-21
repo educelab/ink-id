@@ -102,8 +102,7 @@ def iterations_in_job_dir(job_dir, ppm_name=None):
 def create_tensorboard_plots(base_dir, out_dir):
     out_dir = os.path.join(out_dir, 'plots')
     os.makedirs(out_dir, exist_ok=True)
-    guidance = STORE_EVERYTHING_SIZE_GUIDANCE
-    multiplexer = EventMultiplexer(size_guidance=guidance).AddRunsFromDirectory(base_dir)
+    multiplexer = EventMultiplexer(size_guidance=STORE_EVERYTHING_SIZE_GUIDANCE).AddRunsFromDirectory(base_dir)
     multiplexer.Reload()
     scalars = []
     for run in multiplexer.Runs():
@@ -744,7 +743,7 @@ def main():
                             prediction_type = re.search(r'.*_prediction_\d+_\d+_(.*)\.png', name).group(1)
                         elif re.match('.*_prediction_final', name):
                             iteration_str = 'final'
-                            prediction_type = re.search(r'.*_prediction_\d+_final_(.*)\.png', name).group(1)
+                            prediction_type = re.search(r'.*_prediction_final_(.*)\.png', name).group(1)
                         if prediction_type is not None and prediction_type not in region_info['iterations_found']:
                             region_info['iterations_found'][prediction_type] = list()
                             iterations_encountered_by_prediction_type[prediction_type] = dict()
