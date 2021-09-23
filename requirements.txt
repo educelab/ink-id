@@ -20,7 +20,7 @@ humanize==3.11.0
 idna==3.2
 imageio==2.9.0
 imagesize==1.2.0
--e git+git@code.cs.uky.edu:seales-research/ink-id.git@ee0a8912310c038090c6b913c643c78295ceb625#egg=inkid
+-e git+git@code.cs.uky.edu:seales-research/ink-id.git@0dba6eea2582f8521b6eeaa11f0562c29abed453#egg=inkid
 isort==5.9.3
 Jinja2==3.0.1
 joblib==1.0.1
@@ -35,6 +35,7 @@ mccabe==0.6.1
 numpy==1.21.2
 oauthlib==3.1.1
 packaging==21.0
+pandas==1.3.3
 Pillow==8.3.2
 platformdirs==2.3.0
 protobuf==3.17.3
@@ -57,6 +58,7 @@ six==1.16.0
 smmap==4.0.0
 snowballstemmer==2.1.0
 Sphinx==4.2.0
+sphinx-rtd-theme==1.0.0
 sphinxcontrib-applehelp==1.0.2
 sphinxcontrib-devhelp==1.0.2
 sphinxcontrib-htmlhelp==2.0.0
