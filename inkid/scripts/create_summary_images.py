@@ -195,6 +195,16 @@ class JobMetadata:
                         return source.get(label_key)
         return None
 
+    def get_mask_image_path(self, ppm_path, invert_normals):
+        for metadata in self.job_metadatas.values():
+            for dataset in metadata['Data'].values():
+                for source in dataset.values():
+                    if source.get('ppm') == ppm_path \
+                            and source.get('invert_normals') == invert_normals \
+                            and source.get('mask') is not None:
+                        return source.get('mask')
+        return None
+
 
 def merge_imgs(paths, bounding_boxes, image_label_as, sets_to_label, rectangle_line_width):
     merged_img = None
@@ -529,6 +539,19 @@ def build_footer_img(width, height, iteration, label_type,
     return footer
 
 
+def try_get_img_from_data_files(img_path):
+    img = None
+    if os.path.isfile(img_path):
+        img = Image.open(img_path)
+    # If not there, maybe it is on the local machine under ~/data.
+    elif '/pscratch/seales_uksr/' in img_path:
+        img_path = img_path.replace('/pscratch/seales_uksr/', '')
+        img_path = os.path.join(Path.home(), 'data', img_path)
+        if os.path.isfile(img_path):
+            img = Image.open(img_path)
+    return img
+
+
 def build_frame(iteration, job_metadata, prediction_type, max_size=None,
                 region_sets_to_include=None, region_sets_to_label=None, cmap_name=None,
                 superimpose_all_jobs=False):
@@ -604,17 +627,11 @@ def build_frame(iteration, job_metadata, prediction_type, max_size=None,
             warnings.warn(f'Unknown prediction type {prediction_type}', RuntimeWarning)
             break
         label_img_path = job_metadata.get_label_image_path(ppm_path, invert_normals, label_key)
+        mask_img_path = job_metadata.get_mask_image_path(ppm_path, invert_normals)
         if label_img_path is not None:
             # Try getting label image file from recorded location (may not exist on this machine)
-            label_img = None
-            if os.path.isfile(label_img_path):
-                label_img = Image.open(label_img_path)
-            # If not there, maybe it is on the local machine under ~/data.
-            elif '/pscratch/seales_uksr/' in label_img_path:
-                label_img_path = label_img_path.replace('/pscratch/seales_uksr/', '')
-                label_img_path = os.path.join(Path.home(), 'data', label_img_path)
-                if os.path.isfile(label_img_path):
-                    label_img = Image.open(label_img_path)
+            label_img = try_get_img_from_data_files(label_img_path)
+            mask_img = try_get_img_from_data_files(mask_img_path)
             if label_img is not None:
                 if cmap_name is not None:
                     color_map = cm.get_cmap(cmap_name)
@@ -631,7 +648,12 @@ def build_frame(iteration, job_metadata, prediction_type, max_size=None,
                         width_pad_offset + len(job_dirs) * col_width + (len(job_dirs) + 1) * buffer_size,
                         sum(row_heights[:face_i]) + (face_i + 2) * buffer_size
                     )
-                frame.paste(label_img, offset)
+                if mask_img is not None:
+                    mask_img = mask_img.convert('L')
+                    mask_img = mask_img.point(lambda x: x > 0, mode='1')
+                    frame.paste(label_img, offset, mask=mask_img)
+                else:
+                    frame.paste(label_img, offset)
             elif not already_warned_about_missing_label_images:
                 warnings.warn(
                     'At least one label image not found, check if dataset locally available',
