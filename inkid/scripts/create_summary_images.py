@@ -425,7 +425,8 @@ def build_footer_img(width, height, iteration, label_type,
         WHITE,
         font=font_black
     )
-    horizontal_offset += font_w
+    batch_font_w = font_black.getsize(batch)[0] + 2 * buffer_size
+    horizontal_offset += max(font_w, batch_font_w)
     # Add divider bar
     footer.paste(
         LIGHT_GRAY,
