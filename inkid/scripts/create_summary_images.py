@@ -144,7 +144,8 @@ class JobMetadata:
         return unique_faces[['ppm_path', 'invert_normals']]
 
     def face_heights(self):
-        return list(self.faces().merge(self.regions_df).ppm_height)
+        region_per_face = self.regions_df.drop_duplicates(subset=['ppm_path', 'invert_normals'])
+        return list(self.faces().merge(region_per_face, how='left').ppm_height)
 
     def faces_list(self):
         return list(self.faces().to_records(index=False))
