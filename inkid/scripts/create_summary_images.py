@@ -144,14 +144,15 @@ class JobMetadata:
         return unique_faces[['ppm_path', 'invert_normals']]
 
     def face_heights(self):
-        return list(self.faces().merge(self.regions_df).ppm_height)
+        region_per_face = self.regions_df.drop_duplicates(subset=['ppm_path', 'invert_normals'])
+        return list(self.faces().merge(region_per_face, how='left').ppm_height)
 
     def faces_list(self):
         return list(self.faces().to_records(index=False))
 
     def get_face_prediction_image(self, job_dir, ppm_path, invert_normals, iteration, prediction_type,
                                   region_sets_to_include, region_sets_to_label, rectangle_line_width,
-                                  return_latest_if_not_found=True):
+                                  cmap_name, return_latest_if_not_found=True):
         """
         Return a prediction image of the specified iteration, job directory, and PPM.
 
@@ -183,7 +184,8 @@ class JobMetadata:
         image_paths = list(df.path)
         image_bounding_boxes = list(df.bounding_box)
         image_label_as = zip(list(df.training), list(df.prediction), list(df.validation))
-        return merge_imgs(image_paths, image_bounding_boxes, image_label_as, region_sets_to_label, rectangle_line_width)
+        return merge_imgs(image_paths, image_bounding_boxes, image_label_as, region_sets_to_label, rectangle_line_width,
+                          cmap_name)
 
     def get_label_image_path(self, ppm_path, invert_normals, label_key):
         for metadata in self.job_metadatas.values():
@@ -206,7 +208,7 @@ class JobMetadata:
         return None
 
 
-def merge_imgs(paths, bounding_boxes, image_label_as, sets_to_label, rectangle_line_width):
+def merge_imgs(paths, bounding_boxes, image_label_as, sets_to_label, rectangle_line_width, cmap_name):
     merged_img = None
     for path, bounding_box, (training, prediction, validation) in zip(paths, bounding_boxes, image_label_as):
         img = Image.open(path)
@@ -220,6 +222,12 @@ def merge_imgs(paths, bounding_boxes, image_label_as, sets_to_label, rectangle_l
             img = Image.fromarray(array)
         # Convert all to RGB since we might draw on them with color
         img = img.convert('RGB')
+        # Apply color map
+        if cmap_name is not None:
+            color_map = cm.get_cmap(cmap_name)
+            img = img.convert('L')
+            img_data = np.array(img)
+            img = Image.fromarray(np.uint8(color_map(img_data) * 255))
         # Paste onto merged image
         if merged_img is None:
             merged_img = img
@@ -425,7 +433,8 @@ def build_footer_img(width, height, iteration, label_type,
         WHITE,
         font=font_black
     )
-    horizontal_offset += font_w
+    batch_font_w = font_black.getsize(batch)[0] + 2 * buffer_size
+    horizontal_offset += max(font_w, batch_font_w)
     # Add divider bar
     footer.paste(
         LIGHT_GRAY,
@@ -590,7 +599,7 @@ def build_frame(iteration, job_metadata, prediction_type, max_size=None,
         for face_i, (ppm_path, invert_normals) in enumerate(job_metadata.faces_list()):
             img = job_metadata.get_face_prediction_image(
                 job_dir, ppm_path, invert_normals, iteration, prediction_type, region_sets_to_include,
-                region_sets_to_label, rectangle_line_width
+                region_sets_to_label, rectangle_line_width, cmap_name
             )
             if img is not None:
                 if superimpose_all_jobs:
@@ -603,11 +612,6 @@ def build_frame(iteration, job_metadata, prediction_type, max_size=None,
                         width_pad_offset + job_i * col_width + (job_i + 1) * buffer_size,
                         sum(row_heights[:face_i]) + (face_i + 2) * buffer_size
                     )
-                if cmap_name is not None:
-                    color_map = cm.get_cmap(cmap_name)
-                    img = img.convert('L')
-                    img_data = np.array(img)
-                    img = Image.fromarray(np.uint8(color_map(img_data) * 255))
                 # When merging all predictions for same PPM, we don't want to overwrite other
                 # predictions with the blank part of this image. So, only paste the parts of this
                 # image that actually have content.
