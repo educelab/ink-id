@@ -221,6 +221,12 @@ def merge_imgs(paths, bounding_boxes, image_label_as, sets_to_label, rectangle_l
             img = Image.fromarray(array)
         # Convert all to RGB since we might draw on them with color
         img = img.convert('RGB')
+        # Apply color map
+        if cmap_name is not None:
+            color_map = cm.get_cmap(cmap_name)
+            img = img.convert('L')
+            img_data = np.array(img)
+            img = Image.fromarray(np.uint8(color_map(img_data) * 255))
         # Paste onto merged image
         if merged_img is None:
             merged_img = img
@@ -228,11 +234,6 @@ def merge_imgs(paths, bounding_boxes, image_label_as, sets_to_label, rectangle_l
             assert img.size == merged_img.size
             img = img.crop(bounding_box)
             merged_img.paste(img, (bounding_box[0], bounding_box[1]))
-        if cmap_name is not None:
-            color_map = cm.get_cmap(cmap_name)
-            merged_img = merged_img.convert('L')
-            merged_img_data = np.array(merged_img)
-            merged_img = Image.fromarray(np.uint8(color_map(merged_img_data) * 255))
         # Draw bounding boxes
         to_draw = {'training': training, 'prediction': prediction, 'validation': validation}
         for region_set_type, is_this_type in to_draw.items():
