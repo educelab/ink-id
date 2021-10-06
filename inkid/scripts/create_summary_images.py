@@ -126,7 +126,8 @@ class JobMetadata:
 
     def iterations_encountered(self, prediction_type: str) -> List[str]:
         filtered_images_df = self.prediction_images_df[self.prediction_images_df['prediction_type'] == prediction_type]
-        return sorted(filtered_images_df.iteration_str.values, key=iteration_str_sort_key)
+        unique_iterations = list(set(filtered_images_df.iteration_str.values))
+        return sorted(unique_iterations, key=iteration_str_sort_key)
 
     def last_iteration_seen(self, prediction_type: str) -> str:
         return self.iterations_encountered(prediction_type)[-1]
