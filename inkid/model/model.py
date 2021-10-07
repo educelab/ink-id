@@ -153,18 +153,16 @@ class Subvolume3DcnnDecoder(torch.nn.Module):
 
 
 class LinearInkDecoder(torch.nn.Module):
-    def __init__(self, drop_rate, input_shape, output_neurons):
+    def __init__(self, _, input_shape, output_neurons):  # Unnamed parameter is previously dropout
         super().__init__()
 
         self.fc = torch.nn.Linear(int(np.prod(input_shape)), output_neurons)
-        self.dropout = torch.nn.Dropout(p=drop_rate)
 
         self.flatten = torch.nn.Flatten()
 
     def forward(self, x):
         y = self.flatten(x)
         y = self.fc(y)
-        y = self.dropout(y)
         # Add some dimensions to match the dimensionality of label which is always 2D even if shape is (1, 1)
         y = torch.unsqueeze(y, 2)
         y = torch.unsqueeze(y, 3)
