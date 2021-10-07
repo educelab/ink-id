@@ -254,8 +254,7 @@ def main():
             shape=label_shape
         )
         metrics['rgb_values'] = {
-            # 'loss': nn.SmoothL1Loss(reduction='mean'),
-            'loss': nn.MSELoss(),
+            'loss': nn.SmoothL1Loss(reduction='mean'),
         }
     if 'autoencoded' in model.labels:
         metrics['autoencoded'] = {
@@ -394,6 +393,8 @@ def main():
                                     _, yb = yb.max(1)  # Argmax
                                 pred = preds[label_type]
                                 if label_type == 'rgb_values' and batch_num % args.summary_every_n_batches == 0:
+                                    logging.info(f'Label: {yb}')
+                                    logging.info(f'Pred: {pred}')
                                     mean_yb = torch.mean(yb)
                                     mean_pred = torch.mean(pred)
                                     logging.info(f'Label mean: {mean_yb}, pred mean: {mean_pred}')
