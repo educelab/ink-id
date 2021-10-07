@@ -254,7 +254,8 @@ def main():
             shape=label_shape
         )
         metrics['rgb_values'] = {
-            'loss': nn.SmoothL1Loss(reduction='mean'),
+            # 'loss': nn.SmoothL1Loss(reduction='mean'),
+            'loss': nn.MSELoss(),
         }
     if 'autoencoded' in model.labels:
         metrics['autoencoded'] = {
