@@ -392,6 +392,13 @@ def main():
                                 if label_type == 'ink_classes':
                                     _, yb = yb.max(1)  # Argmax
                                 pred = preds[label_type]
+                                if label_type == 'rgb_values' and batch_num % args.summary_every_n_batches == 0:
+                                    mean_yb = torch.mean(yb)
+                                    mean_pred = torch.mean(pred)
+                                    logging.info(f'Label mean: {mean_yb}, pred mean: {mean_pred}')
+                                    writer.add_scalar('label_mean', mean_yb, epoch * len(train_dl) + batch_num)
+                                    writer.add_scalar('pred_mean', mean_pred, epoch * len(train_dl) + batch_num)
+                                    writer.flush()
                                 for metric, fn in metrics[label_type].items():
                                     metric_result = fn(pred, yb)
                                     metric_results[label_type][metric].append(metric_result)
