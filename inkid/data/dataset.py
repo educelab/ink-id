@@ -228,20 +228,21 @@ class RegionSource(DataSource):
         return 0, 0, self._ppm.width, self._ppm.height
 
     def point_to_ink_classes_label(self, point, shape):
+        # 0 = no ink, 1 = ink
         assert self._ink_label is not None
         x, y = point
-        label = np.stack((np.ones(shape), np.zeros(shape))).astype(np.float32)  # Create array of no-ink labels
+        label = np.zeros(shape).astype(np.float32)  # Create array of no-ink labels
         y_d, x_d = np.array(shape) // 2  # Calculate distance from center to edges of square we are sampling
         # Iterate over label indices
         for idx, _ in np.ndenumerate(label):
-            _, y_idx, x_idx = idx
+            y_idx, x_idx = idx
             y_s = y - y_d + y_idx  # Sample point is center minus distance (half edge length) plus label index
             x_s = x - x_d + x_idx
             # Bounds check to make sure inside PPM
             if 0 <= y_s < self._ink_label.shape[0] and 0 <= x_s < self._ink_label.shape[1]:
                 if self._ink_label[y_s, x_s] != 0:
-                    label[:, y_idx, x_idx] = [0.0, 1.0]  # Mark this "ink"
-        return torch.Tensor(label)
+                    label[y_idx, x_idx] = 1.0  # Mark this "ink"
+        return torch.Tensor(label).long()
 
     def point_to_rgb_values_label(self, point, shape):
         assert self._rgb_label is not None

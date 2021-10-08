@@ -389,8 +389,6 @@ def main():
                             total_loss = None
                             for label_type in model.labels:
                                 yb = xb.clone() if label_type == 'autoencoded' else batch[label_type].to(device)
-                                if label_type == 'ink_classes':
-                                    _, yb = yb.max(1)  # Argmax
                                 pred = preds[label_type]
                                 for metric, fn in metrics[label_type].items():
                                     metric_result = fn(pred, yb)
