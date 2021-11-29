@@ -144,6 +144,15 @@ class PPM:
 
         self._data = new_data
 
+    def translate(self, dx: int, dy: int, dz: int) -> None:
+        for ppm_y in tqdm(range(self.height)):
+            for ppm_x in range(self.width):
+                if np.any(self._data[ppm_y, ppm_x]):  # Leave empty pixels unchanged
+                    vol_x, vol_y, vol_z = self._data[ppm_y, ppm_x, 0:3]
+                    self._data[ppm_y, ppm_x, 0] = vol_x + dx
+                    self._data[ppm_y, ppm_x, 1] = vol_y + dy
+                    self._data[ppm_y, ppm_x, 2] = vol_z + dz
+
     def write(self, filename):
         self.ensure_loaded()
 
