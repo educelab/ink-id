@@ -4,6 +4,7 @@ import json
 import os
 from pathlib import Path, PurePath
 import re
+from typing import List
 import warnings
 
 from humanize import naturalsize
@@ -11,6 +12,7 @@ import imageio
 from matplotlib import cm
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 from PIL import Image, ImageDraw, ImageFont
 import pygifsicle
 from scipy.signal import savgol_filter
@@ -20,12 +22,229 @@ from tqdm import tqdm
 
 import inkid
 
-# General note:
-# There is a lot of tedious string processing in this file. Parsing the
-# filenames to get the PPM, iteration, and epoch is annoying and fragile. It would
-# be better to use EXIF data or similar, perhaps integrated with Smeagol.
-# Or perhaps to develop the RegionSet class some more instead of relying so much
-# on directly reading the metadata dictionary.
+
+def iteration_str_sort_key(iteration):
+    if iteration == 'final':
+        epoch, batch = 10e9, 10e9
+    else:
+        epoch, batch = int(iteration.split('_')[0]), int(iteration.split('_')[1])
+    return epoch * 10e9 + batch
+
+
+def iteration_series_sort_key(iterations_series):
+    return np.array(list(map(iteration_str_sort_key, list(iterations_series))))
+
+
+class JobMetadata:
+    def __init__(self, directory):
+        # Get list of directories (not files) in given parent dir
+        possible_dirs = [os.path.join(directory, name) for name in os.listdir(directory)]
+        job_dirs = list(filter(is_job_dir, possible_dirs))
+        job_dirs = sorted(job_dirs, key=n_from_dir)
+        print('Found job directories:')
+        for d in job_dirs:
+            print(f'\t{d}')
+
+        self.job_metadatas = dict()
+        self.regions_df = pd.DataFrame(columns=[
+            'region_name', 'ppm_path', 'ppm_width', 'ppm_height', 'invert_normals', 'bounding_box',
+        ])
+        self.prediction_images_df = pd.DataFrame(columns=[
+            'path', 'region_name', 'iteration_str', 'prediction_type', 'job_dir', 'n_from_k_fold',
+            'training', 'prediction', 'validation',
+        ])
+
+        # Iterate through job dirs
+        for job_dir in job_dirs:
+            # Read the job metadata file (we use the region info)
+            metadata_filename = os.path.join(job_dir, 'metadata.json')
+            n_from_k_fold = n_from_dir(job_dir)
+            if not os.path.exists(metadata_filename):
+                print(f'No job metadata file found in {job_dir}')
+                return
+            with open(metadata_filename) as f:
+                metadata = json.loads(f.read())
+                self.job_metadatas[job_dir] = metadata
+
+            # Look in predictions directory to process prediction images
+            pred_dir = os.path.join(job_dir, 'predictions')
+            if os.path.isdir(pred_dir):
+                # Get all filenames in that directory
+                names = os.listdir(pred_dir)
+                # Filter out those that do not match the desired name format
+                names = list(filter(lambda name: re.match('.*_prediction_', name), names))
+                for name in names:
+                    image_path = os.path.join(pred_dir, name)
+                    # Get region name from image filename
+                    region_name = re.search('(.*)_prediction_', name).group(1)
+                    set_types, region_full_name, region_info = [], None, None
+                    # Find which of the possible datasets this region is in
+                    for set_type in ['training', 'prediction', 'validation']:
+                        regions = [r for r in metadata['Data'][set_type].keys() if region_name in r]
+                        if regions:
+                            set_types.append(set_type)
+                            # Also get its full name and its info from the metadata
+                            region_full_name = regions[0]
+                            region_info = metadata['Data'][set_type][region_full_name]
+                    # Make sure it actually appeared somewhere
+                    assert len(set_types) > 0 and region_full_name is not None and region_info is not None
+                    if region_name not in self.regions_df.region_name.values:
+                        ppm_size = Image.open(image_path).size
+                        self.regions_df = self.regions_df.append({
+                            'region_name': region_name,
+                            'ppm_path': region_info['ppm'],
+                            'ppm_width': ppm_size[0],
+                            'ppm_height': ppm_size[1],
+                            'invert_normals': region_info['invert_normals'],
+                            'bounding_box': tuple(region_info['bounding_box']),
+                        }, ignore_index=True)
+                    if re.match(r'.*_prediction_\d+_\d+', name):
+                        iteration_str = re.search(r'.*_prediction_(\d+_\d+)_.*\.png', name).group(1)
+                        prediction_type = re.search(r'.*_prediction_\d+_\d+_(.*)\.png', name).group(1)
+                    elif re.match('.*_prediction_final', name):
+                        iteration_str = 'final'
+                        prediction_type = re.search(r'.*_prediction_final_(.*)\.png', name).group(1)
+                    else:
+                        raise ValueError(f'Image filename {name} does not match expected format')
+                    self.prediction_images_df = self.prediction_images_df.append({
+                        'path': image_path,
+                        'region_name': region_name,
+                        'iteration_str': iteration_str,
+                        'prediction_type': prediction_type,
+                        'job_dir': job_dir,
+                        'n_from_k_fold': n_from_k_fold,
+                        'training': 'training' in set_types,
+                        'prediction': 'prediction' in set_types,
+                        'validation': 'validation' in set_types,
+                    }, ignore_index=True)
+
+    def prediction_images_found(self) -> bool:
+        return len(self.prediction_images_df) > 0
+
+    def prediction_types(self) -> List[str]:
+        return self.prediction_images_df.prediction_type.unique()
+
+    def iterations_encountered(self, prediction_type: str) -> List[str]:
+        filtered_images_df = self.prediction_images_df[self.prediction_images_df['prediction_type'] == prediction_type]
+        unique_iterations = list(set(filtered_images_df.iteration_str.values))
+        return sorted(unique_iterations, key=iteration_str_sort_key)
+
+    def last_iteration_seen(self, prediction_type: str) -> str:
+        return self.iterations_encountered(prediction_type)[-1]
+
+    def job_dirs(self) -> List[str]:
+        return sorted(self.prediction_images_df.job_dir.unique(), key=n_from_dir)
+
+    def max_image_width(self):
+        return self.prediction_images_df.merge(self.regions_df).ppm_width.max()
+
+    def faces(self):
+        """Where 'face' is a (ppm, invert_normals) unique pair"""
+        merged = self.prediction_images_df.merge(self.regions_df)
+        unique_faces = merged.groupby(['ppm_path', 'invert_normals'], as_index=False).first()
+        return unique_faces[['ppm_path', 'invert_normals']]
+
+    def face_heights(self):
+        region_per_face = self.regions_df.drop_duplicates(subset=['ppm_path', 'invert_normals'])
+        return list(self.faces().merge(region_per_face, how='left').ppm_height)
+
+    def faces_list(self):
+        return list(self.faces().to_records(index=False))
+
+    def get_face_prediction_image(self, job_dir, ppm_path, invert_normals, iteration, prediction_type,
+                                  region_sets_to_include, region_sets_to_label, rectangle_line_width,
+                                  cmap_name, return_latest_if_not_found=True):
+        """
+        Return a prediction image of the specified iteration, job directory, and PPM.
+
+        If such an image does not exist return None.
+        """
+        df = self.prediction_images_df.merge(self.regions_df)
+        # Filter to only those from this job, on this face and correct prediction type
+        df = df.loc[
+            (df['job_dir'] == job_dir)
+            & (df['ppm_path'] == ppm_path)
+            & (df['invert_normals'] == invert_normals)
+            & (df['prediction_type'] == prediction_type)
+        ]
+        if return_latest_if_not_found:
+            # Sort by iteration
+            df = df.sort_values('iteration_str', key=iteration_series_sort_key)
+            # Filter out those past the iteration we are looking for
+            df = df.loc[(iteration_series_sort_key(df['iteration_str']) <= iteration_str_sort_key(iteration))]
+            # Get the last one from each region
+            df = df.groupby(['region_name'], as_index=False).last()
+        else:
+            df = df.loc[(df['iteration_str'] == iteration)]
+        # Filter out those which aren't from the requested region types (training, prediction, validation)
+        if region_sets_to_include is not None:
+            filtered_dfs = []
+            for region_set_type in region_sets_to_include:
+                filtered_dfs.append(df[df[region_set_type]])
+            df = pd.concat(filtered_dfs, ignore_index=True).drop_duplicates(ignore_index=True)
+        image_paths = list(df.path)
+        image_bounding_boxes = list(df.bounding_box)
+        image_label_as = zip(list(df.training), list(df.prediction), list(df.validation))
+        return merge_imgs(image_paths, image_bounding_boxes, image_label_as, region_sets_to_label, rectangle_line_width,
+                          cmap_name)
+
+    def get_label_image_path(self, ppm_path, invert_normals, label_key):
+        for metadata in self.job_metadatas.values():
+            for dataset in metadata['Data'].values():
+                for source in dataset.values():
+                    if source.get('ppm') == ppm_path \
+                            and source.get('invert_normals') == invert_normals \
+                            and source.get(label_key) is not None:
+                        return source.get(label_key)
+        return None
+
+    def get_mask_image_path(self, ppm_path, invert_normals):
+        for metadata in self.job_metadatas.values():
+            for dataset in metadata['Data'].values():
+                for source in dataset.values():
+                    if source.get('ppm') == ppm_path \
+                            and source.get('invert_normals') == invert_normals \
+                            and source.get('mask') is not None:
+                        return source.get('mask')
+        return None
+
+
+def merge_imgs(paths, bounding_boxes, image_label_as, sets_to_label, rectangle_line_width, cmap_name):
+    merged_img = None
+    for path, bounding_box, (training, prediction, validation) in zip(paths, bounding_boxes, image_label_as):
+        img = Image.open(path)
+        if bounding_box is None:
+            bounding_box = (0, 0, img.width, img.height)
+        # For some images (grayscale PNGs in my experience so far), Pillow opens them as 32-bit integer images and
+        # then clips them to 8-bit in later stages, creating washed out images. If it has opened an image as 32-bit
+        # we detect and convert it here, so it is not clipped later.
+        if img.mode == 'I':
+            array = np.uint8(np.array(img) / 256)
+            img = Image.fromarray(array)
+        # Convert all to RGB since we might draw on them with color
+        img = img.convert('RGB')
+        # Apply color map
+        if cmap_name is not None:
+            color_map = cm.get_cmap(cmap_name)
+            img = img.convert('L')
+            img_data = np.array(img)
+            img = Image.fromarray(np.uint8(color_map(img_data) * 255))
+        # Paste onto merged image
+        if merged_img is None:
+            merged_img = img
+        else:
+            assert img.size == merged_img.size
+            img = img.crop(bounding_box)
+            merged_img.paste(img, (bounding_box[0], bounding_box[1]))
+        # Draw bounding boxes
+        to_draw = {'training': training, 'prediction': prediction, 'validation': validation}
+        for region_set_type, is_this_type in to_draw.items():
+            if is_this_type and region_set_type in sets_to_label:
+                d = ImageDraw.Draw(merged_img)
+                color = region_set_type_to_color[region_set_type]
+                d.rectangle(bounding_box, outline=color, fill=None, width=rectangle_line_width)
+    return merged_img
+
 
 # We might issue this warning but only need to do it once
 already_warned_about_missing_label_images = False
@@ -36,13 +255,16 @@ DARK_GRAY = (64, 64, 64)
 RED = (255, 0, 0)
 BLUE = (0, 0, 255)
 YELLOW = (255, 255, 0)
-region_type_to_color = {'training': RED, 'prediction': YELLOW, 'validation': BLUE}
+region_set_type_to_color = {'training': RED, 'prediction': YELLOW, 'validation': BLUE}
 
 
-# Return whether the given directory matches the expected structure for a job dir.
-# For example we often want a list of the k-fold subdirs in a directory but do not want
-# e.g. previous summary subdirs, or others.
 def is_job_dir(dirname):
+    """
+    Return whether this directory matches the expected structure for a job dir.
+
+    For example we often want a list of the k-fold subdirs in a directory but do not want e.g. previous summary
+    subdirs, or others.
+    """
     # k-fold job
     if is_k_fold_dir(dirname):
         return True
@@ -54,15 +276,18 @@ def is_job_dir(dirname):
     return False
 
 
-# Sometimes we want to know specifically if it is a k-fold job directory
 def is_k_fold_dir(dirname):
+    """Return whether this directory is a k-fold job directory."""
     dirname = os.path.basename(dirname)
     return re.match(r'.*\d\d\d\d-\d\d-\d\d_\d\d\.\d\d\.\d\d_(\d+)$', dirname)
 
 
-# Return which k-fold job this directory corresponds to (if any, -1 otherwise).
-# For the purpose of sorting a list of dirs based on job #.
-def k_from_dir(dirname):
+def n_from_dir(dirname):
+    """
+    Return which k-fold job this directory corresponds to (if any, -1 otherwise).
+
+    For the purpose of sorting a list of dirs based on job #.
+    """
     # Only has a valid k-fold # if it matches this particular format
     if is_k_fold_dir(dirname):
         # Return the last number in the dirname, which is the k-fold #
@@ -72,34 +297,11 @@ def k_from_dir(dirname):
         return -1
 
 
-# Return a set of all iterations encountered in a k-fold directory
-# Optionally restrict to those of only a particular PPM
-def iterations_in_job_dir(job_dir, ppm_name=None):
-    iterations = set()
-    # Look in predictions directory to get all iterations from prediction images
-    pred_dir = os.path.join(job_dir, 'predictions')
-    if os.path.isdir(pred_dir):
-        # Get all filenames in that directory
-        names = os.listdir(pred_dir)
-        # Filter out those that do not match the desired name format
-        if ppm_name is not None:
-            names = list(filter(lambda x: re.match(f'{ppm_name}_prediction_.*', x), names))
-        else:
-            names = list(filter(lambda x: re.match('.*_prediction_', x), names))
-        for name in names:
-            if re.match(r'.*_prediction_\d+_(\d+)', name):
-                iterations.add(re.search(r'.*_prediction_\d+_(\d+)', name).group(1))
-            elif re.match('.*_prediction_final', name):
-                iterations.add('final')
-    return sort_iterations(iterations)
-
-
 # Reading Tensorboard files similar to this method https://stackoverflow.com/a/41083104
 def create_tensorboard_plots(base_dir, out_dir):
     out_dir = os.path.join(out_dir, 'plots')
     os.makedirs(out_dir, exist_ok=True)
-    guidance = STORE_EVERYTHING_SIZE_GUIDANCE
-    multiplexer = EventMultiplexer(size_guidance=guidance).AddRunsFromDirectory(base_dir)
+    multiplexer = EventMultiplexer(size_guidance=STORE_EVERYTHING_SIZE_GUIDANCE).AddRunsFromDirectory(base_dir)
     multiplexer.Reload()
     scalars = []
     for run in multiplexer.Runs():
@@ -113,7 +315,7 @@ def create_tensorboard_plots(base_dir, out_dir):
             make_this_plot = True
             for run in multiplexer.Runs():
                 run_path = PurePath(run)
-                label = k_from_dir(run_path.parts[0])
+                label = n_from_dir(run_path.parts[0])
                 if label == -1:
                     label = run_path.parts[0]
                 accumulator = multiplexer.GetAccumulator(run)
@@ -146,51 +348,6 @@ def create_tensorboard_plots(base_dir, out_dir):
                 fig.savefig(os.path.join(out_dir, f'{title}.png'))
 
 
-# Return a prediction image of the specified iteration, job directory,
-# and PPM. If such an image does not exist return None
-def get_prediction_image(iteration, job_dir, ppm_name, return_latest_if_not_found=True):
-    filename = f'{ppm_name}_prediction_{iteration}.png'
-    full_filename = os.path.join(job_dir, 'predictions', filename)
-    img = None
-    if os.path.isfile(full_filename):
-        img = Image.open(full_filename)
-    elif return_latest_if_not_found:
-        ret_iteration = None
-        # We did not find original file. Check to see if the requested iteration
-        # is greater than any we have. If so, return the greatest one we have.
-        iterations = iterations_in_job_dir(job_dir, ppm_name)
-        if len(iterations) == 0:
-            return None
-        if iteration == 'final':
-            ret_iteration = iterations[-1]
-        else:
-            # Remove 'final' if present
-            numeric_iterations = [i for i in iterations if i != 'final']
-            # Get int(yyy) from 'xxx_yyy'
-            numeric_iterations = [int(i.split('_')[1]) for i in numeric_iterations]
-            # Do the same with requested iteration
-            int_iteration = int(iteration.split('_')[1])
-            # If requested is beyond any we have, return the last one we have
-            if len(numeric_iterations) > 0 and int_iteration > max(numeric_iterations):
-                ret_iteration = iterations[-1]
-        if ret_iteration is not None:
-            filename = f'{ppm_name}_prediction_{ret_iteration}.png'
-            full_filename = os.path.join(job_dir, 'predictions', filename)
-            if os.path.isfile(full_filename):
-                img = Image.open(full_filename)
-    if img is not None:
-        # For some images (grayscale PNGs in my experience so far), Pillow opens them as
-        # 32-bit integer images and then clips them to 8-bit in later stages, creating
-        # washed out images. If it has opened an image as 32-bit we detect and convert it
-        # here, so it is not clipped later.
-        if img.mode == 'I':
-            array = np.uint8(np.array(img) / 256)
-            img = Image.fromarray(array)
-        # Convert all to RGB since we might draw on them with color
-        img = img.convert('RGB')
-    return img
-
-
 def build_footer_img(width, height, iteration, label_type,
                      regions_shown, regions_to_label, cmap_name=None):
     footer = Image.new('RGB', (width, height))
@@ -214,12 +371,48 @@ def build_footer_img(width, height, iteration, label_type,
             (horizontal_offset, 0, horizontal_offset + divider_bar_size, height)
         )
         horizontal_offset += divider_bar_size
-    # Add iteration/batch #
+    # Add epoch
+    if iteration != 'final':
+        draw = ImageDraw.Draw(footer)
+        font_path = os.path.join(os.path.dirname(inkid.__file__), 'assets', 'fonts', 'Roboto-Regular.ttf')
+        fontsize = 1
+        font_regular = ImageFont.truetype(font_path, fontsize)
+        txt = 'eooch'  # Hack as I don't want it to care about 'p' sticking down
+        allowed_font_height = int((height - buffer_size * 3) / 2)
+        while font_regular.getsize(txt)[1] < allowed_font_height:
+            fontsize += 1
+            font_regular = ImageFont.truetype(font_path, fontsize)
+        fontsize -= 1
+        txt = 'epoch'
+        draw.text(
+            (horizontal_offset + buffer_size, buffer_size),
+            txt,
+            WHITE,
+            font=font_regular
+        )
+        font_w = font_regular.getsize(txt)[0] + 2 * buffer_size
+        font_path_black = os.path.join(os.path.dirname(inkid.__file__), 'assets', 'fonts', 'Roboto-Black.ttf')
+        font_black = ImageFont.truetype(font_path_black, fontsize)
+        epoch = '' if iteration == 'final' else re.search(r'(\d+)_\d+', iteration).group(1)
+        draw.text(
+            (horizontal_offset + buffer_size, allowed_font_height + 2 * buffer_size),
+            epoch,
+            WHITE,
+            font=font_black
+        )
+        horizontal_offset += font_w
+        # Add divider bar
+        footer.paste(
+            LIGHT_GRAY,
+            (horizontal_offset, 0, horizontal_offset + divider_bar_size, height)
+        )
+        horizontal_offset += divider_bar_size
+    # Add batch
     draw = ImageDraw.Draw(footer)
     font_path = os.path.join(os.path.dirname(inkid.__file__), 'assets', 'fonts', 'Roboto-Regular.ttf')
     fontsize = 1
     font_regular = ImageFont.truetype(font_path, fontsize)
-    txt = 'training batch'
+    txt = 'batch'
     allowed_font_height = int((height - buffer_size * 3) / 2)
     while font_regular.getsize(txt)[1] < allowed_font_height:
         fontsize += 1
@@ -234,15 +427,15 @@ def build_footer_img(width, height, iteration, label_type,
     font_w = font_regular.getsize(txt)[0] + 2 * buffer_size
     font_path_black = os.path.join(os.path.dirname(inkid.__file__), 'assets', 'fonts', 'Roboto-Black.ttf')
     font_black = ImageFont.truetype(font_path_black, fontsize)
-    if re.match(r'\d+_\d+', iteration):
-        iteration = re.search(r'\d+_(\d+)', iteration).group(1)
+    batch = 'final' if iteration == 'final' else re.search(r'\d+_(\d+)', iteration).group(1)
     draw.text(
         (horizontal_offset + buffer_size, allowed_font_height + 2 * buffer_size),
-        iteration,
+        batch,
         WHITE,
         font=font_black
     )
-    horizontal_offset += font_w
+    batch_font_w = font_black.getsize(batch)[0] + 2 * buffer_size
+    horizontal_offset += max(font_w, batch_font_w)
     # Add divider bar
     footer.paste(
         LIGHT_GRAY,
@@ -343,7 +536,7 @@ def build_footer_img(width, height, iteration, label_type,
             y0 -= int(buffer_size / 2)
             x1 += int(buffer_size / 2)
             y1 += int(buffer_size / 2)
-            color = region_type_to_color[region_type]
+            color = region_set_type_to_color[region_type]
             draw = ImageDraw.Draw(footer)
             draw.rectangle((x0, y0, x1, y1), outline=color, fill=None, width=int(height / 40))
     horizontal_offset += font_w + 2 * buffer_size
@@ -356,21 +549,34 @@ def build_footer_img(width, height, iteration, label_type,
     return footer
 
 
-def build_frame(iteration, job_dir_to_metadata, ppms, label_type, max_size=None,
-                regions_to_include=None, regions_to_label=None, cmap_name=None,
-                merge_all_of_same_ppm=False):
+def try_get_img_from_data_files(img_path):
+    img = None
+    if os.path.isfile(img_path):
+        img = Image.open(img_path)
+    # If not there, maybe it is on the local machine under ~/data.
+    elif '/pscratch/seales_uksr/' in img_path:
+        img_path = img_path.replace('/pscratch/seales_uksr/', '')
+        img_path = os.path.join(Path.home(), 'data', img_path)
+        if os.path.isfile(img_path):
+            img = Image.open(img_path)
+    return img
+
+
+def build_frame(iteration, job_metadata, prediction_type, max_size=None,
+                region_sets_to_include=None, region_sets_to_label=None, cmap_name=None,
+                superimpose_all_jobs=False):
     global already_warned_about_missing_label_images
 
-    if regions_to_include is None:
-        regions_to_include = ['training', 'prediction', 'validation']
-    if regions_to_label is None:
-        regions_to_label = []
+    if region_sets_to_include is None:
+        region_sets_to_include = ['training', 'prediction', 'validation']
+    if region_sets_to_label is None:
+        region_sets_to_label = []
 
-    job_dirs = job_dir_to_metadata.keys()
-    col_width = max([ppm['size'][0] for ppm in ppms.values()])
-    row_heights = [ppm['size'][1] for ppm in ppms.values()]
+    job_dirs = job_metadata.job_dirs()
+    col_width = job_metadata.max_image_width()
+    row_heights = job_metadata.face_heights()
     buffer_size = int(col_width / 10)
-    if merge_all_of_same_ppm:
+    if superimpose_all_jobs:
         width = col_width * 2 + buffer_size * 3  # Only need space for one result column plus label column
     else:
         width = col_width * (len(job_dirs) + 1) + buffer_size * (len(job_dirs) + 2)
@@ -390,90 +596,69 @@ def build_frame(iteration, job_dir_to_metadata, ppms, label_type, max_size=None,
     # Add prediction images
     # One column at a time
     for job_i, job_dir in enumerate(job_dirs):
-        # Get metadata for this job
-        metadata = job_dir_to_metadata[job_dir]
         # Make each row of this column
-        for ppm_i, (ppm_name, ppm) in enumerate(ppms.items()):
-            img = get_prediction_image(iteration, job_dir, ppm_name)
+        for face_i, (ppm_path, invert_normals) in enumerate(job_metadata.faces_list()):
+            img = job_metadata.get_face_prediction_image(
+                job_dir, ppm_path, invert_normals, iteration, prediction_type, region_sets_to_include,
+                region_sets_to_label, rectangle_line_width, cmap_name
+            )
             if img is not None:
-                if merge_all_of_same_ppm:
+                if superimpose_all_jobs:
                     offset = (
                         width_pad_offset + buffer_size,
-                        sum(row_heights[:ppm_i]) + (ppm_i + 2) * buffer_size
+                        sum(row_heights[:face_i]) + (face_i + 2) * buffer_size
                     )
                 else:
                     offset = (
                         width_pad_offset + job_i * col_width + (job_i + 1) * buffer_size,
-                        sum(row_heights[:ppm_i]) + (ppm_i + 2) * buffer_size
+                        sum(row_heights[:face_i]) + (face_i + 2) * buffer_size
                     )
-                if cmap_name is not None:
-                    color_map = cm.get_cmap(cmap_name)
-                    img = img.convert('L')
-                    img_data = np.array(img)
-                    img = Image.fromarray(np.uint8(color_map(img_data) * 255))
-                # Only keep those regions we are interested in
-                new_img = Image.new('RGB', (img.width, img.height))
-                region_set = metadata['Region set']['regions']
-                for region_type, regions in region_set.items():
-                    if region_type in regions_to_include:
-                        for region in regions:
-                            if 'bounds' not in region:
-                                region['bounds'] = (0, 0, img.width, img.height)
-                            region_img = img.crop(region['bounds'])
-                            new_img.paste(region_img, (region['bounds'][0], region['bounds'][1]))
-                for region_type in regions_to_label:
-                    regions = region_set[region_type]
-                    for region in regions:
-                        if region['ppm'] == ppm_name:
-                            if 'bounds' not in region:
-                                region['bounds'] = (0, 0, img.width, img.height)
-                            draw = ImageDraw.Draw(new_img)
-                            color = region_type_to_color[region_type]
-                            draw.rectangle(region['bounds'], outline=color, fill=None, width=rectangle_line_width)
                 # When merging all predictions for same PPM, we don't want to overwrite other
                 # predictions with the blank part of this image. So, only paste the parts of this
                 # image that actually have content.
-                mask = new_img.convert('L')
+                mask = img.convert('L')
                 mask = mask.point(lambda x: x > 0, mode='1')
-                frame.paste(new_img, offset, mask=mask)
+                frame.paste(img, offset, mask=mask)
 
     # Add label column
-    for ppm_i, ppm in enumerate(ppms.values()):
-        if label_type == 'rgb_values':
-            label_key = 'rgb-label'
-        elif label_type == 'ink_classes':
-            label_key = 'ink-label'
+    for face_i, (ppm_path, invert_normals) in enumerate(job_metadata.faces_list()):
+        if prediction_type == 'rgb_values':
+            label_key = 'rgb_label'
+        elif prediction_type == 'ink_classes':
+            label_key = 'ink_label'
+        elif prediction_type == 'volcart_texture':
+            label_key = 'volcart_texture_label'
         else:
+            warnings.warn(f'Unknown prediction type {prediction_type}', RuntimeWarning)
             break
-        label_img_path = ppm.get(label_key)
+        label_img_path = job_metadata.get_label_image_path(ppm_path, invert_normals, label_key)
+        mask_img_path = job_metadata.get_mask_image_path(ppm_path, invert_normals)
         if label_img_path is not None:
             # Try getting label image file from recorded location (may not exist on this machine)
-            label_img = None
-            if os.path.isfile(label_img_path):
-                label_img = Image.open(label_img_path)
-            # If not there, maybe it is on the local machine under ~/data.
-            elif '/pscratch/seales_uksr/' in label_img_path:
-                label_img_path = label_img_path.replace('/pscratch/seales_uksr/', '')
-                label_img_path = os.path.join(Path.home(), 'data', label_img_path)
-                if os.path.isfile(label_img_path):
-                    label_img = Image.open(label_img_path)
+            label_img = try_get_img_from_data_files(label_img_path)
+            mask_img = try_get_img_from_data_files(mask_img_path)
             if label_img is not None:
                 if cmap_name is not None:
                     color_map = cm.get_cmap(cmap_name)
                     label_img = label_img.convert('L')
                     img_data = np.array(label_img)
                     label_img = Image.fromarray(np.uint8(color_map(img_data) * 255))
-                if merge_all_of_same_ppm:
+                if superimpose_all_jobs:
                     offset = (
                         width_pad_offset + col_width + buffer_size * 2,
-                        sum(row_heights[:ppm_i]) + (ppm_i + 2) * buffer_size
+                        sum(row_heights[:face_i]) + (face_i + 2) * buffer_size
                     )
                 else:
                     offset = (
                         width_pad_offset + len(job_dirs) * col_width + (len(job_dirs) + 1) * buffer_size,
-                        sum(row_heights[:ppm_i]) + (ppm_i + 2) * buffer_size
+                        sum(row_heights[:face_i]) + (face_i + 2) * buffer_size
                     )
-                frame.paste(label_img, offset)
+                if mask_img is not None:
+                    mask_img = mask_img.convert('L')
+                    mask_img = mask_img.point(lambda x: x > 0, mode='1')
+                    frame.paste(label_img, offset, mask=mask_img)
+                else:
+                    frame.paste(label_img, offset)
             elif not already_warned_about_missing_label_images:
                 warnings.warn(
                     'At least one label image not found, check if dataset locally available',
@@ -482,7 +667,7 @@ def build_frame(iteration, job_dir_to_metadata, ppms, label_type, max_size=None,
                 already_warned_about_missing_label_images = True
 
     # Make column headers
-    if merge_all_of_same_ppm:
+    if superimpose_all_jobs:
         draw = ImageDraw.Draw(frame)
         font_path = os.path.join(os.path.dirname(inkid.__file__), 'assets', 'fonts', 'Roboto-Regular.ttf')
         fontsize = 1
@@ -539,7 +724,7 @@ def build_frame(iteration, job_dir_to_metadata, ppms, label_type, max_size=None,
     fontsize -= 1
     txt = 'Label image'
     offset_for_centering = int((col_width - font_regular.getsize(txt)[0]) / 2)
-    if merge_all_of_same_ppm:
+    if superimpose_all_jobs:
         offset = (
             width_pad_offset + col_width + buffer_size * 2 + offset_for_centering,
             int(buffer_size * 0.5)
@@ -557,8 +742,8 @@ def build_frame(iteration, job_dir_to_metadata, ppms, label_type, max_size=None,
     )
 
     # Add footer
-    footer = build_footer_img(width, footer_height, iteration, label_type,
-                              regions_to_include, regions_to_label, cmap_name)
+    footer = build_footer_img(width, footer_height, iteration, prediction_type,
+                              region_sets_to_include, region_sets_to_label, cmap_name)
     frame.paste(footer, (0, height - footer_height))
 
     # Downsize image while keeping aspect ratio
@@ -581,7 +766,7 @@ def create_animation(filename, fps, iterations, write_sequence, *args, **kwargs)
 def write_img_sequence(animation, outdir):
     if len(animation) == 0:
         return
-    print('\nWriting training image sequence to', outdir)
+    print('\nWriting image sequence to', outdir)
     prefix = os.path.join(outdir, "sequence_")
     for i, img in enumerate(animation):
         outfile = prefix + str(i) + ".png"
@@ -591,7 +776,7 @@ def write_img_sequence(animation, outdir):
 def write_gif(animation, outfile, fps=10):
     if len(animation) == 0:
         return
-    print('\nWriting training gif to', outfile)
+    print('\nWriting gif to', outfile)
     durations = [1 / fps] * len(animation)
     # Make the last frame hold for longer.
     durations[-1] = 5
@@ -606,17 +791,6 @@ def write_gif(animation, outfile, fps=10):
     new_size = os.path.getsize(outfile)
     reduction = (prev_size - new_size) / prev_size * 100
     print(f'Size reduced {reduction:.2f}% from {naturalsize(prev_size)} to {naturalsize(new_size)}')
-
-
-def sort_iterations(iterations):
-    has_final = 'final' in iterations
-    if has_final:
-        iterations.remove('final')
-    iterations = sorted(list(map(int, iterations)))
-    iterations = ['0_' + str(i) for i in iterations]
-    if has_final:
-        iterations.append('final')
-    return iterations
 
 
 def main():
@@ -635,131 +809,65 @@ def main():
     out_dir = os.path.join(args.dir, out_dir)
     os.makedirs(out_dir, exist_ok=True)
 
-    # Get list of directories (not files) in given parent dir
-    possible_dirs = [os.path.join(args.dir, name) for name in os.listdir(args.dir)]
-    job_dirs = list(filter(is_job_dir, possible_dirs))
-    job_dirs = sorted(job_dirs, key=k_from_dir)
-    print('Found job directories:')
-    for d in job_dirs:
-        print(f'\t{d}')
-
-    # Get PPM data, and list of all iterations encountered across jobs (some might have more than others)
-    # Start by storing a dict where we map the directory name to the metadata for that job
-    job_dir_to_metadata = dict()
-    ppms_from_metadata = None
-    # Iterate through job dirs
-    for job_dir in job_dirs:
-        # Read the metadata file and store each of them (we need the region info
-        # from all job directories)
-        metadata_file = os.path.join(job_dir, 'metadata.json')
-        if not os.path.exists(metadata_file):
-            print(f'No job metadata file found in {job_dir}')
-            return
-        with open(metadata_file) as f:
-            metadata = json.loads(f.read())
-            job_dir_to_metadata[job_dir] = metadata
-
-        # Useful to separately store just the PPM info (should be same across all jobs)
-        ppms_from_metadata = list(job_dir_to_metadata.values())[0]['Region set']['ppms']
-
-        # Look in predictions directory to get all iterations from prediction images
-        pred_dir = os.path.join(job_dir, 'predictions')
-        if os.path.isdir(pred_dir):
-            # Get all filenames in that directory
-            names = os.listdir(pred_dir)
-            # Filter out those that do not match the desired name format
-            names = list(filter(lambda name: re.match('.*_prediction_', name), names))
-            for name in names:
-                # Get PPM filename from image filename
-                ppm_filename = re.search('(.*)_prediction_', name).group(1)
-                # Note PPM size based on image size. Would get this from the PPM file
-                # headers, but those are not necessarily on the machine this script is run on.
-                for ppm_name, ppm in ppms_from_metadata.items():
-                    # Locate correct PPM in the metadata
-                    if ppm_name == ppm_filename:
-                        # Only add size information if we haven't already
-                        if 'size' not in ppm:
-                            image_path = os.path.join(pred_dir, name)
-                            ppm['size'] = Image.open(image_path).size
-                        # Extract iteration name from each image
-                        if 'iterations' not in ppm:
-                            ppm['iterations'] = []
-                        iteration = None
-                        if re.match(r'.*_prediction_\d+_(\d+)', name):
-                            iteration = re.search(r'.*_prediction_\d+_(\d+)', name).group(1)
-                        elif re.match('.*_prediction_final', name):
-                            iteration = 'final'
-                        if iteration is not None and iteration not in ppm['iterations']:
-                            ppm['iterations'].append(iteration)
-    # Remove those PPMs that had no prediction images generated
-    ppms_from_metadata = {k: v for k, v in ppms_from_metadata.items() if 'size' in v}
-    print(f'\nFound PPMs with prediction images:')
-    for ppm in ppms_from_metadata.keys():
-        print(f'\t{ppm}, size: {ppms_from_metadata[ppm]["size"]}')
-
-    encountered_iterations = set()
-    for ppm in ppms_from_metadata.values():
-        if 'iterations' in ppm:
-            for iteration in ppm['iterations']:
-                encountered_iterations.add(iteration)
-    encountered_iterations = sort_iterations(encountered_iterations)
-
-    label_type = metadata.get('Arguments').get('label_type')
+    job_metadata = JobMetadata(args.dir)
 
     # Tensorboard
     print('\nCreating Tensorboard plots...')
     create_tensorboard_plots(args.dir, out_dir)
     print('done.')
 
-    if len(encountered_iterations) == 0:
+    if not job_metadata.prediction_images_found():
         print('No iterations encountered in prediction folders. No images will be produced.')
         return
-    last_iteration_seen = encountered_iterations[-1]
 
-    # Static images
-    print('\nCreating final static image with all regions...')
-    final_frame = build_frame(last_iteration_seen, job_dir_to_metadata, ppms_from_metadata, label_type,
-                              args.static_max_size, regions_to_label=['training'])
-    final_frame.save(os.path.join(out_dir, f'{last_iteration_seen}_all.png'))
-    print('done.')
+    for prediction_type in job_metadata.prediction_types():
+        last_iteration_seen = job_metadata.last_iteration_seen(prediction_type)
 
-    print('\nCreating final static image with only prediction regions...')
-    final_frame = build_frame(last_iteration_seen, job_dir_to_metadata, ppms_from_metadata, label_type,
-                              args.static_max_size, regions_to_include=['prediction'],
-                              merge_all_of_same_ppm=True)
-    final_frame.save(os.path.join(out_dir, f'{last_iteration_seen}_prediction.png'))
-    print('done.')
-
-    # Color map images
-    color_maps_dir = os.path.join(out_dir, 'colormaps')
-    os.makedirs(color_maps_dir, exist_ok=True)
-    for cmap in ['plasma', 'viridis', 'hot', 'inferno', 'seismic', 'Spectral', 'coolwarm', 'bwr']:
-        print(f'\nCreating final static image with all regions and color map: {cmap}...')
-        final_frame = build_frame(last_iteration_seen, job_dir_to_metadata, ppms_from_metadata, label_type,
-                                  args.static_max_size, cmap_name=cmap, regions_to_label=['training'])
-        final_frame.save(os.path.join(color_maps_dir, f'{last_iteration_seen}_all_{cmap}.png'))
+        # Static images
+        print(f'\nCreating final static {prediction_type} image with all regions...')
+        final_frame = build_frame(last_iteration_seen, job_metadata, prediction_type,
+                                  args.static_max_size, region_sets_to_label=['training'])
+        final_frame.save(os.path.join(out_dir, f'{prediction_type}_{last_iteration_seen}_all.png'))
         print('done.')
 
-        print(f'\nCreating final static image with prediction regions and color map: {cmap}...')
-        final_frame = build_frame(last_iteration_seen, job_dir_to_metadata, ppms_from_metadata, label_type,
-                                  args.static_max_size, cmap_name=cmap, regions_to_include=['prediction'],
-                                  merge_all_of_same_ppm=True)
-        final_frame.save(os.path.join(color_maps_dir, f'{last_iteration_seen}_prediction_{cmap}.png'))
+        print(f'\nCreating final static {prediction_type} image with only prediction regions...')
+        final_frame = build_frame(last_iteration_seen, job_metadata, prediction_type,
+                                  args.static_max_size, region_sets_to_include=['prediction'],
+                                  superimpose_all_jobs=True)
+        final_frame.save(os.path.join(out_dir, f'{prediction_type}_{last_iteration_seen}_prediction.png'))
         print('done.')
 
-    # Gifs
-    print('\nCreating animation with all regions:')
-    create_animation(os.path.join(out_dir, 'animation_all'), args.gif_fps, encountered_iterations,
-                     args.img_seq, job_dir_to_metadata,
-                     ppms_from_metadata, label_type, args.gif_max_size,
-                     regions_to_label=['training'])
+        # Color map images
+        color_maps_dir = os.path.join(out_dir, 'colormaps')
+        os.makedirs(color_maps_dir, exist_ok=True)
+        for cmap in ['plasma', 'viridis', 'hot', 'inferno', 'seismic', 'Spectral', 'coolwarm', 'bwr']:
+            print(f'\nCreating final static {prediction_type} image with all regions and color map: {cmap}...')
+            final_frame = build_frame(last_iteration_seen, job_metadata, prediction_type,
+                                      args.static_max_size, cmap_name=cmap, region_sets_to_label=['training'])
+            final_frame.save(os.path.join(color_maps_dir, f'{prediction_type}_{last_iteration_seen}_all_{cmap}.png'))
+            print('done.')
 
-    print('\nCreating animation with only prediction regions:')
-    create_animation(os.path.join(out_dir, 'animation_prediction'), args.gif_fps, encountered_iterations,
-                     args.img_seq, job_dir_to_metadata,
-                     ppms_from_metadata, label_type, args.gif_max_size,
-                     regions_to_include=['prediction'],
-                     merge_all_of_same_ppm=True)
+            print(f'\nCreating final static {prediction_type} image with prediction regions and color map: {cmap}...')
+            final_frame = build_frame(last_iteration_seen, job_metadata, prediction_type,
+                                      args.static_max_size, cmap_name=cmap, region_sets_to_include=['prediction'],
+                                      superimpose_all_jobs=True)
+            final_frame.save(
+                os.path.join(color_maps_dir, f'{prediction_type}_{last_iteration_seen}_prediction_{cmap}.png'))
+            print('done.')
+
+        # Gifs
+        print(f'\nCreating {prediction_type} animation with all regions:')
+        create_animation(os.path.join(out_dir, f'{prediction_type}_animation_all'), args.gif_fps,
+                         job_metadata.iterations_encountered(prediction_type),
+                         args.img_seq, job_metadata, prediction_type, args.gif_max_size,
+                         region_sets_to_label=['training'])
+
+        print('\nCreating animation with only prediction regions:')
+        create_animation(os.path.join(out_dir, f'{prediction_type}_animation_prediction'), args.gif_fps,
+                         job_metadata.iterations_encountered(prediction_type),
+                         args.img_seq, job_metadata, prediction_type, args.gif_max_size,
+                         region_sets_to_include=['prediction'],
+                         superimpose_all_jobs=True)
 
 
 if __name__ == '__main__':

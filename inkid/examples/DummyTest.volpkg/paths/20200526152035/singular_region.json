@@ -1,0 +1,20 @@
+{
+  "ppms": {
+    "textSurface": {
+      "path": "textSurface.ppm",
+      "volume": "../../volumes/20200526145449",
+      "mask": "textSurface_mask.png",
+      "ink-label": "textSurface_ink-mask.png",
+      "rgb-label": "textSurface_rgb-mask.png"
+    }
+  },
+  "regions": {
+    "prediction": [],
+    "validation": [],
+    "training": [
+      {
+        "ppm": "textSurface"
+      }
+    ]
+  }
+}

@@ -56,8 +56,18 @@ def auc(pred, yb):
 def metrics_dict(metric_results):
     with warnings.catch_warnings():  # Sometimes we will take the mean of all NaNs. This is fine, just return NaN.
         warnings.simplefilter("ignore")
-        return {k: np.nanmean([float(i) for i in v]) for k, v in metric_results.items()}
+        result_dict = {}
+        for label_type in metric_results:
+            for k, v in metric_results[label_type].items():
+                result_dict[f'{label_type}_{k}'] = np.nanmean([float(i) for i in v])
+        return result_dict
 
 
 def metrics_str(metric_results):
     return ' '.join([k + ': ' + f'{v:5.2g}' for k, v in metrics_dict(metric_results).items()])
+
+
+def weight_loss(weight: float, loss: callable):
+    def new_loss_func(pred, yb):
+        return weight * loss(pred, yb)
+    return new_loss_func

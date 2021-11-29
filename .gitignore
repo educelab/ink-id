@@ -1,6 +1,3 @@
-# Job output files
-*.out
-
 .DS_Store
 feat_cache/
 *__pycache__/
@@ -8,9 +5,9 @@ feat_cache/
 *.sif
 
 build/
-data/
+dist/
+public/
 !inkid/data/
-out/
 *.egg-info
 .vscode
 env/
@@ -24,7 +21,7 @@ Pipfile*
 test/
 
 # Cython
-inkid/data/volume.html
+inkid/data/*.html
 *.c
 *.so
 

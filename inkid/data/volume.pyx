@@ -8,27 +8,51 @@ cimport libc.math as math
 import logging
 import os
 import random
-from typing import Dict
+from typing import Dict, Optional
 
-import mathutils
 import numpy as np
 cimport numpy as cnp
 from PIL import Image
 from tqdm import tqdm
 
+cimport inkid.data.mathutils as mathutils
 
-cdef BasisVectors get_basis_from_square(square_corners):
+import inkid.ops
+
+cpdef norm(vec):
+    vec = np.array(vec)
+    return (vec[0]**2 + vec[1]**2 + vec[2]**2)**(1./2)
+
+cpdef normalize_fl3(vec):
+    vec = np.array(vec)
+    n = norm(vec)
+    return vec / n
+
+cpdef BasisVectors get_basis_from_square(square_corners):
+    cdef BasisVectors basis
+    cdef float x_vec[3]
+    cdef float y_vec[3]
+    cdef float z_vec[3]
+    mathutils.zero_v3(z_vec)
+
     top_left, top_right, bottom_left, bottom_right = np.array(square_corners)
 
-    x_vec = ((top_right - top_left) + (bottom_right - bottom_left)) / 2.0
-    y_vec = ((bottom_left - top_left) + (bottom_right - top_right)) / 2.0
-    z_vec = np.cross(x_vec, y_vec)
+    x_vec_np = ((top_right - top_left) + (bottom_right - bottom_left)) / 2.0
+    y_vec_np = ((bottom_left - top_left) + (bottom_right - top_right)) / 2.0
 
-    x_vec = mathutils.Vector(x_vec.tolist()).normalized()
-    y_vec = mathutils.Vector(y_vec.tolist()).normalized()
-    z_vec = mathutils.Vector(z_vec.tolist()).normalized()
+    x_vec[0] = x_vec_np[0]
+    x_vec[1] = x_vec_np[1]
+    x_vec[2] = x_vec_np[2]
 
-    cdef BasisVectors basis
+    y_vec[0] = y_vec_np[0]
+    y_vec[1] = y_vec_np[1]
+    y_vec[2] = y_vec_np[2]
+
+    mathutils.cross_v3_v3v3(z_vec, x_vec, y_vec)
+
+    mathutils.normalize_v3(x_vec)
+    mathutils.normalize_v3(y_vec)
+    mathutils.normalize_v3(z_vec)
 
     basis.x.x = x_vec[0]
     basis.x.y = x_vec[1]
@@ -45,7 +69,7 @@ cdef BasisVectors get_basis_from_square(square_corners):
     return basis
 
 
-cdef BasisVectors get_component_vectors_from_normal(Float3 n):
+cpdef BasisVectors get_component_vectors_from_normal(const Float3 n):
     """Get a subvolume oriented based on a surface normal vector.
 
     Calculate the rotation needed to align the z axis of the
@@ -57,23 +81,35 @@ cdef BasisVectors get_component_vectors_from_normal(Float3 n):
     https://docs.blender.org/api/blender_python_api_current/mathutils.html
 
     """
-    x_vec = mathutils.Vector([1, 0, 0])
-    y_vec = mathutils.Vector([0, 1, 0])
-    z_vec = mathutils.Vector([0, 0, 1])
-    normal = mathutils.Vector([n.x, n.y, n.z]).normalized()
-
-    quaternion = z_vec.rotation_difference(normal)
-
-    x_vec.rotate(quaternion)
-    y_vec.rotate(quaternion)
-    z_vec.rotate(quaternion)
-
     cdef BasisVectors basis
-    
+    cdef float x_vec[3]
+    cdef float y_vec[3]
+    cdef float z_vec[3]
+    cdef float normal[3]
+    cdef float quaternion[4]
+
+    mathutils.zero_v3(x_vec)
+    x_vec[0] = 1.0
+    mathutils.zero_v3(y_vec)
+    y_vec[1] = 1.0
+    mathutils.zero_v3(z_vec)
+    z_vec[2] = 1.0
+
+    normal[0] = n.x
+    normal[1] = n.y
+    normal[2] = n.z
+    mathutils.normalize_v3(normal)
+
+    mathutils.vector_rotation_difference(quaternion, z_vec, normal)
+
+    mathutils.rotate(x_vec, x_vec, quaternion)
+    mathutils.rotate(y_vec, y_vec, quaternion)
+    mathutils.rotate(z_vec, z_vec, quaternion)
+
     basis.x.x = x_vec[0]
     basis.x.y = x_vec[1]
     basis.x.z = x_vec[2]
-    
+
     basis.y.x = y_vec[0]
     basis.y.y = y_vec[1]
     basis.y.z = y_vec[2]
@@ -103,12 +139,12 @@ cdef class Volume:
     - Volume shapes are (z, y, x)
 
     """
-    cdef unsigned short [:, :, :] _data_view
+    cdef const unsigned short [:, :, :] _data_view
     cdef int shape_z, shape_y, shape_x
     cdef dict _metadata
-    cdef float _voxelsize
+    cdef float _voxelsize_um
 
-    initialized_volumes: Dict[str, Volume] = dict()
+    initialized_volumes = dict()  # Dict[str, Volume]
 
     @classmethod
     def from_path(cls, path: str) -> Volume:
@@ -136,7 +172,7 @@ cdef class Volume:
         else:
             with open(metadata_filename) as f:
                 self._metadata = json.loads(f.read())
-        self._voxelsize = self._metadata['voxelsize']
+        self._voxelsize_um = self._metadata['voxelsize']
         self.shape_z = self._metadata['slices']
         self.shape_y = self._metadata['height']
         self.shape_x = self._metadata['width']
@@ -157,7 +193,9 @@ cdef class Volume:
         logging.info('Loading volume slices from {}...'.format(slices_path))
         for slice_i, slice_file in tqdm(list(enumerate(slice_files))):
             if data is None:
-                w, h = Image.open(slice_file).size
+                img = Image.open(slice_file)
+                w, h = img.size
+                img.close()
                 d = len(slice_files)
                 data = np.empty((d, h, w), dtype=np.uint16)
             data[slice_i, :, :] = np.array(Image.open(slice_file), dtype=np.uint16).copy()
@@ -167,6 +205,24 @@ cdef class Volume:
             slices_path,
             data.shape
         ))
+
+    def z_slice(self, int idx):
+        if 0 <= idx < self.shape_z:
+            return inkid.ops.uint16_to_float32_normalized_0_1(self._data_view[idx, :, :])
+        else:
+            return np.zeros((self.shape_y, self.shape_x), dtype=np.float32)
+
+    def y_slice(self, int idx):
+        if 0 <= idx < self.shape_y:
+            return inkid.ops.uint16_to_float32_normalized_0_1(self._data_view[:, idx, :])
+        else:
+            return np.zeros((self.shape_z, self.shape_x), dtype=np.float32)
+
+    def x_slice(self, int idx):
+        if 0 <= idx < self.shape_x:
+            return inkid.ops.uint16_to_float32_normalized_0_1(self._data_view[:, :, idx])
+        else:
+            return np.zeros((self.shape_z, self.shape_y), dtype=np.float32)
 
     cdef unsigned short intensity_at(self, int x, int y, int z) nogil:
         """Get the intensity value at a voxel position."""
@@ -214,33 +270,6 @@ cdef class Volume:
 
         c = <unsigned short>(c0 * (1 - dz) + c1 * dz)
         return c
-
-    def get_voxel_vector(self, center, normal, length_in_each_direction, out_of_bounds):
-        """Get a voxel vector from within the volume."""
-        assert len(center) == 3
-        assert len(normal) == 3
-
-        normal = mathutils.Vector(normal).normalized()
-
-        if out_of_bounds is None:
-            out_of_bounds = 'all_zeros'
-        assert out_of_bounds in ['all_zeros', 'partial_zeros', 'index_error']
-
-        center = np.array(center)
-
-        voxel_vector = []
-
-        try:
-            for i in range(-length_in_each_direction, length_in_each_direction + 1):
-                x, y, z = center + i * normal
-                voxel_vector.append(self.interpolate_at(x, y, z))
-            return voxel_vector
-
-        except IndexError:
-            if out_of_bounds == 'all_zeros':
-                return [0.0] * (length_in_each_direction * 2 + 1)
-            else:
-                raise IndexError
 
     cpdef get_subvolume_snap_to_axis_aligned(self,
                                              center,
@@ -310,9 +339,9 @@ cdef class Volume:
         subvolume_voxel_size_microns.y = shape_microns.y / shape_voxels.y
         subvolume_voxel_size_microns.z = shape_microns.z / shape_voxels.z
 
-        subvolume_voxel_size_volume_voxel_size_ratio.x = subvolume_voxel_size_microns.x / self._voxelsize
-        subvolume_voxel_size_volume_voxel_size_ratio.y = subvolume_voxel_size_microns.y / self._voxelsize
-        subvolume_voxel_size_volume_voxel_size_ratio.z = subvolume_voxel_size_microns.z / self._voxelsize
+        subvolume_voxel_size_volume_voxel_size_ratio.x = subvolume_voxel_size_microns.x / self._voxelsize_um
+        subvolume_voxel_size_volume_voxel_size_ratio.y = subvolume_voxel_size_microns.y / self._voxelsize_um
+        subvolume_voxel_size_volume_voxel_size_ratio.z = subvolume_voxel_size_microns.z / self._voxelsize_um
         
         for z in range(shape_voxels.z):
             for y in range(shape_voxels.y):
@@ -359,9 +388,9 @@ cdef class Volume:
         subvolume_voxel_size_microns.y = shape_microns.y / shape_voxels.y
         subvolume_voxel_size_microns.z = shape_microns.z / shape_voxels.z
 
-        subvolume_voxel_size_volume_voxel_size_ratio.x = subvolume_voxel_size_microns.x / self._voxelsize
-        subvolume_voxel_size_volume_voxel_size_ratio.y = subvolume_voxel_size_microns.y / self._voxelsize
-        subvolume_voxel_size_volume_voxel_size_ratio.z = subvolume_voxel_size_microns.z / self._voxelsize
+        subvolume_voxel_size_volume_voxel_size_ratio.x = subvolume_voxel_size_microns.x / self._voxelsize_um
+        subvolume_voxel_size_volume_voxel_size_ratio.y = subvolume_voxel_size_microns.y / self._voxelsize_um
+        subvolume_voxel_size_volume_voxel_size_ratio.z = subvolume_voxel_size_microns.z / self._voxelsize_um
         
         for z in range(shape_voxels.z):
             for y in range(shape_voxels.y):
@@ -440,7 +469,7 @@ cdef class Volume:
         # If shape_microns not specified, fall back to the old method
         # (spatial extent based only on number of voxels and not voxel size)
         if shape_microns is None:
-            shape_microns = list(np.array(shape_voxels) * self._voxelsize)
+            shape_microns = list(np.array(shape_voxels) * self._voxelsize_um)
 
         assert len(shape_microns) == 3
 
@@ -448,9 +477,9 @@ cdef class Volume:
         # TODO if empty return zeros?
 
         if normal is None:
-            normal = mathutils.Vector((0, 0, 1))
+            normal = np.array([0, 0, 1])
         else:
-            normal = mathutils.Vector(normal).normalized()
+            normal = normalize_fl3(normal)
 
         if out_of_bounds is None:
             out_of_bounds = 'all_zeros'
@@ -523,8 +552,8 @@ cdef class Volume:
 
         assert subvolume.shape == tuple(shape_voxels)
 
-        # Convert to float
-        subvolume = np.asarray(subvolume, np.float32)
+        # Convert to float normalized to [0, 1]
+        subvolume = inkid.ops.uint16_to_float32_normalized_0_1(subvolume)
         # Add singleton dimension for number of channels
         subvolume = np.expand_dims(subvolume, 0)
 

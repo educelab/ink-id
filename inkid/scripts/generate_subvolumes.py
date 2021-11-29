@@ -1,26 +1,24 @@
 import argparse
-import functools
 import math
 import numpy as np
 import os
+import sys
 
 import torch
 
 import inkid
 
 
-def main():
+def main(argv=None):
     parser = argparse.ArgumentParser()
-    parser.add_argument('input', help='Input region JSON')
-    parser.add_argument('output', help='Directory to hold output subvolumes')
+    parser.add_argument('--input-set', metavar='path', nargs='*', help='input dataset(s)', default=[])
+    parser.add_argument('--output', help='directory to hold output subvolumes', required=True)
     parser.add_argument('--number', '-n', metavar='N', default=4, type=int,
                         help='number of subvolumes to keep')
-    parser.add_argument('--ink', action='store_true', help='Restrict to points on ink areas')
-    parser.add_argument('--no-ink', action='store_true', help='Restrict to points not on ink areas')
-    parser.add_argument('--ink-mask', help='Specify a different ink mask from the default in the region JSON',
-                        default=None)
+    parser.add_argument('--ink', action='store_true', help='restrict to points on ink areas')
+    parser.add_argument('--no-ink', action='store_true', help='restrict to points not on ink areas')
     parser.add_argument('--concat-subvolumes', action='store_true',
-                        help='Create one set of slices containing all subvolumes')
+                        help='create one set of slices containing all subvolumes')
     inkid.ops.add_subvolume_args(parser)
 
     # Data organization/augmentation
@@ -28,40 +26,17 @@ def main():
     parser.add_argument('--augmentation', action='store_true', dest='augmentation')
     parser.add_argument('--no-augmentation', action='store_false', dest='augmentation')
 
-    # Data region
-    parser.add_argument('-k', metavar='num', default=None, type=int,
-                        help='index of region to use for prediction and validation')
-    parser.add_argument('--region', metavar='name', default='all', 
-                        help='training, prediction, validation, or all',
-                        choices=[
-                            'training',
-                            'prediction',
-                            'validation',
-                            'all'
-                        ])
+    args = parser.parse_args(argv)
 
-    args = parser.parse_args()
+    # Make sure some sort of input is provided, else there is nothing to do
+    if len(args.input_set) == 0:
+        raise ValueError('Some --input-set must be specified.')
 
-
-    region_data = inkid.data.RegionSet.get_data_from_file(args.input)
     os.makedirs(args.output, exist_ok=True)
 
-    if args.ink_mask is not None:
-        for ppm in region_data['ppms']:
-            region_data['ppms'][ppm]['ink-label'] = args.ink_mask
-
-    # If k-fold job, remove kth region from training and put in prediction/validation sets
-    if args.k is not None:
-        k_region = region_data['regions']['training'].pop(int(args.k))
-        region_data['regions']['prediction'].append(k_region)
-        region_data['regions']['validation'].append(k_region)
-
-    region_set = inkid.data.RegionSet(region_data)
-
-    point_to_subvolume_input = functools.partial(
-        region_set.point_to_subvolume_input,
-        subvolume_shape_voxels=args.subvolume_shape_voxels,
-        subvolume_shape_microns=args.subvolume_shape_microns,
+    subvolume_args = dict(
+        shape_voxels=args.subvolume_shape_voxels,
+        shape_microns=args.subvolume_shape_microns,
         out_of_bounds='all_zeros',
         move_along_normal=args.move_along_normal,
         method=args.subvolume_method,
@@ -70,24 +45,15 @@ def main():
         jitter_max=args.jitter_max,
     )
 
-    if args.ink:
-        specify_inkness = True
-    elif args.no_ink:
-        specify_inkness = False
-    else:
-        specify_inkness = None
-
-    regions = ['training', 'validation', 'prediction'] if args.region == 'all' \
-                                                                else [args.region]
-
-    points_ds = inkid.data.PointsDataset(region_set, regions, point_to_subvolume_input,
-                                         specify_inkness=specify_inkness)
+    input_ds = inkid.data.Dataset(args.input_set, feature_args=subvolume_args)
 
     seed = 42
     np.random.seed(seed)
     torch.manual_seed(seed)
 
-    points_dl = torch.utils.data.DataLoader(points_ds, shuffle=True)
+    input_dl = None
+    if len(input_ds) > 0:
+        input_dl = torch.utils.data.DataLoader(input_ds, shuffle=True)
 
     square_side_length = math.ceil(math.sqrt(args.number))
     pad = 20
@@ -98,9 +64,10 @@ def main():
     concatenated_subvolumes = np.zeros(concatenated_shape)
 
     counter = 0
-    for subvolume in points_dl:
+    for batch in input_dl:
         if counter >= args.number:
             break
+        subvolume = batch['feature']
         subvolume = subvolume.numpy()[0][0]
         if args.concat_subvolumes:
             concat_x = (counter // square_side_length) * padded_shape_voxels[2]
