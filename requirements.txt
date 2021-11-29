@@ -46,6 +46,7 @@ pygifsicle==1.0.4
 Pygments==2.10.0
 pylint==2.10.2
 pyparsing==2.4.7
+PySide6==6.1.2
 pyrsistent==0.18.0
 python-dateutil==2.8.2
 pytz==2021.1
