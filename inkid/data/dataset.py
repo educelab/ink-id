@@ -11,6 +11,7 @@ import jsonschema
 import numpy as np
 from PIL import Image
 import torch
+import volcart as vc
 
 import inkid
 
@@ -87,6 +88,7 @@ class RegionSource(DataSource):
         # Initialize region's PPM, volume, etc
         self._ppm: inkid.data.PPM = inkid.data.PPM.from_path(self.data_dict['ppm'])
         self.volume: inkid.data.Volume = inkid.data.Volume.from_path(self.data_dict['volume'])
+        # TODO BINDINGS self.volume = vc.Volume(self.data_dict['volume'])
         self.bounding_box: Tuple[int, int, int, int] = self.data_dict['bounding_box'] or self.get_default_bounds()
         self._invert_normals: bool = self.data_dict['invert_normals']
 
