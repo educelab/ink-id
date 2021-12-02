@@ -98,14 +98,20 @@ class RegionSource(DataSource):
             im = Image.open(self.data_dict['ink_label']).convert('L')  # Allow RGB mode images
             self._ink_label = np.array(im)
         if self.data_dict['rgb_label'] is not None:
-            self._rgb_label = np.array(Image.open(self.data_dict['rgb_label']))
+            im = Image.open(self.data_dict['rgb_label'])
+            assert im.mode == 'RGB'
+            self._rgb_label = np.array(im).astype(np.float32)
+            # Make sure RGB image loaded wasn't more than 8 bit
+            assert np.amax(self._rgb_label) <= np.iinfo(np.uint8).max
+            # Map from [0, 255] to [0, 1]
+            self._rgb_label /= np.iinfo(np.uint8).max
         if self.data_dict['volcart_texture_label'] is not None:
             im = Image.open(self.data_dict['volcart_texture_label'])
             # Assuming image is uint16 data but Pillow loads it as uint32 ('I')
             assert im.mode == 'I'
             self._volcart_texture_label = np.array(im).astype(np.float32)
-            # Make sure the data isn't actually greater than uint16
-            assert np.amax(self._volcart_texture_label) <= np.iinfo(np.uint16).max
+            # Make sure data seems to be 16 bit (not a perfect check)
+            assert np.iinfo(np.uint8).max <= np.amax(self._volcart_texture_label) <= np.iinfo(np.uint16).max
             # Normalize to [0.0, 1.0]
             self._volcart_texture_label /= np.iinfo(np.uint16).max
 
@@ -302,12 +308,17 @@ class RegionSource(DataSource):
                     self._ink_classes_prediction_image[y_s, x_s] = v
                     self._ink_classes_prediction_image_written_to = True
                 elif label_type == 'rgb_values':
+                    # Rescale from [0, 1] to [0, 255]
+                    v = value * np.iinfo(np.uint8).max
                     # Restrict value to uint8 range
-                    v = np.clip(value, 0, np.iinfo(np.uint8).max)
+                    v = np.clip(v, 0, np.iinfo(np.uint8).max)
                     self._rgb_values_prediction_image[y_s, x_s] = v
                     self._rgb_values_prediction_image_written_to = True
                 elif label_type == 'volcart_texture':
+                    # Rescale from [0, 1]
                     v = value[0] * np.iinfo(np.uint16).max
+                    # Restrict value to uint16 range
+                    v = np.clip(v, 0, np.iinfo(np.uint16).max)
                     self._volcart_texture_prediction_image[y_s, x_s] = v
                     self._volcart_texture_prediction_image_written_to = True
                 else:
