@@ -98,8 +98,7 @@ class RegionSource(DataSource):
             im = Image.open(self.data_dict['ink_label']).convert('L')  # Allow RGB mode images
             self._ink_label = np.array(im)
         if self.data_dict['rgb_label'] is not None:
-            im = Image.open(self.data_dict['rgb_label'])
-            assert im.mode == 'RGB'
+            im = Image.open(self.data_dict['rgb_label']).convert('RGB')
             self._rgb_label = np.array(im).astype(np.float32)
             # Make sure RGB image loaded wasn't more than 8 bit
             assert np.amax(self._rgb_label) <= np.iinfo(np.uint8).max
