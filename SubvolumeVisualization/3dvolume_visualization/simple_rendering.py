@@ -121,7 +121,7 @@ def render_3D_volume_plotly(subvol, direction='z', color_choice="jet"):
     
 
 
-input_data = "/home/mhaya2/subvolume_sampler/PHercParisObjet59/Size_32_54_54/0"
+input_data = "/home/mhaya2/subvolume_sampler/PHercParisObjet59/Size_32_54_54/2"
 output_data = "/home/mhaya2/test"
 
 # Create output dir
@@ -173,7 +173,7 @@ print("image Files length: ", len(graphs))
 
 # At this point, there should be 6 images 
 
-img_size = (0,0) # (width, height)
+img_size = [0,0] # (width, height)
 
 # Only up to the first plotly image for calculating 
 # as the other plotly images will be added to the side.
@@ -187,8 +187,8 @@ for graph in graphs[0:4]:
 #print("width: ", img_width)
 #print("height: ", img_height)
 
-summary_img = Image.new('RGB', (img_width, img_height))
-current_pos = (0,0)
+summary_img = Image.new('RGB', (img_size[0], img_size[1]))
+current_pos = [0,0]
 
 ##  Stitch all graphs together
 # Matplotlib images
@@ -203,7 +203,7 @@ for graph in graphs[3:6]:
     # shift it to the side
     current_pos = (current_pos[0] + graph.width, current_pos[1])
 
-summary_img.save("test.png")
+summary_img.save("test2.png")
 
 for img in images:
     img.close()
