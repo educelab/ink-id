@@ -8,7 +8,7 @@ charset-normalizer==2.0.9
 cycler==0.11.0
 Cython==3.0.0a9
 dicttoxml==1.7.4
-fonttools==4.28.3
+fonttools==4.28.4
 gitdb==4.0.9
 GitPython==3.1.24
 google-auth==2.3.3
@@ -16,23 +16,25 @@ google-auth-oauthlib==0.4.6
 grpcio==1.42.0
 humanize==3.13.1
 idna==3.3
-imageio==2.13.2
+imageio==2.13.3
 importlib-metadata==4.8.2
--e git+https://code.cs.uky.edu/seales-research/ink-id.git@23ab3965b30f392f4e8a2200e84624cdb7446a06#egg=inkid
+-e git+ssh://git@code.cs.uky.edu/seales-research/ink-id.git@0898ae3de27926003d5fe6f21da1d5e32691286e#egg=inkid
 isort==5.10.1
 joblib==1.1.0
 jsmin==3.0.0
-jsonschema==4.2.1
+jsonschema==4.3.0
+kaleido==0.2.1
 kiwisolver==1.3.2
-lazy-object-proxy==1.6.0
+lazy-object-proxy==1.7.1
 Markdown==3.3.6
-matplotlib==3.5.0
+matplotlib==3.5.1
 mccabe==0.6.1
 numpy==1.21.4
 oauthlib==3.1.1
 packaging==21.3
-pandas==1.3.4
+pandas==1.3.5
 Pillow==8.4.0
+pkg_resources==0.0.0
 platformdirs==2.4.0
 plotly==5.4.0
 protobuf==3.19.1
@@ -43,7 +45,7 @@ pygifsicle==1.0.5
 pylint==2.12.2
 pyparsing==3.0.6
 pyrsistent==0.18.0
-PySide6==6.2.2
+PySide6==6.2.2.1
 python-dateutil==2.8.2
 pytz==2021.3
 requests==2.26.0
@@ -51,8 +53,7 @@ requests-oauthlib==1.3.0
 rsa==4.8
 scikit-learn==1.0.1
 scipy==1.7.3
-setuptools-scm==6.3.2
-shiboken6==6.2.2
+shiboken6==6.2.2.1
 six==1.16.0
 smmap==5.0.0
 tenacity==8.0.1
@@ -61,8 +62,7 @@ tensorboard-data-server==0.6.1
 tensorboard-plugin-wit==1.8.0
 threadpoolctl==3.0.0
 toml==0.10.2
-tomli==1.2.2
-torch==1.10.0
+torch==1.10.1
 torch-summary==1.4.5
 tqdm==4.62.3
 typing_extensions==4.0.1
