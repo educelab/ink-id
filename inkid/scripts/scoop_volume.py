@@ -6,11 +6,31 @@ reveal the next layer, so it can be better segmented (likely with Canny edge det
 """
 
 import argparse
+import multiprocessing
 from pathlib import Path
 
+from multiprocessing import Pool
 import numpy as np
 from PIL import Image
 from tqdm import tqdm
+
+
+def scoop(input_tuple: tuple) -> None:
+    filename, input_volume_dir, output_volume_dir, fill, jitter = input_tuple
+    projection_img = Image.open(filename).convert('RGB')
+    output_img = Image.open(input_volume_dir / f'{filename.stem}.tif').copy()
+    assert output_img.mode == 'I;16'
+    # Column by column
+    for x in range(projection_img.width):
+        # Within a column look for where the line intersects. Assume line has original width 1 but anti aliasing
+        # makes it width 3. So we find the first instance of color and then go one pixel further for line center.
+        for y in range(projection_img.height - 1, 0, -1):
+            rgb = projection_img.getpixel((x, y))
+            if len(set(rgb)) > 1:  # Check if there is more than 1 unique value within RGB values, indicating color
+                for inner_y in range(y - 1, projection_img.height):
+                    output_img.putpixel((x, inner_y), fill + np.random.randint(-jitter, jitter))
+                break  # On to the next column
+    output_img.save(output_volume_dir / f'{filename.stem}.tif')
 
 
 def main():
@@ -31,21 +51,11 @@ def main():
     output_volume_dir = Path(args.output_volume_dir)
     output_volume_dir.mkdir(exist_ok=True)
 
-    for filename in tqdm(sorted(list(projections_dir.glob('*.png')))):
-        projection_img = Image.open(filename).convert('RGB')
-        output_img = Image.open(input_volume_dir / f'{filename.stem}.tif').copy()
-        assert output_img.mode == 'I;16'
-        # Column by column
-        for x in range(projection_img.width):
-            # Within a column look for where the line intersects. Assume line has original width 1 but anti aliasing
-            # makes it width 3. So we find the first instance of color and then go one pixel further for line center.
-            for y in range(projection_img.height - 1, 0, -1):
-                rgb = projection_img.getpixel((x, y))
-                if len(set(rgb)) > 1:  # Check if there is more than 1 unique value within RGB values, indicating color
-                    for inner_y in range(y - 1, projection_img.height):
-                        output_img.putpixel((x, inner_y), args.fill + np.random.randint(-args.jitter, args.jitter))
-                    break  # On to the next column
-        output_img.save(output_volume_dir / f'{filename.stem}.tif')
+    projection_filenames = sorted(list(projections_dir.glob('*.png')))
+    with Pool(processes=multiprocessing.cpu_count() * 3 // 4) as p:
+        pool_args = [(f, input_volume_dir, output_volume_dir, args.fill, args.jitter) for f in projection_filenames]
+        for _ in tqdm(p.imap(scoop, pool_args), total=len(projection_filenames)):
+            pass
 
 
 if __name__ == '__main__':
