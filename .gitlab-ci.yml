@@ -14,7 +14,7 @@ singularity:
   script:
     - cp -r . /tmp/ink-id
     - singularity build inkid.sif singularity/inkid.def
-    - singularity run inkid.sif python -m unittest
+    # - singularity run inkid.sif python -m unittest  # Removed for now, as it won't run on Singularity inside Docker
   artifacts:
     paths:
       - inkid.sif
