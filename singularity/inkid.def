@@ -71,7 +71,9 @@ From: ubuntu:21.04
       `rm -f inkid.overlay && dd if=/dev/zero of=inkid.overlay bs=1M count=500 && mkfs.ext3 -F inkid.overlay  # Create a new overlay for the new container`
       `singularity shell --overlay inkid.overlay inkid.sif  # If you want to get into the container and make any changes to the code, or checkout another branch`
       `rclone copy -uv inkid.sif dri-experiments-drive:singularity-containers`  # If you want to update the shared .sif file
-      `cp inkid.sif `
+      `cp inkid.sif /project/seales_uksr/containers`
+      `chmod g+w /project/seales_uksr/containers/inkid.sif`
+      `chgrp seales_uksr /project/seales_uksr/containers/inkid.sif`
 
   Usage:
     - Any script or shell usage should first source the virtualenv: `. /usr/local/dri/ink-id/.venv/bin/activate`
