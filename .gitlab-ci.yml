@@ -14,6 +14,7 @@ singularity:
   script:
     - cp -r . /tmp/ink-id
     - singularity build inkid.sif singularity/inkid.def
+    - singularity run inkid.sif python -m unittest
   artifacts:
     paths:
       - inkid.sif
