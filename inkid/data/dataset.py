@@ -476,3 +476,6 @@ class Dataset(torch.utils.data.Dataset):
     def reset_predictions(self):
         for region in self.regions():
             region.reset_predictions()
+
+    def set_inkness(self, inkness: Optional[bool]):
+        self._set_for_all_sources('specify_inkness', inkness)
