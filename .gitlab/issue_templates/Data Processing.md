@@ -7,6 +7,7 @@ Consult the [Data preparation workflow](https://code.cs.uky.edu/seales-research/
 - [ ] Create .volpkg
 - [ ] Segment
 - [ ] Texture
+- [ ] Orient correctly
 - [ ] Align reference image
 - [ ] Create labels (ink mask and aligned image)
 - [ ] Create region set for this dataset
