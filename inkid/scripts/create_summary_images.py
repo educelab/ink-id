@@ -567,7 +567,7 @@ def try_get_img_from_data_files(img_path):
 
 def build_frame(iteration, job_metadata, prediction_type, max_size=None,
                 region_sets_to_include=None, region_sets_to_label=None, cmap_name=None,
-                superimpose_all_jobs=False):
+                superimpose_all_jobs=False, label_column=True):
     global already_warned_about_missing_label_images
 
     if region_sets_to_include is None:
@@ -580,9 +580,11 @@ def build_frame(iteration, job_metadata, prediction_type, max_size=None,
     row_heights = job_metadata.face_heights()
     buffer_size = int(col_width / 10)
     if superimpose_all_jobs:
-        width = col_width * 2 + buffer_size * 3  # Only need space for one result column plus label column
+        width = col_width + buffer_size * 2  # Only need space for one result column
     else:
-        width = col_width * (len(job_dirs) + 1) + buffer_size * (len(job_dirs) + 2)
+        width = col_width * len(job_dirs) + buffer_size * (len(job_dirs) + 1)
+    if label_column:
+        width += col_width + buffer_size
     height = sum(row_heights) + buffer_size * (len(row_heights) + 2)
     # Prevent weird aspect ratios
     width_pad_offset = 0
@@ -624,50 +626,51 @@ def build_frame(iteration, job_metadata, prediction_type, max_size=None,
                 frame.paste(img, offset, mask=mask)
 
     # Add label column
-    for face_i, (ppm_path, invert_normals) in enumerate(job_metadata.faces_list()):
-        if prediction_type == 'rgb_values':
-            label_key = 'rgb_label'
-        elif prediction_type == 'ink_classes':
-            label_key = 'ink_label'
-        elif prediction_type == 'volcart_texture':
-            label_key = 'volcart_texture_label'
-        else:
-            warnings.warn(f'Unknown prediction type {prediction_type}', RuntimeWarning)
-            break
-        label_img_path = job_metadata.get_label_image_path(ppm_path, invert_normals, label_key)
-        mask_img_path = job_metadata.get_mask_image_path(ppm_path, invert_normals)
-        if label_img_path is not None:
-            # Try getting label image file from recorded location (may not exist on this machine)
-            label_img = try_get_img_from_data_files(label_img_path)
-            mask_img = try_get_img_from_data_files(mask_img_path)
-            if label_img is not None:
-                if cmap_name is not None:
-                    color_map = cm.get_cmap(cmap_name)
-                    label_img = label_img.convert('L')
-                    img_data = np.array(label_img)
-                    label_img = Image.fromarray(np.uint8(color_map(img_data) * 255))
-                if superimpose_all_jobs:
-                    offset = (
-                        width_pad_offset + col_width + buffer_size * 2,
-                        sum(row_heights[:face_i]) + (face_i + 2) * buffer_size
+    if label_column:
+        for face_i, (ppm_path, invert_normals) in enumerate(job_metadata.faces_list()):
+            if prediction_type == 'rgb_values':
+                label_key = 'rgb_label'
+            elif prediction_type == 'ink_classes':
+                label_key = 'ink_label'
+            elif prediction_type == 'volcart_texture':
+                label_key = 'volcart_texture_label'
+            else:
+                warnings.warn(f'Unknown prediction type {prediction_type}', RuntimeWarning)
+                break
+            label_img_path = job_metadata.get_label_image_path(ppm_path, invert_normals, label_key)
+            mask_img_path = job_metadata.get_mask_image_path(ppm_path, invert_normals)
+            if label_img_path is not None:
+                # Try getting label image file from recorded location (may not exist on this machine)
+                label_img = try_get_img_from_data_files(label_img_path)
+                mask_img = try_get_img_from_data_files(mask_img_path)
+                if label_img is not None:
+                    if cmap_name is not None:
+                        color_map = cm.get_cmap(cmap_name)
+                        label_img = label_img.convert('L')
+                        img_data = np.array(label_img)
+                        label_img = Image.fromarray(np.uint8(color_map(img_data) * 255))
+                    if superimpose_all_jobs:
+                        offset = (
+                            width_pad_offset + col_width + buffer_size * 2,
+                            sum(row_heights[:face_i]) + (face_i + 2) * buffer_size
+                        )
+                    else:
+                        offset = (
+                            width_pad_offset + len(job_dirs) * col_width + (len(job_dirs) + 1) * buffer_size,
+                            sum(row_heights[:face_i]) + (face_i + 2) * buffer_size
+                        )
+                    if mask_img is not None:
+                        mask_img = mask_img.convert('L')
+                        mask_img = mask_img.point(lambda x: x > 0, mode='1')
+                        frame.paste(label_img, offset, mask=mask_img)
+                    else:
+                        frame.paste(label_img, offset)
+                elif not already_warned_about_missing_label_images:
+                    warnings.warn(
+                        'At least one label image not found, check if dataset locally available',
+                        RuntimeWarning
                     )
-                else:
-                    offset = (
-                        width_pad_offset + len(job_dirs) * col_width + (len(job_dirs) + 1) * buffer_size,
-                        sum(row_heights[:face_i]) + (face_i + 2) * buffer_size
-                    )
-                if mask_img is not None:
-                    mask_img = mask_img.convert('L')
-                    mask_img = mask_img.point(lambda x: x > 0, mode='1')
-                    frame.paste(label_img, offset, mask=mask_img)
-                else:
-                    frame.paste(label_img, offset)
-            elif not already_warned_about_missing_label_images:
-                warnings.warn(
-                    'At least one label image not found, check if dataset locally available',
-                    RuntimeWarning
-                )
-                already_warned_about_missing_label_images = True
+                    already_warned_about_missing_label_images = True
 
     # Make column headers
     if superimpose_all_jobs:
@@ -675,7 +678,7 @@ def build_frame(iteration, job_metadata, prediction_type, max_size=None,
         font_path = os.path.join(os.path.dirname(inkid.__file__), 'assets', 'fonts', 'Roboto-Regular.ttf')
         fontsize = 1
         font_regular = ImageFont.truetype(font_path, fontsize)
-        txt = f'Combined runs'
+        txt = f'Generated image'
         allowed_width = col_width
         while font_regular.getsize(txt)[0] < allowed_width and font_regular.getsize(txt)[1] < buffer_size:
             fontsize += 1
@@ -715,34 +718,35 @@ def build_frame(iteration, job_metadata, prediction_type, max_size=None,
                 WHITE,
                 font=font_regular
             )
-    draw = ImageDraw.Draw(frame)
-    font_path = os.path.join(os.path.dirname(inkid.__file__), 'assets', 'fonts', 'Roboto-Regular.ttf')
-    fontsize = 1
-    font_regular = ImageFont.truetype(font_path, fontsize)
-    txt = 'Label imaee'  # Hack because I don't want it to care about the part of the 'g' that sticks down
-    allowed_width = col_width
-    while font_regular.getsize(txt)[0] < allowed_width and font_regular.getsize(txt)[1] < buffer_size:
-        fontsize += 1
+    if label_column:
+        draw = ImageDraw.Draw(frame)
+        font_path = os.path.join(os.path.dirname(inkid.__file__), 'assets', 'fonts', 'Roboto-Regular.ttf')
+        fontsize = 1
         font_regular = ImageFont.truetype(font_path, fontsize)
-    fontsize -= 1
-    txt = 'Label image'
-    offset_for_centering = int((col_width - font_regular.getsize(txt)[0]) / 2)
-    if superimpose_all_jobs:
-        offset = (
-            width_pad_offset + col_width + buffer_size * 2 + offset_for_centering,
-            int(buffer_size * 0.5)
+        txt = 'Label imaee'  # Hack because I don't want it to care about the part of the 'g' that sticks down
+        allowed_width = col_width
+        while font_regular.getsize(txt)[0] < allowed_width and font_regular.getsize(txt)[1] < buffer_size:
+            fontsize += 1
+            font_regular = ImageFont.truetype(font_path, fontsize)
+        fontsize -= 1
+        txt = 'Label image'
+        offset_for_centering = int((col_width - font_regular.getsize(txt)[0]) / 2)
+        if superimpose_all_jobs:
+            offset = (
+                width_pad_offset + col_width + buffer_size * 2 + offset_for_centering,
+                int(buffer_size * 0.5)
+            )
+        else:
+            offset = (
+                width_pad_offset + len(job_dirs) * col_width + (len(job_dirs) + 1) * buffer_size + offset_for_centering,
+                int(buffer_size * 0.5)
+            )
+        draw.text(
+            offset,
+            txt,
+            WHITE,
+            font=font_regular
         )
-    else:
-        offset = (
-            width_pad_offset + len(job_dirs) * col_width + (len(job_dirs) + 1) * buffer_size + offset_for_centering,
-            int(buffer_size * 0.5)
-        )
-    draw.text(
-        offset,
-        txt,
-        WHITE,
-        font=font_regular
-    )
 
     # Add footer
     footer = build_footer_img(width, footer_height, iteration, prediction_type,
@@ -806,11 +810,14 @@ def main():
     parser.add_argument('--gif-fps', default=10, type=int, help='GIF frames per second')
     parser.add_argument('--gif-max-size', type=int, nargs=2, default=[1920, 1080])
     parser.add_argument('--static-max-size', type=int, nargs=2, default=[3840, 2160])
+    parser.add_argument('--no-label-column', action='store_true')
     args = parser.parse_args()
 
     out_dir = f'{datetime.datetime.today().strftime("%Y-%m-%d_%H.%M.%S")}_summary'
     out_dir = os.path.join(args.dir, out_dir)
     os.makedirs(out_dir, exist_ok=True)
+
+    label_column = not args.no_label_column
 
     job_metadata = JobMetadata(args.dir)
 
@@ -829,14 +836,14 @@ def main():
         # Static images
         print(f'\nCreating final static {prediction_type} image with all regions...')
         final_frame = build_frame(last_iteration_seen, job_metadata, prediction_type,
-                                  args.static_max_size, region_sets_to_label=['training'])
+                                  args.static_max_size, region_sets_to_label=['training'], label_column=label_column)
         final_frame.save(os.path.join(out_dir, f'{prediction_type}_{last_iteration_seen}_all.png'))
         print('done.')
 
         print(f'\nCreating final static {prediction_type} image with only prediction regions...')
         final_frame = build_frame(last_iteration_seen, job_metadata, prediction_type,
                                   args.static_max_size, region_sets_to_include=['prediction'],
-                                  superimpose_all_jobs=True)
+                                  superimpose_all_jobs=True, label_column=label_column)
         final_frame.save(os.path.join(out_dir, f'{prediction_type}_{last_iteration_seen}_prediction.png'))
         print('done.')
 
@@ -846,14 +853,15 @@ def main():
         for cmap in ['plasma', 'viridis', 'hot', 'inferno', 'seismic', 'Spectral', 'coolwarm', 'bwr']:
             print(f'\nCreating final static {prediction_type} image with all regions and color map: {cmap}...')
             final_frame = build_frame(last_iteration_seen, job_metadata, prediction_type,
-                                      args.static_max_size, cmap_name=cmap, region_sets_to_label=['training'])
+                                      args.static_max_size, cmap_name=cmap, region_sets_to_label=['training'],
+                                      label_column=label_column)
             final_frame.save(os.path.join(color_maps_dir, f'{prediction_type}_{last_iteration_seen}_all_{cmap}.png'))
             print('done.')
 
             print(f'\nCreating final static {prediction_type} image with prediction regions and color map: {cmap}...')
             final_frame = build_frame(last_iteration_seen, job_metadata, prediction_type,
                                       args.static_max_size, cmap_name=cmap, region_sets_to_include=['prediction'],
-                                      superimpose_all_jobs=True)
+                                      superimpose_all_jobs=True, label_column=label_column)
             final_frame.save(
                 os.path.join(color_maps_dir, f'{prediction_type}_{last_iteration_seen}_prediction_{cmap}.png'))
             print('done.')
@@ -863,14 +871,14 @@ def main():
         create_animation(os.path.join(out_dir, f'{prediction_type}_animation_all'), args.gif_fps,
                          job_metadata.iterations_encountered(prediction_type),
                          args.img_seq, job_metadata, prediction_type, args.gif_max_size,
-                         region_sets_to_label=['training'])
+                         region_sets_to_label=['training'], label_column=label_column)
 
         print('\nCreating animation with only prediction regions:')
         create_animation(os.path.join(out_dir, f'{prediction_type}_animation_prediction'), args.gif_fps,
                          job_metadata.iterations_encountered(prediction_type),
                          args.img_seq, job_metadata, prediction_type, args.gif_max_size,
                          region_sets_to_include=['prediction'],
-                         superimpose_all_jobs=True)
+                         superimpose_all_jobs=True, label_column=label_column)
 
 
 if __name__ == '__main__':
