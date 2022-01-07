@@ -90,13 +90,16 @@ class JobMetadata:
                     assert len(set_types) > 0 and region_full_name is not None and region_info is not None
                     if region_name not in self.regions_df.region_name.values:
                         ppm_size = Image.open(image_path).size
+                        bounding_box = region_info.get('bounding_box')
+                        if bounding_box is not None:
+                            bounding_box = tuple(bounding_box)
                         self.regions_df = self.regions_df.append({
                             'region_name': region_name,
                             'ppm_path': region_info['ppm'],
                             'ppm_width': ppm_size[0],
                             'ppm_height': ppm_size[1],
                             'invert_normals': region_info['invert_normals'],
-                            'bounding_box': tuple(region_info['bounding_box']),
+                            'bounding_box': bounding_box,
                         }, ignore_index=True)
                     if re.match(r'.*_prediction_\d+_\d+', name):
                         iteration_str = re.search(r'.*_prediction_(\d+_\d+)_.*\.png', name).group(1)
