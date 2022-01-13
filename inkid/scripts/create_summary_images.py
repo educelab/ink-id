@@ -35,6 +35,18 @@ def iteration_series_sort_key(iterations_series):
     return np.array(list(map(iteration_str_sort_key, list(iterations_series))))
 
 
+def label_key_from_prediction_type(prediction_type: str) -> str:
+    if prediction_type == 'rgb_values':
+        label_key = 'rgb_label'
+    elif prediction_type == 'ink_classes':
+        label_key = 'ink_label'
+    elif prediction_type == 'volcart_texture':
+        label_key = 'volcart_texture_label'
+    else:
+        raise ValueError(f'Unknown prediction type {prediction_type}')
+    return label_key
+
+
 class JobMetadata:
     def __init__(self, directory):
         # Get list of directories (not files) in given parent dir
@@ -211,6 +223,18 @@ class JobMetadata:
                         return source.get('mask')
         return None
 
+    def any_label_images_found(self) -> bool:
+        for prediction_type in self.prediction_types():
+            for face_i, (ppm_path, invert_normals) in enumerate(self.faces_list()):
+                label_key = label_key_from_prediction_type(prediction_type)
+                label_img_path = self.get_label_image_path(ppm_path, invert_normals, label_key)
+                if label_img_path is not None:
+                    # Try getting label image file from recorded location (may not exist on this machine)
+                    label_img = try_get_img_from_data_files(label_img_path)
+                    if label_img is not None:
+                        return True
+        return False
+
 
 def merge_imgs(paths, bounding_boxes, image_label_as, sets_to_label, rectangle_line_width, cmap_name):
     merged_img = None
@@ -265,7 +289,7 @@ def is_job_dir(dirname):
     """
     Return whether this directory matches the expected structure for a job dir.
 
-    For example we often want a list of the k-fold subdirs in a directory but do not want e.g. previous summary
+    For example, we often want a list of the k-fold subdirs in a directory but do not want e.g. previous summary
     subdirs, or others.
     """
     # k-fold job
@@ -628,15 +652,7 @@ def build_frame(iteration, job_metadata, prediction_type, max_size=None,
     # Add label column
     if label_column:
         for face_i, (ppm_path, invert_normals) in enumerate(job_metadata.faces_list()):
-            if prediction_type == 'rgb_values':
-                label_key = 'rgb_label'
-            elif prediction_type == 'ink_classes':
-                label_key = 'ink_label'
-            elif prediction_type == 'volcart_texture':
-                label_key = 'volcart_texture_label'
-            else:
-                warnings.warn(f'Unknown prediction type {prediction_type}', RuntimeWarning)
-                break
+            label_key = label_key_from_prediction_type(prediction_type)
             label_img_path = job_metadata.get_label_image_path(ppm_path, invert_normals, label_key)
             mask_img_path = job_metadata.get_mask_image_path(ppm_path, invert_normals)
             if label_img_path is not None:
@@ -817,9 +833,12 @@ def main():
     out_dir = os.path.join(args.dir, out_dir)
     os.makedirs(out_dir, exist_ok=True)
 
-    label_column = not args.no_label_column
-
     job_metadata = JobMetadata(args.dir)
+
+    label_column = not args.no_label_column
+    if not job_metadata.any_label_images_found():
+        print('Label column requested but no label images found. Not adding label column to summary images.')
+        label_column = False
 
     # Tensorboard
     print('\nCreating Tensorboard plots...')
