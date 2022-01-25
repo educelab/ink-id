@@ -16,11 +16,13 @@ import json
 import logging
 import multiprocessing
 import os
+import random
 import sys
 import time
 import timeit
 
 import git
+import numpy as np
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
@@ -66,6 +68,10 @@ def main():
     # Data organization/augmentation
     parser.add_argument('--jitter-max', metavar='n', type=int, default=4)
     parser.add_argument('--no-augmentation', action='store_true')
+    parser.add_argument('--oversampling', metavar='n', type=float, default=None,
+                        help='desired fraction of positives')
+    parser.add_argument('--undersampling', metavar='n', type=float, default=None,
+                        help='desired fraction of positives')
 
     # Network architecture
     parser.add_argument('--model', default='InkClassifier3DCNN', help='model to run against',
@@ -97,6 +103,7 @@ def main():
     parser.add_argument('--final-prediction-on-all', action='store_true')
     parser.add_argument('--skip-training', action='store_true')
     parser.add_argument('--dataloaders-num-workers', metavar='n', type=int, default=None)
+    parser.add_argument('--random-seed', type=int, default=42)
 
     # Profiling
     parser.add_argument('--no-profiling', action='store_false', dest='profiling',
@@ -153,6 +160,11 @@ def main():
             logging.StreamHandler()
         ]
     )
+
+    # Fix random seeds
+    np.random.seed(args.random_seed)
+    random.seed(args.random_seed)
+    torch.manual_seed(args.random_seed)
 
     # Automatically increase prediction grid spacing if using 2D labels, and turn off augmentation
     if args.model_3d_to_2d:
@@ -248,6 +260,10 @@ def main():
             'recall': inkid.metrics.recall,
             'fbeta': inkid.metrics.fbeta,
             'auc': inkid.metrics.auc,
+            'positive_labels_sum': inkid.metrics.positive_labels,
+            'negative_labels_sum': inkid.metrics.negative_labels,
+            'positive_preds_sum': inkid.metrics.positive_preds,
+            'negative_preds_sum': inkid.metrics.negative_preds,
         }
     if 'rgb_values' in model.labels:
         label_args['rgb_values'] = dict(
@@ -279,6 +295,11 @@ def main():
         nth_region_source = train_ds.pop_source(nth_region_path)
         val_ds.sources.append(nth_region_source)
         pred_ds.sources.append(nth_region_source)
+
+    if args.oversampling is not None:
+        train_ds.set_oversampling(args.oversampling)
+    elif args.undersampling is not None:
+        train_ds.set_undersampling(args.undersampling)
 
     pred_ds.set_regions_grid_spacing(args.prediction_grid_spacing)
 
@@ -376,94 +397,91 @@ def main():
 
     # Run training loop
     if train_dl is not None and not args.skip_training:
-        try:
-            with context_manager:
-                for epoch in range(args.training_epochs):
-                    model.train()  # Turn on training mode
-                    total_batches = len(train_dl)
-                    for batch_num, batch in enumerate(train_dl):
-                        xb = batch['feature']
-                        with torch.profiler.record_function(f'train_batch_{batch_num}'):
-                            xb = xb.to(device)
-                            preds = model(xb)
-                            total_loss = None
-                            for label_type in model.labels:
-                                yb = xb.clone() if label_type == 'autoencoded' else batch[label_type].to(device)
-                                pred = preds[label_type]
-                                for metric, fn in metrics[label_type].items():
-                                    metric_result = fn(pred, yb)
-                                    metric_results[label_type][metric].append(metric_result)
-                                    if metric == 'loss':
-                                        if total_loss is None:
-                                            total_loss = metric_result
-                                        else:
-                                            total_loss = total_loss + metric_result
-                            if total_loss is not None:
-                                total_loss.backward()
-                                if 'total' not in metric_results:
-                                    metric_results['total'] = {'loss': []}
-                                metric_results['total']['loss'].append(total_loss)
-                            else:
-                                raise NoTrainingLossError('Training is running, but no loss function encountered')
-                            opt.step()
-                            opt.zero_grad()
+        with context_manager:
+            for epoch in range(args.training_epochs):
+                model.train()  # Turn on training mode
+                total_batches = len(train_dl)
+                for batch_num, batch in enumerate(train_dl):
+                    xb = batch['feature']
+                    with torch.profiler.record_function(f'train_batch_{batch_num}'):
+                        xb = xb.to(device)
+                        preds = model(xb)
+                        total_loss = None
+                        for label_type in model.labels:
+                            yb = xb.clone() if label_type == 'autoencoded' else batch[label_type].to(device)
+                            pred = preds[label_type]
+                            for metric, fn in metrics[label_type].items():
+                                metric_result = fn(pred, yb)
+                                metric_results[label_type][metric].append(metric_result)
+                                if metric == 'loss':
+                                    if total_loss is None:
+                                        total_loss = metric_result
+                                    else:
+                                        total_loss = total_loss + metric_result
+                        if total_loss is not None:
+                            total_loss.backward()
+                            if 'total' not in metric_results:
+                                metric_results['total'] = {'loss': []}
+                            metric_results['total']['loss'].append(total_loss)
+                        else:
+                            raise NoTrainingLossError('Training is running, but no loss function encountered')
+                        opt.step()
+                        opt.zero_grad()
 
-                            if batch_num % args.summary_every_n_batches == 0:
-                                logging.info(f'Epoch: {epoch:>5d}/{args.training_epochs:<5d}'
-                                             f'Batch: {batch_num:>5d}/{total_batches:<5d} '
-                                             f'{inkid.metrics.metrics_str(metric_results)} '
-                                             f'Seconds: {time.time() - last_summary:5.3g}')
-                                for metric, result in inkid.metrics.metrics_dict(metric_results).items():
-                                    writer.add_scalar('train_' + metric, result, epoch * len(train_dl) + batch_num)
+                        if batch_num % args.summary_every_n_batches == 0:
+                            logging.info(f'Epoch: {epoch:>5d}/{args.training_epochs:<5d}'
+                                         f'Batch: {batch_num:>5d}/{total_batches:<5d} '
+                                         f'{inkid.metrics.metrics_str(metric_results)} '
+                                         f'Seconds: {time.time() - last_summary:5.3g}')
+                            for metric, result in inkid.metrics.metrics_dict(metric_results).items():
+                                writer.add_scalar('train_' + metric, result, epoch * len(train_dl) + batch_num)
+                                writer.flush()
+                            for metrics_for_label in metric_results.values():
+                                for single_metric_results in metrics_for_label.values():
+                                    single_metric_results.clear()
+                            last_summary = time.time()
+
+                        if batch_num % args.checkpoint_every_n_batches == 0:
+                            # Save model checkpoint
+                            torch.save({
+                                'epoch': epoch,
+                                'batch': batch_num,
+                                'model_state_dict': model.state_dict(),
+                                'optimizer_state_dict': opt.state_dict()
+                            }, os.path.join(checkpoints_dir, f'checkpoint_{epoch}_{batch_num}.pt'))
+
+                            # Periodic evaluation and prediction
+                            if val_dl is not None:
+                                logging.info('Evaluating on validation set... ')
+                                val_results = inkid.ops.perform_validation(model, val_dl, metrics, device)
+                                for metric, result in inkid.metrics.metrics_dict(val_results).items():
+                                    writer.add_scalar('val_' + metric, result, epoch * len(train_dl) + batch_num)
                                     writer.flush()
-                                for metrics_for_label in metric_results.values():
-                                    for single_metric_results in metrics_for_label.values():
-                                        single_metric_results.clear()
-                                last_summary = time.time()
+                                logging.info(f'done ({inkid.metrics.metrics_str(val_results)})')
+                            else:
+                                logging.info('Empty validation set, skipping validation.')
 
-                            if batch_num % args.checkpoint_every_n_batches == 0:
-                                # Save model checkpoint
-                                torch.save({
-                                    'epoch': epoch,
-                                    'batch': batch_num,
-                                    'model_state_dict': model.state_dict(),
-                                    'optimizer_state_dict': opt.state_dict()
-                                }, os.path.join(checkpoints_dir, f'checkpoint_{epoch}_{batch_num}.pt'))
+                            # Prediction image
+                            if pred_dl is not None:
+                                logging.info('Generating prediction image... ')
+                                inkid.ops.generate_prediction_images(
+                                    pred_dl, model, device, predictions_dir, f'{epoch}_{batch_num}',
+                                    args.prediction_averaging)
+                                logging.info('done')
+                            else:
+                                logging.info('Empty prediction set, skipping prediction image generation.')
 
-                                # Periodic evaluation and prediction
-                                if val_dl is not None:
-                                    logging.info('Evaluating on validation set... ')
-                                    val_results = inkid.ops.perform_validation(model, val_dl, metrics, device)
-                                    for metric, result in inkid.metrics.metrics_dict(val_results).items():
-                                        writer.add_scalar('val_' + metric, result, epoch * len(train_dl) + batch_num)
-                                        writer.flush()
-                                    logging.info(f'done ({inkid.metrics.metrics_str(val_results)})')
-                                else:
-                                    logging.info('Empty validation set, skipping validation.')
-
-                                # Prediction image
-                                if pred_dl is not None:
-                                    logging.info('Generating prediction image... ')
-                                    inkid.ops.generate_prediction_images(
-                                        pred_dl, model, device, predictions_dir, f'{epoch}_{batch_num}',
-                                        args.prediction_averaging)
-                                    logging.info('done')
-                                else:
-                                    logging.info('Empty prediction set, skipping prediction image generation.')
-
-                                # Visualize autoencoder outputs
-                                if args.model in ['autoencoder', 'AutoencoderAndInkClassifier']:
-                                    logging.info('Visualizing autoencoder outputs...')
-                                    inkid.ops.save_subvolume_batch_to_img(
-                                        model, device, train_dl, os.path.join(output_path, 'subvolumes'),
-                                        include_autoencoded=True, iteration=batch_num, include_vol_slices=False
-                                    )
-                                    logging.info('done')
-                            # Only advance profiler step if profiling is enabled (the context manager is not null)
-                            if isinstance(context_manager, torch.profiler.profile):
-                                context_manager.step()
-        except KeyboardInterrupt:
-            pass
+                            # Visualize autoencoder outputs
+                            if args.model in ['autoencoder', 'AutoencoderAndInkClassifier']:
+                                logging.info('Visualizing autoencoder outputs...')
+                                inkid.ops.save_subvolume_batch_to_img(
+                                    model, device, train_dl, os.path.join(output_path, 'subvolumes'),
+                                    include_autoencoded=True, iteration=batch_num, include_vol_slices=False
+                                )
+                                logging.info('done')
+                        # Only advance profiler step if profiling is enabled (the context manager is not null)
+                        if isinstance(context_manager, torch.profiler.profile):
+                            context_manager.step()
 
     # Run a final prediction on all regions
     if args.final_prediction_on_all:

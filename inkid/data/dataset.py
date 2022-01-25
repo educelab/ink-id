@@ -5,6 +5,7 @@ from abc import ABC, abstractmethod
 from collections import namedtuple
 import json
 import os
+import random
 from typing import Dict, List, Optional, Tuple
 
 import jsonschema
@@ -121,6 +122,8 @@ class RegionSource(DataSource):
 
         self.grid_spacing = 1
         self.specify_inkness = None
+        self.undersampling_ink_ratio = None
+        self.oversampling_ink_ratio = None
 
         # Prediction images
         self._ink_classes_prediction_image = np.zeros((self._ppm.height, self._ppm.width), np.uint16)
@@ -181,7 +184,8 @@ class RegionSource(DataSource):
 
     def update_points_list(self) -> None:
         """Update the list of points after changes to the bounding box, grid spacing, or some other options."""
-        self._points = list()
+        positive_points = list()
+        negative_points = list()
         x0, y0, x1, y1 = self.bounding_box
         for y in range(y0, y1, self.grid_spacing):
             for x in range(x0, x1, self.grid_spacing):
@@ -190,8 +194,39 @@ class RegionSource(DataSource):
                         continue
                     elif not self.specify_inkness and self.is_ink(x, y):
                         continue
-                if self.is_on_surface(x, y):
-                    self._points.append((x, y))
+                if not self.is_on_surface(x, y):
+                    continue
+                if self.is_ink(x, y):
+                    positive_points.append((x, y))
+                else:
+                    negative_points.append((x, y))
+
+        """
+        For the given ink ratio,
+        Undersampling: reduces the number of negative points for the positive
+            points available.
+        Oversampling: repeats the positive points in order to achieve the
+            desired ratio for the given number of negative points.
+        If neither undersampling nor oversampling is chosen, all the
+            available points are used without balancing classes.
+
+        undersampling_ink_ratio: float (default=None)
+        oversampling_ink_ratio: float  (default=None)
+        """
+        if self.undersampling_ink_ratio is not None:
+            negative_ratio = 1.0 - self.undersampling_ink_ratio
+            negatives_needed = int(len(positive_points) * negative_ratio / self.undersampling_ink_ratio)
+            self._points = positive_points + random.choices(negative_points, k=negatives_needed)
+        elif self.oversampling_ink_ratio is not None:
+            negative_ratio = 1.0 - self.oversampling_ink_ratio
+            positives_needed = int(len(negative_points) * self.oversampling_ink_ratio / negative_ratio)
+            positive_reps = 1 if positives_needed < len(positive_points) else \
+                int(positives_needed / len(positive_points))
+            extended_positive_points = list(np.repeat(np.array(positive_points), positive_reps, axis=0))
+            self._points = extended_positive_points + negative_points
+        else:
+            self._points = positive_points + negative_points
+
         self._points_list_needs_update = False
 
     @property
@@ -210,6 +245,24 @@ class RegionSource(DataSource):
     @specify_inkness.setter
     def specify_inkness(self, inkness: Optional[bool]):
         self._specify_inkness = inkness
+        self._points_list_needs_update = True
+
+    @property
+    def oversampling_ink_ratio(self):
+        return self._oversampling_ink_ratio
+
+    @oversampling_ink_ratio.setter
+    def oversampling_ink_ratio(self, ratio: Optional[float]):
+        self._oversampling_ink_ratio = ratio
+        self._points_list_needs_update = True
+
+    @property
+    def undersampling_ink_ratio(self):
+        return self._undersampling_ink_ratio
+
+    @undersampling_ink_ratio.setter
+    def undersampling_ink_ratio(self, ratio: Optional[float]):
+        self._undersampling_ink_ratio = ratio
         self._points_list_needs_update = True
 
     def is_ink(self, x: int, y: int) -> bool:
@@ -479,3 +532,9 @@ class Dataset(torch.utils.data.Dataset):
 
     def set_inkness(self, inkness: Optional[bool]):
         self._set_for_all_sources('specify_inkness', inkness)
+
+    def set_oversampling(self, positives_probability: float):
+        self._set_for_all_sources('oversampling_ink_ratio', positives_probability)
+
+    def set_undersampling(self, positives_probability: float):
+        self._set_for_all_sources('undersampling_ink_ratio', positives_probability)
