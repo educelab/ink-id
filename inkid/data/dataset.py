@@ -186,20 +186,24 @@ class RegionSource(DataSource):
         """Update the list of points after changes to the bounding box, grid spacing, or some other options."""
         positive_points = list()
         negative_points = list()
+        unlabeled_points = list()
         x0, y0, x1, y1 = self.bounding_box
         for y in range(y0, y1, self.grid_spacing):
             for x in range(x0, x1, self.grid_spacing):
+                if not self.is_on_surface(x, y):
+                    continue
                 if self.specify_inkness is not None:
                     if self.specify_inkness and not self.is_ink(x, y):
                         continue
                     elif not self.specify_inkness and self.is_ink(x, y):
                         continue
-                if not self.is_on_surface(x, y):
-                    continue
-                if self.is_ink(x, y):
-                    positive_points.append((x, y))
+                if self.oversampling_ink_ratio is not None or self.undersampling_ink_ratio is not None:
+                    if self.is_ink(x, y):
+                        positive_points.append((x, y))
+                    else:
+                        negative_points.append((x, y))
                 else:
-                    negative_points.append((x, y))
+                    unlabeled_points.append((x, y))
 
         """
         For the given ink ratio,
@@ -225,7 +229,7 @@ class RegionSource(DataSource):
             extended_positive_points = list(np.repeat(np.array(positive_points), positive_reps, axis=0))
             self._points = extended_positive_points + negative_points
         else:
-            self._points = positive_points + negative_points
+            self._points = unlabeled_points
 
         self._points_list_needs_update = False
 
