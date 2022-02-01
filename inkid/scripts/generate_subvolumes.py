@@ -172,12 +172,7 @@ def main(argv=None):
     parser.add_argument('--concat-subvolumes', action='store_true',
                         help='create one set of slices containing all subvolumes')
     parser.add_argument('--random-seed', type=int, default=42, help='seed for random number generators')
-    inkid.ops.add_subvolume_args(parser)
-
-    # Data organization/augmentation
-    parser.add_argument('--jitter-max', metavar='n', type=int)
-    parser.add_argument('--augmentation', action='store_true', dest='augmentation')
-    parser.add_argument('--no-augmentation', action='store_false', dest='augmentation')
+    inkid.data.add_subvolume_arguments(parser)
 
     # Image rendering option
     parser.add_argument('--visualize', action='store_true', help='generate and save 2D/3D renderings')
@@ -201,11 +196,19 @@ def main(argv=None):
         jitter_max=args.jitter_max,
     )
 
-    input_ds = inkid.data.Dataset(args.input_set, feature_args=subvolume_args)
+    input_ds = inkid.data.Dataset(args.input_set)
+    specify_inkness = None
     if args.ink:
-        input_ds.set_inkness(True)
+        specify_inkness = True
     elif args.no_ink:
-        input_ds.set_inkness(False)
+        specify_inkness = False
+    sampler = inkid.data.RegionPointSampler(
+        specify_inkness=specify_inkness
+    )
+
+    for region in input_ds.regions():
+        region.feature_args = subvolume_args
+        region.sampler = sampler
 
     np.random.seed(args.random_seed)
     torch.manual_seed(args.random_seed)
@@ -237,7 +240,7 @@ def main(argv=None):
                                     concat_y:concat_y + padded_shape_voxels[1],
                                     concat_x:concat_x + padded_shape_voxels[2]] = subvolume
         else:
-            inkid.ops.save_volume_to_image_stack(subvolume, os.path.join(args.output, str(counter)))
+            inkid.util.save_volume_to_image_stack(subvolume, os.path.join(args.output, str(counter)))
 
             if args.visualize:
                 rendered_img = visualize(subvolume)
@@ -246,7 +249,7 @@ def main(argv=None):
         counter += 1
 
     if args.concat_subvolumes:
-        inkid.ops.save_volume_to_image_stack(concatenated_subvolumes, args.output)
+        inkid.util.save_volume_to_image_stack(concatenated_subvolumes, args.output)
 
 
 if __name__ == '__main__':

@@ -48,8 +48,8 @@ The package can be used as a Python library:
 
    import inkid
 
-   params = inkid.ops.json_schema('dataSource0.1')
-   regions = inkid.data.Dataset([os.path.join(inkid.ops.dummy_volpkg_path(), 'working', 'DummyTest_grid1x2.txt')])
+   params = inkid.util.json_schema('dataSource0.1')
+   regions = inkid.data.Dataset([os.path.join(inkid.util.dummy_volpkg_path(), 'working', 'DummyTest_grid1x2.txt')])
 
 A script is also included for running a training job and/or generating prediction images:
 

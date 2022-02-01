@@ -10,7 +10,7 @@ Subpackages
    inkid.data
    inkid.metrics
    inkid.model
-   inkid.ops
+   inkid.util
    inkid.schemas
    inkid.volumes
 

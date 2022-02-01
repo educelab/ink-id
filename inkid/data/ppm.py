@@ -9,7 +9,7 @@ from typing import Dict, Optional
 import numpy as np
 from tqdm import tqdm
 
-import inkid.ops
+import inkid.util
 
 
 class PPM:
@@ -61,7 +61,7 @@ class PPM:
 
         width, height, dim, ordered, val_type, version = [None] * 6
 
-        data = inkid.ops.get_raw_data_from_file_or_url(filename)
+        data = inkid.util.get_raw_data_from_file_or_url(filename)
         while True:
             line = data.readline().decode('utf-8')
             if comments_re.match(line):
@@ -109,7 +109,7 @@ class PPM:
 
         self._data = np.empty((self.height, self.width, self._dim))
 
-        data = inkid.ops.get_raw_data_from_file_or_url(self._path)
+        data = inkid.util.get_raw_data_from_file_or_url(self._path)
         header_terminator_re = re.compile('^<>$')
         while True:
             line = data.readline().decode('utf-8')

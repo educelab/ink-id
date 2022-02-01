@@ -1,3 +1,5 @@
+from .model import model_choices
+
 from .model import Autoencoder
 from .model import AutoencoderAndInkClassifier
 from .model import InkClassifier3DCNN

@@ -10,7 +10,7 @@ added to those for validation and prediction.
 """
 
 import argparse
-import contextlib
+import copy
 import datetime
 import json
 import logging
@@ -36,10 +36,6 @@ import inkid
 torch.multiprocessing.set_sharing_strategy('file_system')
 
 
-class NoTrainingLossError(RuntimeError):
-    pass
-
-
 def main():
     """Run the training and prediction process."""
     start = timeit.default_timer()
@@ -57,25 +53,26 @@ def main():
                         help='remove the nth source from the flattened set of all training data sources, and '
                              'add this set to the validation and prediction sets')
 
-    # Method
-    parser.add_argument('--model-3d-to-2d', action='store_true',
-                        help='Use semi-fully convolutional model (which removes a dimension) with 2d labels per '
-                             'subvolume')
-
-    # Subvolumes
-    inkid.ops.add_subvolume_args(parser)
-
-    # Data organization/augmentation
-    parser.add_argument('--jitter-max', metavar='n', type=int, default=4)
-    parser.add_argument('--no-augmentation', action='store_true')
+    # Which samples are generated
     parser.add_argument('--oversampling', metavar='n', type=float, default=None,
                         help='desired fraction of positives')
     parser.add_argument('--undersampling', metavar='n', type=float, default=None,
                         help='desired fraction of positives')
+    parser.add_argument('--ambiguous-ink-labels-filter-radius', metavar='n', type=float, default=None,
+                        help='identify boundary edges between ink and no-ink labels, dilate them by this radius in '
+                             'pixels, and remove those points from the training dataset')
+    parser.add_argument('--prediction-grid-spacing', metavar='n', type=int, default=4,
+                        help='prediction points will be taken from an NxN grid')
+
+    # How samples are generated
+    inkid.data.add_subvolume_arguments(parser)
 
     # Network architecture
+    parser.add_argument('--model-3d-to-2d', action='store_true',
+                        help='Use semi-fully convolutional model (which removes a dimension) with 2d labels per '
+                             'subvolume')
     parser.add_argument('--model', default='InkClassifier3DCNN', help='model to run against',
-                        choices=inkid.ops.model_choices())
+                        choices=inkid.model.model_choices())
     parser.add_argument('--volcart-texture-loss-coefficient', default=100, type=float,
                         help='Multiplicative weight of the volcart texture loss in any loss sums')
     parser.add_argument('--learning-rate', metavar='n', type=float, default=0.001)
@@ -93,8 +90,6 @@ def main():
     parser.add_argument('--batch-size', metavar='n', type=int, default=32)
     parser.add_argument('--training-max-samples', metavar='n', type=int, default=None)
     parser.add_argument('--training-epochs', metavar='n', type=int, default=1)
-    parser.add_argument('--prediction-grid-spacing', metavar='n', type=int, default=4,
-                        help='prediction points will be taken from an NxN grid')
     parser.add_argument('--prediction-averaging', action='store_true',
                         help='average multiple predictions based on rotated and flipped input subvolumes')
     parser.add_argument('--validation-max-samples', metavar='n', type=int, default=5000)
@@ -105,10 +100,6 @@ def main():
     parser.add_argument('--dataloaders-num-workers', metavar='n', type=int, default=None)
     parser.add_argument('--random-seed', type=int, default=42)
 
-    # Profiling
-    parser.add_argument('--no-profiling', action='store_false', dest='profiling',
-                        help='Disable PyTorch profiling during training')
-
     # Rclone
     parser.add_argument('--rclone-transfer-remote', metavar='remote', default=None,
                         help='if specified, and if matches the name of one of the directories in '
@@ -116,9 +107,6 @@ def main():
                              'subpath following the remote name')
 
     args = parser.parse_args()
-
-    # Argument makes more sense as a negative, variable makes more sense as a positive
-    args.augmentation = not args.no_augmentation
 
     # Make sure some sort of input is provided, else there is nothing to do
     if len(args.training_set) == 0 and len(args.prediction_set) == 0 and len(args.validation_set) == 0:
@@ -176,6 +164,8 @@ def main():
     os.makedirs(predictions_dir)
     checkpoints_dir = os.path.join(output_path, 'checkpoints')
     os.makedirs(checkpoints_dir)
+    diagnostic_images_dir = os.path.join(output_path, 'diagnostic_images')
+    os.makedirs(diagnostic_images_dir)
 
     if args.dataloaders_num_workers is None:
         args.dataloaders_num_workers = multiprocessing.cpu_count()
@@ -201,24 +191,29 @@ def main():
             metadata[slurm_var] = os.getenv(slurm_var)
 
     # Define the feature inputs to the network
+    # subvolume_args = inkid.data.SubvolumeGeneratorInfo(
     subvolume_args = dict(
-        shape_voxels=args.subvolume_shape_voxels,
+        method=args.subvolume_method,
         shape_microns=args.subvolume_shape_microns,
+        shape_voxels=args.subvolume_shape_voxels,
         out_of_bounds='all_zeros',
         move_along_normal=args.move_along_normal,
-        method=args.subvolume_method,
         normalize=args.normalize_subvolumes,
     )
+    # train_feature_args = dataclasses.replace(
+    #     subvolume_args,
     train_feature_args = subvolume_args.copy()
     train_feature_args.update(
         augment_subvolume=args.augmentation,
         jitter_max=args.jitter_max,
     )
+    # val_feature_args = dataclasses.replace(
     val_feature_args = subvolume_args.copy()
     val_feature_args.update(
         augment_subvolume=False,
         jitter_max=0,
     )
+    # pred_feature_args = dataclasses.replace(val_feature_args)
     pred_feature_args = val_feature_args.copy()
 
     # Create the model for training
@@ -243,6 +238,7 @@ def main():
     }[args.model]
 
     # Define the labels and metrics
+    # TODO maybe clean these up like the subvolume args but maybe not
     if args.model_3d_to_2d:
         label_shape = (args.subvolume_shape_voxels[1], args.subvolume_shape_voxels[2])
     else:
@@ -285,28 +281,46 @@ def main():
         }
     metric_results = {label_type: {metric: [] for metric in metrics[label_type]} for label_type in metrics}
 
-    train_ds = inkid.data.Dataset(args.training_set, train_feature_args, model.labels, label_args)
-    val_ds = inkid.data.Dataset(args.validation_set, val_feature_args, model.labels, label_args)
-    pred_ds = inkid.data.Dataset(args.prediction_set, pred_feature_args)  # pred_ds has no labels
+    train_sampler = inkid.data.RegionPointSampler(
+        undersampling_ink_ratio=args.undersampling,
+        oversampling_ink_ratio=args.oversampling,
+        ambiguous_ink_labels_filter_radius=args.ambiguous_ink_labels_filter_radius,
+    )
+    pred_sampler = inkid.data.RegionPointSampler(
+        grid_spacing=args.prediction_grid_spacing,
+    )
+
+    train_ds = inkid.data.Dataset(args.training_set)
+    val_ds = inkid.data.Dataset(args.validation_set)
+    pred_ds = inkid.data.Dataset(args.prediction_set)
 
     # If k-fold job, remove nth region from training and put in prediction/validation sets
     if args.cross_validate_on is not None:
-        nth_region_path: str = train_ds.regions()[args.cross_validate_on].path
-        nth_region_source = train_ds.pop_source(nth_region_path)
-        val_ds.sources.append(nth_region_source)
-        pred_ds.sources.append(nth_region_source)
+        nth_region_path = train_ds.pop_nth_region(args.cross_validate_on).path
+        val_ds.sources.append(inkid.data.DataSource.from_path(nth_region_path))
+        pred_ds.sources.append(inkid.data.DataSource.from_path(nth_region_path))
 
-    if args.oversampling is not None:
-        train_ds.set_oversampling(args.oversampling)
-    elif args.undersampling is not None:
-        train_ds.set_undersampling(args.undersampling)
+    for region in train_ds.regions():
+        region.sampler = copy.deepcopy(train_sampler)
+        region.feature_args = train_feature_args
+        region.label_types = model.labels
+        region.label_args = label_args
+    for region in val_ds.regions():
+        region.feature_args = val_feature_args
+        region.label_types = model.labels
+        region.label_args = label_args
+    for region in pred_ds.regions():
+        region.sampler = copy.deepcopy(pred_sampler)
+        region.feature_args = pred_feature_args
 
-    pred_ds.set_regions_grid_spacing(args.prediction_grid_spacing)
+    if args.ambiguous_ink_labels_filter_radius is not None:
+        for region in train_ds.regions():
+            region.write_ambiguous_labels_diagnostic_mask(diagnostic_images_dir)
 
     metadata['Data'] = {
-        'training': train_ds.data_dict(),
-        'validation': val_ds.data_dict(),
-        'prediction': pred_ds.data_dict(),
+        'training': train_ds.source_json(),
+        'validation': val_ds.source_json(),
+        'prediction': pred_ds.source_json(),
     }
 
     # Print metadata for logging and diagnostics
@@ -316,25 +330,40 @@ def main():
     with open(os.path.join(output_path, 'metadata.json'), 'w') as metadata_file:
         metadata_file.write(json.dumps(metadata, indent=4, sort_keys=False))
 
+    def create_subset_random_sampler(ds: torch.utils.data.Dataset, size: int):
+        indices = list(range(len(ds)))
+        np.random.shuffle(indices)
+        indices = indices[:size]
+        return torch.utils.data.SubsetRandomSampler(indices)
+
+    # Only take specified number of samples from training dataset, if requested
     if args.training_max_samples is not None:
         logging.info(f'Trimming training dataset to {args.training_max_samples} samples...')
-        train_ds = inkid.ops.take_from_dataset(train_ds, args.training_max_samples)
+        train_sampler = create_subset_random_sampler(train_ds, args.training_max_samples)
+        shuffle_train_dl = False
         logging.info('done')
+    else:
+        train_sampler = None
+        shuffle_train_dl = True
     # Only take n samples for validation, not the entire region
     if args.validation_max_samples is not None:
         logging.info(f'Trimming validation dataset to {args.validation_max_samples}...')
-        val_ds = inkid.ops.take_from_dataset(val_ds, args.validation_max_samples)
+        val_sampler = create_subset_random_sampler(val_ds, args.validation_max_samples)
+        shuffle_val_dl = False
         logging.info('done')
+    else:
+        val_sampler = None
+        shuffle_val_dl = True
 
     # Define the dataloaders which implement batching, shuffling, etc.
     logging.info('Creating dataloaders...')
     train_dl, val_dl, pred_dl = None, None, None
     if len(train_ds) > 0:
-        train_dl = DataLoader(train_ds, batch_size=args.batch_size, shuffle=True,
-                              num_workers=args.dataloaders_num_workers)
+        train_dl = DataLoader(train_ds, batch_size=args.batch_size, shuffle=shuffle_train_dl,
+                              num_workers=args.dataloaders_num_workers, sampler=train_sampler)
     if len(val_ds) > 0:
-        val_dl = DataLoader(val_ds, batch_size=args.batch_size * 2, shuffle=True,
-                            num_workers=args.dataloaders_num_workers)
+        val_dl = DataLoader(val_ds, batch_size=args.batch_size * 2, shuffle=shuffle_val_dl,
+                            num_workers=args.dataloaders_num_workers, sampler=val_sampler)
     if len(pred_ds) > 0:
         pred_dl = DataLoader(pred_ds, batch_size=args.batch_size * 2, shuffle=False,
                              num_workers=args.dataloaders_num_workers)
@@ -363,9 +392,9 @@ def main():
     sample_dl = train_dl or val_dl or pred_dl
     if sample_dl is not None:
         features = next(iter(sample_dl))['feature']
-        writer.add_graph(inkid.ops.ImmutableOutputModelWrapper(model), features)
+        writer.add_graph(inkid.util.ImmutableOutputModelWrapper(model), features)
         writer.flush()
-        inkid.ops.save_subvolume_batch_to_img(model, device, sample_dl, os.path.join(output_path, 'subvolumes'))
+        inkid.util.save_subvolume_batch_to_img(model, device, sample_dl, diagnostic_images_dir)
 
     # Move model to device (possibly GPU)
     model = model.to(device)
@@ -381,23 +410,20 @@ def main():
     last_summary = time.time()
 
     # Set up profiling
-    if args.profiling:
-        context_manager = torch.profiler.profile(
-            record_shapes=True, with_stack=True,
-            schedule=torch.profiler.schedule(
-                wait=10,  # Wait ten batches before doing anything
-                warmup=10,  # Profile ten batches, but don't actually record those results
-                active=10,  # Profile ten batches, and record those
-                repeat=1  # Only do this process once
-            ),
-            on_trace_ready=torch.profiler.tensorboard_trace_handler(tensorboard_path)
-        )
-    else:
-        context_manager = contextlib.nullcontext()
+    profiling_context_manager = torch.profiler.profile(
+        record_shapes=True, with_stack=True,
+        schedule=torch.profiler.schedule(
+            wait=10,  # Wait ten batches before doing anything
+            warmup=10,  # Profile ten batches, but don't actually record those results
+            active=10,  # Profile ten batches, and record those
+            repeat=1  # Only do this process once
+        ),
+        on_trace_ready=torch.profiler.tensorboard_trace_handler(tensorboard_path)
+    )
 
     # Run training loop
     if train_dl is not None and not args.skip_training:
-        with context_manager:
+        with profiling_context_manager:
             for epoch in range(args.training_epochs):
                 model.train()  # Turn on training mode
                 total_batches = len(train_dl)
@@ -424,7 +450,7 @@ def main():
                                 metric_results['total'] = {'loss': []}
                             metric_results['total']['loss'].append(total_loss)
                         else:
-                            raise NoTrainingLossError('Training is running, but no loss function encountered')
+                            raise TypeError('Training is running, but loss is None')
                         opt.step()
                         opt.zero_grad()
 
@@ -453,7 +479,7 @@ def main():
                             # Periodic evaluation and prediction
                             if val_dl is not None:
                                 logging.info('Evaluating on validation set... ')
-                                val_results = inkid.ops.perform_validation(model, val_dl, metrics, device)
+                                val_results = inkid.util.perform_validation(model, val_dl, metrics, device)
                                 for metric, result in inkid.metrics.metrics_dict(val_results).items():
                                     writer.add_scalar('val_' + metric, result, epoch * len(train_dl) + batch_num)
                                     writer.flush()
@@ -464,7 +490,7 @@ def main():
                             # Prediction image
                             if pred_dl is not None:
                                 logging.info('Generating prediction image... ')
-                                inkid.ops.generate_prediction_images(
+                                inkid.util.generate_prediction_images(
                                     pred_dl, model, device, predictions_dir, f'{epoch}_{batch_num}',
                                     args.prediction_averaging)
                                 logging.info('done')
@@ -474,27 +500,27 @@ def main():
                             # Visualize autoencoder outputs
                             if args.model in ['autoencoder', 'AutoencoderAndInkClassifier']:
                                 logging.info('Visualizing autoencoder outputs...')
-                                inkid.ops.save_subvolume_batch_to_img(
-                                    model, device, train_dl, os.path.join(output_path, 'subvolumes'),
+                                inkid.util.save_subvolume_batch_to_img(
+                                    model, device, train_dl, diagnostic_images_dir,
                                     include_autoencoded=True, iteration=batch_num, include_vol_slices=False
                                 )
                                 logging.info('done')
-                        # Only advance profiler step if profiling is enabled (the context manager is not null)
-                        if isinstance(context_manager, torch.profiler.profile):
-                            context_manager.step()
+                        profiling_context_manager.step()
 
     # Run a final prediction on all regions
     if args.final_prediction_on_all:
         try:
             logging.info('Generating final prediction images... ')
             all_sources = list(set(args.training_set + args.validation_set + args.prediction_set))
-            final_pred_ds = inkid.data.Dataset(all_sources, pred_feature_args)
+            final_pred_ds = inkid.data.Dataset(all_sources)
+            for region in final_pred_ds:
+                region.feature_args = pred_feature_args
             final_pred_ds.set_regions_grid_spacing(args.prediction_grid_spacing)
             if len(final_pred_ds) > 0:
                 final_pred_dl = DataLoader(final_pred_ds, batch_size=args.batch_size * 2, shuffle=False,
                                            num_workers=args.dataloaders_num_workers)
-                inkid.ops.generate_prediction_images(final_pred_dl, model, device,
-                                                     predictions_dir, 'final', args.prediction_averaging)
+                inkid.util.generate_prediction_images(final_pred_dl, model, device,
+                                                      predictions_dir, 'final', args.prediction_averaging)
             logging.info('done')
         # Perform finishing touches even if cut short
         except KeyboardInterrupt:
@@ -504,7 +530,7 @@ def main():
     try:
         if val_dl is not None:
             logging.info('Performing final evaluation on validation set... ')
-            val_results = inkid.ops.perform_validation(model, val_dl, metrics, device)
+            val_results = inkid.util.perform_validation(model, val_dl, metrics, device)
             metadata['Final validation metrics'] = inkid.metrics.metrics_dict(val_results)
             logging.info(f'done ({inkid.metrics.metrics_str(val_results)})')
         else:
@@ -523,7 +549,7 @@ def main():
 
     # Transfer results via rclone if requested
     if args.rclone_transfer_remote is not None:
-        inkid.ops.rclone_transfer_to_remote(args.rclone_transfer_remote, output_path)
+        inkid.util.rclone_transfer_to_remote(args.rclone_transfer_remote, output_path)
 
     writer.close()
 

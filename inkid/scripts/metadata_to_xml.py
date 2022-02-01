@@ -12,7 +12,7 @@ def main():
 
     with open(args.infile) as f:
         data = json.load(f)
-    xml = inkid.ops.dict_to_xml(data)
+    xml = inkid.util.dict_to_xml(data)
     with open(args.outfile, 'w') as f:
         f.write(xml)
 
