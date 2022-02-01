@@ -1,8 +1,15 @@
+import inspect
 import math
+import sys
 from typing import Union
 
 import numpy as np
 import torch
+
+
+# Automatically get the current list of classes in inkid.model https://stackoverflow.com/a/1796247
+def model_choices():
+    return [s for (s, _) in inspect.getmembers(sys.modules['inkid.model'], inspect.isclass)]
 
 
 def conv_output_shape(input_shape, kernel_size: Union[int, tuple], stride: Union[int, tuple],

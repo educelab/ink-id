@@ -12,7 +12,7 @@ def main():
                         'sub-path following the remote name')
     args = parser.parse_args()
 
-    inkid.ops.rclone_transfer_to_remote(args.rclone_transfer_remote, args.dir)
+    inkid.util.rclone_transfer_to_remote(args.rclone_transfer_remote, args.dir)
 
 
 if __name__ == '__main__':

@@ -3,12 +3,10 @@
 from collections import namedtuple
 from copy import deepcopy
 import itertools
-import inspect
 from io import BytesIO
 import json
 import logging
 import requests
-import sys
 from typing import Any
 from urllib.parse import urlsplit, urlunsplit
 
@@ -26,30 +24,6 @@ import torch.nn.functional as F
 from tqdm import tqdm
 
 import inkid
-
-
-def add_subvolume_args(parser):
-    parser.add_argument('--subvolume-method', default='nearest_neighbor',
-                        help='method for sampling subvolumes', choices=['nearest_neighbor', 'interpolated'])
-    parser.add_argument('--subvolume-shape-microns', metavar='um', nargs=3, type=float, default=None,
-                        help='subvolume shape (microns) in (z, y, x)')
-    parser.add_argument('--subvolume-shape-voxels', metavar='n', nargs=3, type=int,
-                        help='subvolume shape (voxels) in (z, y, x)', default=[48, 48, 48])
-    parser.add_argument('--move-along-normal', metavar='n', type=float, default=0,
-                        help='number of voxels to move along normal vector before sampling a subvolume')
-    parser.add_argument('--normalize-subvolumes', action='store_true',
-                        help='normalize each subvolume to zero mean and unit variance')
-
-
-def take_from_dataset(dataset, n_samples):
-    """Take only n samples from a dataset to reduce the size."""
-    if n_samples < len(dataset):
-        dataset = torch.utils.data.random_split(
-            dataset=dataset,
-            lengths=[n_samples, len(dataset) - n_samples],
-            generator=torch.Generator().manual_seed(42)
-        )[0]
-    return dataset
 
 
 def are_coordinates_within(p1, p2, distance):
@@ -242,14 +216,15 @@ def generate_prediction_images(dataloader, model, device, predictions_dir, suffi
                 # Separate these three lists
                 source_paths, xs, ys, _, _, _, _, _, _ = batch_metadata
                 for prediction, source_path, x, y in zip(batch_pred, source_paths, xs, ys):
-                    dataloader.dataset.get_source(source_path).store_prediction(
+                    dataloader.dataset.source(source_path).store_prediction(
                         int(x),
                         int(y),
                         prediction,
                         label_type
                     )
-    dataloader.dataset.save_predictions(predictions_dir, suffix)
-    dataloader.dataset.reset_predictions()
+    for region in dataloader.dataset.regions():
+        region.write_predictions(predictions_dir, suffix)
+        region.reset_predictions()
     model.train()
 
 
@@ -406,7 +381,8 @@ def save_subvolume_batch_to_img(model, device, dataloader, outdir, padding=10, b
 
     imgs = []
     for i, (subvolume, autoencoded) in enumerate(zip(subvolumes, autoencodeds)):
-        volume = dataloader.dataset.get_source(batch['feature_metadata'].path[i]).volume
+        dataloader.dataset.source(batch['feature_metadata'].path[i])
+        volume = dataloader.dataset.source(batch['feature_metadata'].path[i]).volume
         imgs.append(subvolume_to_sample_img(
             subvolume,
             volume,
@@ -425,16 +401,11 @@ def save_subvolume_batch_to_img(model, device, dataloader, outdir, padding=10, b
     for i, img in enumerate(imgs):
         composite_img.paste(img, (padding, img.size[1] * i + padding * (i + 1)))
 
-    outfile = os.path.join(outdir, f'sample_batch')
+    outfile = os.path.join(outdir, f'sample_subvolume_batch')
     if iteration is not None:
         outfile += f'_{iteration}'
     outfile += '.png'
     composite_img.save(outfile)
-
-
-# Automatically get the current list of classes in inkid.model https://stackoverflow.com/a/1796247
-def model_choices():
-    return [s for (s, _) in inspect.getmembers(sys.modules['inkid.model'], inspect.isclass)]
 
 
 # https://discuss.pytorch.org/t/a-tensorboard-problem-about-use-add-graph-method-for-deeplab-v3-in-torchvision/95808/2

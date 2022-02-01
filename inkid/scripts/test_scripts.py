@@ -2,7 +2,7 @@ import os
 import shutil
 import unittest
 
-from inkid.ops import dummy_volpkg_path
+from inkid.util import dummy_volpkg_path
 
 from . import generate_subvolumes
 

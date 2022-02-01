@@ -78,7 +78,7 @@ def main():
     file_extension = os.path.splitext(args.input)[1]
 
     if file_extension == '.json':
-        raw_data = inkid.ops.get_raw_data_from_file_or_url(args.input)
+        raw_data = inkid.util.get_raw_data_from_file_or_url(args.input)
         minified = jsmin(raw_data.read().decode('UTF-8'))
         json_data = json.loads(minified)
         if 'ppms' in json_data and 'regions' in json_data:

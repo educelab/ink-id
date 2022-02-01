@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from collections import namedtuple
+from dataclasses import dataclass
 import json
 import os
 import random
@@ -10,11 +11,63 @@ from typing import Dict, List, Optional, Tuple
 
 import jsonschema
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageFilter
 import torch
 
 import inkid
 
+
+# Which subvolumes are retrieved
+class RegionPointSampler:
+    def __init__(self,
+                 grid_spacing: int = 1,
+                 specify_inkness: Optional[bool] = None,
+                 undersampling_ink_ratio: Optional[float] = None,
+                 oversampling_ink_ratio: Optional[float] = None,
+                 ambiguous_ink_labels_filter_radius: Optional[float] = None,
+                 ):
+        self.grid_spacing = grid_spacing
+        self.specify_inkness = specify_inkness
+        self.undersampling_ink_ratio = undersampling_ink_ratio
+        self.oversampling_ink_ratio = oversampling_ink_ratio
+        self.ambiguous_ink_labels_filter_radius = ambiguous_ink_labels_filter_radius
+        self.ambiguous_labels_mask = None
+
+
+# How subvolumes are retrieved TODO
+@dataclass
+class SubvolumeGeneratorInfo:
+    method: str = 'nearest_neighbor'
+    shape_microns: Optional[tuple[float, float, float]] = None
+    shape_voxels: Optional[tuple[int, int, int]] = (48, 48, 48)
+    out_of_bounds: str = 'all_zeros'
+    move_along_normal: float = 0
+    normalize: bool = False
+    jitter_max: int = 4
+    augment_subvolume: bool = True
+
+    method_choices = ['nearest_neighbor', 'interpolated']
+    out_of_bounds_choices = ['all_zeros', 'partial_zeros', 'index_error']
+
+
+# How subvolumes are retrieved
+def add_subvolume_arguments(parser):
+    default = SubvolumeGeneratorInfo()
+    parser.add_argument('--subvolume-method', default=default.method, choices=default.method_choices,
+                        help='method for sampling subvolumes')
+    parser.add_argument('--subvolume-shape-microns', metavar='um', nargs=3, type=float, default=default.shape_microns,
+                        help='subvolume shape (microns) in (z, y, x)')
+    parser.add_argument('--subvolume-shape-voxels', metavar='n', nargs=3, type=int,
+                        help='subvolume shape (voxels) in (z, y, x)', default=default.shape_voxels)
+    parser.add_argument('--move-along-normal', metavar='n', type=float, default=default.move_along_normal,
+                        help='number of voxels to move along normal vector before sampling a subvolume')
+    parser.add_argument('--normalize-subvolumes', action='store_true',
+                        help='normalize each subvolume to zero mean and unit variance')
+    parser.add_argument('--jitter-max', metavar='n', type=int, default=default.jitter_max)
+    parser.add_argument('--no-augmentation', action='store_false', dest='augmentation')
+
+
+# Tuple (not dataclass) I believe because needs to be passed through PyTorch and needs to be basic structure TODO check
 FeatureMetadata = namedtuple(
     'FeatureMetadata',
     ('path', 'surface_x', 'surface_y', 'x', 'y', 'z', 'n_x', 'n_y', 'n_z'),
@@ -27,22 +80,18 @@ class DataSource(ABC):
 
     def __init__(self, path: str) -> None:
         self.path = path
-        source_file_contents, relative_url = inkid.ops.get_raw_data_from_file_or_url(path, return_relative_url=True)
-        source_json: Dict = json.load(source_file_contents)
+        source_file_contents, relative_url = inkid.util.get_raw_data_from_file_or_url(path, return_relative_url=True)
+        self.source_json: Dict = json.load(source_file_contents)
         # Validate JSON fits schema
-        jsonschema.validate(source_json, inkid.ops.json_schema('dataSource0.1'))
-        # Save original source
-        self.source_json: Dict = source_json.copy()
+        jsonschema.validate(self.source_json, inkid.util.json_schema('dataSource0.1'))
         # Normalize paths in JSON
         for key in ['volume', 'ppm', 'mask', 'ink_label', 'rgb_label', 'volcart_texture_label']:
-            if key in source_json:
-                source_json[key] = inkid.ops.normalize_path(source_json[key], relative_url)
-        self.data_dict: Dict = source_json
+            if key in self.source_json:
+                self.source_json[key] = inkid.util.normalize_path(self.source_json[key], relative_url)
 
-        self.feature_args: Dict = dict()
-
-        self.label_types: List[str] = []
-        self.label_args: Dict = dict()
+        self.feature_args: dict = dict()
+        self.label_types: list[str] = []
+        self.label_args: dict = dict()
 
     @abstractmethod
     def __len__(self):
@@ -86,27 +135,27 @@ class RegionSource(DataSource):
         super().__init__(path)
 
         # Initialize region's PPM, volume, etc
-        self._ppm: inkid.data.PPM = inkid.data.PPM.from_path(self.data_dict['ppm'])
-        self.volume: inkid.data.Volume = inkid.data.Volume.from_path(self.data_dict['volume'])
-        self.bounding_box: Tuple[int, int, int, int] = self.data_dict['bounding_box'] or self.get_default_bounds()
-        self._invert_normals: bool = self.data_dict['invert_normals']
+        self._ppm: inkid.data.PPM = inkid.data.PPM.from_path(self.source_json['ppm'])
+        self.volume: inkid.data.Volume = inkid.data.Volume.from_path(self.source_json['volume'])
+        self.bounding_box: Tuple[int, int, int, int] = self.source_json['bounding_box'] or self.get_default_bounds()
+        self._invert_normals: bool = self.source_json['invert_normals']
 
         # Mask and label images
         self._mask, self._ink_label, self._rgb_label, self._volcart_texture_label = None, None, None, None
-        if self.data_dict['mask'] is not None:
-            self._mask = np.array(Image.open(self.data_dict['mask']))
-        if self.data_dict['ink_label'] is not None:
-            im = Image.open(self.data_dict['ink_label']).convert('L')  # Allow RGB mode images
+        if self.source_json['mask'] is not None:
+            self._mask = np.array(Image.open(self.source_json['mask']))
+        if self.source_json['ink_label'] is not None:
+            im = Image.open(self.source_json['ink_label']).convert('L')  # Allow RGB mode images
             self._ink_label = np.array(im)
-        if self.data_dict['rgb_label'] is not None:
-            im = Image.open(self.data_dict['rgb_label']).convert('RGB')
+        if self.source_json['rgb_label'] is not None:
+            im = Image.open(self.source_json['rgb_label']).convert('RGB')
             self._rgb_label = np.array(im).astype(np.float32)
             # Make sure RGB image loaded wasn't more than 8 bit
             assert np.amax(self._rgb_label) <= np.iinfo(np.uint8).max
             # Map from [0, 255] to [0, 1]
             self._rgb_label /= np.iinfo(np.uint8).max
-        if self.data_dict['volcart_texture_label'] is not None:
-            im = Image.open(self.data_dict['volcart_texture_label'])
+        if self.source_json['volcart_texture_label'] is not None:
+            im = Image.open(self.source_json['volcart_texture_label'])
             # Assuming image is uint16 data but Pillow loads it as uint32 ('I')
             assert im.mode == 'I'
             self._volcart_texture_label = np.array(im).astype(np.float32)
@@ -120,10 +169,7 @@ class RegionSource(DataSource):
         # Mark that this list needs updating so that it will be filled before being accessed
         self._points_list_needs_update: bool = True
 
-        self.grid_spacing = 1
-        self.specify_inkness = None
-        self.undersampling_ink_ratio = None
-        self.oversampling_ink_ratio = None
+        self.sampler = RegionPointSampler()
 
         # Prediction images
         self._ink_classes_prediction_image = np.zeros((self._ppm.height, self._ppm.width), np.uint16)
@@ -184,20 +230,33 @@ class RegionSource(DataSource):
 
     def update_points_list(self) -> None:
         """Update the list of points after changes to the bounding box, grid spacing, or some other options."""
+        # TODO move this inside sampler
+        if self._ink_label is not None and self.sampler.ambiguous_ink_labels_filter_radius is not None:
+            ambiguous_labels_mask = Image.fromarray(self._ink_label)
+            # 3x3 Laplacian kernel for edge detection
+            ambiguous_labels_mask = ambiguous_labels_mask.filter(ImageFilter.FIND_EDGES)
+            # Max filter for dilation
+            dilation_kernel_width = int(2 * self.sampler.ambiguous_ink_labels_filter_radius + 1)
+            ambiguous_labels_mask = ambiguous_labels_mask.filter(ImageFilter.MaxFilter(dilation_kernel_width))
+            self.sampler.ambiguous_labels_mask = np.array(ambiguous_labels_mask)
         positive_points = list()
         negative_points = list()
         unlabeled_points = list()
         x0, y0, x1, y1 = self.bounding_box
-        for y in range(y0, y1, self.grid_spacing):
-            for x in range(x0, x1, self.grid_spacing):
+        for y in range(y0, y1, self.sampler.grid_spacing):
+            for x in range(x0, x1, self.sampler.grid_spacing):
                 if not self.is_on_surface(x, y):
                     continue
-                if self.specify_inkness is not None:
-                    if self.specify_inkness and not self.is_ink(x, y):
+                if self.sampler.specify_inkness is not None:
+                    if self.sampler.specify_inkness and not self.is_ink(x, y):
                         continue
-                    elif not self.specify_inkness and self.is_ink(x, y):
+                    elif not self.sampler.specify_inkness and self.is_ink(x, y):
                         continue
-                if self.oversampling_ink_ratio is not None or self.undersampling_ink_ratio is not None:
+                # Filter out points with ambiguous ink labels
+                if self.sampler.ambiguous_labels_mask is not None:
+                    if self.sampler.ambiguous_labels_mask[y, x] != 0:
+                        continue
+                if self.sampler.oversampling_ink_ratio is not None or self.sampler.undersampling_ink_ratio is not None:
                     if self.is_ink(x, y):
                         positive_points.append((x, y))
                     else:
@@ -217,13 +276,13 @@ class RegionSource(DataSource):
         undersampling_ink_ratio: float (default=None)
         oversampling_ink_ratio: float  (default=None)
         """
-        if self.undersampling_ink_ratio is not None:
-            negative_ratio = 1.0 - self.undersampling_ink_ratio
-            negatives_needed = int(len(positive_points) * negative_ratio / self.undersampling_ink_ratio)
+        if self.sampler.undersampling_ink_ratio is not None:
+            negative_ratio = 1.0 - self.sampler.undersampling_ink_ratio
+            negatives_needed = int(len(positive_points) * negative_ratio / self.sampler.undersampling_ink_ratio)
             self._points = positive_points + random.choices(negative_points, k=negatives_needed)
-        elif self.oversampling_ink_ratio is not None:
-            negative_ratio = 1.0 - self.oversampling_ink_ratio
-            positives_needed = int(len(negative_points) * self.oversampling_ink_ratio / negative_ratio)
+        elif self.sampler.oversampling_ink_ratio is not None:
+            negative_ratio = 1.0 - self.sampler.oversampling_ink_ratio
+            positives_needed = int(len(negative_points) * self.sampler.oversampling_ink_ratio / negative_ratio)
             positive_reps = 1 if positives_needed < len(positive_points) else \
                 int(positives_needed / len(positive_points))
             extended_positive_points = list(np.repeat(np.array(positive_points), positive_reps, axis=0))
@@ -234,40 +293,13 @@ class RegionSource(DataSource):
         self._points_list_needs_update = False
 
     @property
-    def grid_spacing(self):
-        return self._grid_spacing
+    def sampler(self):
+        return self._sampler
 
-    @grid_spacing.setter
-    def grid_spacing(self, spacing: int):
-        self._grid_spacing = spacing
-        self._points_list_needs_update = True
-
-    @property
-    def specify_inkness(self):
-        return self._specify_inkness
-
-    @specify_inkness.setter
-    def specify_inkness(self, inkness: Optional[bool]):
-        self._specify_inkness = inkness
-        self._points_list_needs_update = True
-
-    @property
-    def oversampling_ink_ratio(self):
-        return self._oversampling_ink_ratio
-
-    @oversampling_ink_ratio.setter
-    def oversampling_ink_ratio(self, ratio: Optional[float]):
-        self._oversampling_ink_ratio = ratio
-        self._points_list_needs_update = True
-
-    @property
-    def undersampling_ink_ratio(self):
-        return self._undersampling_ink_ratio
-
-    @undersampling_ink_ratio.setter
-    def undersampling_ink_ratio(self, ratio: Optional[float]):
-        self._undersampling_ink_ratio = ratio
-        self._points_list_needs_update = True
+    @sampler.setter
+    def sampler(self, sampler: RegionPointSampler):
+        self._sampler = sampler
+        self.update_points_list()
 
     def is_ink(self, x: int, y: int) -> bool:
         assert self._ink_label is not None
@@ -345,8 +377,8 @@ class RegionSource(DataSource):
         """
         # Repeat prediction to fill grid square so prediction image is not single pixels in sea of blackness
         if prediction.shape[1] == 1 and prediction.shape[2] == 1:
-            prediction = np.repeat(prediction, repeats=self.grid_spacing, axis=1)
-            prediction = np.repeat(prediction, repeats=self.grid_spacing, axis=2)
+            prediction = np.repeat(prediction, repeats=self.sampler.grid_spacing, axis=1)
+            prediction = np.repeat(prediction, repeats=self.sampler.grid_spacing, axis=2)
         # Calculate distance from center to edges of square we are writing
         y_d, x_d = np.array(prediction.shape)[1:] // 2
         # Iterate over label indices
@@ -380,7 +412,7 @@ class RegionSource(DataSource):
                 else:
                     raise ValueError(f'Unknown label_type: {label_type} used for prediction')
 
-    def save_predictions(self, directory, suffix):
+    def write_predictions(self, directory, suffix):
         """Write the buffered prediction images to disk."""
         if not os.path.exists(directory):
             os.makedirs(directory)
@@ -405,6 +437,20 @@ class RegionSource(DataSource):
         self._volcart_texture_prediction_image = np.zeros((self._ppm.height, self._ppm.width), np.uint16)
         self._volcart_texture_prediction_image_written_to = False
 
+    def write_ambiguous_labels_diagnostic_mask(self, directory):
+        if self._points_list_needs_update:
+            self.update_points_list()
+        # Overlay on ink label image for diagnostic purposes
+        overlay = Image.fromarray(self.sampler.ambiguous_labels_mask).convert('RGBA')
+        overlay_data = np.array(overlay)
+        red, green, blue, _ = overlay_data.T
+        white_areas = (red == 255) & (blue == 255) & (green == 255)
+        overlay_data[...][white_areas.T] = (255, 0, 0, 128)  # Transpose back needed
+        overlay = Image.fromarray(overlay_data)
+        ink_label_diagnostic_img = Image.fromarray(self._ink_label).copy().convert('RGBA')
+        ink_label_diagnostic_img.alpha_composite(overlay)
+        ink_label_diagnostic_img.save(os.path.join(directory, f'{self.name}_ink_label_diagnostic.png'))
+
 
 class VolumeSource(DataSource):
     """A volume data source generates subvolumes and possibly labels from anywhere in a volume.
@@ -423,6 +469,37 @@ class VolumeSource(DataSource):
         raise NotImplementedError
 
 
+def flatten_data_sources_list(source_paths: List[str]) -> List[str]:
+    """Expand list of .txt and .json filenames into flattened list of .json filenames.
+
+    The file paths in the input can point to either .txt or .json files. The .txt
+    files are themselves lists of other files, which can further be .txt or .json.
+    This function goes through this list, and for any .txt file it reads the list
+    that file contains and recursively processes it. The result is a list of only
+    .json data source file paths.
+
+    Args:
+        source_paths (List[str]): A list of .txt dataset or .json data source file paths.
+
+    Returns:
+        List[str]: A list of absolute paths to the .json data source files representing this dataset.
+
+    """
+    expanded_paths: List[str] = list()
+    for source_path in source_paths:
+        file_extension = os.path.splitext(source_path)[1]
+        if file_extension == '.json':
+            expanded_paths.append(source_path)
+        elif file_extension == '.txt':
+            with open(source_path, 'r') as f:
+                sources_in_file = f.read().splitlines()
+            sources_in_file = [os.path.join(os.path.dirname(source_path), s) for s in sources_in_file]
+            expanded_paths += flatten_data_sources_list(sources_in_file)
+        else:
+            raise ValueError(f'Data source {source_path} is not a permitted file type (.txt or .json)')
+    return list(dict.fromkeys(expanded_paths))  # Remove duplicates, keep order https://stackoverflow.com/a/17016257
+
+
 class Dataset(torch.utils.data.Dataset):
     """A PyTorch Dataset to serve inkid features and labels.
 
@@ -433,8 +510,7 @@ class Dataset(torch.utils.data.Dataset):
 
     """
 
-    def __init__(self, source_paths: List[str], feature_args: Dict = None, label_types: Dict = None,
-                 label_args: Dict = None) -> None:
+    def __init__(self, source_paths: List[str]) -> None:
         """Initialize the dataset given .json data source and/or .txt dataset paths.
 
         This recursively expands any provided .txt dataset files until there is just a
@@ -445,100 +521,37 @@ class Dataset(torch.utils.data.Dataset):
             source_paths: A list of .txt dataset or .json data source file paths.
 
         """
-        # Convert the list of paths to a list of InkidDataSources
-        source_paths = self.expand_data_sources(source_paths)
+        source_paths = flatten_data_sources_list(source_paths)
         self.sources: List[DataSource] = list()
         for source_path in source_paths:
             self.sources.append(DataSource.from_path(source_path))
 
-        self._set_for_all_sources('feature_args', feature_args)
-        if label_types is not None:
-            self._set_for_all_sources('label_types', label_types)
-        if label_args is not None:
-            self._set_for_all_sources('label_args', label_args)
-
-    def expand_data_sources(self, source_paths: List[str]) -> List[str]:
-        """Expand list of .txt and .json filenames into flattened list of .json filenames.
-
-        The file paths in the input can point to either .txt or .json files. The .txt
-        files are themselves lists of other files, which can further be .txt or .json.
-        This function goes through this list, and for any .txt file it reads the list
-        that file contains and recursively processes it. The result is a list of only
-        .json data source file paths.
-
-        Args:
-            source_paths (List[str]): A list of .txt dataset or .json data source file paths.
-
-        Returns:
-            List[str]: A list of absolute paths to the .json data source files representing this dataset.
-
-        """
-        expanded_paths: List[str] = list()
-        for source_path in source_paths:
-            file_extension = os.path.splitext(source_path)[1]
-            if file_extension == '.json':
-                expanded_paths.append(source_path)
-            elif file_extension == '.txt':
-                with open(source_path, 'r') as f:
-                    sources_in_file = f.read().splitlines()
-                sources_in_file = [os.path.join(os.path.dirname(source_path), s) for s in sources_in_file]
-                expanded_paths += self.expand_data_sources(sources_in_file)
-            else:
-                raise ValueError(f'Data source {source_path} is not a permitted file type (.txt or .json)')
-        return list(dict.fromkeys(expanded_paths))  # Remove duplicates, keep order https://stackoverflow.com/a/17016257
-
-    def set_regions_grid_spacing(self, spacing: int):
-        for source in self.sources:
-            if isinstance(source, RegionSource):
-                source.grid_spacing = spacing
-
     def __len__(self) -> int:
         return sum([len(source) for source in self.sources])
 
-    def __getitem__(self, item: int):
+    def __getitem__(self, idx: int):
         for source in self.sources:
             source_len = len(source)
-            if item < source_len:
-                return source[item]
-            item -= source_len
+            if idx < source_len:
+                return source[idx]
+            idx -= source_len
         raise IndexError
 
-    def regions(self) -> List[RegionSource]:
+    def regions(self) -> list[RegionSource]:
         return [source for source in self.sources if isinstance(source, RegionSource)]
 
-    def get_source(self, source_path: str) -> Optional[DataSource]:
-        for source in self.sources:
-            if source.path == source_path:
-                return source
+    def pop_nth_region(self, n: int) -> RegionSource:
+        region = self.regions()[n]
+        for i, source in enumerate(self.sources):
+            if source.path == region.path:
+                return self.sources.pop(i)
+        raise ValueError('No source found with same path as desired region.')
+
+    def source(self, source_path: str) -> Optional[DataSource]:
+        for s in self.sources:
+            if s.path == source_path:
+                return s
         return None
 
-    def pop_source(self, source_path: str) -> DataSource:
-        source_idx_to_remove: int = self.source_paths().index(source_path)
-        return self.sources.pop(source_idx_to_remove)
-
-    def source_paths(self) -> List[str]:
-        return [source.path for source in self.sources]
-
-    def data_dict(self):
-        return {source.path: source.data_dict for source in self.sources}
-
-    def _set_for_all_sources(self, attribute: str, value):
-        for source in self.sources:
-            setattr(source, attribute, value)
-
-    def save_predictions(self, directory, suffix):
-        for region in self.regions():
-            region.save_predictions(directory, suffix)
-
-    def reset_predictions(self):
-        for region in self.regions():
-            region.reset_predictions()
-
-    def set_inkness(self, inkness: Optional[bool]):
-        self._set_for_all_sources('specify_inkness', inkness)
-
-    def set_oversampling(self, positives_probability: float):
-        self._set_for_all_sources('oversampling_ink_ratio', positives_probability)
-
-    def set_undersampling(self, positives_probability: float):
-        self._set_for_all_sources('undersampling_ink_ratio', positives_probability)
+    def source_json(self) -> dict:
+        return {source.path: source.source_json for source in self.sources}

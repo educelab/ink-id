@@ -1,6 +1,6 @@
 """Identify ink with machine learning."""
 
-from . import ops
+from . import util
 from . import model
 from . import data
 from . import metrics

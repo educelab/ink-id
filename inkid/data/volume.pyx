@@ -8,7 +8,6 @@ cimport libc.math as math
 import logging
 import os
 import random
-from typing import Dict, Optional
 
 import numpy as np
 cimport numpy as cnp
@@ -17,7 +16,7 @@ from tqdm import tqdm
 
 cimport inkid.data.mathutils as mathutils
 
-import inkid.ops
+import inkid.util
 
 cpdef norm(vec):
     vec = np.array(vec)
@@ -208,19 +207,19 @@ cdef class Volume:
 
     def z_slice(self, int idx):
         if 0 <= idx < self.shape_z:
-            return inkid.ops.uint16_to_float32_normalized_0_1(self._data_view[idx, :, :])
+            return inkid.util.uint16_to_float32_normalized_0_1(self._data_view[idx, :, :])
         else:
             return np.zeros((self.shape_y, self.shape_x), dtype=np.float32)
 
     def y_slice(self, int idx):
         if 0 <= idx < self.shape_y:
-            return inkid.ops.uint16_to_float32_normalized_0_1(self._data_view[:, idx, :])
+            return inkid.util.uint16_to_float32_normalized_0_1(self._data_view[:, idx, :])
         else:
             return np.zeros((self.shape_z, self.shape_x), dtype=np.float32)
 
     def x_slice(self, int idx):
         if 0 <= idx < self.shape_x:
-            return inkid.ops.uint16_to_float32_normalized_0_1(self._data_view[:, :, idx])
+            return inkid.util.uint16_to_float32_normalized_0_1(self._data_view[:, :, idx])
         else:
             return np.zeros((self.shape_z, self.shape_y), dtype=np.float32)
 
@@ -456,7 +455,7 @@ cdef class Volume:
                 the center point along the center vector.
             jitter_max: Jitter the center point a random amount up to
                 this value in either direction along the normal vector.
-            augment_subvolume: Whether or not to perform augmentation.
+            augment_subvolume: Whether to perform augmentation.
             method: String to indicate how to get the volume data.
 
         Returns:
@@ -553,7 +552,7 @@ cdef class Volume:
         assert subvolume.shape == tuple(shape_voxels)
 
         # Convert to float normalized to [0, 1]
-        subvolume = inkid.ops.uint16_to_float32_normalized_0_1(subvolume)
+        subvolume = inkid.util.uint16_to_float32_normalized_0_1(subvolume)
         # Add singleton dimension for number of channels
         subvolume = np.expand_dims(subvolume, 0)
 

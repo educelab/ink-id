@@ -43,7 +43,7 @@ def main():
             args.subvolume_shape,
             augment_subvolume=False
         )
-        statistics = inkid.ops.get_descriptive_statistics(subvolume)
+        statistics = inkid.util.get_descriptive_statistics(subvolume)
         all_statistics.append(statistics)
         all_points.append(point)
     all_statistics = np.array(all_statistics)
@@ -64,7 +64,7 @@ def main():
                 np.array([region_id]),
                 np.array(
                     [
-                        int(inkid.ops.remap(
+                        int(inkid.util.remap(
                             statistics[stat_idx],
                             mins[stat_idx],
                             maxs[stat_idx],
@@ -75,11 +75,12 @@ def main():
                 ),
                 np.array([[x, y]])
             )
-        regions.save_predictions(
-            os.path.join(output_path, 'predictions'),
-            'stats_{}'.format(stat_idx)
-        )
-        regions.reset_predictions()
+        for region in regions:
+            region.write_predictions(
+                os.path.join(output_path, 'predictions'),
+                'stats_{}'.format(stat_idx)
+            )
+            region.reset_predictions()
     print('done')
 
 

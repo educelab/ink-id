@@ -1,21 +1,21 @@
-inkid.ops package
+inkid.util package
 =================
 
 Submodules
 ----------
 
-inkid.ops.ops module
+inkid.util.util module
 --------------------
 
-.. automodule:: inkid.ops.ops
+.. automodule:: inkid.util.util
    :members:
    :undoc-members:
    :show-inheritance:
 
-inkid.ops.test\_ops module
+inkid.util.test\_util module
 --------------------------
 
-.. automodule:: inkid.ops.test_ops
+.. automodule:: inkid.util.test_util
    :members:
    :undoc-members:
    :show-inheritance:
@@ -23,7 +23,7 @@ inkid.ops.test\_ops module
 Module contents
 ---------------
 
-.. automodule:: inkid.ops
+.. automodule:: inkid.util
    :members:
    :undoc-members:
    :show-inheritance:
