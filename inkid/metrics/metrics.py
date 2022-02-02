@@ -18,7 +18,7 @@ def confusion(prediction, truth):
     confusion_vector = prediction.float() / truth.float()
 
     true_positives = torch.sum(confusion_vector == 1).item()
-    false_positives = torch.sum(confusion_vector == float('inf')).item()
+    false_positives = torch.sum(confusion_vector == float("inf")).item()
     true_negatives = torch.sum(torch.isnan(confusion_vector)).item()
     false_negatives = torch.sum(confusion_vector == 0).item()
 
@@ -27,12 +27,12 @@ def confusion(prediction, truth):
 
 def recall(pred, yb):
     tp, _, _, fn = confusion(pred, yb)
-    return float('nan') if tp + fn == 0 else tp / (tp + fn)
+    return float("nan") if tp + fn == 0 else tp / (tp + fn)
 
 
 def precision(pred, yb):
     tp, fp, _, _ = confusion(pred, yb)
-    return float('nan') if tp + fp == 0 else tp / (tp + fp)
+    return float("nan") if tp + fp == 0 else tp / (tp + fp)
 
 
 def fbeta(pred, yb, beta=0.3):
@@ -51,7 +51,7 @@ def auc(pred, yb):
     try:
         return roc_auc_score(yb.cpu().numpy(), pred.cpu().numpy())
     except ValueError:  # If only one class present in yb, ROC AUC not defined
-        return float('nan')
+        return float("nan")
 
 
 def metrics_dict(metric_results):
@@ -60,20 +60,23 @@ def metrics_dict(metric_results):
         result_dict = {}
         for label_type in metric_results:
             for k, v in metric_results[label_type].items():
-                if 'sum' in k:
-                    result_dict[f'{label_type}_{k}'] = np.nansum([float(i) for i in v])
+                if "sum" in k:
+                    result_dict[f"{label_type}_{k}"] = np.nansum([float(i) for i in v])
                 else:
-                    result_dict[f'{label_type}_{k}'] = np.nanmean([float(i) for i in v])
+                    result_dict[f"{label_type}_{k}"] = np.nanmean([float(i) for i in v])
         return result_dict
 
 
 def metrics_str(metric_results):
-    return ' '.join([k + ': ' + f'{v:5.2g}' for k, v in metrics_dict(metric_results).items()])
+    return " ".join(
+        [k + ": " + f"{v:5.2g}" for k, v in metrics_dict(metric_results).items()]
+    )
 
 
 def weight_loss(weight: float, loss: callable):
     def new_loss_func(pred, yb):
         return weight * loss(pred, yb)
+
     return new_loss_func
 
 

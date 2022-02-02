@@ -29,7 +29,7 @@ To install the source for development:
     $ python -m venv .venv              # Create a virtual environment
     $ . .venv/bin/activate              # Activate the environment
     (.venv) $ pip install -U pip        # Upgrade pip
-    (.venv) $ pip install -e .          # Install ink-id and dependencies
+    (.venv) $ pip install -e .[dev]     # Install ink-id and dependencies, including those specific to development
     (.venv) $ deactivate                # When finished, deactivate the environment
 
 Cython modules are automatically built during the installation.

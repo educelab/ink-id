@@ -1,43 +1,49 @@
-'''Create and configure the main window.'''
+"""Create and configure the main window."""
 
 from pathlib import Path
 from PySide6.QtCore import Slot, Qt, QModelIndex
 from PySide6.QtGui import QKeySequence, QScreen
 from PySide6.QtWidgets import QMainWindow, QFileDialog, QSplitter, QMessageBox
-from .datasets import DatasetModel, DatasetTreeView, DatasetError, DatasetEditor, DatasourceEditor
+from .datasets import (
+    DatasetModel,
+    DatasetTreeView,
+    DatasetError,
+    DatasetEditor,
+    DatasourceEditor,
+)
 
 
 class MainWindow(QMainWindow):
-    '''Create and configure the main window.'''
+    """Create and configure the main window."""
 
     def __init__(self):
         super().__init__()
         self.dataset_model = None
         self._create_menus()
         self._create_central_widget()
-        self.setWindowTitle('Region Set Studio')
+        self.setWindowTitle("Region Set Studio")
         self.resize(self.screen().availableSize() * 0.75)
         self.show()
 
     def _create_menus(self):
         menu_bar = self.menuBar()
         # Menu: File
-        menu_file = menu_bar.addMenu('&File')
+        menu_file = menu_bar.addMenu("&File")
         # Action: Open Data Set
-        self.act_new_ds = menu_file.addAction('New Dataset')
+        self.act_new_ds = menu_file.addAction("New Dataset")
         self.act_new_ds.setShortcut(QKeySequence.New)
         self.act_new_ds.triggered.connect(self.action_new_dataset)
         # Action: Open Data Set
-        self.act_open_ds = menu_file.addAction('Open Dataset')
+        self.act_open_ds = menu_file.addAction("Open Dataset")
         self.act_open_ds.setShortcut(QKeySequence.Open)
         self.act_open_ds.triggered.connect(self.action_open_dataset)
         # Action: Close Data Set
-        self.act_close_ds = menu_file.addAction('Close Dataset')
+        self.act_close_ds = menu_file.addAction("Close Dataset")
         self.act_close_ds.setShortcut(QKeySequence.Close)
         self.act_close_ds.triggered.connect(self.action_close_dataset)
         self.act_close_ds.setEnabled(False)
         # Action: Quit
-        self.act_quit = menu_file.addAction('Quit')
+        self.act_quit = menu_file.addAction("Quit")
         self.act_quit.setShortcut(QKeySequence.Quit)
         self.act_quit.triggered.connect(self.action_quit)
 
@@ -58,15 +64,18 @@ class MainWindow(QMainWindow):
             self.act_open_ds.setEnabled(False)
             self.act_close_ds.setEnabled(True)
         except DatasetError as err:
-            QMessageBox.critical(self, 'Error loading dataset', str(err))
+            QMessageBox.critical(self, "Error loading dataset", str(err))
             self.dataset_model = None
 
     def _safe_to_close(self):
         if self.splitter.count() > 1:
             editor = self.splitter.widget(1)
             if editor.tainted():
-                discard_yorn = QMessageBox.question(self, 'Discard unsaved changes?',
-                                                    'You have unsaved changes. Are you sure you want to discard them?')
+                discard_yorn = QMessageBox.question(
+                    self,
+                    "Discard unsaved changes?",
+                    "You have unsaved changes. Are you sure you want to discard them?",
+                )
                 if discard_yorn == QMessageBox.No:
                     return False
         return True
@@ -74,32 +83,33 @@ class MainWindow(QMainWindow):
     @Slot(bool)
     def action_new_dataset(self, checked: bool = True):
         filename = QFileDialog.getSaveFileName(
-            self, 'New Dataset', filter='Datasets (*.txt)')[0]
+            self, "New Dataset", filter="Datasets (*.txt)"
+        )[0]
         if len(filename) < 1:
             return
-        path = Path(filename).with_suffix('.txt')
+        path = Path(filename).with_suffix(".txt")
         try:
             # Create (or truncate) the file
-            with open(path, 'w'):
+            with open(path, "w"):
                 pass
             # Then load up that dataset file
             self._load_dataset(str(path))
         except OSError as err:
-            QMessageBox.critical(self, 'Failed to save file', str(err))
+            QMessageBox.critical(self, "Failed to save file", str(err))
 
     @Slot(bool)
     def action_open_dataset(self, checked=False):
-        '''Open a dataset and update the GUI for browsing it.'''
-        filename = QFileDialog.getOpenFileName(parent=self,
-                                               caption='Open Dataset',
-                                               filter='Datasets (*.txt)')[0]
+        """Open a dataset and update the GUI for browsing it."""
+        filename = QFileDialog.getOpenFileName(
+            parent=self, caption="Open Dataset", filter="Datasets (*.txt)"
+        )[0]
         if len(filename) < 1:
             return
         self._load_dataset(filename)
 
     @Slot(bool)
     def action_close_dataset(self, checked=False):
-        '''Close a currently open dataset.'''
+        """Close a currently open dataset."""
         if not self._safe_to_close():
             return
         # We need to destroy the second widget from the splitter
@@ -114,7 +124,7 @@ class MainWindow(QMainWindow):
 
     @Slot(bool)
     def action_quit(self, checked=False):
-        '''Close the main window, causing the application to exit.'''
+        """Close the main window, causing the application to exit."""
         if self._safe_to_close():
             self.close()
 
@@ -129,14 +139,14 @@ class MainWindow(QMainWindow):
         try:
             editor = item.editor(self)
         except DatasetError as err:
-            QMessageBox.critical(self, 'Error loading editor', str(err))
+            QMessageBox.critical(self, "Error loading editor", str(err))
             return
         self.dataset_tree.setCurrentIndex(index)
         if isinstance(editor, DatasetEditor):
             editor.saved.connect(self.reload_dataset)
         elif isinstance(editor, DatasourceEditor):
             editor.switch_editors.connect(self.switch_editors)
-        if (self.splitter.count() > 1):
+        if self.splitter.count() > 1:
             self.splitter.replaceWidget(1, editor)
         else:
             self.splitter.addWidget(editor)

@@ -52,7 +52,7 @@ def save_volume_to_image_stack(volume, dirname):
         image *= np.iinfo(np.uint16).max  # Assume incoming [0, 1] floats
         image = image.astype(np.uint16)
         image = Image.fromarray(image)
-        image.save(os.path.join(dirname, str(z) + '.tif'))
+        image.save(os.path.join(dirname, str(z) + ".tif"))
 
 
 def remap(x, in_min, in_max, out_min, out_max):
@@ -71,14 +71,7 @@ def get_descriptive_statistics(tensor):
     t_median = np.median(tensor)
     t_var = tensor.var()
 
-    return np.array([
-        t_min,
-        t_max,
-        t_mean,
-        t_std,
-        t_median,
-        t_var
-    ])
+    return np.array([t_min, t_max, t_mean, t_std, t_median, t_var])
 
 
 def rclone_transfer_to_remote(rclone_remote, output_path, move=False):
@@ -86,48 +79,56 @@ def rclone_transfer_to_remote(rclone_remote, output_path, move=False):
     path = os.path.abspath(output_path)
     while True:
         path, folder = os.path.split(path)
-        if folder != '':
+        if folder != "":
             folders.append(folder)
         else:
-            if path != '':
+            if path != "":
                 folders.append(path)
             break
     folders.reverse()
 
     if rclone_remote is None:
         for folder in folders:
-            if '-drive' in folder:
+            if "-drive" in folder:
                 rclone_remote = folder
                 break
 
     if rclone_remote not in folders:
-        print('Provided rclone transfer remote was not a directory '
-              'name in the output path, so it is not clear where in the '
-              'remote to put the files. Transfer canceled.')
+        print(
+            "Provided rclone transfer remote was not a directory "
+            "name in the output path, so it is not clear where in the "
+            "remote to put the files. Transfer canceled."
+        )
     else:
         while folders.pop(0) != rclone_remote:
             continue
 
         if move:
             command = [
-                'rclone',
-                '--transfers=32', '--checkers=16', '--drive-chunk-size=16384k', '--drive-upload-cutoff=16384k',
-                'move',
-                '-v',
-                '--delete-empty-src-dirs',
+                "rclone",
+                "--transfers=32",
+                "--checkers=16",
+                "--drive-chunk-size=16384k",
+                "--drive-upload-cutoff=16384k",
+                "move",
+                "-v",
+                "--delete-empty-src-dirs",
                 output_path,
-                rclone_remote + ':' + os.path.join(*folders)
+                rclone_remote + ":" + os.path.join(*folders),
             ]
         else:
             command = [
-                'rclone',
-                '--transfers=32', '--checkers=16', '--drive-chunk-size=16384k', '--drive-upload-cutoff=16384k',
-                'copy',
-                '-v',
+                "rclone",
+                "--transfers=32",
+                "--checkers=16",
+                "--drive-chunk-size=16384k",
+                "--drive-upload-cutoff=16384k",
+                "copy",
+                "-v",
                 output_path,
-                rclone_remote + ':' + os.path.join(*folders)
+                rclone_remote + ":" + os.path.join(*folders),
             ]
-        logging.info(' '.join(command))
+        logging.info(" ".join(command))
         subprocess.call(command)
 
 
@@ -142,44 +143,59 @@ def perform_validation(model, dataloader, metrics, device):
     """Run the validation process using a model and dataloader, and return the results of all metrics."""
     model.eval()  # Turn off training mode for batch norm and dropout purposes
     with torch.no_grad():
-        metric_results = {label_type: {metric: [] for metric in metrics[label_type]} for label_type in metrics}
+        metric_results = {
+            label_type: {metric: [] for metric in metrics[label_type]}
+            for label_type in metrics
+        }
         for batch in tqdm(dataloader):
-            xb = batch['feature'].to(device)
+            xb = batch["feature"].to(device)
             preds = model(xb)
             total_loss = None
             for label_type in model.labels:
-                yb = xb.clone() if label_type == 'autoencoded' else batch[label_type].to(device)
+                yb = (
+                    xb.clone()
+                    if label_type == "autoencoded"
+                    else batch[label_type].to(device)
+                )
                 pred = preds[label_type]
                 for metric, fn in metrics[label_type].items():
                     metric_result = fn(pred, yb)
                     metric_results[label_type][metric].append(metric_result)
-                    if metric == 'loss':
+                    if metric == "loss":
                         if total_loss is None:
                             total_loss = metric_result
                         else:
                             total_loss = total_loss + metric_result
             if total_loss is not None:
-                if 'total' not in metric_results:
-                    metric_results['total'] = {'loss': []}
-                metric_results['total']['loss'].append(total_loss)
+                if "total" not in metric_results:
+                    metric_results["total"] = {"loss": []}
+                metric_results["total"]["loss"].append(total_loss)
     model.train()
     return metric_results
 
 
-def generate_prediction_images(dataloader, model, device, predictions_dir, suffix, prediction_averaging):
+def generate_prediction_images(
+    dataloader, model, device, predictions_dir, suffix, prediction_averaging
+):
     """Helper function to generate a prediction image given a model and dataloader, and save it to a file."""
     model.eval()  # Turn off training mode for batch norm and dropout purposes
     with torch.no_grad():
         for batch in tqdm(dataloader):
-            batch_copy = deepcopy(batch)  # https://github.com/pytorch/pytorch/issues/973#issuecomment-459398189
-            batch_metadata = batch_copy['feature_metadata']
-            batch_features = batch_copy['feature']
+            batch_copy = deepcopy(
+                batch
+            )  # https://github.com/pytorch/pytorch/issues/973#issuecomment-459398189
+            batch_metadata = batch_copy["feature_metadata"]
+            batch_features = batch_copy["feature"]
             # Only do those label types actually included in model output
-            for label_type in {'ink_classes', 'rgb_values', 'volcart_texture'}.intersection(model.labels):
+            for label_type in {
+                "ink_classes",
+                "rgb_values",
+                "volcart_texture",
+            }.intersection(model.labels):
                 output_size = {
-                    'volcart_texture': 1,
-                    'ink_classes': 2,
-                    'rgb_values': 3,
+                    "volcart_texture": 1,
+                    "ink_classes": 2,
+                    "rgb_values": 3,
                 }[label_type]
                 # Smooth predictions via augmentation. Augment each subvolume 8-fold via rotations and flips
                 if prediction_averaging:
@@ -197,9 +213,11 @@ def generate_prediction_images(dataloader, model, device, predictions_dir, suffi
                         aug_pxb = aug_pxb.flip(4)
                     preds = model(aug_pxb.to(device))
                     pred = preds[label_type]
-                    if label_type == 'ink_classes':
+                    if label_type == "ink_classes":
                         pred = F.softmax(pred, dim=1)
-                    pred = deepcopy(pred.cpu())  # https://github.com/pytorch/pytorch/issues/973#issuecomment-459398189
+                    pred = deepcopy(
+                        pred.cpu()
+                    )  # https://github.com/pytorch/pytorch/issues/973#issuecomment-459398189
                     # Example pred.shape = [64, 2, 48, 48] (BxCxHxW)
                     # Undo flip and rotation
                     if flip:
@@ -209,18 +227,25 @@ def generate_prediction_images(dataloader, model, device, predictions_dir, suffi
                     # Example pred.shape = [1, 64, 2, 48, 48] (BxCxHxW)
                     # Save this augmentation to the batch totals
                     if batch_preds is None:
-                        batch_preds = np.zeros((0, batch_features.shape[0], output_size, pred.shape[3], pred.shape[4]))
+                        batch_preds = np.zeros(
+                            (
+                                0,
+                                batch_features.shape[0],
+                                output_size,
+                                pred.shape[3],
+                                pred.shape[4],
+                            )
+                        )
                     batch_preds = np.append(batch_preds, pred, axis=0)
                 # Average over batch of predictions after augmentation
                 batch_pred = batch_preds.mean(0)
                 # Separate these three lists
                 source_paths, xs, ys, _, _, _, _, _, _ = batch_metadata
-                for prediction, source_path, x, y in zip(batch_pred, source_paths, xs, ys):
+                for prediction, source_path, x, y in zip(
+                    batch_pred, source_paths, xs, ys
+                ):
                     dataloader.dataset.source(source_path).store_prediction(
-                        int(x),
-                        int(y),
-                        prediction,
-                        label_type
+                        int(x), int(y), prediction, label_type
                     )
     for region in dataloader.dataset.regions():
         region.write_predictions(predictions_dir, suffix)
@@ -230,13 +255,15 @@ def generate_prediction_images(dataloader, model, device, predictions_dir, suffi
 
 def json_schema(schema_name):
     """Return the JSON schema of the specified name from the inkid/schemas directory."""
-    file_path = os.path.join(os.path.dirname(inkid.__file__), 'schemas', schema_name + '.schema.json')
-    with open(file_path, 'r') as f:
+    file_path = os.path.join(
+        os.path.dirname(inkid.__file__), "schemas", schema_name + ".schema.json"
+    )
+    with open(file_path, "r") as f:
         return json.load(f)
 
 
 def dummy_volpkg_path():
-    return os.path.join(os.path.dirname(inkid.__file__), 'examples', 'DummyTest.volpkg')
+    return os.path.join(os.path.dirname(inkid.__file__), "examples", "DummyTest.volpkg")
 
 
 def get_raw_data_from_file_or_url(filename, return_relative_url=False):
@@ -247,22 +274,25 @@ def get_raw_data_from_file_or_url(filename, return_relative_url=False):
 
     """
     url = urlsplit(filename)
-    if url.scheme in ('http', 'https'):
+    if url.scheme in ("http", "https"):
         response = requests.get(filename)
         if response.status_code != 200:
-            raise ValueError(f'Unable to fetch URL '
-                             f'(code={response.status_code}): {filename}')
+            raise ValueError(
+                f"Unable to fetch URL " f"(code={response.status_code}): {filename}"
+            )
         data = response.content
-    elif url.scheme == '':
-        with open(filename, 'rb') as f:
+    elif url.scheme == "":
+        with open(filename, "rb") as f:
             data = f.read()
     else:
-        raise ValueError(f'Unsupported URL: {filename}')
-    relative_url = (url.scheme,
-                    url.netloc,
-                    os.path.dirname(url.path),
-                    url.query,
-                    url.fragment)
+        raise ValueError(f"Unsupported URL: {filename}")
+    relative_url = (
+        url.scheme,
+        url.netloc,
+        os.path.dirname(url.path),
+        url.query,
+        url.fragment,
+    )
     if return_relative_url:
         return BytesIO(data), relative_url
     else:
@@ -273,16 +303,13 @@ def normalize_path(path, relative_url):
     """Normalize path to be absolute and with URL where appropriate."""
     url = urlsplit(path)
     # Leave existing URLs and absolute file paths alone
-    if url.scheme != '' or os.path.isabs(path):
+    if url.scheme != "" or os.path.isabs(path):
         return path
     # For all others, we generate a new URL relative to the
     # region set file itself. This handles all schemas as well
     # as regular file paths.
     new_url = list(relative_url)
-    new_url[2] = os.path.abspath(os.path.join(
-        new_url[2],
-        path
-    ))
+    new_url[2] = os.path.abspath(os.path.join(new_url[2], path))
     return urlunsplit(new_url)
 
 
@@ -294,13 +321,20 @@ def uint16_to_float32_normalized_0_1(img):
     return img
 
 
-def float_0_1_to_cmap_rgb_uint8(img, cmap='turbo'):
+def float_0_1_to_cmap_rgb_uint8(img, cmap="turbo"):
     color_map = cm.get_cmap(cmap)
     return Image.fromarray(np.uint8(color_map(img) * 255))
 
 
-def subvolume_to_sample_img(subvolume, volume, vol_coord, padding, background_color,
-                            autoencoded_subvolume=None, include_vol_slices=True):
+def subvolume_to_sample_img(
+    subvolume,
+    volume,
+    vol_coord,
+    padding,
+    background_color,
+    autoencoded_subvolume=None,
+    include_vol_slices=True,
+):
     max_size = (300, 300)
     red = (255, 0, 0)
     z_shape, y_shape, x_shape = subvolume.shape
@@ -347,14 +381,20 @@ def subvolume_to_sample_img(subvolume, volume, vol_coord, padding, background_co
             sub_images.append(vol_sub_img)
 
     if autoencoded_subvolume is not None:
-        sub_images.append(float_0_1_to_cmap_rgb_uint8(autoencoded_subvolume[z_idx, :, :]))
-        sub_images.append(float_0_1_to_cmap_rgb_uint8(autoencoded_subvolume[:, y_idx, :]))
-        sub_images.append(float_0_1_to_cmap_rgb_uint8(autoencoded_subvolume[:, :, x_idx]))
+        sub_images.append(
+            float_0_1_to_cmap_rgb_uint8(autoencoded_subvolume[z_idx, :, :])
+        )
+        sub_images.append(
+            float_0_1_to_cmap_rgb_uint8(autoencoded_subvolume[:, y_idx, :])
+        )
+        sub_images.append(
+            float_0_1_to_cmap_rgb_uint8(autoencoded_subvolume[:, :, x_idx])
+        )
 
     width = sum([s.size[0] for s in sub_images]) + padding * (len(sub_images) - 1)
     height = max([s.size[1] for s in sub_images])
 
-    img = Image.new('RGB', (width, height), background_color)
+    img = Image.new("RGB", (width, height), background_color)
     x_ctr = 0
     for s in sub_images:
         img.paste(s, (x_ctr, 0))
@@ -363,48 +403,63 @@ def subvolume_to_sample_img(subvolume, volume, vol_coord, padding, background_co
     return img
 
 
-def save_subvolume_batch_to_img(model, device, dataloader, outdir, padding=10, background_color=(128, 128, 128),
-                                include_autoencoded=False, iteration=None, include_vol_slices=True):
+def save_subvolume_batch_to_img(
+    model,
+    device,
+    dataloader,
+    outdir,
+    padding=10,
+    background_color=(128, 128, 128),
+    include_autoencoded=False,
+    iteration=None,
+    include_vol_slices=True,
+):
     os.makedirs(outdir, exist_ok=True)
 
     batch = next(iter(dataloader))
     if include_autoencoded:
         model.eval()  # Turn off training mode for batch norm and dropout purposes
         with torch.no_grad():
-            autoencodeds = model(batch['feature'].to(device))['autoencoded']
+            autoencodeds = model(batch["feature"].to(device))["autoencoded"]
             autoencodeds = autoencodeds.cpu()
             autoencodeds = np.squeeze(autoencodeds, axis=1)
         model.train()
     else:
-        autoencodeds = [None] * len(batch['feature'])
-    subvolumes = np.squeeze(batch['feature'], axis=1)  # Remove channels axis
+        autoencodeds = [None] * len(batch["feature"])
+    subvolumes = np.squeeze(batch["feature"], axis=1)  # Remove channels axis
 
     imgs = []
     for i, (subvolume, autoencoded) in enumerate(zip(subvolumes, autoencodeds)):
-        dataloader.dataset.source(batch['feature_metadata'].path[i])
-        volume = dataloader.dataset.source(batch['feature_metadata'].path[i]).volume
-        imgs.append(subvolume_to_sample_img(
-            subvolume,
-            volume,
-            (batch['feature_metadata'].x[i], batch['feature_metadata'].y[i], batch['feature_metadata'].z[i]),
-            padding,
-            background_color,
-            autoencoded_subvolume=autoencoded,
-            include_vol_slices=include_vol_slices
-        ))
+        dataloader.dataset.source(batch["feature_metadata"].path[i])
+        volume = dataloader.dataset.source(batch["feature_metadata"].path[i]).volume
+        imgs.append(
+            subvolume_to_sample_img(
+                subvolume,
+                volume,
+                (
+                    batch["feature_metadata"].x[i],
+                    batch["feature_metadata"].y[i],
+                    batch["feature_metadata"].z[i],
+                ),
+                padding,
+                background_color,
+                autoencoded_subvolume=autoencoded,
+                include_vol_slices=include_vol_slices,
+            )
+        )
 
     width = imgs[0].size[0] + padding * 2
     height = imgs[0].size[1] * len(imgs) + padding * (len(imgs) + 1)
 
-    composite_img = Image.new('RGB', (width, height), background_color)
+    composite_img = Image.new("RGB", (width, height), background_color)
 
     for i, img in enumerate(imgs):
         composite_img.paste(img, (padding, img.size[1] * i + padding * (i + 1)))
 
-    outfile = os.path.join(outdir, f'sample_subvolume_batch')
+    outfile = os.path.join(outdir, f"sample_subvolume_batch")
     if iteration is not None:
-        outfile += f'_{iteration}'
-    outfile += '.png'
+        outfile += f"_{iteration}"
+    outfile += ".png"
     composite_img.save(outfile)
 
 
@@ -418,7 +473,7 @@ class ImmutableOutputModelWrapper(torch.nn.Module):
         x = self.model(x)
 
         if isinstance(x, dict):
-            x_named_tuple = namedtuple('ModelEndpoints', sorted(x.keys()))
+            x_named_tuple = namedtuple("ModelEndpoints", sorted(x.keys()))
             x = x_named_tuple(**x)
         elif isinstance(x, list):
             x = tuple(x)

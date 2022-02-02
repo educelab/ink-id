@@ -11,5 +11,5 @@ class AreCoordinatesWithinTestCase(unittest.TestCase):
         self.assertFalse(inkid.util.are_coordinates_within((0, 0), (10, 10), 4))
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()
