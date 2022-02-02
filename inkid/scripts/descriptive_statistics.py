@@ -11,50 +11,56 @@ import inkid
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('data', metavar='path',
-                        help='input data file (JSON)')
-    parser.add_argument('output', metavar='path', default='out',
-                        help='output directory')
-    parser.add_argument('--subvolume-shape', metavar='n', nargs=3, type=int, default=[34, 34, 34],
-                        help='subvolume shape in z y x')
+    parser.add_argument("data", metavar="path", help="input data file (JSON)")
+    parser.add_argument(
+        "output", metavar="path", default="out", help="output directory"
+    )
+    parser.add_argument(
+        "--subvolume-shape",
+        metavar="n",
+        nargs=3,
+        type=int,
+        default=[34, 34, 34],
+        help="subvolume shape in z y x",
+    )
 
     args = parser.parse_args()
     output_path = os.path.join(
-        args.output,
-        datetime.datetime.today().strftime('%Y-%m-%d_%H.%M.%S')
+        args.output, datetime.datetime.today().strftime("%Y-%m-%d_%H.%M.%S")
     )
 
     regions = inkid.data.RegionSet.from_json(args.data)
 
-    points = [p for p in regions.get_points_generator(
-        ['training', 'prediction', 'validation'],
-        restrict_to_surface=True,
-        perform_shuffle=True,
-        shuffle_seed=37,
-    )()]
+    points = [
+        p
+        for p in regions.get_points_generator(
+            ["training", "prediction", "validation"],
+            restrict_to_surface=True,
+            perform_shuffle=True,
+            shuffle_seed=37,
+        )()
+    ]
 
-    print('Calculating summary statistics...')
+    print("Calculating summary statistics...")
     all_statistics = []
     all_points = []
     for point in tqdm(points):
         region_id, x, y = point
         subvolume = regions._regions[region_id].ppm.point_to_subvolume(
-            (x, y),
-            args.subvolume_shape,
-            augment_subvolume=False
+            (x, y), args.subvolume_shape, augment_subvolume=False
         )
         statistics = inkid.util.get_descriptive_statistics(subvolume)
         all_statistics.append(statistics)
         all_points.append(point)
     all_statistics = np.array(all_statistics)
 
-    print('Calculating max and min for each statistic...', end='')
+    print("Calculating max and min for each statistic...", end="")
     sys.stdout.flush()
     maxs = np.amax(all_statistics, axis=0)
     mins = np.amin(all_statistics, axis=0)
-    print('done')
+    print("done")
 
-    print('Saving prediction images...', end='')
+    print("Saving prediction images...", end="")
     sys.stdout.flush()
     for stat_idx in range(len(all_statistics[0])):
         for i in range(len(all_statistics)):
@@ -64,25 +70,26 @@ def main():
                 np.array([region_id]),
                 np.array(
                     [
-                        int(inkid.util.remap(
-                            statistics[stat_idx],
-                            mins[stat_idx],
-                            maxs[stat_idx],
-                            0,
-                            np.iinfo(np.uint16).max
-                        ))
+                        int(
+                            inkid.util.remap(
+                                statistics[stat_idx],
+                                mins[stat_idx],
+                                maxs[stat_idx],
+                                0,
+                                np.iinfo(np.uint16).max,
+                            )
+                        )
                     ]
                 ),
-                np.array([[x, y]])
+                np.array([[x, y]]),
             )
         for region in regions:
             region.write_predictions(
-                os.path.join(output_path, 'predictions'),
-                'stats_{}'.format(stat_idx)
+                os.path.join(output_path, "predictions"), "stats_{}".format(stat_idx)
             )
             region.reset_predictions()
-    print('done')
+    print("done")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

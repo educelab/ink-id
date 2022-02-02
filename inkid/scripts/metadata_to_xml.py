@@ -6,16 +6,16 @@ import inkid
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('infile')
-    parser.add_argument('outfile')
+    parser.add_argument("infile")
+    parser.add_argument("outfile")
     args = parser.parse_args()
 
     with open(args.infile) as f:
         data = json.load(f)
     xml = inkid.util.dict_to_xml(data)
-    with open(args.outfile, 'w') as f:
+    with open(args.outfile, "w") as f:
         f.write(xml)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

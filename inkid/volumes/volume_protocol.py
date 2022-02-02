@@ -4,7 +4,7 @@ import struct
 import dataclasses
 import typing
 
-MAGIC = 0xf6fcdac0
+MAGIC = 0xF6FCDAC0
 VOLPKG_SZ = 64
 VOLUME_SZ = 64
 V1 = 1
@@ -13,6 +13,7 @@ V1 = 1
 @dataclasses.dataclass
 class RequestHdr:
     """Class for storing a request header for a request to a VC Volume Server."""
+
     num_requests: int
     magic: int = MAGIC
     version: int = V1
@@ -26,12 +27,15 @@ class RequestHdr:
 
     def to_struct(self):
         """Convert this object into a C-style struct."""
-        return struct.pack(self.struct_format(), self.magic, self.version, self.num_requests)
+        return struct.pack(
+            self.struct_format(), self.magic, self.version, self.num_requests
+        )
 
 
 @dataclasses.dataclass
 class RequestArgs:
     """Class for storing a single request to a VC Volume Server."""
+
     # pylint: disable=too-many-instance-attributes
     volpkg: str
     volume: str
@@ -59,18 +63,33 @@ class RequestArgs:
 
     def to_struct(self):
         """Convert this object into a C-style struct."""
-        return struct.pack(self.struct_format(), str.encode(self.volpkg), str.encode(self.volume),
-                           self.center_x, self.center_y, self.center_z,
-                           self.basis_0_x, self.basis_0_y, self.basis_0_z,
-                           self.basis_1_x, self.basis_1_y, self.basis_1_z,
-                           self.basis_2_x, self.basis_2_y, self.basis_2_z,
-                           self.sampling_r_x, self.sampling_r_y, self.sampling_r_z,
-                           self.sampling_interval)
+        return struct.pack(
+            self.struct_format(),
+            str.encode(self.volpkg),
+            str.encode(self.volume),
+            self.center_x,
+            self.center_y,
+            self.center_z,
+            self.basis_0_x,
+            self.basis_0_y,
+            self.basis_0_z,
+            self.basis_1_x,
+            self.basis_1_y,
+            self.basis_1_z,
+            self.basis_2_x,
+            self.basis_2_y,
+            self.basis_2_z,
+            self.sampling_r_x,
+            self.sampling_r_y,
+            self.sampling_r_z,
+            self.sampling_interval,
+        )
 
 
 @dataclasses.dataclass
 class ResponseArgs:
     """Class for storing a response from a VC Volume Server."""
+
     volpkg: str
     volume: str
     extent_x: int
@@ -87,14 +106,22 @@ class ResponseArgs:
     def from_struct(cls, struct_data):
         """Create an object from a C-style struct."""
         (volpkg, volume, extent_x, extent_y, extent_z, size) = struct.unpack(
-            cls.struct_format(), struct_data)
-        return cls(volpkg=volpkg.rstrip(b'\0').decode(),
-                   volume=volume.rstrip(b'\0').decode(), extent_x=extent_x,
-                   extent_y=extent_y, extent_z=extent_z, size=size)
+            cls.struct_format(), struct_data
+        )
+        return cls(
+            volpkg=volpkg.rstrip(b"\0").decode(),
+            volume=volume.rstrip(b"\0").decode(),
+            extent_x=extent_x,
+            extent_y=extent_y,
+            extent_z=extent_z,
+            size=size,
+        )
 
 
-def get_subvolumes(requests: typing.List[RequestArgs],
-                   server: typing.Tuple[str, int] = ("127.0.0.1", 8087)):
+def get_subvolumes(
+    requests: typing.List[RequestArgs],
+    server: typing.Tuple[str, int] = ("127.0.0.1", 8087),
+):
     """Returns an array of one or more requested subvolumes from a volume server."""
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.connect(server)
@@ -105,7 +132,8 @@ def get_subvolumes(requests: typing.List[RequestArgs],
     responses = []
     for _ in requests:
         response_args = ResponseArgs.from_struct(
-            sock.recv(struct.calcsize(ResponseArgs.struct_format())))
+            sock.recv(struct.calcsize(ResponseArgs.struct_format()))
+        )
         response_data = bytearray()
         while len(response_data) < response_args.size:
             tmp_data = sock.recv(4096)

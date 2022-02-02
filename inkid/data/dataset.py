@@ -19,13 +19,14 @@ import inkid
 
 # Which subvolumes are retrieved
 class RegionPointSampler:
-    def __init__(self,
-                 grid_spacing: int = 1,
-                 specify_inkness: Optional[bool] = None,
-                 undersampling_ink_ratio: Optional[float] = None,
-                 oversampling_ink_ratio: Optional[float] = None,
-                 ambiguous_ink_labels_filter_radius: Optional[float] = None,
-                 ):
+    def __init__(
+        self,
+        grid_spacing: int = 1,
+        specify_inkness: Optional[bool] = None,
+        undersampling_ink_ratio: Optional[float] = None,
+        oversampling_ink_ratio: Optional[float] = None,
+        ambiguous_ink_labels_filter_radius: Optional[float] = None,
+    ):
         self.grid_spacing = grid_spacing
         self.specify_inkness = specify_inkness
         self.undersampling_ink_ratio = undersampling_ink_ratio
@@ -37,40 +38,66 @@ class RegionPointSampler:
 # How subvolumes are retrieved TODO
 @dataclass
 class SubvolumeGeneratorInfo:
-    method: str = 'nearest_neighbor'
+    method: str = "nearest_neighbor"
     shape_microns: Optional[tuple[float, float, float]] = None
     shape_voxels: Optional[tuple[int, int, int]] = (48, 48, 48)
-    out_of_bounds: str = 'all_zeros'
+    out_of_bounds: str = "all_zeros"
     move_along_normal: float = 0
     normalize: bool = False
     jitter_max: int = 4
     augment_subvolume: bool = True
 
-    method_choices = ['nearest_neighbor', 'interpolated']
-    out_of_bounds_choices = ['all_zeros', 'partial_zeros', 'index_error']
+    method_choices = ["nearest_neighbor", "interpolated"]
+    out_of_bounds_choices = ["all_zeros", "partial_zeros", "index_error"]
 
 
 # How subvolumes are retrieved
 def add_subvolume_arguments(parser):
     default = SubvolumeGeneratorInfo()
-    parser.add_argument('--subvolume-method', default=default.method, choices=default.method_choices,
-                        help='method for sampling subvolumes')
-    parser.add_argument('--subvolume-shape-microns', metavar='um', nargs=3, type=float, default=default.shape_microns,
-                        help='subvolume shape (microns) in (z, y, x)')
-    parser.add_argument('--subvolume-shape-voxels', metavar='n', nargs=3, type=int,
-                        help='subvolume shape (voxels) in (z, y, x)', default=default.shape_voxels)
-    parser.add_argument('--move-along-normal', metavar='n', type=float, default=default.move_along_normal,
-                        help='number of voxels to move along normal vector before sampling a subvolume')
-    parser.add_argument('--normalize-subvolumes', action='store_true',
-                        help='normalize each subvolume to zero mean and unit variance')
-    parser.add_argument('--jitter-max', metavar='n', type=int, default=default.jitter_max)
-    parser.add_argument('--no-augmentation', action='store_false', dest='augmentation')
+    parser.add_argument(
+        "--subvolume-method",
+        default=default.method,
+        choices=default.method_choices,
+        help="method for sampling subvolumes",
+    )
+    parser.add_argument(
+        "--subvolume-shape-microns",
+        metavar="um",
+        nargs=3,
+        type=float,
+        default=default.shape_microns,
+        help="subvolume shape (microns) in (z, y, x)",
+    )
+    parser.add_argument(
+        "--subvolume-shape-voxels",
+        metavar="n",
+        nargs=3,
+        type=int,
+        help="subvolume shape (voxels) in (z, y, x)",
+        default=default.shape_voxels,
+    )
+    parser.add_argument(
+        "--move-along-normal",
+        metavar="n",
+        type=float,
+        default=default.move_along_normal,
+        help="number of voxels to move along normal vector before sampling a subvolume",
+    )
+    parser.add_argument(
+        "--normalize-subvolumes",
+        action="store_true",
+        help="normalize each subvolume to zero mean and unit variance",
+    )
+    parser.add_argument(
+        "--jitter-max", metavar="n", type=int, default=default.jitter_max
+    )
+    parser.add_argument("--no-augmentation", action="store_false", dest="augmentation")
 
 
 # Tuple (not dataclass) I believe because needs to be passed through PyTorch and needs to be basic structure TODO check
 FeatureMetadata = namedtuple(
-    'FeatureMetadata',
-    ('path', 'surface_x', 'surface_y', 'x', 'y', 'z', 'n_x', 'n_y', 'n_z'),
+    "FeatureMetadata",
+    ("path", "surface_x", "surface_y", "x", "y", "z", "n_x", "n_y", "n_z"),
     defaults=None,
 )
 
@@ -80,14 +107,25 @@ class DataSource(ABC):
 
     def __init__(self, path: str) -> None:
         self.path = path
-        source_file_contents, relative_url = inkid.util.get_raw_data_from_file_or_url(path, return_relative_url=True)
+        source_file_contents, relative_url = inkid.util.get_raw_data_from_file_or_url(
+            path, return_relative_url=True
+        )
         self.source_json: Dict = json.load(source_file_contents)
         # Validate JSON fits schema
-        jsonschema.validate(self.source_json, inkid.util.json_schema('dataSource0.1'))
+        jsonschema.validate(self.source_json, inkid.util.json_schema("dataSource0.1"))
         # Normalize paths in JSON
-        for key in ['volume', 'ppm', 'mask', 'ink_label', 'rgb_label', 'volcart_texture_label']:
+        for key in [
+            "volume",
+            "ppm",
+            "mask",
+            "ink_label",
+            "rgb_label",
+            "volcart_texture_label",
+        ]:
             if key in self.source_json:
-                self.source_json[key] = inkid.util.normalize_path(self.source_json[key], relative_url)
+                self.source_json[key] = inkid.util.normalize_path(
+                    self.source_json[key], relative_url
+                )
 
         self.feature_args: dict = dict()
         self.label_types: list[str] = []
@@ -109,19 +147,23 @@ class DataSource(ABC):
         a message is issued telling the user how to update the file format.
 
         """
-        with open(path, 'r') as f:
+        with open(path, "r") as f:
             source_json = json.load(f)
-        if 'ppms' in source_json and 'regions' in source_json:
-            raise ValueError(f'Source file {path} uses the deprecated region set file format. '
-                             f'Please convert it to the updated data source format. '
-                             f'The following script can be used: \n\n'
-                             f'\tpython inkid/scripts/update_data_file.py {path}')
-        if source_json.get('type') == 'region':
+        if "ppms" in source_json and "regions" in source_json:
+            raise ValueError(
+                f"Source file {path} uses the deprecated region set file format. "
+                f"Please convert it to the updated data source format. "
+                f"The following script can be used: \n\n"
+                f"\tpython inkid/scripts/update_data_file.py {path}"
+            )
+        if source_json.get("type") == "region":
             return RegionSource(path)
-        elif source_json.get('type') == 'volume':
+        elif source_json.get("type") == "volume":
             return VolumeSource(path)
         else:
-            raise ValueError(f'Source file {path} does not specify valid "type" of "region" or "volume"')
+            raise ValueError(
+                f'Source file {path} does not specify valid "type" of "region" or "volume"'
+            )
 
 
 class RegionSource(DataSource):
@@ -135,32 +177,47 @@ class RegionSource(DataSource):
         super().__init__(path)
 
         # Initialize region's PPM, volume, etc
-        self._ppm: inkid.data.PPM = inkid.data.PPM.from_path(self.source_json['ppm'])
-        self.volume: inkid.data.Volume = inkid.data.Volume.from_path(self.source_json['volume'])
-        self.bounding_box: Tuple[int, int, int, int] = self.source_json['bounding_box'] or self.get_default_bounds()
-        self._invert_normals: bool = self.source_json['invert_normals']
+        self._ppm: inkid.data.PPM = inkid.data.PPM.from_path(self.source_json["ppm"])
+        self.volume: inkid.data.Volume = inkid.data.Volume.from_path(
+            self.source_json["volume"]
+        )
+        self.bounding_box: Tuple[int, int, int, int] = (
+            self.source_json["bounding_box"] or self.get_default_bounds()
+        )
+        self._invert_normals: bool = self.source_json["invert_normals"]
 
         # Mask and label images
-        self._mask, self._ink_label, self._rgb_label, self._volcart_texture_label = None, None, None, None
-        if self.source_json['mask'] is not None:
-            self._mask = np.array(Image.open(self.source_json['mask']))
-        if self.source_json['ink_label'] is not None:
-            im = Image.open(self.source_json['ink_label']).convert('L')  # Allow RGB mode images
+        self._mask, self._ink_label, self._rgb_label, self._volcart_texture_label = (
+            None,
+            None,
+            None,
+            None,
+        )
+        if self.source_json["mask"] is not None:
+            self._mask = np.array(Image.open(self.source_json["mask"]))
+        if self.source_json["ink_label"] is not None:
+            im = Image.open(self.source_json["ink_label"]).convert(
+                "L"
+            )  # Allow RGB mode images
             self._ink_label = np.array(im)
-        if self.source_json['rgb_label'] is not None:
-            im = Image.open(self.source_json['rgb_label']).convert('RGB')
+        if self.source_json["rgb_label"] is not None:
+            im = Image.open(self.source_json["rgb_label"]).convert("RGB")
             self._rgb_label = np.array(im).astype(np.float32)
             # Make sure RGB image loaded wasn't more than 8 bit
             assert np.amax(self._rgb_label) <= np.iinfo(np.uint8).max
             # Map from [0, 255] to [0, 1]
             self._rgb_label /= np.iinfo(np.uint8).max
-        if self.source_json['volcart_texture_label'] is not None:
-            im = Image.open(self.source_json['volcart_texture_label'])
+        if self.source_json["volcart_texture_label"] is not None:
+            im = Image.open(self.source_json["volcart_texture_label"])
             # Assuming image is uint16 data but Pillow loads it as uint32 ('I')
-            assert im.mode == 'I'
+            assert im.mode == "I"
             self._volcart_texture_label = np.array(im).astype(np.float32)
             # Make sure data seems to be 16 bit (not a perfect check)
-            assert np.iinfo(np.uint8).max <= np.amax(self._volcart_texture_label) <= np.iinfo(np.uint16).max
+            assert (
+                np.iinfo(np.uint8).max
+                <= np.amax(self._volcart_texture_label)
+                <= np.iinfo(np.uint16).max
+            )
             # Normalize to [0.0, 1.0]
             self._volcart_texture_label /= np.iinfo(np.uint16).max
 
@@ -172,11 +229,17 @@ class RegionSource(DataSource):
         self.sampler = RegionPointSampler()
 
         # Prediction images
-        self._ink_classes_prediction_image = np.zeros((self._ppm.height, self._ppm.width), np.uint16)
+        self._ink_classes_prediction_image = np.zeros(
+            (self._ppm.height, self._ppm.width), np.uint16
+        )
         self._ink_classes_prediction_image_written_to = False
-        self._rgb_values_prediction_image = np.zeros((self._ppm.height, self._ppm.width, 3), np.uint8)
+        self._rgb_values_prediction_image = np.zeros(
+            (self._ppm.height, self._ppm.width, 3), np.uint8
+        )
         self._rgb_values_prediction_image_written_to = False
-        self._volcart_texture_prediction_image = np.zeros((self._ppm.height, self._ppm.width), np.uint16)
+        self._volcart_texture_prediction_image = np.zeros(
+            (self._ppm.height, self._ppm.width), np.uint16
+        )
         self._volcart_texture_prediction_image_written_to = False
 
     @property
@@ -199,45 +262,49 @@ class RegionSource(DataSource):
         if self._invert_normals:
             n_x, n_y, n_z = -n_x, -n_y, -n_z
         # Get the feature metadata (useful for e.g. knowing where this feature came from on the surface)
-        feature_metadata = FeatureMetadata(self.path, surface_x, surface_y, x, y, z, n_x, n_y, n_z)
+        feature_metadata = FeatureMetadata(
+            self.path, surface_x, surface_y, x, y, z, n_x, n_y, n_z
+        )
         # Get the feature
         feature = self.volume.get_subvolume(
-            center=(x, y, z),
-            normal=(n_x, n_y, n_z),
-            **self.feature_args
+            center=(x, y, z), normal=(n_x, n_y, n_z), **self.feature_args
         )
         item = {
-            'feature_metadata': feature_metadata,
-            'feature': feature,
+            "feature_metadata": feature_metadata,
+            "feature": feature,
         }
         # Get the label
-        if 'ink_classes' in self.label_types:
-            item['ink_classes'] = self.point_to_ink_classes_label(
-                (surface_x, surface_y),
-                **self.label_args['ink_classes']
+        if "ink_classes" in self.label_types:
+            item["ink_classes"] = self.point_to_ink_classes_label(
+                (surface_x, surface_y), **self.label_args["ink_classes"]
             )
-        if 'rgb_values' in self.label_types:
-            item['rgb_values'] = self.point_to_rgb_values_label(
-                (surface_x, surface_y),
-                **self.label_args['rgb_values']
+        if "rgb_values" in self.label_types:
+            item["rgb_values"] = self.point_to_rgb_values_label(
+                (surface_x, surface_y), **self.label_args["rgb_values"]
             )
-        if 'volcart_texture' in self.label_types:
-            item['volcart_texture'] = self.point_to_volcart_texture_label(
-                (surface_x, surface_y),
-                **self.label_args['volcart_texture']
+        if "volcart_texture" in self.label_types:
+            item["volcart_texture"] = self.point_to_volcart_texture_label(
+                (surface_x, surface_y), **self.label_args["volcart_texture"]
             )
         return item
 
     def update_points_list(self) -> None:
         """Update the list of points after changes to the bounding box, grid spacing, or some other options."""
         # TODO move this inside sampler
-        if self._ink_label is not None and self.sampler.ambiguous_ink_labels_filter_radius is not None:
+        if (
+            self._ink_label is not None
+            and self.sampler.ambiguous_ink_labels_filter_radius is not None
+        ):
             ambiguous_labels_mask = Image.fromarray(self._ink_label)
             # 3x3 Laplacian kernel for edge detection
             ambiguous_labels_mask = ambiguous_labels_mask.filter(ImageFilter.FIND_EDGES)
             # Max filter for dilation
-            dilation_kernel_width = int(2 * self.sampler.ambiguous_ink_labels_filter_radius + 1)
-            ambiguous_labels_mask = ambiguous_labels_mask.filter(ImageFilter.MaxFilter(dilation_kernel_width))
+            dilation_kernel_width = int(
+                2 * self.sampler.ambiguous_ink_labels_filter_radius + 1
+            )
+            ambiguous_labels_mask = ambiguous_labels_mask.filter(
+                ImageFilter.MaxFilter(dilation_kernel_width)
+            )
             self.sampler.ambiguous_labels_mask = np.array(ambiguous_labels_mask)
         positive_points = list()
         negative_points = list()
@@ -256,7 +323,10 @@ class RegionSource(DataSource):
                 if self.sampler.ambiguous_labels_mask is not None:
                     if self.sampler.ambiguous_labels_mask[y, x] != 0:
                         continue
-                if self.sampler.oversampling_ink_ratio is not None or self.sampler.undersampling_ink_ratio is not None:
+                if (
+                    self.sampler.oversampling_ink_ratio is not None
+                    or self.sampler.undersampling_ink_ratio is not None
+                ):
                     if self.is_ink(x, y):
                         positive_points.append((x, y))
                     else:
@@ -278,14 +348,29 @@ class RegionSource(DataSource):
         """
         if self.sampler.undersampling_ink_ratio is not None:
             negative_ratio = 1.0 - self.sampler.undersampling_ink_ratio
-            negatives_needed = int(len(positive_points) * negative_ratio / self.sampler.undersampling_ink_ratio)
-            self._points = positive_points + random.choices(negative_points, k=negatives_needed)
+            negatives_needed = int(
+                len(positive_points)
+                * negative_ratio
+                / self.sampler.undersampling_ink_ratio
+            )
+            self._points = positive_points + random.choices(
+                negative_points, k=negatives_needed
+            )
         elif self.sampler.oversampling_ink_ratio is not None:
             negative_ratio = 1.0 - self.sampler.oversampling_ink_ratio
-            positives_needed = int(len(negative_points) * self.sampler.oversampling_ink_ratio / negative_ratio)
-            positive_reps = 1 if positives_needed < len(positive_points) else \
-                int(positives_needed / len(positive_points))
-            extended_positive_points = list(np.repeat(np.array(positive_points), positive_reps, axis=0))
+            positives_needed = int(
+                len(negative_points)
+                * self.sampler.oversampling_ink_ratio
+                / negative_ratio
+            )
+            positive_reps = (
+                1
+                if positives_needed < len(positive_points)
+                else int(positives_needed / len(positive_points))
+            )
+            extended_positive_points = list(
+                np.repeat(np.array(positive_points), positive_reps, axis=0)
+            )
             self._points = extended_positive_points + negative_points
         else:
             self._points = unlabeled_points
@@ -314,7 +399,7 @@ class RegionSource(DataSource):
 
         """
         assert self._mask is not None
-        square = self._mask[y - r:y + r + 1, x - r:x + r + 1]
+        square = self._mask[y - r : y + r + 1, x - r : x + r + 1]
         return np.size(square) > 0 and np.min(square) != 0
 
     def get_default_bounds(self) -> Tuple[int, int, int, int]:
@@ -326,14 +411,21 @@ class RegionSource(DataSource):
         assert self._ink_label is not None
         x, y = point
         label = np.zeros(shape).astype(np.float32)  # Create array of no-ink labels
-        y_d, x_d = np.array(shape) // 2  # Calculate distance from center to edges of square we are sampling
+        y_d, x_d = (
+            np.array(shape) // 2
+        )  # Calculate distance from center to edges of square we are sampling
         # Iterate over label indices
         for idx, _ in np.ndenumerate(label):
             y_idx, x_idx = idx
-            y_s = y - y_d + y_idx  # Sample point is center minus distance (half edge length) plus label index
+            y_s = (
+                y - y_d + y_idx
+            )  # Sample point is center minus distance (half edge length) plus label index
             x_s = x - x_d + x_idx
             # Bounds check to make sure inside PPM
-            if 0 <= y_s < self._ink_label.shape[0] and 0 <= x_s < self._ink_label.shape[1]:
+            if (
+                0 <= y_s < self._ink_label.shape[0]
+                and 0 <= x_s < self._ink_label.shape[1]
+            ):
                 if self._ink_label[y_s, x_s] != 0:
                     label[y_idx, x_idx] = 1.0  # Mark this "ink"
         return torch.Tensor(label).long()
@@ -342,14 +434,21 @@ class RegionSource(DataSource):
         assert self._rgb_label is not None
         x, y = point
         label = np.zeros((3,) + shape).astype(np.float32)
-        y_d, x_d = np.array(shape) // 2  # Calculate distance from center to edges of square we are sampling
+        y_d, x_d = (
+            np.array(shape) // 2
+        )  # Calculate distance from center to edges of square we are sampling
         # Iterate over label indices
         for idx, _ in np.ndenumerate(label):
             _, y_idx, x_idx = idx
-            y_s = y - y_d + y_idx  # Sample point is center minus distance (half edge length) plus label index
+            y_s = (
+                y - y_d + y_idx
+            )  # Sample point is center minus distance (half edge length) plus label index
             x_s = x - x_d + x_idx
             # Bounds check to make sure inside PPM
-            if 0 <= y_s < self._rgb_label.shape[0] and 0 <= x_s < self._rgb_label.shape[1]:
+            if (
+                0 <= y_s < self._rgb_label.shape[0]
+                and 0 <= x_s < self._rgb_label.shape[1]
+            ):
                 label[:, y_idx, x_idx] = self._rgb_label[y_s, x_s]
         return label
 
@@ -357,14 +456,21 @@ class RegionSource(DataSource):
         assert self._volcart_texture_label is not None
         x, y = point
         label = np.zeros((1,) + shape).astype(np.float32)
-        y_d, x_d = np.array(shape) // 2  # Calculate distance from center to edges of square we are sampling
+        y_d, x_d = (
+            np.array(shape) // 2
+        )  # Calculate distance from center to edges of square we are sampling
         # Iterate over label indices
         for idx, _ in np.ndenumerate(label):
             _, y_idx, x_idx = idx
-            y_s = y - y_d + y_idx  # Sample point is center minus distance (half edge length) plus label index
+            y_s = (
+                y - y_d + y_idx
+            )  # Sample point is center minus distance (half edge length) plus label index
             x_s = x - x_d + x_idx
             # Bounds check to make sure inside PPM
-            if 0 <= y_s < self._volcart_texture_label.shape[0] and 0 <= x_s < self._volcart_texture_label.shape[1]:
+            if (
+                0 <= y_s < self._volcart_texture_label.shape[0]
+                and 0 <= x_s < self._volcart_texture_label.shape[1]
+            ):
                 label[0, y_idx, x_idx] = self._volcart_texture_label[y_s, x_s]
         return label
 
@@ -377,8 +483,12 @@ class RegionSource(DataSource):
         """
         # Repeat prediction to fill grid square so prediction image is not single pixels in sea of blackness
         if prediction.shape[1] == 1 and prediction.shape[2] == 1:
-            prediction = np.repeat(prediction, repeats=self.sampler.grid_spacing, axis=1)
-            prediction = np.repeat(prediction, repeats=self.sampler.grid_spacing, axis=2)
+            prediction = np.repeat(
+                prediction, repeats=self.sampler.grid_spacing, axis=1
+            )
+            prediction = np.repeat(
+                prediction, repeats=self.sampler.grid_spacing, axis=2
+            )
         # Calculate distance from center to edges of square we are writing
         y_d, x_d = np.array(prediction.shape)[1:] // 2
         # Iterate over label indices
@@ -390,19 +500,19 @@ class RegionSource(DataSource):
             x_s = x - x_d + x_idx
             # Bounds check to make sure inside PPM
             if 0 <= x_s < self._ppm.width and 0 <= y_s < self._ppm.height:
-                if label_type == 'ink_classes':
+                if label_type == "ink_classes":
                     # Convert ink class probability to image intensity
                     v = value[1] * np.iinfo(np.uint16).max
                     self._ink_classes_prediction_image[y_s, x_s] = v
                     self._ink_classes_prediction_image_written_to = True
-                elif label_type == 'rgb_values':
+                elif label_type == "rgb_values":
                     # Rescale from [0, 1] to [0, 255]
                     v = value * np.iinfo(np.uint8).max
                     # Restrict value to uint8 range
                     v = np.clip(v, 0, np.iinfo(np.uint8).max)
                     self._rgb_values_prediction_image[y_s, x_s] = v
                     self._rgb_values_prediction_image_written_to = True
-                elif label_type == 'volcart_texture':
+                elif label_type == "volcart_texture":
                     # Rescale from [0, 1]
                     v = value[0] * np.iinfo(np.uint16).max
                     # Restrict value to uint16 range
@@ -410,46 +520,60 @@ class RegionSource(DataSource):
                     self._volcart_texture_prediction_image[y_s, x_s] = v
                     self._volcart_texture_prediction_image_written_to = True
                 else:
-                    raise ValueError(f'Unknown label_type: {label_type} used for prediction')
+                    raise ValueError(
+                        f"Unknown label_type: {label_type} used for prediction"
+                    )
 
     def write_predictions(self, directory, suffix):
         """Write the buffered prediction images to disk."""
         if not os.path.exists(directory):
             os.makedirs(directory)
 
-        filename_base = os.path.join(directory, '{}_prediction_{}_'.format(self.name, suffix))
+        filename_base = os.path.join(
+            directory, "{}_prediction_{}_".format(self.name, suffix)
+        )
         if self._ink_classes_prediction_image_written_to:
             im = Image.fromarray(self._ink_classes_prediction_image)
-            im.save(filename_base + 'ink_classes.png')
+            im.save(filename_base + "ink_classes.png")
         if self._rgb_values_prediction_image_written_to:
             im = Image.fromarray(self._rgb_values_prediction_image)
-            im.save(filename_base + 'rgb_values.png')
+            im.save(filename_base + "rgb_values.png")
         if self._volcart_texture_prediction_image_written_to:
             im = Image.fromarray(self._volcart_texture_prediction_image)
-            im.save(filename_base + 'volcart_texture.png')
+            im.save(filename_base + "volcart_texture.png")
 
     def reset_predictions(self):
         """Reset the prediction image buffers."""
-        self._ink_classes_prediction_image = np.zeros((self._ppm.height, self._ppm.width), np.uint16)
+        self._ink_classes_prediction_image = np.zeros(
+            (self._ppm.height, self._ppm.width), np.uint16
+        )
         self._ink_classes_prediction_image_written_to = False
-        self._rgb_values_prediction_image = np.zeros((self._ppm.height, self._ppm.width, 3), np.uint8)
+        self._rgb_values_prediction_image = np.zeros(
+            (self._ppm.height, self._ppm.width, 3), np.uint8
+        )
         self._rgb_values_prediction_image_written_to = False
-        self._volcart_texture_prediction_image = np.zeros((self._ppm.height, self._ppm.width), np.uint16)
+        self._volcart_texture_prediction_image = np.zeros(
+            (self._ppm.height, self._ppm.width), np.uint16
+        )
         self._volcart_texture_prediction_image_written_to = False
 
     def write_ambiguous_labels_diagnostic_mask(self, directory):
         if self._points_list_needs_update:
             self.update_points_list()
         # Overlay on ink label image for diagnostic purposes
-        overlay = Image.fromarray(self.sampler.ambiguous_labels_mask).convert('RGBA')
+        overlay = Image.fromarray(self.sampler.ambiguous_labels_mask).convert("RGBA")
         overlay_data = np.array(overlay)
         red, green, blue, _ = overlay_data.T
         white_areas = (red == 255) & (blue == 255) & (green == 255)
         overlay_data[...][white_areas.T] = (255, 0, 0, 128)  # Transpose back needed
         overlay = Image.fromarray(overlay_data)
-        ink_label_diagnostic_img = Image.fromarray(self._ink_label).copy().convert('RGBA')
+        ink_label_diagnostic_img = (
+            Image.fromarray(self._ink_label).copy().convert("RGBA")
+        )
         ink_label_diagnostic_img.alpha_composite(overlay)
-        ink_label_diagnostic_img.save(os.path.join(directory, f'{self.name}_ink_label_diagnostic.png'))
+        ink_label_diagnostic_img.save(
+            os.path.join(directory, f"{self.name}_ink_label_diagnostic.png")
+        )
 
 
 class VolumeSource(DataSource):
@@ -488,16 +612,22 @@ def flatten_data_sources_list(source_paths: List[str]) -> List[str]:
     expanded_paths: List[str] = list()
     for source_path in source_paths:
         file_extension = os.path.splitext(source_path)[1]
-        if file_extension == '.json':
+        if file_extension == ".json":
             expanded_paths.append(source_path)
-        elif file_extension == '.txt':
-            with open(source_path, 'r') as f:
+        elif file_extension == ".txt":
+            with open(source_path, "r") as f:
                 sources_in_file = f.read().splitlines()
-            sources_in_file = [os.path.join(os.path.dirname(source_path), s) for s in sources_in_file]
+            sources_in_file = [
+                os.path.join(os.path.dirname(source_path), s) for s in sources_in_file
+            ]
             expanded_paths += flatten_data_sources_list(sources_in_file)
         else:
-            raise ValueError(f'Data source {source_path} is not a permitted file type (.txt or .json)')
-    return list(dict.fromkeys(expanded_paths))  # Remove duplicates, keep order https://stackoverflow.com/a/17016257
+            raise ValueError(
+                f"Data source {source_path} is not a permitted file type (.txt or .json)"
+            )
+    return list(
+        dict.fromkeys(expanded_paths)
+    )  # Remove duplicates, keep order https://stackoverflow.com/a/17016257
 
 
 class Dataset(torch.utils.data.Dataset):
@@ -545,7 +675,7 @@ class Dataset(torch.utils.data.Dataset):
         for i, source in enumerate(self.sources):
             if source.path == region.path:
                 return self.sources.pop(i)
-        raise ValueError('No source found with same path as desired region.')
+        raise ValueError("No source found with same path as desired region.")
 
     def source(self, source_path: str) -> Optional[DataSource]:
         for s in self.sources:
