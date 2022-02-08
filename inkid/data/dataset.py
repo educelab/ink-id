@@ -41,14 +41,12 @@ class SubvolumeGeneratorInfo:
     method: str = "nearest_neighbor"
     shape_microns: Optional[tuple[float, float, float]] = None
     shape_voxels: Optional[tuple[int, int, int]] = (48, 48, 48)
-    out_of_bounds: str = "all_zeros"
     move_along_normal: float = 0
     normalize: bool = False
     jitter_max: int = 4
     augment_subvolume: bool = True
 
     method_choices = ["nearest_neighbor", "interpolated"]
-    out_of_bounds_choices = ["all_zeros", "partial_zeros", "index_error"]
 
 
 # How subvolumes are retrieved

@@ -225,9 +225,11 @@ cdef class Volume:
 
     cdef unsigned short intensity_at(self, int x, int y, int z) nogil:
         """Get the intensity value at a voxel position."""
-        if x >= self.shape_x or y >= self.shape_y or z >= self.shape_z:
+        if 0 <= x < self.shape_x and 0 <= y < self.shape_y and 0 <= z < self.shape_z:
+            return self._data_view[z, y, x]
+        else:
             return 0
-        return self._data_view[z, y, x]
+
 
     cdef unsigned short interpolate_at(self, float x, float y, float z) nogil:
         """Get the intensity value at a subvoxel position.
@@ -240,9 +242,6 @@ cdef class Volume:
         https://stackoverflow.com/questions/6427276/3d-interpolation-of-numpy-arrays-without-scipy
 
         """
-        if x >= self.shape_x or y >= self.shape_y or z >= self.shape_z:
-            return 0
-
         cdef double dx, dy, dz, x0d, y0d, z0d
         cdef int x0, y0, z0, x1, y1, z1
         cdef double c00, c10, c01, c11, c0, c1
@@ -273,8 +272,7 @@ cdef class Volume:
     cpdef get_subvolume_snap_to_axis_aligned(self,
                                              center,
                                              shape,
-                                             normal,
-                                             out_of_bounds):
+                                             normal):
         """Snap to and get the closest axis-aligned subvolume.
 
         Snap the normal vector to the closest axis vector (including
@@ -315,17 +313,10 @@ cdef class Volume:
         if normal[strongest_normal_axis] < 0:
             subvolume = np.rot90(subvolume, k=2, axes=(0, 1))
 
-        if out_of_bounds == 'all_zeros':
-            if subvolume.shape[0] != tuple(shape)[0] \
-               or subvolume.shape[1] != tuple(shape)[1] \
-                or subvolume.shape[2] != tuple(shape)[2]:
-                subvolume = np.zeros(shape, dtype=np.uint16)
-        elif out_of_bounds == 'partial_zeros':
-            pass
-        elif out_of_bounds == 'index_error':
-            pass
-        else:
-            raise ValueError('Out of bounds method not recognized.')
+        if subvolume.shape[0] != tuple(shape)[0] \
+           or subvolume.shape[1] != tuple(shape)[1] \
+            or subvolume.shape[2] != tuple(shape)[2]:
+            subvolume = np.zeros(shape, dtype=np.uint16)
 
         return subvolume
 
@@ -429,7 +420,7 @@ cdef class Volume:
 
 
     def get_subvolume(self, center, shape_voxels, shape_microns, normal,
-                      out_of_bounds, move_along_normal, jitter_max,
+                      move_along_normal, jitter_max,
                       augment_subvolume, method, normalize=False, square_corners=None):
         """Get a subvolume from a center point and normal vector.
 
@@ -449,8 +440,6 @@ cdef class Volume:
             shape_voxels: The desired shape of the subvolume in voxels.
             shape_microns: The desired spatial extent of the sampled subvolume in microns.
             normal: The normal vector at the center point.
-            out_of_bounds: String indicating what to do if the requested
-                subvolume does not fit entirely within the volume.
             move_along_normal: Scalar of how many units to translate
                 the center point along the center vector.
             jitter_max: Jitter the center point a random amount up to
@@ -479,10 +468,6 @@ cdef class Volume:
             normal = np.array([0, 0, 1])
         else:
             normal = normalize_fl3(normal)
-
-        if out_of_bounds is None:
-            out_of_bounds = 'all_zeros'
-        assert out_of_bounds in ['all_zeros', 'partial_zeros', 'index_error']
 
         if move_along_normal is None:
             move_along_normal = 0

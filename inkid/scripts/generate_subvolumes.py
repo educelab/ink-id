@@ -224,7 +224,6 @@ def main(argv=None):
     subvolume_args = dict(
         shape_voxels=args.subvolume_shape_voxels,
         shape_microns=args.subvolume_shape_microns,
-        out_of_bounds="all_zeros",
         move_along_normal=args.move_along_normal,
         method=args.subvolume_method,
         normalize=args.normalize_subvolumes,

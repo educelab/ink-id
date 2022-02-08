@@ -299,7 +299,6 @@ def main():
         method=args.subvolume_method,
         shape_microns=args.subvolume_shape_microns,
         shape_voxels=args.subvolume_shape_voxels,
-        out_of_bounds="all_zeros",
         move_along_normal=args.move_along_normal,
         normalize=args.normalize_subvolumes,
     )
