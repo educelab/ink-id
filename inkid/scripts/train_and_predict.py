@@ -36,7 +36,7 @@ import inkid
 torch.multiprocessing.set_sharing_strategy("file_system")
 
 
-def main():
+def main(argv=None):
     """Run the training and prediction process."""
     start = timeit.default_timer()
 
@@ -188,7 +188,7 @@ def main():
         "subpath following the remote name",
     )
 
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     # Make sure some sort of input is provided, else there is nothing to do
     if (
@@ -372,7 +372,6 @@ def main():
     }[args.model]
 
     # Define the labels and metrics
-    # TODO maybe clean these up like the subvolume args but maybe not
     if args.model_3d_to_2d:
         label_shape = (args.subvolume_shape_voxels[1], args.subvolume_shape_voxels[2])
     else:
@@ -720,9 +719,9 @@ def main():
                 set(args.training_set + args.validation_set + args.prediction_set)
             )
             final_pred_ds = inkid.data.Dataset(all_sources)
-            for region in final_pred_ds:
+            for region in final_pred_ds.regions():
+                region.sampler = copy.deepcopy(pred_sampler)
                 region.feature_args = pred_feature_args
-            final_pred_ds.set_regions_grid_spacing(args.prediction_grid_spacing)
             if len(final_pred_ds) > 0:
                 final_pred_dl = DataLoader(
                     final_pred_ds,

@@ -18,7 +18,6 @@ tmp/
 *.overlay
 
 Pipfile*
-test/
 
 # Cython
 inkid/data/*.html
