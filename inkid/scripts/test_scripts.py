@@ -1,13 +1,15 @@
 import os
+from pathlib import Path
 import shutil
 import unittest
 
 from inkid.util import dummy_volpkg_path
 
 from . import generate_subvolumes
+from . import train_and_predict
 
 
-test_output_dir = "test_output"
+test_output_dir = Path("test_output")
 
 
 class TestScriptsTestCase(unittest.TestCase):
@@ -20,7 +22,24 @@ class TestScriptsTestCase(unittest.TestCase):
                 "--input-set",
                 os.path.join(dummy_volpkg_path(), "working", "DummyTest_grid1x2.txt"),
                 "--output",
-                os.path.join(test_output_dir, "subvolumes"),
+                str(test_output_dir / "subvolumes"),
+            ]
+        )
+
+    def test_train_and_predict(self) -> None:
+        train_and_predict.main(
+            [
+                "--training-set",
+                str(Path(dummy_volpkg_path()) / "working" / "DummyTest_grid1x2.txt"),
+                "--output",
+                str(test_output_dir / "train_and_predict"),
+                "--cross-validate-on",
+                "0",
+                "--training-max-samples",
+                "10",
+                "--final-prediction-on-all",
+                "--dataloaders-num-workers",
+                "0",
             ]
         )
 
