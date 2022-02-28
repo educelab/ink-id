@@ -171,18 +171,21 @@ class RegionSource(DataSource):
 
     """
 
-    def __init__(self, path: str) -> None:
+    def __init__(self, path: str, lazy_load: bool = False) -> None:
         super().__init__(path)
 
         # Initialize region's PPM, volume, etc
         self._ppm: inkid.data.PPM = inkid.data.PPM.from_path(self.source_json["ppm"])
-        self.volume: inkid.data.Volume = inkid.data.Volume.from_path(
-            self.source_json["volume"]
-        )
         self.bounding_box: Tuple[int, int, int, int] = (
             self.source_json["bounding_box"] or self.get_default_bounds()
         )
         self._invert_normals: bool = self.source_json["invert_normals"]
+        if lazy_load:
+            self.volume = None
+        else:
+            self.volume: inkid.data.Volume = inkid.data.Volume.from_path(
+                self.source_json["volume"]
+            )
 
         # Mask and label images
         self._mask, self._ink_label, self._rgb_label, self._volcart_texture_label = (

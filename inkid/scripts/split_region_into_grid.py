@@ -32,7 +32,7 @@ def main():
 
     args = parser.parse_args()
 
-    data_source = inkid.data.RegionSource(args.input)
+    data_source = inkid.data.RegionSource(args.input, lazy_load=True)
     bounds = data_source.bounding_box
 
     width = bounds[2] - bounds[0]
