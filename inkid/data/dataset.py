@@ -108,7 +108,8 @@ class DataSource(ABC):
         source_file_contents, relative_url = inkid.util.get_raw_data_from_file_or_url(
             path, return_relative_url=True
         )
-        self.source_json: Dict = json.load(source_file_contents)
+        self.unmodified_source_json: Dict = json.load(source_file_contents)
+        self.source_json = self.unmodified_source_json.copy()
         # Validate JSON fits schema
         jsonschema.validate(self.source_json, inkid.util.json_schema("dataSource0.1"))
         # Normalize paths in JSON

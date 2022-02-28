@@ -46,7 +46,7 @@ def main():
 
     for row in range(rows):
         for col in range(columns):
-            grid_square_json = data_source.source_json.copy()
+            grid_square_json = data_source.unmodified_source_json.copy()
             grid_square_json["bounding_box"] = [
                 bounds[0] + col * grid_square_width,
                 bounds[1] + row * grid_square_height,
