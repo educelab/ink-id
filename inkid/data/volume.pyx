@@ -18,6 +18,9 @@ cimport inkid.data.mathutils as mathutils
 
 import inkid.util
 
+import warnings
+warnings.filterwarnings("error")
+
 cpdef norm(vec):
     vec = np.array(vec)
     return (vec[0]**2 + vec[1]**2 + vec[2]**2)**(1./2)
@@ -464,7 +467,7 @@ cdef class Volume:
         # TODO if square_corners is not None and not empty, modify basis vectors before calling (and center and normal?)
         # TODO if empty return zeros?
 
-        if normal is None:
+        if normal is None or not np.any(normal):
             normal = np.array([0, 0, 1])
         else:
             normal = normalize_fl3(normal)
