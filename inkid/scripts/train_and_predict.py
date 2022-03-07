@@ -264,7 +264,7 @@ def main(argv=None):
     os.makedirs(diagnostic_images_dir)
 
     if args.dataloaders_num_workers is None:
-        args.dataloaders_num_workers = multiprocessing.cpu_count()
+        args.dataloaders_num_workers = max(1, multiprocessing.cpu_count() - 1)
 
     # Create metadata dict
     metadata = {
