@@ -246,9 +246,11 @@ def main(argv=None):
     )
 
     # Fix random seeds
-    np.random.seed(args.random_seed)
-    random.seed(args.random_seed)
-    torch.manual_seed(args.random_seed)
+    def fix_random_seed(seed):
+        np.random.seed(seed)
+        random.seed(seed)
+        torch.manual_seed(seed)
+    fix_random_seed(args.random_seed)
 
     # Automatically increase prediction grid spacing if using 2D labels, and turn off augmentation
     if args.model_3d_to_2d:
@@ -584,6 +586,7 @@ def main(argv=None):
     if train_dl is not None and not args.skip_training:
         with profiling_context_manager:
             for epoch in range(args.training_epochs):
+                fix_random_seed(epoch + args.random_seed)
                 model.train()  # Turn on training mode
                 total_batches = len(train_dl)
                 for batch_num, batch in enumerate(train_dl):
