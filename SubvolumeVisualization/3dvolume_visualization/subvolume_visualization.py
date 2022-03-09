@@ -9,7 +9,7 @@ import plotly.graph_objects as go
 import io
 import argparse
 
-class Subvolume_visualization:
+class SubvolumeVisualization:
 
     def __init__(self, input_dir, outfile):
         self.input_dir = input_dir
@@ -213,6 +213,6 @@ if __name__ == "__main__":
     input_data_dir = args.input
     output_file = args.output
 
-    s = Subvolume_visualization(input_data_dir, output_file)
+    s = SubvolumeVisualization(input_data_dir, output_file)
     s.create_summary()
     
