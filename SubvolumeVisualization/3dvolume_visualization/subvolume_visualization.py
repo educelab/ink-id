@@ -70,7 +70,7 @@ class SubvolumeVisualization:
     
         buf = io.BytesIO()
         plt.savefig(buf, format='png')
-        #plt.close(f)
+        plt.close(f)
         buf.seek(0)
     
         return buf
