@@ -69,6 +69,7 @@ def render_slices(subvol, direction, color="jet", imgs_in_row=6):
 
     buf = io.BytesIO()
     plt.savefig(buf, format="png")
+    plt.close(f)
     buf.seek(0)
 
     return buf
@@ -284,6 +285,7 @@ def main(argv=None):
             if args.visualize:
                 rendered_img = visualize(subvolume)
                 rendered_img.save(os.path.join(args.output, f"{str(counter)}.png"))
+                del rendered_img
 
         counter += 1
 
