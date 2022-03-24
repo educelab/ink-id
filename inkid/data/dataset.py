@@ -564,7 +564,8 @@ class RegionSource(DataSource):
             self.update_points_list()
         # Overlay on ink label image for diagnostic purposes
         overlay = Image.fromarray(self.sampler.ambiguous_labels_mask).convert("RGBA")
-        overlay.putalpha(0)  # Set alpha to 0 everywhere so the black regions don't mask the ink labels later
+        # Set alpha to 0 everywhere so the black regions don't mask the ink labels later
+        overlay.putalpha(0)
         overlay_data = np.array(overlay)
         red, green, blue, _ = overlay_data.T
         white_areas = (red == 255) & (blue == 255) & (green == 255)

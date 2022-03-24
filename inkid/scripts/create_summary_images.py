@@ -135,15 +135,20 @@ class JobMetadata:
                         bounding_box = region_info.get("bounding_box")
                         if bounding_box is not None:
                             bounding_box = tuple(bounding_box)
-                        self.regions_df = self.regions_df.append(
-                            {
-                                "region_name": region_name,
-                                "ppm_path": region_info["ppm"],
-                                "ppm_width": ppm_size[0],
-                                "ppm_height": ppm_size[1],
-                                "invert_normals": region_info["invert_normals"],
-                                "bounding_box": bounding_box,
-                            },
+                        self.regions_df = pd.concat(
+                            [
+                                self.regions_df,
+                                pd.DataFrame.from_dict(
+                                    {
+                                        "region_name": [region_name],
+                                        "ppm_path": [region_info["ppm"]],
+                                        "ppm_width": [ppm_size[0]],
+                                        "ppm_height": [ppm_size[1]],
+                                        "invert_normals": [region_info["invert_normals"]],
+                                        "bounding_box": [bounding_box],
+                                    },
+                                ),
+                            ],
                             ignore_index=True,
                         )
                     if re.match(r".*_prediction_\d+_\d+", name):
@@ -162,18 +167,23 @@ class JobMetadata:
                         raise ValueError(
                             f"Image filename {name} does not match expected format"
                         )
-                    self.prediction_images_df = self.prediction_images_df.append(
-                        {
-                            "path": image_path,
-                            "region_name": region_name,
-                            "iteration_str": iteration_str,
-                            "prediction_type": prediction_type,
-                            "job_dir": job_dir,
-                            "n_from_k_fold": n_from_k_fold,
-                            "training": "training" in set_types,
-                            "prediction": "prediction" in set_types,
-                            "validation": "validation" in set_types,
-                        },
+                    self.prediction_images_df = pd.concat(
+                        [
+                            self.prediction_images_df,
+                            pd.DataFrame.from_dict(
+                                {
+                                    "path": [image_path],
+                                    "region_name": [region_name],
+                                    "iteration_str": [iteration_str],
+                                    "prediction_type": [prediction_type],
+                                    "job_dir": [job_dir],
+                                    "n_from_k_fold": [n_from_k_fold],
+                                    "training": ["training" in set_types],
+                                    "prediction": ["prediction" in set_types],
+                                    "validation": ["validation" in set_types],
+                                },
+                            ),
+                        ],
                         ignore_index=True,
                     )
 
@@ -704,9 +714,12 @@ def try_get_img_from_data_files(img_path):
     # If not there, maybe it is on the local machine under ~/data.
     elif "/pscratch/seales_uksr/" in img_path:
         img_path = img_path.replace("/pscratch/seales_uksr/", "")
-        img_path = os.path.join(Path.home(), "data", img_path)
-        if os.path.isfile(img_path):
-            img = Image.open(img_path)
+        data_img_path = os.path.join(Path.home(), "data", img_path)
+        bigdata_img_path = os.path.join(Path.home(), "bigdata", img_path)
+        if os.path.isfile(data_img_path):
+            img = Image.open(data_img_path)
+        elif os.path.isfile(bigdata_img_path):
+            img = Image.open(bigdata_img_path)
     return img
 
 

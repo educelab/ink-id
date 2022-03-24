@@ -250,6 +250,7 @@ def main(argv=None):
         np.random.seed(seed)
         random.seed(seed)
         torch.manual_seed(seed)
+
     fix_random_seed(args.random_seed)
 
     # Automatically increase prediction grid spacing if using 2D labels, and turn off augmentation

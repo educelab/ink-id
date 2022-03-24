@@ -4,7 +4,8 @@ Consult the [Data preparation workflow](https://code.cs.uky.edu/seales-research/
 
 - [ ] Transfer dataset to machine
 - [ ] Resize/crop slices
-- [ ] Create .volpkg
+- [ ] Consider windowing slices or adjusting contrast
+- [ ] Create .volpkg or volume in existing .volpkg
 - [ ] Segment
 - [ ] Texture
 - [ ] Orient correctly

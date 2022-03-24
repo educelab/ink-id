@@ -18,9 +18,6 @@ cimport inkid.data.mathutils as mathutils
 
 import inkid.util
 
-import warnings
-warnings.filterwarnings("error")
-
 cpdef norm(vec):
     vec = np.array(vec)
     return (vec[0]**2 + vec[1]**2 + vec[2]**2)**(1./2)
