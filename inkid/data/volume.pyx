@@ -421,7 +421,7 @@ cdef class Volume:
 
     def get_subvolume(self, center, shape_voxels, shape_microns, normal,
                       move_along_normal, jitter_max,
-                      augment_subvolume, method, normalize=False, square_corners=None):
+                      augment_subvolume, method, normalize=False, square_corners=None, window_min_max=None):
         """Get a subvolume from a center point and normal vector.
 
         At the time of writing, this function very closely resembles
@@ -538,6 +538,12 @@ cdef class Volume:
 
         # Convert to float normalized to [0, 1]
         subvolume = inkid.util.uint16_to_float32_normalized_0_1(subvolume)
+
+        # Window (contrast stretch) if requested
+        if window_min_max is not None:
+            window_min, window_max = window_min_max
+            subvolume = inkid.util.window_0_1_array(subvolume, window_min, window_max)
+
         # Add singleton dimension for number of channels
         subvolume = np.expand_dims(subvolume, 0)
 

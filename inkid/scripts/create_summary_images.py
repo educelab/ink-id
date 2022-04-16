@@ -144,7 +144,9 @@ class JobMetadata:
                                         "ppm_path": [region_info["ppm"]],
                                         "ppm_width": [ppm_size[0]],
                                         "ppm_height": [ppm_size[1]],
-                                        "invert_normals": [region_info["invert_normals"]],
+                                        "invert_normals": [
+                                            region_info["invert_normals"]
+                                        ],
                                         "bounding_box": [bounding_box],
                                     },
                                 ),

@@ -326,6 +326,14 @@ def float_0_1_to_cmap_rgb_uint8(img, cmap="turbo"):
     return Image.fromarray(np.uint8(color_map(img) * 255))
 
 
+def window_0_1_array(arr, window_min, window_max):
+    """Assumes input array is in [0, 1] range and contrast stretches to new min/max"""
+    clipped = np.clip(arr, window_min, window_max)
+    shifted = clipped - window_min
+    windowed = shifted / (window_max - window_min)
+    return windowed
+
+
 def subvolume_to_sample_img(
     subvolume,
     volume,

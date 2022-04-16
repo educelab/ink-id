@@ -90,6 +90,13 @@ def add_subvolume_arguments(parser):
         "--jitter-max", metavar="n", type=int, default=default.jitter_max
     )
     parser.add_argument("--no-augmentation", action="store_false", dest="augmentation")
+    parser.add_argument(
+        "--subvolume-window-min-max",
+        nargs=2,
+        type=float,
+        default=None,
+        help="window each subvolume to this defined window in [0, 1]",
+    )
 
 
 # Tuple (not dataclass) I believe because needs to be passed through PyTorch and needs to be basic structure TODO check
