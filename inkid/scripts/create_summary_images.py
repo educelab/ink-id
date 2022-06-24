@@ -508,7 +508,7 @@ def build_footer_img(
             os.path.dirname(inkid.__file__), "assets", logo_filename
         )
         logo = Image.open(logo_path)
-        logo.thumbnail((100000, height - 2 * buffer_size), Image.BICUBIC)
+        logo.thumbnail((100000, height - 2 * buffer_size), Image.Resampling.BICUBIC)
         logo_offset = (horizontal_offset + buffer_size, buffer_size)
         # Third argument used as transparency mask. Convert to RGBA to force presence of alpha channel
         footer.paste(logo, logo_offset, logo.convert("RGBA"))
@@ -941,7 +941,7 @@ def build_frame(
 
     # Downsize image while keeping aspect ratio
     if max_size is not None:
-        frame.thumbnail(max_size, Image.BICUBIC)
+        frame.thumbnail(max_size, Image.Resampling.BICUBIC)
 
     return frame
 
