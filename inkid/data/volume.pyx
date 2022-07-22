@@ -13,6 +13,7 @@ import numpy as np
 cimport numpy as cnp
 from PIL import Image
 from tqdm import tqdm
+import zarr
 
 cimport inkid.data.mathutils as mathutils
 
@@ -176,33 +177,50 @@ cdef class Volume:
         self.shape_y = self._metadata['height']
         self.shape_x = self._metadata['width']
 
-        # Get list of slice image filenames
-        slice_files = []
-        for root, dirs, files in os.walk(slices_path):
-            for filename in files:
-                # Make sure it is not a hidden file and it's a
-                # .tif. In the future we might add other formats.
-                if filename[0] != '.' and os.path.splitext(filename)[1] == '.tif':
-                    slice_files.append(os.path.join(root, filename))
-        slice_files.sort()
-        assert len(slice_files) == self.shape_z
+        # Zarr array
+        zarr_filename = os.path.join(slices_path, 'volume.zarr')
+        if not os.path.exists(zarr_filename):
+            print(f'No Zarr file found for volume {slices_path}, creating one now')
+            chunk_size = 128
+            z = zarr.open(
+                zarr_filename,
+                mode='w',
+                shape=(self.shape_z, self.shape_y, self.shape_x),
+                chunks=(chunk_size, chunk_size, chunk_size),
+                dtype='<i2',  # Little endian, integer, 16-bit (2 byte)
+            )
 
-        # Load slice images into volume
-        data, w, h, d = None, 0, 0, 0
-        logging.info('Loading volume slices from {}...'.format(slices_path))
-        for slice_i, slice_file in tqdm(list(enumerate(slice_files))):
-            if data is None:
-                img = Image.open(slice_file)
-                w, h = img.size
-                img.close()
-                d = len(slice_files)
-                data = np.empty((d, h, w), dtype=np.uint16)
-            data[slice_i, :, :] = np.array(Image.open(slice_file), dtype=np.uint16).copy()
-        print()
-        self._data_view = data
+            # Get list of slice image filenames
+            slice_files = []
+            for root, dirs, files in os.walk(slices_path):
+                for filename in files:
+                    # Make sure it is not a hidden file and it's a
+                    # .tif. In the future we might add other formats.
+                    if filename[0] != '.' and os.path.splitext(filename)[1] == '.tif':
+                        slice_files.append(os.path.join(root, filename))
+            slice_files.sort()
+            assert len(slice_files) == self.shape_z
+
+            # Load slice images into volume
+            data, w, h, d = None, 0, 0, 0
+            logging.info('Loading volume slices from {}...'.format(slices_path))
+            for slice_i, slice_file in tqdm(list(enumerate(slice_files))):
+                z[slice_i, :, :] = np.array(Image.open(slice_file), dtype=np.uint16).copy()
+            print()
+
+        z = zarr.open(
+            zarr_filename,
+            mode='r',
+            shape=(self.shape_z, self.shape_y, self.shape_x),
+            chunks=(chunk_size, chunk_size, chunk_size),
+            dtype='<i2',  # Little endian, integer, 16-bit (2 byte)
+        )
+
+        # TODO LEFT OFF getting this below to work. Not sure what the correct way is, or if I need the memoryview.
+        self._data_view = z
         logging.info('Loaded volume {} with shape (z, y, x) = {}'.format(
             slices_path,
-            data.shape
+            z.shape
         ))
 
     def z_slice(self, int idx):
