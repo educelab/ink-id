@@ -297,7 +297,6 @@ def main(argv=None):
             metadata[slurm_var] = os.getenv(slurm_var)
 
     # Define the feature inputs to the network
-    # subvolume_args = inkid.data.SubvolumeGeneratorInfo(
     subvolume_args = dict(
         method=args.subvolume_method,
         shape_microns=args.subvolume_shape_microns,
@@ -306,20 +305,16 @@ def main(argv=None):
         normalize=args.normalize_subvolumes,
         window_min_max=args.subvolume_window_min_max,
     )
-    # train_feature_args = dataclasses.replace(
-    #     subvolume_args,
     train_feature_args = subvolume_args.copy()
     train_feature_args.update(
         augment_subvolume=args.augmentation,
         jitter_max=args.jitter_max,
     )
-    # val_feature_args = dataclasses.replace(
     val_feature_args = subvolume_args.copy()
     val_feature_args.update(
         augment_subvolume=False,
         jitter_max=0,
     )
-    # pred_feature_args = dataclasses.replace(val_feature_args)
     pred_feature_args = val_feature_args.copy()
 
     # Create the model for training
@@ -441,6 +436,8 @@ def main(argv=None):
         region.feature_args = train_feature_args
         region.label_types = model.labels
         region.label_args = label_args
+    for volume in train_ds.volumes():
+        volume.feature_args = train_feature_args
     for region in val_ds.regions():
         region.feature_args = val_feature_args
         region.label_types = model.labels
@@ -700,7 +697,7 @@ def main(argv=None):
 
                             # Visualize autoencoder outputs
                             if args.model in [
-                                "autoencoder",
+                                "Autoencoder",
                                 "AutoencoderAndInkClassifier",
                             ]:
                                 logging.info("Visualizing autoencoder outputs...")

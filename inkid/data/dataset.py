@@ -5,6 +5,7 @@ from abc import ABC, abstractmethod
 from collections import namedtuple
 from dataclasses import dataclass
 import json
+import math
 import os
 import random
 from typing import Dict, List, Optional, Tuple
@@ -35,7 +36,7 @@ class RegionPointSampler:
         self.ambiguous_labels_mask = None
 
 
-# How subvolumes are retrieved TODO
+# How subvolumes are retrieved
 @dataclass
 class SubvolumeGeneratorInfo:
     method: str = "nearest_neighbor"
@@ -99,7 +100,7 @@ def add_subvolume_arguments(parser):
     )
 
 
-# Tuple (not dataclass) I believe because needs to be passed through PyTorch and needs to be basic structure TODO check
+# Tuple (not dataclass) I believe because needs to be passed through PyTorch and needs to be basic structure
 FeatureMetadata = namedtuple(
     "FeatureMetadata",
     ("path", "surface_x", "surface_y", "x", "y", "z", "n_x", "n_y", "n_z"),
@@ -593,15 +594,49 @@ class VolumeSource(DataSource):
     The points are not restricted to a particular surface, PPM, or segmentation.
 
     """
-
     def __init__(self, path: str) -> None:
         super().__init__(path)
 
-    def __len__(self):
-        raise NotImplementedError
+        self.volume: inkid.data.Volume = inkid.data.Volume.from_path(
+            self.source_json["volume"]
+        )
 
-    def __getitem__(self, item):
-        raise NotImplementedError
+        # This volume generates points, here we create the empty list
+        self._points = list()
+
+    def __len__(self):
+        # Could be anything, we can keep sampling all day. PyTorch requires a finite value, so here's one.
+        # This could either be changed or one could combine the settings for multiple epochs and limited
+        # training samples.
+        return 10000000
+
+    def __getitem__(self, _):
+        # Random 3d position
+        shape = self.volume.shape()
+        x = random.random() * shape[2]
+        y = random.random() * shape[1]
+        z = random.random() * shape[0]
+
+        # Random 3d direction https://math.stackexchange.com/a/44691
+        theta = random.random() * 2 * math.pi
+        zed = random.random() * 2 - 1
+        n_x = math.sqrt(1 - zed**2) * math.cos(theta)
+        n_y = math.sqrt(1 - zed**2) * math.sin(theta)
+        n_z = zed
+
+        # Get the feature metadata (useful for e.g. knowing where this feature came from on the surface)
+        feature_metadata = FeatureMetadata(
+            self.path, -1, -1, x, y, z, n_x, n_y, n_z
+        )
+        # Get the feature
+        feature = self.volume.get_subvolume(
+            center=(x, y, z), normal=(n_x, n_y, n_z), **self.feature_args
+        )
+        item = {
+            "feature_metadata": feature_metadata,
+            "feature": feature,
+        }
+        return item
 
 
 def flatten_data_sources_list(source_paths: List[str]) -> List[str]:
@@ -680,6 +715,9 @@ class Dataset(torch.utils.data.Dataset):
 
     def regions(self) -> list[RegionSource]:
         return [source for source in self.sources if isinstance(source, RegionSource)]
+
+    def volumes(self) -> list[VolumeSource]:
+        return [source for source in self.sources if isinstance(source, VolumeSource)]
 
     def pop_nth_region(self, n: int) -> RegionSource:
         region = self.regions()[n]

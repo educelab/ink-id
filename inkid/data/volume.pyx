@@ -223,6 +223,9 @@ cdef class Volume:
         else:
             return np.zeros((self.shape_z, self.shape_y), dtype=np.float32)
 
+    def shape(self):
+        return self.shape_z, self.shape_y, self.shape_x
+
     cdef unsigned short intensity_at(self, int x, int y, int z) nogil:
         """Get the intensity value at a voxel position."""
         if 0 <= x < self.shape_x and 0 <= y < self.shape_y and 0 <= z < self.shape_z:
