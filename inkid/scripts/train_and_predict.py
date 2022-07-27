@@ -539,6 +539,7 @@ def main(argv=None):
         checkpoint = torch.load(args.load_weights_from)
         pretrained_dict = checkpoint["model_state_dict"]
         pretrained_dict = {k: v for k, v in pretrained_dict.items() if k in model_dict}
+        logging.info(f"Loading weights for the following layers: {pretrained_dict.keys()}")
         model_dict.update(pretrained_dict)
         model.load_state_dict(model_dict)
         logging.info("done")
