@@ -281,7 +281,7 @@ def main(argv=None):
         repo = git.Repo(os.path.join(os.path.dirname(inkid.__file__), ".."))
         sha = repo.head.object.hexsha
         metadata["Git hash"] = repo.git.rev_parse(sha, short=6)
-    except git.exc.InvalidGitRepositoryError:
+    except (git.exc.InvalidGitRepositoryError, ValueError):
         metadata[
             "Git hash"
         ] = "No git hash available (unable to find valid repository)."
