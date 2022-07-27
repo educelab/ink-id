@@ -1,9 +1,9 @@
 Bootstrap: docker
-From: ubuntu:21.04
+From: ubuntu:22.04
 
 %labels
   MAINTAINER Stephen Parsons <stephen.parsons@uky.edu>, Mami Hayashida <mami.hayashida@uky.edu>
-  OS Ubuntu 21.04
+  OS Ubuntu 22.04
 
 %files
   /tmp/ink-id /usr/local/dri/ink-id
@@ -22,11 +22,11 @@ From: ubuntu:21.04
   # Temporary fix for https://github.com/pytorch/pytorch/issues/53452
   apt install -y libncurses5
   # Python installs
-  apt install -y python3.9-dev python3.9-venv
+  apt install -y python3.10-dev python3.10-venv
   # Needed for pygifsicle
   apt install -y gifsicle
   # Create a virtualenv for this project
-  python3.9 -m venv /usr/local/dri/ink-id/.venv
+  python3.10 -m venv /usr/local/dri/ink-id/.venv
   # Activate virtualenv
   . /usr/local/dri/ink-id/.venv/bin/activate
   # Update pip
