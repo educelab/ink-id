@@ -1,7 +1,7 @@
 absl-py==1.2.0
 alabaster==0.7.12
 astroid==2.11.7
-attrs==21.4.0
+attrs==22.1.0
 autopep8==1.6.0
 Babel==2.10.3
 black==22.6.0
@@ -10,7 +10,7 @@ certifi==2022.6.15
 charset-normalizer==2.1.0
 click==8.1.3
 cycler==0.11.0
-Cython==3.0.0a10
+Cython==3.0.0a11
 dicttoxml==1.7.4
 dill==0.3.5.1
 docutils==0.17.1
@@ -22,14 +22,14 @@ google-auth-oauthlib==0.4.6
 grpcio==1.47.0
 humanize==4.2.3
 idna==3.3
-imageio==2.19.5
+imageio==2.21.0
 imagesize==1.4.1
--e git+ssh://git@code.cs.uky.edu/seales-research/ink-id.git@69ad77160c9f9693c061af339e0c4e9e8b2d52bc#egg=inkid
+-e git+ssh://git@code.cs.uky.edu/seales-research/ink-id.git@13bfc3138875f016fe54523c18cefc5b5c58de33#egg=inkid
 isort==5.10.1
 Jinja2==3.1.2
 joblib==1.1.0
 jsmin==3.0.1
-jsonschema==4.7.2
+jsonschema==4.9.1
 kaleido==0.2.1
 kiwisolver==1.4.4
 lazy-object-proxy==1.7.1
@@ -49,7 +49,7 @@ plotly==5.9.0
 protobuf==3.19.4
 pyasn1==0.4.8
 pyasn1-modules==0.2.8
-pycodestyle==2.8.0
+pycodestyle==2.9.1
 pygifsicle==1.0.5
 Pygments==2.12.0
 pylint==2.14.5
@@ -64,12 +64,12 @@ requests==2.28.1
 requests-oauthlib==1.3.1
 rsa==4.9
 scikit-learn==1.1.1
-scipy==1.8.1
+scipy==1.9.0
 shiboken6==6.3.1
 six==1.16.0
 smmap==5.0.0
 snowballstemmer==2.2.0
-Sphinx==5.0.2
+Sphinx==5.1.1
 sphinx-rtd-theme==1.0.0
 sphinxcontrib-applehelp==1.0.2
 sphinxcontrib-devhelp==1.0.2
@@ -89,7 +89,7 @@ torch==1.12.0
 torch-summary==1.4.5
 tqdm==4.64.0
 typing_extensions==4.3.0
-urllib3==1.26.10
-Wand==0.6.8
-Werkzeug==2.1.2
+urllib3==1.26.11
+Wand==0.6.9
+Werkzeug==2.2.1
 wrapt==1.14.1
