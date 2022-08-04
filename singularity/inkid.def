@@ -17,6 +17,7 @@ From: ubuntu:22.04
   # Store git credentials for up to an hour (in overlay, not container) for convenience
   git config --global credential.helper cache
   git config --global credential.helper 'cache --timeout=3600'
+  git config --global -add safe.directory /usr/local/dri/ink-id
   # To make add-apt-repository available
   apt install -y software-properties-common
   # Temporary fix for https://github.com/pytorch/pytorch/issues/53452
