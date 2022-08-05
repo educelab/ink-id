@@ -132,7 +132,7 @@ def main(argv=None):
         help="Multiplicative weight of the volcart texture loss in any loss sums",
     )
     parser.add_argument(
-        "--autoencoded-loss-coefficient",
+        "--autoencoder-loss-coefficient",
         default=1,
         type=float,
         help="Multiplicative weight of the autoencoder loss in any loss sums",
