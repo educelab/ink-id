@@ -131,6 +131,12 @@ def main(argv=None):
         type=float,
         help="Multiplicative weight of the volcart texture loss in any loss sums",
     )
+    parser.add_argument(
+        "--autoencoded-loss-coefficient",
+        default=1,
+        type=float,
+        help="Multiplicative weight of the autoencoder loss in any loss sums",
+    )
     parser.add_argument("--learning-rate", metavar="n", type=float, default=0.001)
     parser.add_argument("--drop-rate", metavar="n", type=float, default=0.5)
     parser.add_argument("--batch-norm-momentum", metavar="n", type=float, default=0.9)
@@ -398,7 +404,9 @@ def main(argv=None):
         }
     if "autoencoded" in model.labels:
         metrics["autoencoded"] = {
-            "loss": nn.MSELoss(),
+            "loss": inkid.metrics.weight_loss(
+                args.autoencoder_loss_coefficient, nn.MSELoss()
+            ),
         }
     if "volcart_texture" in model.labels:
         label_args["volcart_texture"] = dict(shape=label_shape)
