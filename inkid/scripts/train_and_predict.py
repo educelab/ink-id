@@ -540,17 +540,24 @@ def main(argv=None):
             f"    Memory Cached:    {round(torch.cuda.memory_reserved(0) / 1024 ** 3, 1)} GB"
         )
 
-    # Load pretrained weights if specified
+    # Load pretrained weights if specified, and freeze them
     if args.load_weights_from is not None:
         logging.info("Loading pretrained weights...")
         model_dict = model.state_dict()
         checkpoint = torch.load(args.load_weights_from)
         pretrained_dict = checkpoint["model_state_dict"]
         pretrained_dict = {k: v for k, v in pretrained_dict.items() if k in model_dict}
-        logging.info(f"Loading weights for the following layers: {pretrained_dict.keys()}")
+        logging.info(f"Loading weights for the following layers: {list(pretrained_dict.keys())}")
         model_dict.update(pretrained_dict)
         model.load_state_dict(model_dict)
         logging.info("done")
+
+        logging.info("Freezing pretrained weights. Layer summary appears below showing which are now trainable:")
+        for name, param in model.named_parameters():
+            if name in pretrained_dict.keys():
+                param.requires_grad = False
+        for name, param in model.named_parameters():
+            logging.info(f"{name} Trainable: {param.requires_grad}")
 
     # Show model in TensorBoard and save sample subvolumes
     sample_dl = train_dl or val_dl or pred_dl
