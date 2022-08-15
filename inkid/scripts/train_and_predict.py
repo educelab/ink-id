@@ -162,6 +162,12 @@ def main(argv=None):
         default=None,
         help="pretrained model checkpoint to initialize network",
     )
+    parser.add_argument(
+        "--unfreeze-loaded-weights",
+        action="store_true",
+        help="allow loaded weights to continue training, typically for fine-tuning "
+             "(it is recommended to use a lower learning rate)"
+    )
 
     # Run configuration
     parser.add_argument("--batch-size", metavar="n", type=int, default=32)
@@ -552,12 +558,13 @@ def main(argv=None):
         model.load_state_dict(model_dict)
         logging.info("done")
 
-        logging.info("Freezing pretrained weights. Layer summary appears below showing which are now trainable:")
-        for name, param in model.named_parameters():
-            if name in pretrained_dict.keys():
-                param.requires_grad = False
-        for name, param in model.named_parameters():
-            logging.info(f"{name} Trainable: {param.requires_grad}")
+        if not args.unfreeze_loaded_weights:
+            logging.info("Freezing pretrained weights. Layer summary appears below showing which are now trainable:")
+            for name, param in model.named_parameters():
+                if name in pretrained_dict.keys():
+                    param.requires_grad = False
+            for name, param in model.named_parameters():
+                logging.info(f"{name} Trainable: {param.requires_grad}")
 
     # Show model in TensorBoard and save sample subvolumes
     sample_dl = train_dl or val_dl or pred_dl
