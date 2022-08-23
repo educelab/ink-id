@@ -23,14 +23,12 @@ To install the source for development:
 
 .. code-block:: bash
 
-    $ git clone https://code.cs.uky.edu/seales-research/ink-id.git && cd ink-id  # From code.cs server
-    $ git clone https://gitlab.com/educelab/ink-id.git && cd ink-id # From gitlab.com
-
-    $ python -m venv .venv              # Create a virtual environment
-    $ . .venv/bin/activate              # Activate the environment
-    (.venv) $ pip install -U pip        # Upgrade pip
-    (.venv) $ pip install -e .[dev]     # Install ink-id and dependencies, including those specific to development
-    (.venv) $ deactivate                # When finished, deactivate the environment
+    $ git clone https://gitlab.com/educelab/ink-id.git && cd ink-id  # Clone the repository
+    $ python -m venv .venv  # Create a virtual environment
+    $ . .venv/bin/activate  # Activate the environment
+    (.venv) $ pip install -U pip  # Upgrade pip
+    (.venv) $ pip install -e .[dev]  # Install ink-id and dependencies, including those specific to development
+    (.venv) $ deactivate  # When finished, deactivate the environment
 
 Cython modules are automatically built during the installation.
 After changes to Cython files (``.pyx`` and ``.pxd``), those modules must be rebuilt:

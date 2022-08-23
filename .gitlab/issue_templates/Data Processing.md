@@ -1,6 +1,6 @@
 # Data processing
 
-Consult the [Data preparation workflow](https://code.cs.uky.edu/seales-research/ink-id/-/wikis/Data-preparation-workflow) for more information on these steps.
+Consult the [Data preparation workflow](https://gitlab.com/educelab/ink-id/-/wikis/Data-preparation-workflow) for more information on these steps.
 
 - [ ] Transfer dataset to machine
 - [ ] Resize/crop slices
