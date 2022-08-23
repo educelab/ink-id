@@ -1,0 +1,15 @@
+Data/
+OldRunResults/
+OldRunScripts/
+Results/
+SavedWeights/
+SingleSubvolumeSamples/
+__pycache__
+copy_model.py
+localTestFiles/
+nohup.out
+vis.yml
+**/__pycache__
+**/.ipynb_checkpoints/
+**/*.info
+gradcam/model_localcopy.py

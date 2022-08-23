@@ -1,0 +1,200 @@
+{% extends "template.html" %}
+{% block content %}
+
+	<!-- Table of Models -->
+	<h2>Saved Models</h2>
+		<div class="container-fluid table-responsive">
+			<table class="table" id="table-models">
+  			<thead class="thead-light">
+  			  <tr>
+  			    <th scope="col">model(weights)</th>
+  			    <th scope="col">SLURM ID</th>
+  			    <th scope="col">Notes</th>
+  			    <th scope="col">Slurm</th>
+  			  </tr>
+  			</thead>
+  			<tbody>
+  			  <tr>
+  			    <th scope="row">1252440_235000</th>
+  			    <td>1252440</td>
+  			    <td>Everything but Col2: Interpolated</td>
+  			    <td id="slurm-script">./submit_with_summary.sh sbatch -p P4V12_SKY32M192_M --time=1-00:00:00 --mem=150G submit.sh $PSCRATCH/seales_uksr/dri-datasets-drive/CarbonPhantom/CarbonPhantomV3.volpkg/working/Col2-predict_all-other-train_region-set.json $PSCRATCH/seales_uksr/dri-experiments-drive/inkid/results/CarbonPhantom/SubvolumeRenders/TrainedModels/AllButCol2/Interpolated/00 --subvolume-shape 48 48 48 --final-prediction-on-all --prediction-grid-spacing 8 --subvolume-method interpolated</td>
+  			  </tr>
+  			  <tr>
+  			    <th scope="row">1252442_235000</th>
+  			    <td>1252442</td>
+  			    <td>Everything but Col2: Nearest Neighbor</td>
+  			    <td id="slurm-script">./submit_with_summary.sh sbatch -p P4V12_SKY32M192_M --time=1-00:00:00 --mem=150G submit.sh $PSCRATCH/seales_uksr/dri-datasets-drive/CarbonPhantom/CarbonPhantomV3.volpkg/working/Col2-predict_all-other-train_region-set.json $PSCRATCH/seales_uksr/dri-experiments-drive/inkid/results/CarbonPhantom/SubvolumeRenders/TrainedModels/AllButCol2/NearestNeighbor/00 --subvolume-shape 48 48 48 --final-prediction-on-all --prediction-grid-spacing 8 --subvolume-method nearest_neighbor</td>
+  			  </tr>
+  			  <tr>
+  			    <th scope="row">1252444_200000</th>
+  			    <td>1252444</td>
+  			    <td>Everything but Col6: Nearest Neighbor</td>
+  			    <td id="slurm-script">./submit_with_summary.sh sbatch -p P4V12_SKY32M192_M --time=1-00:00:00 --mem=150G submit.sh $PSCRATCH/seales_uksr/dri-datasets-drive/CarbonPhantom/CarbonPhantomV3.volpkg/working/Col6-predict_all-other-train_region-set.json $PSCRATCH/seales_uksr/dri-experiments-drive/inkid/results/CarbonPhantom/SubvolumeRenders/TrainedModels/AllButCol6/NearestNeighbor/00 --subvolume-shape 48 48 48 --final-prediction-on-all --prediction-grid-spacing 8 --subvolume-method nearest_neighbor</td>
+  			  </tr>
+  			  <tr>
+  			    <th scope="row">1252447_200000</th>
+  			    <td>1252447</td>
+  			    <td>Everything but Col6: Interpolated</td>
+  			    <td id="slurm-script">./submit_with_summary.sh sbatch -p P4V12_SKY32M192_M --time=1-00:00:00 --mem=150G submit.sh $PSCRATCH/seales_uksr/dri-datasets-drive/CarbonPhantom/CarbonPhantomV3.volpkg/working/Col6-predict_all-other-train_region-set.json $PSCRATCH/seales_uksr/dri-experiments-drive/inkid/results/CarbonPhantom/SubvolumeRenders/TrainedModels/AllButCol6/Interpolated/00 --subvolume-shape 48 48 48 --final-prediction-on-all --prediction-grid-spacing 8 --subvolume-method interpolated</td>
+  			  </tr>
+					<tr>
+  			    <th scope="row">1254548_360000</th>
+  			    <td>1254548</td>
+  			    <td>All Columns: Nearest Neighbor</td>
+  			    <td id="slurm-script">./submit_with_summary.sh sbatch -p P4V12_SKY32M192_M --time=1-00:00:00 --mem=150G submit.sh $PSCRATCH/seales_uksr/dri-datasets-drive/CarbonPhantom/CarbonPhantomV3.volpkg/working/Cols1-6_5x6grid.json $PSCRATCH/seales_uksr/dri-experiments-drive/inkid/results/CarbonPhantom/SubvolumeRenders/TrainedModels/TrainOnAll/NearestNeighbor/02 --subvolume-shape 48 48 48 --final-prediction-on-all --prediction-grid-spacing 8 --subvolume-method nearest_neighbor</td>
+  			  </tr>
+					<tr>
+  			    <th scope="row">1254552_360000</th>
+  			    <td>1254552</td>
+  			    <td>All columns: Interpolated</td>
+  			    <td id="slurm-script">./submit_with_summary.sh sbatch -p P4V12_SKY32M192_M --time=1-00:00:00 --mem=150G submit.sh $PSCRATCH/seales_uksr/dri-datasets-drive/CarbonPhantom/CarbonPhantomV3.volpkg/working/Cols1-6_k-fold-characters-region-set.json $PSCRATCH/seales_uksr/dri-experiments-drive/inkid/results/CarbonPhantom/SubvolumeRenders/TrainedModels/TrainOnAll/Interpolated/02 --subvolume-shape 48 48 48 --final-prediction-on-all --prediction-grid-spacing 8 --subvolume-method interpolated</td>
+  			  </tr>
+  			</tbody>
+			</table>
+		</div>
+	<!-- Selector Form -->
+  <form>
+    <div class="container-fluid">
+		 <h2>Search</h2>
+      <div class="form-group col-8">
+        <label for="dataset">Dataset</label>
+        <select class="form-control" id="datasetSelection">
+          <option>
+            CarbonPhantom
+          </option>
+        </select> 
+				<label for="group">Group</label> 
+					<select class="form-control" id="groupSelection">
+         	 <option>
+         	   All
+         	 </option>
+         	 <option>
+         	   Interpolated
+         	 </option>
+         	 <option>
+         	   NearestNeighbor
+         	 </option>
+         </select> 
+				<label for="column">Column</label> 
+					<select class="form-control" id="columnSelection">
+          	<option>
+            	All
+          	</option>
+          	<option>
+            	Col2
+          	</option>
+          	<option>
+            	Col6
+          	</option>
+        	</select> 
+				<label for="ground truth">Ground Truth</label> 
+					<select class="form-control" id="truthSelection">
+          	<option>
+            	All
+          	</option>
+          	<option>
+            	CarbonInk
+          	</option>
+          	<option>
+            	NoInk
+          	</option>
+          	<option>
+            	IronGall
+          	</option>
+        	</select> 
+				<label for="image type">Image Type</label> 
+					<select class="form-control" id="imageSelection">
+          	<option>
+          	  All
+          	</option>
+          	<option>
+          	  Plotlymono
+          	</option>
+          	<option>
+          	  Plotlycolor
+          	</option>
+          	<option>
+          	  Ytcolor
+          	</option>
+          	<option>
+          	  GradcamDefault
+          	</option>
+          	<option>
+          	  GradcamReverse
+          	</option>
+        	</select>
+        <label for="prediction">Prediction (valid only for gradcam images)</label> 
+					<select class="form-control" id="predictionSelection">
+          	<option>
+          	  All
+          	</option>
+          	<option>
+          	  ink
+          	</option>
+          	<option>
+          	  no_ink
+          	</option>
+					</select>
+        <label for="model">Saved Model (valid only for gradcam images)</label> 
+					<select class="form-control" id="modelSelection">
+          	<option>
+          	  All
+          	</option>
+          	<option>
+          	  1252440_235000
+          	</option>
+          	<option>
+          	  1252442_235000
+          	</option>
+          	<option>
+          	  1252444_200000
+          	</option>
+          	<option>
+          	  1252447_200000
+          	</option>
+          	<option>
+          	  1254548_360000
+          	</option>
+          	<option>
+          	  1254552_360000
+          	</option>
+					</select>
+      </div>
+    </div>
+  </form>
+  
+  <!-- Load images button -->
+  <button type="button" class="btn btn-secondary" id="loadButton">Load
+  Images</button>
+  
+  <!-- Gallery -->
+  <section id="subvolumes">
+    <div class="container-fluid">
+      <div class="row text-center text-lg-left" id="gallery">
+        <!-- ghost image -->
+
+        <div class="col-lg-3 col-md-4 col-6" id="shadowBlock" style=
+        "display: none !important;">
+          <div class="card gallery-card" style="">
+            <a target="_blank" href="/static/images/plotly-gray.png"
+            class="d-block mb-2 h-100" id="popup-image"><img class=
+            "card-img-top" src="/static/images/plotly-gray.png" alt=
+            "Card image cap" id="thumbnail-image"></a> <a target=
+            "_blank" href="/static/texts/metadata1.json" class="" id=
+            "metadata-json">
+            <p class="card-text text-center" id="metadata-path">
+            path/to/file</p></a>
+          </div>
+        </div><!-- end of ghost image -->
+      </div>
+    </div>
+{% endblock %}
+
+  {% block footer %}
+	<script src="/static/js/filter.js" charset="utf-8">                        
+	</script> 
+  {% endblock %}
+
+</html>
+
