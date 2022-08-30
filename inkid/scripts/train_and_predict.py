@@ -345,6 +345,13 @@ def main(argv=None):
             args.filters,
             args.drop_rate,
         ),
+        "DeeperInkClassifier3DCNN": inkid.model.DeeperInkClassifier3DCNN(
+            args.subvolume_shape_voxels,
+            args.batch_norm_momentum,
+            args.no_batch_norm,
+            args.filters,
+            args.drop_rate,
+        ),
         "InkClassifier3DCNN": inkid.model.InkClassifier3DCNN(
             args.subvolume_shape_voxels,
             args.batch_norm_momentum,
