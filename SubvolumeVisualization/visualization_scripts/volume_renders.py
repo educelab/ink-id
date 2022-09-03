@@ -1,3 +1,9 @@
+# volume_renders.py
+#
+# Given a numpy 3D array, generate 3D volume rendering using Ploty and
+# 2D slices using matplotlib
+#
+
 import os
 import numpy as np
 from pathlib import Path
@@ -9,30 +15,22 @@ import plotly.graph_objects as go
 import io
 import argparse
 
-class SubvolumeVisualization:
+# TODO: Add the option of printing only 2D or 3D.
 
-    def __init__(self, input_dir, outfile):
-        self.input_dir = input_dir
+class VolumeRenders:
+
+    def __init__(self, input_arr, outfile):
+        '''
+        Args:
+          input_arr(numpy 3D array):
+          outfile(str): path/to/output/image.png
+        '''
         self.outfile = outfile
+        self.subvolume = input_arr
 
-        dataset_dir = Path(self.input_dir)
-        print("dataset directory: ", dataset_dir)
-        files = list(dataset_dir.glob('*.tif'))
-        files.sort(key=lambda f: int(re.sub(r'[^0-9]*', "", str(f))))
-        print("files: ", files)
         
-        # Load input subvolume data
-        subvolume = []
-        for f in files:
-          i = Image.open(f)
-          subvolume.append(np.array(Image.open(f), dtype=np.float32))
-        
-        # convert to numpy
-        self.subvolume = np.array(subvolume)
-        print("Created a numpy array with shape: ", np.shape(self.subvolume))
-
-
     def render_slices(self, direction, cmap_choice="jet", imgs_in_row=6):
+
         size_x, size_y, size_z = np.shape(self.subvolume)
     
         if direction == 'x':
@@ -213,6 +211,6 @@ if __name__ == "__main__":
     input_data_dir = args.input
     output_file = args.output
 
-    s = SubvolumeVisualization(input_data_dir, output_file)
+    s = VolumeRenders(input_data_dir, output_file)
     s.create_summary()
     
