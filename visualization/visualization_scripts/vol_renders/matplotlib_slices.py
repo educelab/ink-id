@@ -1,4 +1,4 @@
-# vol_render_matplotlib_slices.py 
+# matplotlib_slices.py 
 
 import os
 import numpy as np
