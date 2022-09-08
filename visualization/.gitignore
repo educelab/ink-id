@@ -13,3 +13,4 @@ vis.yml
 **/.ipynb_checkpoints/
 **/*.info
 gradcam/model_localcopy.py
+venv/

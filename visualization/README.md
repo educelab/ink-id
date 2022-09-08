@@ -3,12 +3,11 @@ The directory holds Python scripts for visualizing each subvolume data in a
 human recognizable way. 
 
 # Content Organization
-## rendering
+## Jupyter Notebooks 
 
-## display
 
-## tests
+## Visualization Scripts
 
-TODO
+
 
 
