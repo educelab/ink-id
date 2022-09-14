@@ -37,25 +37,34 @@ def main():
         output_spacing=output_spacing,
     )
 
+    print("Setting up registration pipeline...")
     initial_difference = itk.SubtractImageFilter.New(Input1=fixed_img, Input2=moving_img)
     initial_difference_img = itk.output(initial_difference)
 
-    print("Initial setup...")
     dimension = fixed_img.GetImageDimension()
     image_type = itk.Image[pixel_type, dimension]
     spline_order = 3
 
-    # transform_type = itk.BSplineTransform[itk.D, dimension, spline_order]
-    transform_type = itk.TranslationTransform[itk.D, dimension]
+    transform_type = itk.BSplineTransform[itk.D, dimension, spline_order]
+    # transform_type = itk.TranslationTransform[itk.D, dimension]
     initial_transform = transform_type.New()
 
-    optimizer = itk.RegularStepGradientDescentOptimizerv4.New(
-        LearningRate=4,
-        MinimumStepLength=0.001,
-        RelaxationFactor=0.5,
-        NumberOfIterations=200,
-        GradientMagnitudeTolerance=1e-7,
+    # optimizer = itk.RegularStepGradientDescentOptimizerv4.New(
+    #     LearningRate=4,
+    #     MinimumStepLength=0.001,
+    #     RelaxationFactor=0.5,
+    #     NumberOfIterations=200,
+    #     GradientMagnitudeTolerance=1e-7,
+    # )
+    optimizer = itk.LBFGSOptimizer.New(
+        # CostFunctionConvergenceFactor=1e+12,
+        # GradientConvergenceTolerance=1.0e-35,
+        # NumberOfIterations=5,
+        # MaximumNumberOfFunctionEvaluations=500,
+        # MaximumNumberOfCorrections=5,
     )
+    # print(optimizer.GetBoundSelection())
+
 
     metric = itk.MattesMutualInformationImageToImageMetricv4[image_type, image_type].New()
 
