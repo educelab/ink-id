@@ -51,33 +51,59 @@ def select_seed_points():
     return [(256, 145, 428)]
 
 
+def get_slice(vol, point, basis_x, basis_y, radius):
+    slice_img = np.zeros((radius * 2 + 1, radius * 2 + 1), dtype=np.uint8)
+    for slice_y in range(slice_img.shape[1]):
+        for slice_x in range(slice_img.shape[0]):
+            slice_x_about_point = slice_x - radius
+            slice_y_about_point = slice_y - radius
+            if math.sqrt(slice_x_about_point**2 + slice_y_about_point**2) > radius:
+                continue
+            new_x, new_y, new_z = (
+                point + slice_x_about_point * basis_x + slice_y_about_point * basis_y
+            ).astype(int)
+            if (
+                0 <= new_z < vol.shape[0]
+                and 0 <= new_y < vol.shape[1]
+                and 0 <= new_x < vol.shape[2]
+            ):
+                slice_img[slice_y, slice_x] = vol[new_z, new_y, new_x]
+    return slice_img
+
+
 def determine_orientation(vol, point):
     point = np.array(point)
-    fig, ((ax_xy, ax_yz), (ax_xz, ax_slice)) = plt.subplots(2, 2)
+    fig, ((ax_xy, ax_yz, ax_radius_slider), (ax_xz, ax_slice, _)) = plt.subplots(2, 3)
     x, y, z = point
     ax_xy.imshow(vol[z, :, :])
     ax_yz.imshow(vol[:, :, x])
     ax_xz.imshow(vol[:, y, :])
 
     # Get the slice image
-    r = 50
-    slice_img = np.zeros((r * 2 + 1, r * 2 + 1), dtype=np.uint8)
+    radius = 50
     basis_x = np.array([1, 0, 0], dtype=float)
     basis_y = np.array([0, 1, 0], dtype=float)
-
-    for slice_y in range(slice_img.shape[1]):
-        for slice_x in range(slice_img.shape[0]):
-            slice_x_about_point = slice_x - r
-            slice_y_about_point = slice_y - r
-            if math.sqrt(slice_x_about_point**2 + slice_y_about_point**2) > r:
-                continue
-            new_x, new_y, new_z = (point + slice_x_about_point * basis_x + slice_y_about_point * basis_y).astype(int)
-            if 0 <= new_z < vol.shape[0] and 0 <= new_y < vol.shape[1] and 0 <= new_x < vol.shape[2]:
-                slice_img[slice_y, slice_x] = vol[new_z, new_y, new_x]
-
+    slice_img = get_slice(vol, point, basis_x, basis_y, radius)
     ax_slice.imshow(slice_img)
 
+    radius_slider = Slider(
+        ax=ax_radius_slider,
+        label="Radius [voxels]",
+        valmin=8,
+        valmax=256,
+        valinit=radius,
+        valstep=1,
+    )
+
+    def update(val):
+        new_slice_img = get_slice(vol, point, basis_x, basis_y, val)
+        ax_slice.imshow(new_slice_img)
+        fig.canvas.draw_idle()
+
+    radius_slider.on_changed(update)
+
     plt.show()
+
     return [math.pi, math.pi]
 
 
