@@ -101,7 +101,7 @@ def determine_orientation(vol, point):
     radius = 50
     scale = 1
     rotation_angles = [0, 0, 0]
-    slice_img = get_slice(vol, point, rotation_angles, radius)
+    slice_img = get_slice(vol, point, rotation_angles, radius, scale)
     ax_slice.imshow(slice_img)
 
     radius_slider = Slider(
