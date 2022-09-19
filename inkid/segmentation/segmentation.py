@@ -6,6 +6,7 @@ import imageio.v3 as iio
 from matplotlib import pyplot as plt
 from matplotlib.widgets import Slider
 import numpy as np
+from scipy.spatial.transform import Rotation
 
 
 def load_volume(slices_dir):
@@ -51,23 +52,29 @@ def select_seed_points():
     return [(256, 145, 428)]
 
 
-def get_slice(vol, point, basis_x, basis_y, radius):
+def get_slice(vol, vol_point, rotation_angles, radius):
     slice_img = np.zeros((radius * 2 + 1, radius * 2 + 1), dtype=np.uint8)
-    for slice_y in range(slice_img.shape[1]):
-        for slice_x in range(slice_img.shape[0]):
-            slice_x_about_point = slice_x - radius
-            slice_y_about_point = slice_y - radius
-            if math.sqrt(slice_x_about_point**2 + slice_y_about_point**2) > radius:
-                continue
-            new_x, new_y, new_z = (
-                point + slice_x_about_point * basis_x + slice_y_about_point * basis_y
-            ).astype(int)
-            if (
-                0 <= new_z < vol.shape[0]
-                and 0 <= new_y < vol.shape[1]
-                and 0 <= new_x < vol.shape[2]
-            ):
-                slice_img[slice_y, slice_x] = vol[new_z, new_y, new_x]
+    for slice_y, slice_x in np.ndindex(*slice_img.shape):
+        new_point = np.array([slice_x, slice_y, 0])
+        # Translate to make the origin the center of the slice image
+        new_point -= np.array([radius, radius, 0])
+        # Check if new point is within slice image circle and continue if not
+        if math.sqrt(new_point[0]**2 + new_point[1]**2) > radius:
+            continue
+        # Rotate
+        r = Rotation.from_euler("xyz", rotation_angles, degrees=False).as_matrix()
+        new_point = np.matmul(r, new_point)
+        # Translate
+        new_point += vol_point
+        # Assign the slice pixel
+        new_point = new_point.astype(int)
+        x, y, z = new_point
+        if (
+            0 <= z < vol.shape[0]
+            and 0 <= y < vol.shape[1]
+            and 0 <= x < vol.shape[2]
+        ):
+            slice_img[slice_y, slice_x] = vol[z, y, x]
     return slice_img
 
 
@@ -81,9 +88,8 @@ def determine_orientation(vol, point):
 
     # Get the slice image
     radius = 50
-    basis_x = np.array([1, 0, 0], dtype=float)
-    basis_y = np.array([0, 1, 0], dtype=float)
-    slice_img = get_slice(vol, point, basis_x, basis_y, radius)
+    rotation_angles = [0, 0, 0]
+    slice_img = get_slice(vol, point, rotation_angles, radius)
     ax_slice.imshow(slice_img)
 
     radius_slider = Slider(
@@ -96,7 +102,7 @@ def determine_orientation(vol, point):
     )
 
     def update(val):
-        new_slice_img = get_slice(vol, point, basis_x, basis_y, val)
+        new_slice_img = get_slice(vol, point, rotation_angles, val)
         ax_slice.imshow(new_slice_img)
         fig.canvas.draw_idle()
 
