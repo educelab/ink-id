@@ -53,31 +53,32 @@ def select_seed_points():
 
 
 def get_slice(vol, vol_point, rotation_angles, radius, scale):
-    slice_img = np.zeros((radius * 2 + 1, radius * 2 + 1), dtype=np.uint8)
-    for slice_y, slice_x in np.ndindex(*slice_img.shape):
-        new_point = np.array([slice_x, slice_y, 0])
-        # Translate to make the origin the center of the slice image
-        new_point -= np.array([radius, radius, 0])
-        # Check if new point is within slice image circle and continue if not
-        if math.sqrt(new_point[0] ** 2 + new_point[1] ** 2) > radius:
-            continue
-        # Rotate
-        r = Rotation.from_euler("xyz", rotation_angles, degrees=False).as_matrix()
-        new_point = np.matmul(r, new_point)
-        # Scale
-        new_point *= scale
-        # Translate
-        new_point += vol_point
-        # Assign the slice pixel
-        new_point = new_point.astype(int)
-        x, y, z = new_point
-        if 0 <= z < vol.shape[0] and 0 <= y < vol.shape[1] and 0 <= x < vol.shape[2]:
-            slice_img[slice_y, slice_x] = vol[z, y, x]
+    # List of all the pixel indices of the slice image we want to generate
+    slice_img_shape = (radius * 2 + 1, radius * 2 + 1)
+    points = np.array(list(np.ndindex(*slice_img_shape)))
+    # Add a third value to each pixel index making it 3D
+    points = np.hstack((points, np.zeros((points.shape[0], 1))))
+    # Translate to make the origin the center of the slice image
+    points -= np.array([radius, radius, 0])
+    # Rotate (have to add a dimension and then remove it to get the vectorized matmul to cooperate)
+    r = Rotation.from_euler("xyz", rotation_angles, degrees=False).as_matrix()
+    points = np.expand_dims(points, axis=2)
+    points = np.matmul(r, points)
+    points = np.squeeze(points)
+    # Scale
+    points *= scale
+    # Translate
+    points += vol_point
+    # Make image
+    points = points.astype(int)
+    xs = np.clip(points[:, 0], 0, vol.shape[2] - 1)
+    ys = np.clip(points[:, 1], 0, vol.shape[1] - 1)
+    zs = np.clip(points[:, 2], 0, vol.shape[0] - 1)
+    slice_img = vol[zs, ys, xs].reshape(slice_img_shape)
     return slice_img
 
 
 def determine_orientation(vol, point):
-    # TODO scale
     # TODO vectorize
     # TODO draw intersection on orthogonal views
     fig, axes = plt.subplots(3, 3)
