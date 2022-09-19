@@ -52,7 +52,7 @@ def select_seed_points():
     return [(256, 145, 428)]
 
 
-def get_slice(vol, vol_point, rotation_angles, radius):
+def get_slice(vol, vol_point, rotation_angles, radius, scale):
     slice_img = np.zeros((radius * 2 + 1, radius * 2 + 1), dtype=np.uint8)
     for slice_y, slice_x in np.ndindex(*slice_img.shape):
         new_point = np.array([slice_x, slice_y, 0])
@@ -64,6 +64,8 @@ def get_slice(vol, vol_point, rotation_angles, radius):
         # Rotate
         r = Rotation.from_euler("xyz", rotation_angles, degrees=False).as_matrix()
         new_point = np.matmul(r, new_point)
+        # Scale
+        new_point *= scale
         # Translate
         new_point += vol_point
         # Assign the slice pixel
@@ -75,12 +77,21 @@ def get_slice(vol, vol_point, rotation_angles, radius):
 
 
 def determine_orientation(vol, point):
+    # TODO scale
+    # TODO vectorize
     # TODO draw intersection on orthogonal views
+    fig, axes = plt.subplots(3, 3)
+    ax_xy = axes[0, 0]
+    ax_yz = axes[0, 1]
+    ax_scale_slider = axes[0, 2]
+    ax_xz = axes[1, 0]
+    ax_slice = axes[1, 1]
+    ax_radius_slider = axes[1, 2]
+    ax_alpha_slider = axes[2, 0]
+    ax_beta_slider = axes[2, 1]
+    ax_gamma_slider = axes[2, 2]
+
     point = np.array(point)
-    fig, (
-        (ax_xy, ax_yz, ax_radius_slider, ax_beta_slider),
-        (ax_xz, ax_slice, ax_alpha_slider, ax_gamma_slider),
-    ) = plt.subplots(2, 4)
     x, y, z = point
     ax_xy.imshow(vol[z, :, :])
     ax_yz.imshow(vol[:, :, x])
@@ -88,6 +99,7 @@ def determine_orientation(vol, point):
 
     # Get the slice image
     radius = 50
+    scale = 1
     rotation_angles = [0, 0, 0]
     slice_img = get_slice(vol, point, rotation_angles, radius)
     ax_slice.imshow(slice_img)
@@ -99,6 +111,13 @@ def determine_orientation(vol, point):
         valmax=256,
         valinit=radius,
         valstep=1,
+    )
+    scale_slider = Slider(
+        ax=ax_scale_slider,
+        label="Scale factor",
+        valmin=0.5,
+        valmax=10,
+        valinit=scale,
     )
     alpha_slider = Slider(
         ax=ax_alpha_slider,
@@ -125,32 +144,40 @@ def determine_orientation(vol, point):
     def update_radius(val):
         nonlocal radius
         radius = val
-        new_slice_img = get_slice(vol, point, rotation_angles, radius)
+        new_slice_img = get_slice(vol, point, rotation_angles, radius, scale)
+        ax_slice.imshow(new_slice_img)
+        fig.canvas.draw_idle()
+
+    def update_scale(val):
+        nonlocal scale
+        scale = val
+        new_slice_img = get_slice(vol, point, rotation_angles, radius, scale)
         ax_slice.imshow(new_slice_img)
         fig.canvas.draw_idle()
 
     def update_alpha(val):
         nonlocal rotation_angles
         rotation_angles[0] = val
-        new_slice_img = get_slice(vol, point, rotation_angles, radius)
+        new_slice_img = get_slice(vol, point, rotation_angles, radius, scale)
         ax_slice.imshow(new_slice_img)
         fig.canvas.draw_idle()
 
     def update_beta(val):
         nonlocal rotation_angles
         rotation_angles[1] = val
-        new_slice_img = get_slice(vol, point, rotation_angles, radius)
+        new_slice_img = get_slice(vol, point, rotation_angles, radius, scale)
         ax_slice.imshow(new_slice_img)
         fig.canvas.draw_idle()
 
     def update_gamma(val):
         nonlocal rotation_angles
         rotation_angles[2] = val
-        new_slice_img = get_slice(vol, point, rotation_angles, radius)
+        new_slice_img = get_slice(vol, point, rotation_angles, radius, scale)
         ax_slice.imshow(new_slice_img)
         fig.canvas.draw_idle()
 
     radius_slider.on_changed(update_radius)
+    scale_slider.on_changed(update_scale)
     alpha_slider.on_changed(update_alpha)
     beta_slider.on_changed(update_beta)
     gamma_slider.on_changed(update_gamma)
