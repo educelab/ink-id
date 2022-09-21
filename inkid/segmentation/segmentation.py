@@ -90,9 +90,8 @@ def get_slice(
     return slice_img
 
 
-def determine_orientation(vol, voxelsize_microns, point):
+def determine_orientation(vol, voxelsize_um, point):
     # TODO draw intersection on orthogonal views
-    # TODO options for choosing next points: automatically based on radius, or just have user click on some points
     fig, axes = plt.subplots(3, 3)
     plt.get_current_fig_manager().set_window_title("Papyrus Fiber Explorer 3000")
     ax_xy = axes[0, 0]
@@ -112,11 +111,11 @@ def determine_orientation(vol, voxelsize_microns, point):
     ax_xz.imshow(vol[:, y, :])
 
     # Get the slice image
-    radius_microns = 800
+    radius_um = 800
     resolution = 0.25
     rotation_angles = [0, 0, 0]
     slice_img = get_slice(
-        vol, point, rotation_angles, voxelsize_microns, radius_microns, resolution
+        vol, point, rotation_angles, voxelsize_um, radius_um, resolution
     )
     ax_slice.imshow(slice_img)
 
@@ -125,7 +124,7 @@ def determine_orientation(vol, voxelsize_microns, point):
         label="Radius [um]",
         valmin=100,
         valmax=4000,
-        valinit=radius_microns,
+        valinit=radius_um,
         valstep=10,
     )
     resolution_slider = Slider(
@@ -158,10 +157,10 @@ def determine_orientation(vol, voxelsize_microns, point):
     )
 
     def update_radius(val):
-        nonlocal radius_microns
-        radius_microns = val
+        nonlocal radius_um
+        radius_um = val
         new_slice_img = get_slice(
-            vol, point, rotation_angles, voxelsize_microns, radius_microns, resolution
+            vol, point, rotation_angles, voxelsize_um, radius_um, resolution
         )
         ax_slice.imshow(new_slice_img)
         fig.canvas.draw_idle()
@@ -170,7 +169,7 @@ def determine_orientation(vol, voxelsize_microns, point):
         nonlocal resolution
         resolution = val
         new_slice_img = get_slice(
-            vol, point, rotation_angles, voxelsize_microns, radius_microns, resolution
+            vol, point, rotation_angles, voxelsize_um, radius_um, resolution
         )
         ax_slice.imshow(new_slice_img)
         fig.canvas.draw_idle()
@@ -179,7 +178,7 @@ def determine_orientation(vol, voxelsize_microns, point):
         nonlocal rotation_angles
         rotation_angles[0] = val
         new_slice_img = get_slice(
-            vol, point, rotation_angles, voxelsize_microns, radius_microns, resolution
+            vol, point, rotation_angles, voxelsize_um, radius_um, resolution
         )
         ax_slice.imshow(new_slice_img)
         fig.canvas.draw_idle()
@@ -188,7 +187,7 @@ def determine_orientation(vol, voxelsize_microns, point):
         nonlocal rotation_angles
         rotation_angles[1] = val
         new_slice_img = get_slice(
-            vol, point, rotation_angles, voxelsize_microns, radius_microns, resolution
+            vol, point, rotation_angles, voxelsize_um, radius_um, resolution
         )
         ax_slice.imshow(new_slice_img)
         fig.canvas.draw_idle()
@@ -197,7 +196,7 @@ def determine_orientation(vol, voxelsize_microns, point):
         nonlocal rotation_angles
         rotation_angles[2] = val
         new_slice_img = get_slice(
-            vol, point, rotation_angles, voxelsize_microns, radius_microns, resolution
+            vol, point, rotation_angles, voxelsize_um, radius_um, resolution
         )
         ax_slice.imshow(new_slice_img)
         fig.canvas.draw_idle()
@@ -210,11 +209,37 @@ def determine_orientation(vol, voxelsize_microns, point):
 
     plt.show()
 
-    return rotation_angles
+    return rotation_angles, radius_um
 
 
-def get_next_points(current_point, orientation):
-    return []
+def get_next_points(vol, voxelsize_um, current_point, rotation_angles, radius_um):
+    points = np.array(
+        [
+            [1, 0, 0],
+            [-1, 0, 0],
+            [0, 1, 0],
+            [0, -1, 0],
+        ]
+    )
+    # Rotate (have to add a dimension and then remove it to get the vectorized matmul to cooperate)
+    r = Rotation.from_euler("xyz", rotation_angles, degrees=False).as_matrix()
+    points = np.expand_dims(points, axis=2)
+    points = np.matmul(r, points)
+    points = np.squeeze(points)
+    # Scale
+    points *= radius_um
+    points /= voxelsize_um
+    # Translate
+    points += current_point
+    points = points.astype(int)
+    # Remove if out of bounds
+    in_bounds_points = []
+    vz, vy, vx = vol.shape
+    for point in points:
+        x, y, z = point
+        if 0 <= x < vx and 0 <= y < vy and 0 <= z < vz:
+            in_bounds_points.append(list(point))
+    return in_bounds_points
 
 
 def main():
@@ -222,14 +247,18 @@ def main():
     parser.add_argument("--input-volume", required=True)
     args = parser.parse_args()
 
-    vol, voxelsize_microns = load_volume(args.input_volume)
+    vol, voxelsize_um = load_volume(args.input_volume)
 
     points_queue = select_seed_points()
     while points_queue:
         current_point = points_queue.pop(0)
-        orientation = determine_orientation(vol, voxelsize_microns, current_point)
-    #     next_points = get_next_points(current_point, orientation)
-    #     points_queue += next_points
+        rotation_angles, radius_um = determine_orientation(
+            vol, voxelsize_um, current_point
+        )
+        next_points = get_next_points(
+            vol, voxelsize_um, current_point, rotation_angles, radius_um
+        )
+        points_queue += next_points
 
 
 if __name__ == "__main__":
