@@ -286,7 +286,6 @@ def main():
         scene = pyrender.Scene()
         scene.add(mesh)
         viewer = pyrender.Viewer(scene, render_flags={"cull_faces": False, "all_wireframe": True})
-        del viewer
 
 
 if __name__ == "__main__":
