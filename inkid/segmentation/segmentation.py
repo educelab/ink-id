@@ -7,7 +7,9 @@ import imageio.v3 as iio
 from matplotlib import pyplot as plt
 from matplotlib.widgets import Slider
 import numpy as np
+import pyrender
 from scipy.spatial.transform import Rotation
+import trimesh
 
 
 def load_volume(slices_dir):
@@ -216,9 +218,9 @@ def get_next_points(vol, voxelsize_um, current_point, rotation_angles, radius_um
     points = np.array(
         [
             [1, 0, 0],
+            [0, -1, 0],
             [-1, 0, 0],
             [0, 1, 0],
-            [0, -1, 0],
         ]
     )
     # Rotate (have to add a dimension and then remove it to get the vectorized matmul to cooperate)
@@ -249,16 +251,42 @@ def main():
 
     vol, voxelsize_um = load_volume(args.input_volume)
 
-    points_queue = select_seed_points()
-    while points_queue:
-        current_point = points_queue.pop(0)
+    mesh_vertices = []
+    mesh_faces = []
+
+    remaining_points_queue = select_seed_points()
+    while remaining_points_queue:
+        current_point = remaining_points_queue.pop(0)
         rotation_angles, radius_um = determine_orientation(
             vol, voxelsize_um, current_point
         )
         next_points = get_next_points(
             vol, voxelsize_um, current_point, rotation_angles, radius_um
         )
-        points_queue += next_points
+        remaining_points_queue += next_points
+
+        # TODO This could work for some cases even if some next_points were out of bounds
+        if len(next_points) == 4:
+            mesh_vertices.append(current_point)
+            mesh_vertices += next_points
+            triangles = np.array(
+                [
+                    [0, 4, 1],
+                    [0, 1, 2],
+                    [0, 2, 3],
+                    [0, 3, 4],
+                ],
+                dtype=int,
+            )
+            triangles += len(mesh_vertices) - 5
+            mesh_faces += list(triangles)
+
+        tri_mesh = trimesh.Trimesh(vertices=mesh_vertices, faces=mesh_faces)
+        mesh = pyrender.Mesh.from_trimesh(tri_mesh)
+        scene = pyrender.Scene()
+        scene.add(mesh)
+        viewer = pyrender.Viewer(scene, render_flags={"cull_faces": False, "all_wireframe": True})
+        del viewer
 
 
 if __name__ == "__main__":
