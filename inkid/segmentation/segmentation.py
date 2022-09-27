@@ -83,19 +83,27 @@ def get_slice(
     points /= resolution
     # Translate
     points += vol_point
-    # Make image
     points = points.astype(int)
+    # Compute corners of slice image
+    points_unflattened = points.copy().reshape(slice_img_shape + (3,))
+    bounds = [
+        points_unflattened[0, 0],
+        points_unflattened[0, radius_pixels * 2],
+        points_unflattened[radius_pixels * 2, 0],
+        points_unflattened[radius_pixels * 2, radius_pixels * 2]
+    ]
+    # Make image
     xs = np.clip(points[:, 0], 0, vol.shape[2] - 1)
     ys = np.clip(points[:, 1], 0, vol.shape[1] - 1)
     zs = np.clip(points[:, 2], 0, vol.shape[0] - 1)
     slice_img = vol[zs, ys, xs].reshape(slice_img_shape).transpose()
-    return slice_img
+
+    return slice_img, bounds
 
 
 def determine_orientation(vol, voxelsize_um, point):
-    # TODO draw intersection on orthogonal views
     fig, axes = plt.subplots(3, 3)
-    plt.get_current_fig_manager().set_window_title("Papyrus Fiber Explorer 3000")
+    plt.get_current_fig_manager().set_window_title("Papyrus Fiber Explorer")
     ax_xy = axes[0, 0]
     ax_yz = axes[0, 1]
     ax_resolution_slider = axes[0, 2]
@@ -108,18 +116,16 @@ def determine_orientation(vol, voxelsize_um, point):
 
     point = np.array(point)
     x, y, z = point
-    ax_xy.imshow(vol[z, :, :])
-    ax_yz.imshow(vol[:, :, x])
-    ax_xz.imshow(vol[:, y, :])
+    ax_xy_slice_img = vol[z, :, :]
+    ax_xy.imshow(ax_xy_slice_img)
+    ax_yz_slice_img = vol[:, :, x]
+    ax_yz.imshow(ax_yz_slice_img)
+    ax_xz_slice_img = vol[:, y, :]
+    ax_xz.imshow(ax_xz_slice_img)
 
-    # Get the slice image
     radius_um = 800
     resolution = 0.25
     rotation_angles = [0, 0, 0]
-    slice_img = get_slice(
-        vol, point, rotation_angles, voxelsize_um, radius_um, resolution
-    )
-    ax_slice.imshow(slice_img)
 
     radius_slider = Slider(
         ax=ax_radius_slider,
@@ -158,56 +164,67 @@ def determine_orientation(vol, voxelsize_um, point):
         valinit=0,
     )
 
+    def draw():
+        slice_img, bounds = get_slice(
+            vol, point, rotation_angles, voxelsize_um, radius_um, resolution
+        )
+        ax_slice.imshow(slice_img)
+
+        # Draw the intersection of the slice on the orthogonal views
+        points_in_xy_intersection = []
+        # Iterate over the four lines made by the bounding corners of the slice
+        # https://stackoverflow.com/a/5764948
+        bounds.append(bounds[0])
+        for point_a, point_b in zip(bounds, bounds[1:]):
+            # Either the line intersects the plane in one point
+            if np.sign(point_a - point)[2] != np.sign(point_b - point)[2]:
+                # Solve for t using z = z_0 + t(z_1 - z_0)
+                # So t = (z - z_0) / (z_1 - z_0)
+                # TODO LEFT OFF
+                pass
+            # Or it lies in the plane
+            elif np.sign(point_a - point)[2] == 0 and np.sign(point_b - point)[2] == 0:
+                pass
+            # Or it does not intersect at all
+            else:
+                continue
+        # Draw
+
+
+        fig.canvas.draw_idle()
+
     def update_radius(val):
         nonlocal radius_um
         radius_um = val
-        new_slice_img = get_slice(
-            vol, point, rotation_angles, voxelsize_um, radius_um, resolution
-        )
-        ax_slice.imshow(new_slice_img)
-        fig.canvas.draw_idle()
+        draw()
 
     def update_resolution(val):
         nonlocal resolution
         resolution = val
-        new_slice_img = get_slice(
-            vol, point, rotation_angles, voxelsize_um, radius_um, resolution
-        )
-        ax_slice.imshow(new_slice_img)
-        fig.canvas.draw_idle()
+        draw()
 
     def update_alpha(val):
         nonlocal rotation_angles
         rotation_angles[0] = val
-        new_slice_img = get_slice(
-            vol, point, rotation_angles, voxelsize_um, radius_um, resolution
-        )
-        ax_slice.imshow(new_slice_img)
-        fig.canvas.draw_idle()
+        draw()
 
     def update_beta(val):
         nonlocal rotation_angles
         rotation_angles[1] = val
-        new_slice_img = get_slice(
-            vol, point, rotation_angles, voxelsize_um, radius_um, resolution
-        )
-        ax_slice.imshow(new_slice_img)
-        fig.canvas.draw_idle()
+        draw()
 
     def update_gamma(val):
         nonlocal rotation_angles
         rotation_angles[2] = val
-        new_slice_img = get_slice(
-            vol, point, rotation_angles, voxelsize_um, radius_um, resolution
-        )
-        ax_slice.imshow(new_slice_img)
-        fig.canvas.draw_idle()
+        draw()
 
     radius_slider.on_changed(update_radius)
     resolution_slider.on_changed(update_resolution)
     alpha_slider.on_changed(update_alpha)
     beta_slider.on_changed(update_beta)
     gamma_slider.on_changed(update_gamma)
+
+    draw()
 
     plt.show()
 
@@ -265,7 +282,7 @@ def main():
         )
         remaining_points_queue += next_points
 
-        # TODO This could work for some cases even if some next_points were out of bounds
+        # This could work for some cases even if some next_points were out of bounds
         if len(next_points) == 4:
             mesh_vertices.append(current_point)
             mesh_vertices += next_points
