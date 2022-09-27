@@ -104,6 +104,7 @@ def get_slice(
 def determine_orientation(vol, voxelsize_um, point):
     fig, axes = plt.subplots(3, 3)
     plt.get_current_fig_manager().set_window_title("Papyrus Fiber Explorer")
+    fig.tight_layout()
     ax_xy = axes[0, 0]
     ax_yz = axes[0, 1]
     ax_resolution_slider = axes[0, 2]
