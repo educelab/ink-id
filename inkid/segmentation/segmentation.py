@@ -7,6 +7,7 @@ import imageio.v3 as iio
 from matplotlib import pyplot as plt
 from matplotlib.widgets import Slider
 import numpy as np
+from PIL import Image, ImageDraw
 import pyrender
 from scipy.spatial.transform import Rotation
 import trimesh
@@ -89,8 +90,8 @@ def get_slice(
     bounds = [
         points_unflattened[0, 0],
         points_unflattened[0, radius_pixels * 2],
+        points_unflattened[radius_pixels * 2, radius_pixels * 2],
         points_unflattened[radius_pixels * 2, 0],
-        points_unflattened[radius_pixels * 2, radius_pixels * 2]
     ]
     # Make image
     xs = np.clip(points[:, 0], 0, vol.shape[2] - 1)
@@ -117,12 +118,12 @@ def determine_orientation(vol, voxelsize_um, point):
 
     point = np.array(point)
     x, y, z = point
-    ax_xy_slice_img = vol[z, :, :]
-    ax_xy.imshow(ax_xy_slice_img)
-    ax_yz_slice_img = vol[:, :, x]
-    ax_yz.imshow(ax_yz_slice_img)
-    ax_xz_slice_img = vol[:, y, :]
-    ax_xz.imshow(ax_xz_slice_img)
+    ax_xy_slice = vol[z, :, :]
+    ax_xy.imshow(ax_xy_slice)
+    ax_yz_slice = vol[:, :, x]
+    ax_yz.imshow(ax_yz_slice)
+    ax_xz_slice = vol[:, y, :]
+    ax_xz.imshow(ax_xz_slice)
 
     radius_um = 800
     resolution = 0.25
@@ -171,26 +172,105 @@ def determine_orientation(vol, voxelsize_um, point):
         )
         ax_slice.imshow(slice_img)
 
+        ################################################################################################################
         # Draw the intersection of the slice on the orthogonal views
+
         points_in_xy_intersection = []
         # Iterate over the four lines made by the bounding corners of the slice
         # https://stackoverflow.com/a/5764948
         bounds.append(bounds[0])
-        for point_a, point_b in zip(bounds, bounds[1:]):
+        for p0, p1 in zip(bounds, bounds[1:]):
+            x0, y0, z0 = p0
+            x1, y1, z1 = p1
             # Either the line intersects the plane in one point
-            if np.sign(point_a - point)[2] != np.sign(point_b - point)[2]:
-                # Solve for t using z = z_0 + t(z_1 - z_0)
-                # So t = (z - z_0) / (z_1 - z_0)
-                # TODO LEFT OFF
-                pass
+            if np.sign(z0 - z) != np.sign(z1 - z):
+                # Solve for t using z = z0 + t(z1 - z0)
+                t = (z - z0) / (z1 - z0)
+                intersection_x = x0 + t * (x1 - x0)
+                intersection_y = y0 + t * (y1 - y0)
+                points_in_xy_intersection.append((intersection_x, intersection_y))
             # Or it lies in the plane
-            elif np.sign(point_a - point)[2] == 0 and np.sign(point_b - point)[2] == 0:
-                pass
+            elif np.sign(z0 - z) == 0 and np.sign(z1 - z) == 0:
+                points_in_xy_intersection.append((x0, y0))
             # Or it does not intersect at all
-            else:
-                continue
         # Draw
+        ax_xy_slice_img = Image.fromarray(ax_xy_slice).copy()
+        ax_xy_slice_img_draw = ImageDraw.ImageDraw(ax_xy_slice_img)
+        color = int(np.amax(ax_xy_slice) * 1.5)
+        if len(points_in_xy_intersection) == 2:
+            ax_xy_slice_img_draw.line(points_in_xy_intersection, fill=color, width=4)
+        elif len(points_in_xy_intersection) == 4:
+            ax_xy_slice_img_draw.polygon(
+                points_in_xy_intersection, outline=color, width=4
+            )
+        else:
+            print(len(points_in_xy_intersection))
+        ax_xy.imshow(np.array(ax_xy_slice_img))
 
+        points_in_yz_intersection = []
+        # Iterate over the four lines made by the bounding corners of the slice
+        # https://stackoverflow.com/a/5764948
+        bounds.append(bounds[0])
+        for p0, p1 in zip(bounds, bounds[1:]):
+            x0, y0, z0 = p0
+            x1, y1, z1 = p1
+            # Either the line intersects the plane in one point
+            if np.sign(x0 - x) != np.sign(x1 - x):
+                # Solve for t using x = x0 + t(x1 - x0)
+                t = (x - x0) / (x1 - x0)
+                intersection_y = y0 + t * (y1 - y0)
+                intersection_z = z0 + t * (z1 - z0)
+                points_in_yz_intersection.append((intersection_y, intersection_z))
+            # Or it lies in the plane
+            elif np.sign(x0 - x) == 0 and np.sign(x1 - x) == 0:
+                points_in_yz_intersection.append((y0, z0))
+            # Or it does not intersect at all
+        # Draw
+        ax_yz_slice_img = Image.fromarray(ax_yz_slice).copy()
+        ax_yz_slice_img_draw = ImageDraw.ImageDraw(ax_yz_slice_img)
+        color = int(np.amax(ax_yz_slice) * 1.5)
+        if len(points_in_yz_intersection) == 2:
+            ax_yz_slice_img_draw.line(points_in_yz_intersection, fill=color, width=4)
+        elif len(points_in_yz_intersection) == 4:
+            ax_yz_slice_img_draw.polygon(
+                points_in_yz_intersection, outline=color, width=4
+            )
+        else:
+            print(len(points_in_yz_intersection))
+        ax_yz.imshow(np.array(ax_yz_slice_img))
+
+        points_in_xz_intersection = []
+        # Iterate over the four lines made by the bounding corners of the slice
+        # https://stackoverflow.com/a/5764948
+        bounds.append(bounds[0])
+        for p0, p1 in zip(bounds, bounds[1:]):
+            x0, y0, z0 = p0
+            x1, y1, z1 = p1
+            # Either the line intersects the plane in one point
+            if np.sign(y0 - y) != np.sign(y1 - y):
+                # Solve for t using y = y0 + t(y1 - y0)
+                t = (y - y0) / (y1 - y0)
+                intersection_x = x0 + t * (x1 - x0)
+                intersection_z = z0 + t * (z1 - z0)
+                points_in_xz_intersection.append((intersection_x, intersection_z))
+            # Or it lies in the plane
+            elif np.sign(y0 - y) == 0 and np.sign(y1 - y) == 0:
+                points_in_xz_intersection.append((x0, z0))
+            # Or it does not intersect at all
+        # Draw
+        ax_xz_slice_img = Image.fromarray(ax_xz_slice).copy()
+        ax_xz_slice_img_draw = ImageDraw.ImageDraw(ax_xz_slice_img)
+        color = int(np.amax(ax_xz_slice) * 1.5)
+        if len(points_in_xz_intersection) == 2:
+            ax_xz_slice_img_draw.line(points_in_xz_intersection, fill=color, width=4)
+        elif len(points_in_xz_intersection) == 4:
+            ax_xz_slice_img_draw.polygon(
+                points_in_xz_intersection, outline=color, width=4
+            )
+        else:
+            print(len(points_in_xz_intersection))
+        ax_xz.imshow(np.array(ax_xz_slice_img))
+        ################################################################################################################
 
         fig.canvas.draw_idle()
 
@@ -284,26 +364,26 @@ def main():
         remaining_points_queue += next_points
 
         # This could work for some cases even if some next_points were out of bounds
-        if len(next_points) == 4:
-            mesh_vertices.append(current_point)
-            mesh_vertices += next_points
-            triangles = np.array(
-                [
-                    [0, 4, 1],
-                    [0, 1, 2],
-                    [0, 2, 3],
-                    [0, 3, 4],
-                ],
-                dtype=int,
-            )
-            triangles += len(mesh_vertices) - 5
-            mesh_faces += list(triangles)
-
-        tri_mesh = trimesh.Trimesh(vertices=mesh_vertices, faces=mesh_faces)
-        mesh = pyrender.Mesh.from_trimesh(tri_mesh)
-        scene = pyrender.Scene()
-        scene.add(mesh)
-        viewer = pyrender.Viewer(scene, render_flags={"cull_faces": False, "all_wireframe": True})
+        # if len(next_points) == 4:
+        #     mesh_vertices.append(current_point)
+        #     mesh_vertices += next_points
+        #     triangles = np.array(
+        #         [
+        #             [0, 4, 1],
+        #             [0, 1, 2],
+        #             [0, 2, 3],
+        #             [0, 3, 4],
+        #         ],
+        #         dtype=int,
+        #     )
+        #     triangles += len(mesh_vertices) - 5
+        #     mesh_faces += list(triangles)
+        #
+        # tri_mesh = trimesh.Trimesh(vertices=mesh_vertices, faces=mesh_faces)
+        # mesh = pyrender.Mesh.from_trimesh(tri_mesh)
+        # scene = pyrender.Scene()
+        # scene.add(mesh)
+        # viewer = pyrender.Viewer(scene, render_flags={"cull_faces": False, "all_wireframe": True})
 
 
 if __name__ == "__main__":
