@@ -322,6 +322,26 @@ class JobMetadata:
                         return True
         return False
 
+    def compute_metrics(self, prediction_type) -> dict:
+        date = self.
+        metrics = {
+            "date": date,
+            "PPM": ppm,
+            "prediction_type": prediction_type,
+            "iterations": iterations,
+            "ink_classification_loss": ink_classification_loss,
+            "ink_AUC": ink_AUC,
+        }
+        # We are working within one prediction type
+        # Get the metrics for that prediction type
+        # Go through all iterations where we have a prediction image:
+        #   For each PPM:
+        #       Get the complete prediction image
+        #       Compute each metric
+
+
+        return metrics
+
 
 def merge_imgs(
     paths,
@@ -1080,6 +1100,10 @@ def main():
             superimpose_all_jobs=True,
             label_column=label_column,
         )
+
+        # Metrics
+        metrics = job_metadata.compute_metrics(prediction_type)
+        # TODO save them
 
 
 if __name__ == "__main__":
