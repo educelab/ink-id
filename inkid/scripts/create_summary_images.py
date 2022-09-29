@@ -2,7 +2,7 @@ import argparse
 import datetime
 import json
 import os
-from pathlib import Path, PurePath
+from pathlib import Path
 import re
 from typing import List
 import warnings
@@ -10,16 +10,10 @@ import warnings
 from humanize import naturalsize
 import imageio
 from matplotlib import cm
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from PIL import Image, ImageDraw, ImageFont
 import pygifsicle
-from scipy.signal import savgol_filter
-from tensorboard.backend.event_processing.event_multiplexer import EventMultiplexer
-from tensorboard.backend.event_processing.event_accumulator import (
-    STORE_EVERYTHING_SIZE_GUIDANCE,
-)
 from tqdm import tqdm
 
 import inkid
@@ -430,61 +424,6 @@ def n_from_dir(dirname):
     else:
         # Otherwise probably was standalone job (not part of k-fold)
         return -1
-
-
-# Reading Tensorboard files similar to this method https://stackoverflow.com/a/41083104
-def create_tensorboard_plots(base_dir, out_dir):
-    out_dir = os.path.join(out_dir, "plots")
-    os.makedirs(out_dir, exist_ok=True)
-    multiplexer = EventMultiplexer(
-        size_guidance=STORE_EVERYTHING_SIZE_GUIDANCE
-    ).AddRunsFromDirectory(base_dir)
-    multiplexer.Reload()
-    scalars = []
-    for run in multiplexer.Runs():
-        scalars = multiplexer.GetAccumulator(run).Tags()["scalars"]
-        break
-    # Disable warning when making more than 20 figures
-    plt.rcParams.update({"figure.max_open_warning": 0})
-    for scalar in scalars:
-        for smooth in [True, False]:
-            fig, ax = plt.subplots()
-            make_this_plot = True
-            for run in multiplexer.Runs():
-                run_path = PurePath(run)
-                label = n_from_dir(run_path.parts[0])
-                if label == -1:
-                    label = run_path.parts[0]
-                accumulator = multiplexer.GetAccumulator(run)
-                step = [x.step for x in accumulator.Scalars(scalar)]
-                value = [x.value for x in accumulator.Scalars(scalar)]
-                if smooth:
-                    # Make smoothing window a fraction of number of values
-                    smoothing_window = len(value) / 500
-                    # Ensure odd number, required for savgol_filter
-                    smoothing_window = int(smoothing_window / 2) * 2 + 1
-                    # For small sets make sure we at least do some smoothing
-                    smoothing_window = max(smoothing_window, 5)
-                    # If this is a very small set of points, it doesn't need any smoothing.
-                    # Move on and rely on the unsmoothed plot which will also be generated.
-                    if smoothing_window > len(value):
-                        print(
-                            f"Skipping smoothed plot for {run} since smoothing window would exceed data length."
-                        )
-                        make_this_plot = False
-                    # Do the smoothing
-                    if make_this_plot:
-                        value = savgol_filter(value, smoothing_window, 3)
-                plt.plot(step, value, label=label)
-            if make_this_plot:
-                title = scalar
-                if smooth:
-                    title += " (smoothed)"
-                ax.set(xlabel="step", ylabel=scalar, title=title)
-                ax.grid()
-                if len(multiplexer.Runs()) > 1:
-                    plt.legend(title="k-fold job")
-                fig.savefig(os.path.join(out_dir, f"{title}.png"))
 
 
 def build_footer_img(
@@ -1016,11 +955,6 @@ def main():
             "Label column requested but no label images found. Not adding label column to summary images."
         )
         label_column = False
-
-    # Tensorboard
-    print("\nCreating Tensorboard plots...")
-    create_tensorboard_plots(args.dir, out_dir)
-    print("done.")
 
     if not job_metadata.prediction_images_found():
         print(
