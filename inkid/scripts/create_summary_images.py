@@ -322,25 +322,27 @@ class JobMetadata:
                         return True
         return False
 
-    def compute_metrics(self, prediction_type) -> dict:
-        date = self.
-        metrics = {
+    def compute_metrics(self, prediction_type: str, validation_dataset: str) -> dict:
+        date = list(self.job_metadatas.values())[0]["Date"]
+        iterations = self.iterations_encountered(prediction_type)
+        validation_ds = inkid.data.Dataset(validation_dataset)
+        metrics_results = {
             "date": date,
-            "PPM": ppm,
+            "dataset": validation_dataset,
             "prediction_type": prediction_type,
             "iterations": iterations,
-            "ink_classification_loss": ink_classification_loss,
-            "ink_AUC": ink_AUC,
         }
-        # We are working within one prediction type
-        # Get the metrics for that prediction type
-        # Go through all iterations where we have a prediction image:
-        #   For each PPM:
-        #       Get the complete prediction image
-        #       Compute each metric
-
-
-        return metrics
+        metrics_to_evaluate = []  # TODO get this list
+        for metric in metrics_to_evaluate:
+            current_metric_results = []
+            for iteration in iterations:
+                # Iterate over region sources in the provided dataset. Initialize a blank image for each.
+                print(validation_ds.regions())
+                # Iterate over the region sources in this job metadata. Add the results to the blank images
+                # Compute metric over all these faces and save that and the iteration in the metrics_results dict
+                pass
+            metrics_results[metric] = current_metric_results
+        return metrics_results
 
 
 def merge_imgs(
@@ -488,7 +490,7 @@ def build_footer_img(
         font_regular = ImageFont.truetype(font_path, fontsize)
         txt = "eooch"  # Hack as I don't want it to care about 'p' sticking down
         allowed_font_height = int((height - buffer_size * 3) / 2)
-        while font_regular.getsize(txt)[1] < allowed_font_height:
+        while int(font_regular.getbbox(txt)[3]) < allowed_font_height:
             fontsize += 1
             font_regular = ImageFont.truetype(font_path, fontsize)
         fontsize -= 1
@@ -499,7 +501,7 @@ def build_footer_img(
             WHITE,
             font=font_regular,
         )
-        font_w = font_regular.getsize(txt)[0] + 2 * buffer_size
+        font_w = int(font_regular.getlength(txt) + 2 * buffer_size)
         font_path_black = os.path.join(
             os.path.dirname(inkid.__file__), "assets", "fonts", "Roboto-Black.ttf"
         )
@@ -529,14 +531,14 @@ def build_footer_img(
     font_regular = ImageFont.truetype(font_path, fontsize)
     txt = "batch"
     allowed_font_height = int((height - buffer_size * 3) / 2)
-    while font_regular.getsize(txt)[1] < allowed_font_height:
+    while int(font_regular.getbbox(txt)[3]) < allowed_font_height:
         fontsize += 1
         font_regular = ImageFont.truetype(font_path, fontsize)
     fontsize -= 1
     draw.text(
         (horizontal_offset + buffer_size, buffer_size), txt, WHITE, font=font_regular
     )
-    font_w = font_regular.getsize(txt)[0] + 2 * buffer_size
+    font_w = int(font_regular.getlength(txt) + 2 * buffer_size)
     font_path_black = os.path.join(
         os.path.dirname(inkid.__file__), "assets", "fonts", "Roboto-Black.ttf"
     )
@@ -550,7 +552,7 @@ def build_footer_img(
         WHITE,
         font=font_black,
     )
-    batch_font_w = font_black.getsize(batch)[0] + 2 * buffer_size
+    batch_font_w = int(font_black.getlength(batch) + 2 * buffer_size)
     horizontal_offset += max(font_w, batch_font_w)
     # Add divider bar
     footer.paste(
@@ -572,8 +574,8 @@ def build_footer_img(
             WHITE,
             font=font_black,
         )
-        font_w = max(
-            font_regular.getsize(cmap_title)[0], font_black.getsize(cmap_name)[0]
+        font_w = int(
+            max(font_regular.getlength(cmap_title), font_black.getlength(cmap_name))
         )
         horizontal_offset += font_w + 2 * buffer_size
         # Add divider bar
@@ -585,7 +587,9 @@ def build_footer_img(
     # Add color map swatch
     if label_type == "ink_classes":
         swatch_title = "no ink            ink"
-        swatch = Image.new("RGB", font_regular.getsize(swatch_title))
+        swatch_title_w = int(font_regular.getlength(swatch_title))
+        swatch_title_h = int(font_regular.getbbox(swatch_title)[3])
+        swatch = Image.new("RGB", (swatch_title_w, swatch_title_h))
         for x in range(swatch.width):
             intensity = int((x / swatch.width) * 255)
             swatch.paste(
@@ -637,17 +641,21 @@ def build_footer_img(
         WHITE,
         font=font_black,
     )
-    font_w = max(
-        font_regular.getsize(regions_title)[0], font_black.getsize(regions_txt)[0]
+    font_w = int(
+        max(font_regular.getlength(regions_title), font_black.getlength(regions_txt))
     )
     for region_type in regions_to_label:
         if region_type in regions_txt:
             preceding_txt = regions_txt.partition(region_type)[0]
-            x0 = horizontal_offset + buffer_size + font_black.getsize(preceding_txt)[0]
-            label_w = font_black.getsize(region_type)[0]
+            x0 = (
+                horizontal_offset
+                + buffer_size
+                + int(font_black.getlength(preceding_txt))
+            )
+            label_w = int(font_black.getlength(region_type))
             x1 = x0 + label_w
             y0 = allowed_font_height + 2 * buffer_size
-            label_h = font_black.getsize(regions_txt)[1]
+            label_h = int(font_black.getbbox(regions_txt)[3])
             y1 = y0 + label_h
             # Pad these a bit to not be right on the text
             x0 -= int(buffer_size / 2)
@@ -815,13 +823,13 @@ def build_frame(
         txt = f"Generated image"
         allowed_width = col_width
         while (
-            font_regular.getsize(txt)[0] < allowed_width
-            and font_regular.getsize(txt)[1] < buffer_size
+            int(font_regular.getlength(txt)) < allowed_width
+            and int(font_regular.getbbox(txt)[3]) < buffer_size
         ):
             fontsize += 1
             font_regular = ImageFont.truetype(font_path, fontsize)
         fontsize -= 1
-        offset_for_centering = int((col_width - font_regular.getsize(txt)[0]) / 2)
+        offset_for_centering = int((col_width - int(font_regular.getlength(txt))) / 2)
         offset = (
             width_pad_offset + buffer_size + offset_for_centering,
             int(buffer_size * 0.5),
@@ -838,13 +846,13 @@ def build_frame(
             txt = f"Job {job_i}"
             allowed_width = col_width
             while (
-                font_regular.getsize(txt)[0] < allowed_width
-                and font_regular.getsize(txt)[1] < buffer_size
+                int(font_regular.getlength(txt)) < allowed_width
+                and int(font_regular.getbbox(txt)[3]) < buffer_size
             ):
                 fontsize += 1
                 font_regular = ImageFont.truetype(font_path, fontsize)
             fontsize -= 1
-            offset_for_centering = int((col_width - font_regular.getsize(txt)[0]) / 2)
+            offset_for_centering = int((col_width - font_regular.getlength(txt)) / 2)
             offset = (
                 width_pad_offset
                 + job_i * col_width
@@ -863,14 +871,14 @@ def build_frame(
         txt = "Label imaee"  # Hack because I don't want it to care about the part of the 'g' that sticks down
         allowed_width = col_width
         while (
-            font_regular.getsize(txt)[0] < allowed_width
-            and font_regular.getsize(txt)[1] < buffer_size
+            int(font_regular.getlength(txt)) < allowed_width
+            and int(font_regular.getbbox(txt)[3]) < buffer_size
         ):
             fontsize += 1
             font_regular = ImageFont.truetype(font_path, fontsize)
         fontsize -= 1
         txt = "Label image"
-        offset_for_centering = int((col_width - font_regular.getsize(txt)[0]) / 2)
+        offset_for_centering = int((col_width - font_regular.getlength(txt)) / 2)
         if superimpose_all_jobs:
             offset = (
                 width_pad_offset + col_width + buffer_size * 2 + offset_for_centering,
@@ -983,6 +991,17 @@ def main():
         return
 
     for prediction_type in job_metadata.prediction_types():
+        # Metrics
+        metrics = job_metadata.compute_metrics(
+            prediction_type,
+            validation_dataset=[
+                "/Users/stephen/data/dri-datasets-2-drive/PHercParis1Fr39/PHercParis1Fr39.volpkg/working"
+                "/54keV_surface_layer/merged/20220318/54KeV_surface_layer.json"
+            ],
+        )
+        print(metrics)
+        # TODO save results
+
         last_iteration_seen = job_metadata.last_iteration_seen(prediction_type)
 
         # Static images
@@ -1100,10 +1119,6 @@ def main():
             superimpose_all_jobs=True,
             label_column=label_column,
         )
-
-        # Metrics
-        metrics = job_metadata.compute_metrics(prediction_type)
-        # TODO save them
 
 
 if __name__ == "__main__":
