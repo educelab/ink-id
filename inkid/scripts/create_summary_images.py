@@ -326,20 +326,25 @@ class JobMetadata:
         date = list(self.job_metadatas.values())[0]["Date"]
         iterations = self.iterations_encountered(prediction_type)
         validation_ds = inkid.data.Dataset(validation_dataset, lazy_load=True)
-        print(validation_ds)
         metrics_results = {
             "date": date,
             "dataset": validation_dataset,
             "prediction_type": prediction_type,
             "iterations": iterations,
         }
-        metrics_to_evaluate = []  # TODO get this list
+        metrics_to_evaluate = ["loss"]  # TODO get this list
         for metric in metrics_to_evaluate:
             current_metric_results = []
             for iteration in iterations:
                 # Iterate over region sources in the provided dataset. Initialize a blank image for each.
-                print(validation_ds.regions())
+                validation_region_images = []
+                for region in validation_ds.regions():
+                    bbox = region.bounding_box
+                    shape = bbox[3] - bbox[1], bbox[2] - bbox[0]
+                    img = np.zeros(shape)
+                    validation_region_images.append(img)
                 # Iterate over the region sources in this job metadata. Add the results to the blank images
+                # TODO LEFT OFF
                 # Compute metric over all these faces and save that and the iteration in the metrics_results dict
                 pass
             metrics_results[metric] = current_metric_results
