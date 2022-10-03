@@ -325,7 +325,8 @@ class JobMetadata:
     def compute_metrics(self, prediction_type: str, validation_dataset: str) -> dict:
         date = list(self.job_metadatas.values())[0]["Date"]
         iterations = self.iterations_encountered(prediction_type)
-        validation_ds = inkid.data.Dataset(validation_dataset)
+        validation_ds = inkid.data.Dataset(validation_dataset, lazy_load=True)
+        print(validation_ds)
         metrics_results = {
             "date": date,
             "dataset": validation_dataset,

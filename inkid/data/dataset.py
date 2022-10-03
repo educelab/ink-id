@@ -19,21 +19,14 @@ import inkid
 
 
 # Which subvolumes are retrieved
+@dataclass
 class RegionPointSampler:
-    def __init__(
-        self,
-        grid_spacing: int = 1,
-        specify_inkness: Optional[bool] = None,
-        undersampling_ink_ratio: Optional[float] = None,
-        oversampling_ink_ratio: Optional[float] = None,
-        ambiguous_ink_labels_filter_radius: Optional[float] = None,
-    ):
-        self.grid_spacing = grid_spacing
-        self.specify_inkness = specify_inkness
-        self.undersampling_ink_ratio = undersampling_ink_ratio
-        self.oversampling_ink_ratio = oversampling_ink_ratio
-        self.ambiguous_ink_labels_filter_radius = ambiguous_ink_labels_filter_radius
-        self.ambiguous_labels_mask = None
+    grid_spacing: int = 1
+    specify_inkness: Optional[bool] = None
+    undersampling_ink_ratio: Optional[float] = None
+    oversampling_ink_ratio: Optional[float] = None
+    ambiguous_ink_labels_filter_radius: Optional[float] = None
+    ambiguous_labels_mask = None
 
 
 # How subvolumes are retrieved
@@ -147,7 +140,7 @@ class DataSource(ABC):
         raise NotImplementedError
 
     @staticmethod
-    def from_path(path: str) -> DataSource:
+    def from_path(path: str, lazy_load: bool = False) -> DataSource:
         """Check first whether this is a region or volume data source, then instantiate accordingly.
 
         Also checks to make sure the old region set file format was not provided. If it was,
@@ -164,7 +157,7 @@ class DataSource(ABC):
                 f"\tpython inkid/scripts/update_data_file.py {path}"
             )
         if source_json.get("type") == "region":
-            return RegionSource(path)
+            return RegionSource(path, lazy_load=lazy_load)
         elif source_json.get("type") == "volume":
             return VolumeSource(path)
         else:
@@ -184,7 +177,7 @@ class RegionSource(DataSource):
         super().__init__(path)
 
         # Initialize region's PPM, volume, etc
-        self._ppm: inkid.data.PPM = inkid.data.PPM.from_path(self.source_json["ppm"])
+        self._ppm: inkid.data.PPM = inkid.data.PPM.from_path(self.source_json["ppm"], lazy_load=lazy_load)
         self.bounding_box: Tuple[int, int, int, int] = (
             self.source_json["bounding_box"] or self.get_default_bounds()
         )
@@ -394,7 +387,7 @@ class RegionSource(DataSource):
     @sampler.setter
     def sampler(self, sampler: RegionPointSampler):
         self._sampler = sampler
-        self.update_points_list()
+        self._points_list_needs_update = True
 
     def is_ink(self, x: int, y: int) -> bool:
         assert self._ink_label is not None
@@ -594,6 +587,7 @@ class VolumeSource(DataSource):
     The points are not restricted to a particular surface, PPM, or segmentation.
 
     """
+
     def __init__(self, path: str) -> None:
         super().__init__(path)
 
@@ -625,9 +619,7 @@ class VolumeSource(DataSource):
         n_z = zed
 
         # Get the feature metadata (useful for e.g. knowing where this feature came from on the surface)
-        feature_metadata = FeatureMetadata(
-            self.path, -1, -1, x, y, z, n_x, n_y, n_z
-        )
+        feature_metadata = FeatureMetadata(self.path, -1, -1, x, y, z, n_x, n_y, n_z)
         # Get the feature
         feature = self.volume.get_subvolume(
             center=(x, y, z), normal=(n_x, n_y, n_z), **self.feature_args
@@ -686,7 +678,7 @@ class Dataset(torch.utils.data.Dataset):
 
     """
 
-    def __init__(self, source_paths: List[str]) -> None:
+    def __init__(self, source_paths: List[str], lazy_load: bool = False) -> None:
         """Initialize the dataset given .json data source and/or .txt dataset paths.
 
         This recursively expands any provided .txt dataset files until there is just a
@@ -700,7 +692,7 @@ class Dataset(torch.utils.data.Dataset):
         source_paths = flatten_data_sources_list(source_paths)
         self.sources: List[DataSource] = list()
         for source_path in source_paths:
-            self.sources.append(DataSource.from_path(source_path))
+            self.sources.append(DataSource.from_path(source_path, lazy_load=lazy_load))
 
     def __len__(self) -> int:
         return sum([len(source) for source in self.sources])
