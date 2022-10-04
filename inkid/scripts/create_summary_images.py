@@ -294,11 +294,12 @@ class JobSummarizer:
         df = self.prediction_images_df.merge(self.regions_df)
         # Filter to only those from this job, on this face and correct prediction type
         df = df.loc[
-            (df["job_dir"] == job_dir)
-            & (df["ppm_path"] == ppm_path)
+            (df["ppm_path"] == ppm_path)
             & (df["invert_normals"] == invert_normals)
             & (df["prediction_type"] == prediction_type)
         ]
+        if job_dir is not None:
+            df = df.loc[df["job_dir"] == job_dir]
         if return_latest_if_not_found:
             # Sort by iteration
             df = df.sort_values("iteration_str", key=iteration_series_sort_key)
@@ -412,15 +413,19 @@ class JobSummarizer:
         height = height + footer_height
         # Create empty frame
         frame = Image.new("RGB", (width, height))
+
         # Add prediction images
-        # One column at a time
-        for job_i, job_dir in enumerate(job_dirs):
-            # Make each row of this column
-            for face_i, (ppm_path, invert_normals) in enumerate(
-                    self.faces_list()
-            ):
+        # Make a row for each face
+        for face_i, (ppm_path, invert_normals) in enumerate(
+                self.faces_list()
+        ):
+            if superimpose_all_jobs:
+                offset = (
+                    width_pad_offset + buffer_size,
+                    sum(row_heights[:face_i]) + (face_i + 2) * buffer_size,
+                )
                 img = self.get_face_prediction_image(
-                    job_dir,
+                    None,
                     ppm_path,
                     invert_normals,
                     iteration,
@@ -430,22 +435,28 @@ class JobSummarizer:
                     rectangle_line_width,
                     cmap_name,
                 )
-                if img is not None:
-                    if superimpose_all_jobs:
-                        offset = (
-                            width_pad_offset + buffer_size,
-                            sum(row_heights[:face_i]) + (face_i + 2) * buffer_size,
-                        )
-                    else:
-                        offset = (
-                            width_pad_offset
-                            + job_i * col_width
-                            + (job_i + 1) * buffer_size,
-                            sum(row_heights[:face_i]) + (face_i + 2) * buffer_size,
-                        )
-                    # When merging all predictions for same PPM, we don't want to overwrite other
-                    # predictions with the blank part of this image. So, only paste the parts of this
-                    # image that actually have content.
+                mask = img.convert("L")
+                mask = mask.point(lambda x: x > 0, mode="1")
+                frame.paste(img, offset, mask=mask)
+            else:
+                for job_i, job_dir in enumerate(job_dirs):
+                    offset = (
+                        width_pad_offset
+                        + job_i * col_width
+                        + (job_i + 1) * buffer_size,
+                        sum(row_heights[:face_i]) + (face_i + 2) * buffer_size,
+                    )
+                    img = self.get_face_prediction_image(
+                        job_dir,
+                        ppm_path,
+                        invert_normals,
+                        iteration,
+                        prediction_type,
+                        region_sets_to_include,
+                        region_sets_to_label,
+                        rectangle_line_width,
+                        cmap_name,
+                    )
                     mask = img.convert("L")
                     mask = mask.point(lambda x: x > 0, mode="1")
                     frame.paste(img, offset, mask=mask)
