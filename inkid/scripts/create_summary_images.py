@@ -19,7 +19,58 @@ from tqdm import tqdm
 import inkid
 
 
-def iteration_str_sort_key(iteration):
+# We might issue this warning but only need to do it once
+already_warned_about_missing_label_images = False
+
+WHITE = (255, 255, 255)
+LIGHT_GRAY = (104, 104, 104)
+DARK_GRAY = (64, 64, 64)
+RED = (255, 0, 0)
+BLUE = (0, 0, 255)
+YELLOW = (255, 255, 0)
+region_set_type_to_color = {"training": RED, "prediction": YELLOW, "validation": BLUE}
+
+
+def is_job_dir(dirname: str) -> bool:
+    """
+    Return whether this directory matches the expected structure for a job dir.
+
+    For example, we often want a list of the k-fold subdirs in a directory but do not want e.g. previous summary
+    subdirs, or others.
+    """
+    # k-fold job
+    if is_k_fold_dir(dirname):
+        return True
+    # Standard job
+    dirname = os.path.basename(dirname)
+    if re.match(r".*\d\d\d\d-\d\d-\d\d_\d\d\.\d\d\.\d\d$", dirname):
+        return True
+    # Must be something else
+    return False
+
+
+def is_k_fold_dir(dirname: str) -> bool:
+    """Return whether this directory is a k-fold job directory."""
+    dirname = os.path.basename(dirname)
+    return re.match(r".*\d\d\d\d-\d\d-\d\d_\d\d\.\d\d\.\d\d_(\d+)$", dirname)
+
+
+def n_from_dir(dirname: str) -> int:
+    """
+    Return which k-fold job this directory corresponds to (if any, -1 otherwise).
+
+    For the purpose of sorting a list of dirs based on job #.
+    """
+    # Only has a valid k-fold # if it matches this particular format
+    if is_k_fold_dir(dirname):
+        # Return the last number in the dirname, which is the k-fold #
+        return int(re.findall(r"(\d+)", dirname)[-1])
+    else:
+        # Otherwise probably was standalone job (not part of k-fold)
+        return -1
+
+
+def iteration_str_sort_key(iteration: str) -> int:
     if iteration == "final":
         epoch, batch = 10e9, 10e9
     else:
@@ -322,34 +373,6 @@ class JobMetadata:
                         return True
         return False
 
-    def compute_metrics(self, prediction_type: str, validation_dataset: str) -> dict:
-        date = list(self.job_metadatas.values())[0]["Date"]
-        iterations = self.iterations_encountered(prediction_type)
-        validation_ds = inkid.data.Dataset(validation_dataset, lazy_load=True)
-        metrics_results = {
-            "date": date,
-            "dataset": validation_dataset,
-            "prediction_type": prediction_type,
-            "iterations": iterations,
-        }
-        metrics_to_evaluate = ["loss"]  # TODO get this list
-        for metric in metrics_to_evaluate:
-            current_metric_results = []
-            for iteration in iterations:
-                # Iterate over region sources in the provided dataset. Initialize a blank image for each.
-                validation_region_images = []
-                for region in validation_ds.regions():
-                    bbox = region.bounding_box
-                    shape = bbox[3] - bbox[1], bbox[2] - bbox[0]
-                    img = np.zeros(shape)
-                    validation_region_images.append(img)
-                # Iterate over the region sources in this job metadata. Add the results to the blank images
-                # TODO LEFT OFF
-                # Compute metric over all these faces and save that and the iteration in the metrics_results dict
-                pass
-            metrics_results[metric] = current_metric_results
-        return metrics_results
-
 
 def merge_imgs(
     paths,
@@ -360,9 +383,8 @@ def merge_imgs(
     cmap_name,
 ):
     merged_img = None
-    for path, bounding_box, (training, prediction, validation) in zip(
-        paths, bounding_boxes, image_label_as
-    ):
+
+    for path, bounding_box in zip(paths, bounding_boxes):
         img = Image.open(path)
         if bounding_box is None:
             bounding_box = (0, 0, img.width, img.height)
@@ -374,12 +396,6 @@ def merge_imgs(
             img = Image.fromarray(array)
         # Convert all to RGB since we might draw on them with color
         img = img.convert("RGB")
-        # Apply color map
-        if cmap_name is not None:
-            color_map = cm.get_cmap(cmap_name)
-            img = img.convert("L")
-            img_data = np.array(img)
-            img = Image.fromarray(np.uint8(color_map(img_data) * 255))
         # Paste onto merged image
         if merged_img is None:
             merged_img = img
@@ -387,7 +403,18 @@ def merge_imgs(
             assert img.size == merged_img.size
             img = img.crop(bounding_box)
             merged_img.paste(img, (bounding_box[0], bounding_box[1]))
-        # Draw bounding boxes
+
+    # Apply color map
+    if cmap_name is not None:
+        color_map = cm.get_cmap(cmap_name)
+        merged_img = merged_img.convert("L")
+        merged_img_data = np.array(merged_img)
+        merged_img = Image.fromarray(np.uint8(color_map(merged_img_data) * 255))
+
+    # Draw bounding boxes
+    for bounding_box, (training, prediction, validation) in zip(
+        bounding_boxes, image_label_as
+    ):
         to_draw = {
             "training": training,
             "prediction": prediction,
@@ -400,58 +427,8 @@ def merge_imgs(
                 d.rectangle(
                     bounding_box, outline=color, fill=None, width=rectangle_line_width
                 )
+
     return merged_img
-
-
-# We might issue this warning but only need to do it once
-already_warned_about_missing_label_images = False
-
-WHITE = (255, 255, 255)
-LIGHT_GRAY = (104, 104, 104)
-DARK_GRAY = (64, 64, 64)
-RED = (255, 0, 0)
-BLUE = (0, 0, 255)
-YELLOW = (255, 255, 0)
-region_set_type_to_color = {"training": RED, "prediction": YELLOW, "validation": BLUE}
-
-
-def is_job_dir(dirname):
-    """
-    Return whether this directory matches the expected structure for a job dir.
-
-    For example, we often want a list of the k-fold subdirs in a directory but do not want e.g. previous summary
-    subdirs, or others.
-    """
-    # k-fold job
-    if is_k_fold_dir(dirname):
-        return True
-    # Standard job
-    dirname = os.path.basename(dirname)
-    if re.match(r".*\d\d\d\d-\d\d-\d\d_\d\d\.\d\d\.\d\d$", dirname):
-        return True
-    # Must be something else
-    return False
-
-
-def is_k_fold_dir(dirname):
-    """Return whether this directory is a k-fold job directory."""
-    dirname = os.path.basename(dirname)
-    return re.match(r".*\d\d\d\d-\d\d-\d\d_\d\d\.\d\d\.\d\d_(\d+)$", dirname)
-
-
-def n_from_dir(dirname):
-    """
-    Return which k-fold job this directory corresponds to (if any, -1 otherwise).
-
-    For the purpose of sorting a list of dirs based on job #.
-    """
-    # Only has a valid k-fold # if it matches this particular format
-    if is_k_fold_dir(dirname):
-        # Return the last number in the dirname, which is the k-fold #
-        return int(re.findall(r"(\d+)", dirname)[-1])
-    else:
-        # Otherwise probably was standalone job (not part of k-fold)
-        return -1
 
 
 def build_footer_img(
@@ -997,16 +974,16 @@ def main():
         return
 
     for prediction_type in job_metadata.prediction_types():
-        # Metrics
-        metrics = job_metadata.compute_metrics(
-            prediction_type,
-            validation_dataset=[
-                "/Users/stephen/data/dri-datasets-2-drive/PHercParis1Fr39/PHercParis1Fr39.volpkg/working"
-                "/54keV_surface_layer/merged/20220318/54KeV_surface_layer.json"
-            ],
-        )
-        print(metrics)
-        # TODO save results
+        # # Metrics
+        # metrics = job_metadata.compute_metrics(
+        #     prediction_type,
+        #     validation_dataset=[
+        #         "/Users/stephen/data/dri-datasets-2-drive/PHercParis1Fr39/PHercParis1Fr39.volpkg/working"
+        #         "/54keV_surface_layer/merged/20220318/54KeV_surface_layer.json"
+        #     ],
+        # )
+        # print(metrics)
+        # # TODO save results
 
         last_iteration_seen = job_metadata.last_iteration_seen(prediction_type)
 
@@ -1085,10 +1062,10 @@ def main():
                 job_metadata,
                 prediction_type,
                 args.static_max_size,
-                cmap_name=cmap,
                 region_sets_to_include=["prediction"],
                 superimpose_all_jobs=True,
                 label_column=label_column,
+                cmap_name=cmap,
             )
             final_frame.save(
                 os.path.join(
