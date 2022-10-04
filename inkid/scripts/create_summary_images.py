@@ -375,15 +375,15 @@ class JobSummarizer:
         return False
 
     def build_frame(
-            self,
-            iteration,
-            prediction_type,
-            max_size=None,
-            region_sets_to_include=None,
-            region_sets_to_label=None,
-            cmap_name=None,
-            superimpose_all_jobs=False,
-            label_column=True,
+        self,
+        iteration,
+        prediction_type,
+        max_size=None,
+        region_sets_to_include=None,
+        region_sets_to_label=None,
+        cmap_name=None,
+        superimpose_all_jobs=False,
+        label_column=True,
     ):
         if region_sets_to_include is None:
             region_sets_to_include = ["training", "prediction", "validation"]
@@ -416,38 +416,21 @@ class JobSummarizer:
 
         # Add prediction images
         # Make a row for each face
-        for face_i, (ppm_path, invert_normals) in enumerate(
-                self.faces_list()
-        ):
+        for face_i, (ppm_path, invert_normals) in enumerate(self.faces_list()):
+            ppm_mask_img_path = self.get_mask_image_path(ppm_path, invert_normals)
+            ppm_mask_img = try_get_img_from_data_files(ppm_mask_img_path)
+            imgs = []
+            offsets = []
             if superimpose_all_jobs:
-                offset = (
-                    width_pad_offset + buffer_size,
-                    sum(row_heights[:face_i]) + (face_i + 2) * buffer_size,
-                )
-                img = self.get_face_prediction_image(
-                    None,
-                    ppm_path,
-                    invert_normals,
-                    iteration,
-                    prediction_type,
-                    region_sets_to_include,
-                    region_sets_to_label,
-                    rectangle_line_width,
-                    cmap_name,
-                )
-                mask = img.convert("L")
-                mask = mask.point(lambda x: x > 0, mode="1")
-                frame.paste(img, offset, mask=mask)
-            else:
-                for job_i, job_dir in enumerate(job_dirs):
-                    offset = (
-                        width_pad_offset
-                        + job_i * col_width
-                        + (job_i + 1) * buffer_size,
+                offsets.append(
+                    (
+                        width_pad_offset + buffer_size,
                         sum(row_heights[:face_i]) + (face_i + 2) * buffer_size,
                     )
-                    img = self.get_face_prediction_image(
-                        job_dir,
+                )
+                imgs.append(
+                    self.get_face_prediction_image(
+                        None,
                         ppm_path,
                         invert_normals,
                         iteration,
@@ -457,30 +440,60 @@ class JobSummarizer:
                         rectangle_line_width,
                         cmap_name,
                     )
-                    mask = img.convert("L")
-                    mask = mask.point(lambda x: x > 0, mode="1")
-                    frame.paste(img, offset, mask=mask)
+                )
+            else:
+                for job_i, job_dir in enumerate(job_dirs):
+                    offsets.append(
+                        (
+                            width_pad_offset
+                            + job_i * col_width
+                            + (job_i + 1) * buffer_size,
+                            sum(row_heights[:face_i]) + (face_i + 2) * buffer_size,
+                        )
+                    )
+                    imgs.append(
+                        self.get_face_prediction_image(
+                            job_dir,
+                            ppm_path,
+                            invert_normals,
+                            iteration,
+                            prediction_type,
+                            region_sets_to_include,
+                            region_sets_to_label,
+                            rectangle_line_width,
+                            cmap_name,
+                        )
+                    )
+            for (img, offset) in zip(imgs, offsets):
+                # Only paste the parts of the image that actually contain something
+                mask_img = img.convert("L")
+                mask_img = mask_img.point(lambda x: x > 0, mode="1")
+                # Also mask by the PPM mask
+                if ppm_mask_img is not None:
+                    ppm_mask_img = ppm_mask_img.convert("L")
+                    ppm_mask_img = ppm_mask_img.point(lambda x: x > 0, mode="1")
+                    mask_img = Image.composite(
+                        mask_img, ppm_mask_img, mask=ppm_mask_img
+                    )
+                frame.paste(img, offset, mask=mask_img)
 
-        # Add label column
-        if label_column:
-            for face_i, (ppm_path, invert_normals) in enumerate(
-                    self.faces_list()
-            ):
+            # Add label column
+            if label_column:
                 label_key = label_key_from_prediction_type(prediction_type)
                 label_img_path = self.get_label_image_path(
                     ppm_path, invert_normals, label_key
                 )
-                mask_img_path = self.get_mask_image_path(ppm_path, invert_normals)
                 if label_img_path is not None:
                     # Try getting label image file from recorded location (may not exist on this machine)
                     label_img = try_get_img_from_data_files(label_img_path)
-                    mask_img = try_get_img_from_data_files(mask_img_path)
                     if label_img is not None:
                         if cmap_name is not None:
                             color_map = cm.get_cmap(cmap_name)
                             label_img = label_img.convert("L")
                             img_data = np.array(label_img)
-                            label_img = Image.fromarray(np.uint8(color_map(img_data) * 255))
+                            label_img = Image.fromarray(
+                                np.uint8(color_map(img_data) * 255)
+                            )
                         if superimpose_all_jobs:
                             offset = (
                                 width_pad_offset + col_width + buffer_size * 2,
@@ -493,10 +506,10 @@ class JobSummarizer:
                                 + (len(job_dirs) + 1) * buffer_size,
                                 sum(row_heights[:face_i]) + (face_i + 2) * buffer_size,
                             )
-                        if mask_img is not None:
-                            mask_img = mask_img.convert("L")
-                            mask_img = mask_img.point(lambda x: x > 0, mode="1")
-                            frame.paste(label_img, offset, mask=mask_img)
+                        if ppm_mask_img is not None:
+                            ppm_mask_img = ppm_mask_img.convert("L")
+                            ppm_mask_img = ppm_mask_img.point(lambda x: x > 0, mode="1")
+                            frame.paste(label_img, offset, mask=ppm_mask_img)
                         else:
                             frame.paste(label_img, offset)
                     elif not self.already_warned_about_missing_label_images:
@@ -517,13 +530,15 @@ class JobSummarizer:
             txt = f"Generated image"
             allowed_width = col_width
             while (
-                    int(font_regular.getlength(txt)) < allowed_width
-                    and int(font_regular.getbbox(txt)[3]) < buffer_size
+                int(font_regular.getlength(txt)) < allowed_width
+                and int(font_regular.getbbox(txt)[3]) < buffer_size
             ):
                 fontsize += 1
                 font_regular = ImageFont.truetype(font_path, fontsize)
             fontsize -= 1
-            offset_for_centering = int((col_width - int(font_regular.getlength(txt))) / 2)
+            offset_for_centering = int(
+                (col_width - int(font_regular.getlength(txt))) / 2
+            )
             offset = (
                 width_pad_offset + buffer_size + offset_for_centering,
                 int(buffer_size * 0.5),
@@ -533,20 +548,25 @@ class JobSummarizer:
             for job_i, job_dir in enumerate(job_dirs):
                 draw = ImageDraw.Draw(frame)
                 font_path = os.path.join(
-                    os.path.dirname(inkid.__file__), "assets", "fonts", "Roboto-Regular.ttf"
+                    os.path.dirname(inkid.__file__),
+                    "assets",
+                    "fonts",
+                    "Roboto-Regular.ttf",
                 )
                 fontsize = 1
                 font_regular = ImageFont.truetype(font_path, fontsize)
                 txt = f"Job {job_i}"
                 allowed_width = col_width
                 while (
-                        int(font_regular.getlength(txt)) < allowed_width
-                        and int(font_regular.getbbox(txt)[3]) < buffer_size
+                    int(font_regular.getlength(txt)) < allowed_width
+                    and int(font_regular.getbbox(txt)[3]) < buffer_size
                 ):
                     fontsize += 1
                     font_regular = ImageFont.truetype(font_path, fontsize)
                 fontsize -= 1
-                offset_for_centering = int((col_width - font_regular.getlength(txt)) / 2)
+                offset_for_centering = int(
+                    (col_width - font_regular.getlength(txt)) / 2
+                )
                 offset = (
                     width_pad_offset
                     + job_i * col_width
@@ -565,8 +585,8 @@ class JobSummarizer:
             txt = "Label imaee"  # Hack because I don't want it to care about the part of the 'g' that sticks down
             allowed_width = col_width
             while (
-                    int(font_regular.getlength(txt)) < allowed_width
-                    and int(font_regular.getbbox(txt)[3]) < buffer_size
+                int(font_regular.getlength(txt)) < allowed_width
+                and int(font_regular.getbbox(txt)[3]) < buffer_size
             ):
                 fontsize += 1
                 font_regular = ImageFont.truetype(font_path, fontsize)
@@ -575,7 +595,10 @@ class JobSummarizer:
             offset_for_centering = int((col_width - font_regular.getlength(txt)) / 2)
             if superimpose_all_jobs:
                 offset = (
-                    width_pad_offset + col_width + buffer_size * 2 + offset_for_centering,
+                    width_pad_offset
+                    + col_width
+                    + buffer_size * 2
+                    + offset_for_centering,
                     int(buffer_size * 0.5),
                 )
             else:
@@ -606,7 +629,9 @@ class JobSummarizer:
 
         return frame
 
-    def create_animation(self, filename, fps, iterations, write_sequence, *args, **kwargs):
+    def create_animation(
+        self, filename, fps, iterations, write_sequence, *args, **kwargs
+    ):
         animation = []
         for iteration in tqdm(iterations):
             frame = self.build_frame(iteration, *args, **kwargs)
