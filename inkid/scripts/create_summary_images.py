@@ -640,6 +640,57 @@ class JobSummarizer:
         if write_sequence:
             write_img_sequence(animation, filename)
 
+    def compute_metrics(self, validation_ds_path):
+        def normalize_path_to_volpkg(path: str) -> str:
+            """Normalize a path to contain only the .volpkg name and parts following.
+
+            Example input:
+
+            /pscratch/seales_uksr/dri-datasets-2-drive/PHercParis1Fr39/PHercParis1Fr39.volpkg/working
+            /54keV_surface_layer/merged/20220318/54KeV_surface_layer.ppm
+
+            Example output:
+
+            PHercParis1Fr39.volpkg/working/54keV_surface_layer/merged/20220318/54KeV_surface_layer.ppm
+            """
+            path = Path(path)
+            delim = ".volpkg"
+            parts_with_delim = list(filter(lambda x: delim in x, path.parts))
+            assert len(parts_with_delim) == 1
+            volpkg_name = parts_with_delim[0]
+            path_after_volpkg = str(path).split(delim)[1][1:]  # Remove leading /
+            return str(Path(volpkg_name) / path_after_volpkg)
+
+        validation_ds = inkid.data.Dataset([validation_ds_path], lazy_load=True)
+        for region in validation_ds.regions():
+            # We know the PPM and invert_normals for this region, so get them
+            ppm_path = normalize_path_to_volpkg(region.source_json["ppm"])
+            invert_normals = region.source_json["invert_normals"]
+            # Filter to the prediction images matching that (ppm, invert_normal) pair
+            pred_imgs_df = self.prediction_images_df.merge(self.regions_df)
+            pred_imgs_df["ppm_path"] = pred_imgs_df["ppm_path"].apply(
+                normalize_path_to_volpkg
+            )
+            pred_imgs_df = pred_imgs_df[
+                (pred_imgs_df["ppm_path"] == ppm_path)
+                & (pred_imgs_df["invert_normals"] == invert_normals)
+            ]
+            # For each (iteration, prediction_type) in this (ppm, invert_normal) pair compose the prediction image
+            groups = pred_imgs_df.groupby(
+                ["iteration_str", "prediction_type"],
+                as_index=False,
+            )
+            # TODO LEFT OFF
+
+            # generated_images = merged.groupby(
+            #     ["ppm_path", "invert_normals", "iteration_str", "prediction_type"],
+            #     as_index=False,
+            # ).first()
+            # Make each of those images
+        # Just make the images
+
+        exit()
+
 
 def merge_imgs(
     paths,
@@ -995,6 +1046,11 @@ def main():
     os.makedirs(out_dir, exist_ok=True)
 
     job_summarizer = JobSummarizer(args.dir)
+
+    job_summarizer.compute_metrics(
+        "/Users/stephen/data/dri-datasets-2-drive/PHercParis1Fr39/PHercParis1Fr39.volpkg"
+        "/working/54keV_surface_layer/merged/20220318/54KeV_surface_layer.json"
+    )
 
     label_column = not args.no_label_column
     if not job_summarizer.any_label_images_found():
