@@ -94,7 +94,7 @@ def label_key_from_prediction_type(prediction_type: str) -> str:
     return label_key
 
 
-class JobMetadata:
+class JobSummarizer:
     def __init__(self, directory):
         # Get list of directories (not files) in given parent dir
         possible_dirs = [
@@ -677,7 +677,7 @@ def try_get_img_from_data_files(img_path):
 
 def build_frame(
     iteration,
-    job_metadata,
+    job_summarizer,
     prediction_type,
     max_size=None,
     region_sets_to_include=None,
@@ -693,9 +693,9 @@ def build_frame(
     if region_sets_to_label is None:
         region_sets_to_label = []
 
-    job_dirs = job_metadata.job_dirs()
-    col_width = job_metadata.max_image_width()
-    row_heights = job_metadata.face_heights()
+    job_dirs = job_summarizer.job_dirs()
+    col_width = job_summarizer.max_image_width()
+    row_heights = job_summarizer.face_heights()
     buffer_size = int(col_width / 10)
     if superimpose_all_jobs:
         width = col_width + buffer_size * 2  # Only need space for one result column
@@ -720,8 +720,10 @@ def build_frame(
     # One column at a time
     for job_i, job_dir in enumerate(job_dirs):
         # Make each row of this column
-        for face_i, (ppm_path, invert_normals) in enumerate(job_metadata.faces_list()):
-            img = job_metadata.get_face_prediction_image(
+        for face_i, (ppm_path, invert_normals) in enumerate(
+            job_summarizer.faces_list()
+        ):
+            img = job_summarizer.get_face_prediction_image(
                 job_dir,
                 ppm_path,
                 invert_normals,
@@ -754,12 +756,14 @@ def build_frame(
 
     # Add label column
     if label_column:
-        for face_i, (ppm_path, invert_normals) in enumerate(job_metadata.faces_list()):
+        for face_i, (ppm_path, invert_normals) in enumerate(
+            job_summarizer.faces_list()
+        ):
             label_key = label_key_from_prediction_type(prediction_type)
-            label_img_path = job_metadata.get_label_image_path(
+            label_img_path = job_summarizer.get_label_image_path(
                 ppm_path, invert_normals, label_key
             )
-            mask_img_path = job_metadata.get_mask_image_path(ppm_path, invert_normals)
+            mask_img_path = job_summarizer.get_mask_image_path(ppm_path, invert_normals)
             if label_img_path is not None:
                 # Try getting label image file from recorded location (may not exist on this machine)
                 label_img = try_get_img_from_data_files(label_img_path)
@@ -958,24 +962,24 @@ def main():
     out_dir = os.path.join(args.dir, out_dir)
     os.makedirs(out_dir, exist_ok=True)
 
-    job_metadata = JobMetadata(args.dir)
+    job_summarizer = JobSummarizer(args.dir)
 
     label_column = not args.no_label_column
-    if not job_metadata.any_label_images_found():
+    if not job_summarizer.any_label_images_found():
         print(
             "Label column requested but no label images found. Not adding label column to summary images."
         )
         label_column = False
 
-    if not job_metadata.prediction_images_found():
+    if not job_summarizer.prediction_images_found():
         print(
             "No iterations encountered in prediction folders. No images will be produced."
         )
         return
 
-    for prediction_type in job_metadata.prediction_types():
+    for prediction_type in job_summarizer.prediction_types():
         # # Metrics
-        # metrics = job_metadata.compute_metrics(
+        # metrics = job_summarizer.compute_metrics(
         #     prediction_type,
         #     validation_dataset=[
         #         "/Users/stephen/data/dri-datasets-2-drive/PHercParis1Fr39/PHercParis1Fr39.volpkg/working"
@@ -985,13 +989,13 @@ def main():
         # print(metrics)
         # # TODO save results
 
-        last_iteration_seen = job_metadata.last_iteration_seen(prediction_type)
+        last_iteration_seen = job_summarizer.last_iteration_seen(prediction_type)
 
         # Static images
         print(f"\nCreating final static {prediction_type} image with all regions...")
         final_frame = build_frame(
             last_iteration_seen,
-            job_metadata,
+            job_summarizer,
             prediction_type,
             args.static_max_size,
             region_sets_to_label=["training"],
@@ -1007,7 +1011,7 @@ def main():
         )
         final_frame = build_frame(
             last_iteration_seen,
-            job_metadata,
+            job_summarizer,
             prediction_type,
             args.static_max_size,
             region_sets_to_include=["prediction"],
@@ -1039,7 +1043,7 @@ def main():
             )
             final_frame = build_frame(
                 last_iteration_seen,
-                job_metadata,
+                job_summarizer,
                 prediction_type,
                 args.static_max_size,
                 cmap_name=cmap,
@@ -1059,7 +1063,7 @@ def main():
             )
             final_frame = build_frame(
                 last_iteration_seen,
-                job_metadata,
+                job_summarizer,
                 prediction_type,
                 args.static_max_size,
                 region_sets_to_include=["prediction"],
@@ -1080,9 +1084,9 @@ def main():
         create_animation(
             os.path.join(out_dir, f"{prediction_type}_animation_all"),
             args.gif_fps,
-            job_metadata.iterations_encountered(prediction_type),
+            job_summarizer.iterations_encountered(prediction_type),
             args.img_seq,
-            job_metadata,
+            job_summarizer,
             prediction_type,
             args.gif_max_size,
             region_sets_to_label=["training"],
@@ -1093,9 +1097,9 @@ def main():
         create_animation(
             os.path.join(out_dir, f"{prediction_type}_animation_prediction"),
             args.gif_fps,
-            job_metadata.iterations_encountered(prediction_type),
+            job_summarizer.iterations_encountered(prediction_type),
             args.img_seq,
-            job_metadata,
+            job_summarizer,
             prediction_type,
             args.gif_max_size,
             region_sets_to_include=["prediction"],
