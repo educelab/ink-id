@@ -14,6 +14,8 @@ import numpy as np
 import pandas as pd
 from PIL import Image, ImageDraw, ImageFont
 import pygifsicle
+import torch
+import torch.nn as nn
 from tqdm import tqdm
 
 import inkid
@@ -26,6 +28,58 @@ RED = (255, 0, 0)
 BLUE = (0, 0, 255)
 YELLOW = (255, 255, 0)
 region_set_type_to_color = {"training": RED, "prediction": YELLOW, "validation": BLUE}
+
+
+def cross_entropy_loss(pred_img, label_img, mask_img=None, bounding_box=None):
+    # Convert images to the desired formats
+    pred_img = pred_img.convert("L")
+    pred_img = np.array(pred_img)
+
+    label_img = label_img.convert("L")
+    label_img = np.array(label_img)
+
+    assert pred_img.shape == label_img.shape
+
+    # Mask list of points to sample based on PPM mask
+    if mask_img is not None:
+        mask_img = mask_img.convert("L")
+        mask_img = np.array(mask_img)
+        assert mask_img.shape == pred_img.shape
+        points = np.argwhere(mask_img)
+    else:
+        points = np.array(list(np.ndindex(*pred_img.shape)))
+
+    # Mask list of points to sample based on validation region bounding box
+    if bounding_box is not None:
+        left, top, right, bottom = bounding_box
+        top_left = np.array([top, left])
+        bottom_right = np.array([bottom, right])
+        # https://stackoverflow.com/a/33051576
+        idxs_in_box = np.all(
+            np.logical_and(top_left <= points, points <= bottom_right), axis=1
+        )
+        points = points[idxs_in_box]
+
+    # Sample the chosen points from the prediction and label images
+    # https://stackoverflow.com/a/16396203
+    preds = pred_img[points[:, 0], points[:, 1]]
+    labels = label_img[points[:, 0], points[:, 1]]
+
+    # Convert prediction image pixel values to (not ink, ink) class scores
+    preds = preds.astype(float)
+    preds /= 255
+    preds = np.vstack((1 - preds, preds)).transpose()
+
+    # Convert label image pixel values to class indices (0: not ink, 1: ink)
+    labels = np.where(labels > 0, 1, 0)
+
+    # Compute cross entropy loss
+    preds = torch.tensor(preds)
+    labels = torch.tensor(labels)
+    loss = nn.CrossEntropyLoss()
+    val = float(loss(preds, labels))
+
+    return val
 
 
 def is_job_dir(dirname: str) -> bool:
@@ -664,32 +718,57 @@ class JobSummarizer:
         validation_ds = inkid.data.Dataset([validation_ds_path], lazy_load=True)
         for region in validation_ds.regions():
             # We know the PPM and invert_normals for this region, so get them
-            ppm_path = normalize_path_to_volpkg(region.source_json["ppm"])
+            normalized_ppm_path = normalize_path_to_volpkg(region.source_json["ppm"])
             invert_normals = region.source_json["invert_normals"]
             # Filter to the prediction images matching that (ppm, invert_normal) pair
             pred_imgs_df = self.prediction_images_df.merge(self.regions_df)
-            pred_imgs_df["ppm_path"] = pred_imgs_df["ppm_path"].apply(
+            pred_imgs_df["normalized_ppm_path"] = pred_imgs_df["ppm_path"].apply(
                 normalize_path_to_volpkg
             )
             pred_imgs_df = pred_imgs_df[
-                (pred_imgs_df["ppm_path"] == ppm_path)
+                (pred_imgs_df["normalized_ppm_path"] == normalized_ppm_path)
                 & (pred_imgs_df["invert_normals"] == invert_normals)
             ]
             # For each (iteration, prediction_type) in this (ppm, invert_normal) pair compose the prediction image
-            groups = pred_imgs_df.groupby(
+            pred_imgs_groups = pred_imgs_df.groupby(
                 ["iteration_str", "prediction_type"],
                 as_index=False,
             )
-            # TODO LEFT OFF
+            for (iteration_str, prediction_type), group_df in pred_imgs_groups:
+                # Compose the prediction image
+                ppm_path = group_df["ppm_path"].iloc[0]
+                bounding_box = region.bounding_box
+                img = self.get_face_prediction_image(
+                    job_dir=None,
+                    ppm_path=ppm_path,
+                    invert_normals=invert_normals,
+                    iteration=iteration_str,
+                    prediction_type=prediction_type,
+                    region_sets_to_include=["prediction"],
+                    region_sets_to_label=[],
+                    rectangle_line_width=0,
+                    cmap_name=None,
+                )
 
-            # generated_images = merged.groupby(
-            #     ["ppm_path", "invert_normals", "iteration_str", "prediction_type"],
-            #     as_index=False,
-            # ).first()
-            # Make each of those images
-        # Just make the images
+                # Get the label image for comparison
+                label_key = label_key_from_prediction_type(prediction_type)
+                label_img_path = self.get_label_image_path(
+                    ppm_path, invert_normals, label_key
+                )
+                assert label_img_path is not None
+                label_img = try_get_img_from_data_files(label_img_path)
+                assert label_img is not None
+                ppm_mask_img_path = self.get_mask_image_path(ppm_path, invert_normals)
+                ppm_mask_img = try_get_img_from_data_files(ppm_mask_img_path)
 
-        exit()
+                # Compute the metric
+                if prediction_type == "ink_classes":
+                    loss = cross_entropy_loss(
+                        img,
+                        label_img,
+                        mask_img=ppm_mask_img,
+                        bounding_box=bounding_box,
+                    )
 
 
 def merge_imgs(
