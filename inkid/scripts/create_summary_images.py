@@ -1,4 +1,5 @@
 import argparse
+import csv
 import datetime
 import json
 import os
@@ -160,6 +161,7 @@ class JobSummarizer:
         # We might issue this warning but only need to do it once
         self.already_warned_about_missing_label_images = False
 
+        self.date = None
         self.job_metadatas = dict()
         self.regions_df = pd.DataFrame(
             columns=[
@@ -196,6 +198,8 @@ class JobSummarizer:
             with open(metadata_filename) as f:
                 metadata = json.loads(f.read())
                 self.job_metadatas[job_dir] = metadata
+                if self.date is None:
+                    self.date = metadata["Date"]
 
             # Look in predictions directory to process prediction images
             pred_dir = os.path.join(job_dir, "predictions")
@@ -716,7 +720,9 @@ class JobSummarizer:
             return str(Path(volpkg_name) / path_after_volpkg)
 
         validation_ds = inkid.data.Dataset([validation_ds_path], lazy_load=True)
+        region_metrics = {}
         for region in validation_ds.regions():
+            region_metrics[region.name] = {}
             # We know the PPM and invert_normals for this region, so get them
             normalized_ppm_path = normalize_path_to_volpkg(region.source_json["ppm"])
             invert_normals = region.source_json["invert_normals"]
@@ -769,6 +775,17 @@ class JobSummarizer:
                         mask_img=ppm_mask_img,
                         bounding_box=bounding_box,
                     )
+                    if prediction_type not in region_metrics[region.name]:
+                        region_metrics[region.name][prediction_type] = {
+                            "iterations": [],
+                            "values": [],
+                        }
+                    region_metrics[region.name][prediction_type]["iterations"].append(
+                        iteration_str
+                    )
+                    region_metrics[region.name][prediction_type]["values"].append(loss)
+
+        return region_metrics
 
 
 def merge_imgs(
@@ -1118,6 +1135,8 @@ def main():
     parser.add_argument("--gif-max-size", type=int, nargs=2, default=[1920, 1080])
     parser.add_argument("--static-max-size", type=int, nargs=2, default=[3840, 2160])
     parser.add_argument("--no-label-column", action="store_true")
+    parser.add_argument("--validation-dataset-for-metrics")
+    parser.add_argument("--metrics-only", action="store_true")
     args = parser.parse_args()
 
     out_dir = f'{datetime.datetime.today().strftime("%Y-%m-%d_%H.%M.%S")}_summary'
@@ -1126,10 +1145,38 @@ def main():
 
     job_summarizer = JobSummarizer(args.dir)
 
-    job_summarizer.compute_metrics(
-        "/Users/stephen/data/dri-datasets-2-drive/PHercParis1Fr39/PHercParis1Fr39.volpkg"
-        "/working/54keV_surface_layer/merged/20220318/54KeV_surface_layer.json"
-    )
+    if args.validation_dataset_for_metrics:
+        print("\nComputing metrics over validation dataset...")
+        metrics = job_summarizer.compute_metrics(args.validation_dataset_for_metrics)
+        metrics_dir = Path(out_dir) / "metrics"
+        metrics_dir.mkdir()
+
+        csv_rows = []
+        job_date = job_summarizer.date
+        job_date = datetime.datetime.strptime(job_date, "%Y-%m-%d-%H:%M:%S").date()
+        for region_name, region_results in metrics.items():
+            for metric, metric_results in region_results.items():
+                iterations = metric_results["iterations"]
+                values = metric_results["values"]
+                combined = sorted(
+                    zip(iterations, values),
+                    key=lambda pair: iteration_str_sort_key(pair[0]),
+                )
+                iterations = [i for i, _ in combined]
+                values = [v for _, v in combined]
+                csv_rows.append(
+                    [job_date, region_name, metric, "iterations"] + iterations
+                )
+                csv_rows.append([job_date, region_name, metric, "values"] + values)
+
+        csv_path = metrics_dir / "metrics.csv"
+        with open(csv_path, "w", newline="") as csvfile:
+            csvwriter = csv.writer(csvfile)
+            csvwriter.writerows(csv_rows)
+
+        print("done.")
+        if args.metrics_only:
+            return
 
     label_column = not args.no_label_column
     if not job_summarizer.any_label_images_found():
