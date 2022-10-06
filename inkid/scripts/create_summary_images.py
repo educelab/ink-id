@@ -162,6 +162,7 @@ class JobSummarizer:
         self.already_warned_about_missing_label_images = False
 
         self.date = None
+        self.name = Path(directory).name
         self.job_metadatas = dict()
         self.regions_df = pd.DataFrame(
             columns=[
@@ -1154,6 +1155,7 @@ def main():
         csv_rows = []
         job_date = job_summarizer.date
         job_date = datetime.datetime.strptime(job_date, "%Y-%m-%d-%H:%M:%S").date()
+        job_name = job_summarizer.name
         for region_name, region_results in metrics.items():
             for metric, metric_results in region_results.items():
                 iterations = metric_results["iterations"]
@@ -1165,9 +1167,11 @@ def main():
                 iterations = [i for i, _ in combined]
                 values = [v for _, v in combined]
                 csv_rows.append(
-                    [job_date, region_name, metric, "iterations"] + iterations
+                    [job_date, job_name, region_name, metric, "iterations"] + iterations
                 )
-                csv_rows.append([job_date, region_name, metric, "values"] + values)
+                csv_rows.append(
+                    [job_date, job_name, region_name, metric, "values"] + values
+                )
 
         csv_path = metrics_dir / "metrics.csv"
         with open(csv_path, "w", newline="") as csvfile:
