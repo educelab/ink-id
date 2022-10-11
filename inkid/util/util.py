@@ -16,7 +16,7 @@ import subprocess
 from xml.dom.minidom import parseString
 
 from dicttoxml import dicttoxml
-from matplotlib import cm
+from matplotlib import colormaps
 import numpy as np
 from PIL import Image, ImageDraw
 import torch
@@ -322,7 +322,7 @@ def uint16_to_float32_normalized_0_1(img):
 
 
 def float_0_1_to_cmap_rgb_uint8(img, cmap="turbo"):
-    color_map = cm.get_cmap(cmap)
+    color_map = colormaps[cmap]
     return Image.fromarray(np.uint8(color_map(img) * 255))
 
 

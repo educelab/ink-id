@@ -10,7 +10,7 @@ import warnings
 
 from humanize import naturalsize
 import imageio
-from matplotlib import cm
+from matplotlib import colormaps
 import numpy as np
 import pandas as pd
 from PIL import Image, ImageDraw, ImageFont
@@ -547,7 +547,7 @@ class JobSummarizer:
                     label_img = try_get_img_from_data_files(label_img_path)
                     if label_img is not None:
                         if cmap_name is not None:
-                            color_map = cm.get_cmap(cmap_name)
+                            color_map = colormaps[cmap_name]
                             label_img = label_img.convert("L")
                             img_data = np.array(label_img)
                             label_img = Image.fromarray(
@@ -821,7 +821,7 @@ def merge_imgs(
 
     # Apply color map
     if cmap_name is not None:
-        color_map = cm.get_cmap(cmap_name)
+        color_map = colormaps[cmap_name]
         merged_img = merged_img.convert("L")
         merged_img_data = np.array(merged_img)
         merged_img = Image.fromarray(np.uint8(color_map(merged_img_data) * 255))
@@ -994,7 +994,7 @@ def build_footer_img(
                 (intensity, intensity, intensity), (x, 0, x + 1, swatch.height)
             )
         if cmap_name is not None:
-            color_map = cm.get_cmap(cmap_name)
+            color_map = colormaps[cmap_name]
             swatch = swatch.convert("L")
             img_data = np.array(swatch)
             swatch = Image.fromarray(np.uint8(color_map(img_data) * 255))
