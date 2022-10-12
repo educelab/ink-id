@@ -2,8 +2,21 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Optional
 
+import numpy as np
 import tensorstore as ts
+
+
+def norm_fl3(vec: tuple[float, float, float]) -> float:
+    vec = np.array(vec)
+    return (vec[0]**2 + vec[1]**2 + vec[2]**2)**(1./2)
+
+
+def normalize_fl3(vec: tuple[float, float, float]) -> tuple[float, float, float]:
+    vec = np.array(vec)
+    n = norm_fl3(vec)
+    return tuple(vec / n)
 
 
 class NewVolume:
@@ -47,11 +60,54 @@ class NewVolume:
         ).result()
 
     def __getitem__(self, key):
+        # TODO consider adding bounds checking and return 0 if not in bounds (to match previous implementation)
+        # It would be nice to avoid that if possible (doesn't affect ML performance), though, because
+        # it breaks the intuition around the array access.
         return self._data[key].read().result()
+
+    @property
+    def shape(self) -> tuple[int, int, int]:
+        return self._data.shape
+
+    def get_subvolume(
+        self,
+        center: tuple[float, float, float],
+        shape_voxels: tuple[int, int, int],
+        shape_microns: Optional[tuple[float, float, float]] = None,
+        normal: tuple[float, float, float] = (0, 0, 1),
+        square_corners=None,
+    ):
+        # TODO removed: augment, jitter, move_along_normal, window_min_max, normalize, method
+
+        assert len(center) == 3
+        assert len(shape_voxels) == 3
+
+        # If shape_microns not specified, fall back to the old method
+        # (spatial extent based only on number of voxels and not voxel size)
+        if shape_microns is None:
+            shape_microns = tuple(np.array(shape_voxels) * self._voxelsize_um)
+        assert len(shape_microns) == 3
+
+        normal = normalize_fl3(normal)
+
+        # TODO LEFT OFF implementing this stuff
+        if square_corners is None:
+            basis = get_component_vectors_from_normal(n)
+        else:
+            basis = get_basis_from_square(square_corners)
+
+        self.nearest_neighbor_with_basis_vectors(c, s_v, s_m, basis, subvolume)
+
+        raise NotImplementedError
+
+    def nearest_neighbor_with_basis_vectors(self):
+        raise NotImplementedError
 
 
 def main():
-    vol = NewVolume.from_path("/home/stephen/data/dri-datasets-drive/PHercParis3/volumes/20211026092241.zarr")
+    vol = NewVolume.from_path(
+        "/home/stephen/data/dri-datasets-drive/PHercParis3/volumes/20211026092241.zarr"
+    )
 
 
 if __name__ == "__main__":
