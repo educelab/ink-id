@@ -10,7 +10,14 @@ import numpy as np
 import tensorstore as ts
 from tqdm import tqdm
 
-from inkid.data.mathutils import I3, Fl3, Fl3x3, normalize, get_component_vectors_from_normal, get_basis_from_square
+from inkid.data.mathutils import (
+    I3,
+    Fl3,
+    Fl3x3,
+    normalize,
+    get_component_vectors_from_normal,
+    get_basis_from_square,
+)
 from inkid.util import uint16_to_float32_normalized_0_1
 
 
@@ -70,7 +77,7 @@ class Volume:
             assert len(slice_files) == self.shape_z
 
             # Load slice images into volume
-            logging.info('Loading volume slices from {}...'.format(vol_path))
+            logging.info("Loading volume slices from {}...".format(vol_path))
             vol = np.empty((self.shape_z, self.shape_y, self.shape_x), dtype=np.uint16)
             for slice_i, slice_file in tqdm(list(enumerate(slice_files))):
                 img = imageio.v3.imread(slice_file)
@@ -78,11 +85,7 @@ class Volume:
             print()
 
             self._data = ts.open(
-                {
-                    "driver": "array",
-                    "array": vol,
-                    "dtype": "uint16"
-                }
+                {"driver": "array", "array": vol, "dtype": "uint16"}
             ).result()
 
     def __getitem__(self, key):
@@ -120,7 +123,9 @@ class Volume:
         else:
             basis = get_basis_from_square(square_corners)
 
-        subvolume = self.nearest_neighbor_with_basis_vectors(center, shape_voxels, shape_microns, basis)
+        subvolume = self.nearest_neighbor_with_basis_vectors(
+            center, shape_voxels, shape_microns, basis
+        )
         assert subvolume.shape == shape_voxels
 
         # TODO move this elsewhere
@@ -134,18 +139,18 @@ class Volume:
         return subvolume
 
     def nearest_neighbor_with_basis_vectors(
-            self,
-            center: Fl3,
-            shape_voxels: I3,
-            shape_microns: Fl3,
-            basis: Fl3x3,
+        self,
+        center: Fl3,
+        shape_voxels: I3,
+        shape_microns: Fl3,
+        basis: Fl3x3,
     ) -> np.array:
         array = np.zeros(shape_voxels, dtype=np.uint16)
 
         subvolume_voxel_size_microns: Fl3 = (
             shape_microns[0] / shape_voxels[0],
             shape_microns[1] / shape_voxels[1],
-            shape_microns[2] / shape_voxels[2]
+            shape_microns[2] / shape_voxels[2],
         )
 
         subvolume_voxel_size_volume_voxel_size_ratio: Fl3 = tuple(
@@ -163,7 +168,7 @@ class Volume:
                     offset: I3 = (
                         int((-1 * (shape_voxels[2] - 1) / 2.0 + x) + 0.5),
                         int((-1 * (shape_voxels[1] - 1) / 2.0 + y) + 0.5),
-                        int((-1 * (shape_voxels[0] - 1) / 2.0 + z) + 0.5)
+                        int((-1 * (shape_voxels[0] - 1) / 2.0 + z) + 0.5),
                     )
 
                     # Calculate the corresponding position in the volume.
@@ -171,17 +176,53 @@ class Volume:
                     vol_y: float = center[1]
                     vol_z: float = center[2]
 
-                    vol_x += offset[0] * basis[0][0] * subvolume_voxel_size_volume_voxel_size_ratio[2]
-                    vol_y += offset[0] * basis[0][1] * subvolume_voxel_size_volume_voxel_size_ratio[2]
-                    vol_z += offset[0] * basis[0][2] * subvolume_voxel_size_volume_voxel_size_ratio[2]
+                    vol_x += (
+                        offset[0]
+                        * basis[0][0]
+                        * subvolume_voxel_size_volume_voxel_size_ratio[2]
+                    )
+                    vol_y += (
+                        offset[0]
+                        * basis[0][1]
+                        * subvolume_voxel_size_volume_voxel_size_ratio[2]
+                    )
+                    vol_z += (
+                        offset[0]
+                        * basis[0][2]
+                        * subvolume_voxel_size_volume_voxel_size_ratio[2]
+                    )
 
-                    vol_x += offset[1] * basis[1][0] * subvolume_voxel_size_volume_voxel_size_ratio[1]
-                    vol_y += offset[1] * basis[1][1] * subvolume_voxel_size_volume_voxel_size_ratio[1]
-                    vol_z += offset[1] * basis[1][2] * subvolume_voxel_size_volume_voxel_size_ratio[1]
+                    vol_x += (
+                        offset[1]
+                        * basis[1][0]
+                        * subvolume_voxel_size_volume_voxel_size_ratio[1]
+                    )
+                    vol_y += (
+                        offset[1]
+                        * basis[1][1]
+                        * subvolume_voxel_size_volume_voxel_size_ratio[1]
+                    )
+                    vol_z += (
+                        offset[1]
+                        * basis[1][2]
+                        * subvolume_voxel_size_volume_voxel_size_ratio[1]
+                    )
 
-                    vol_x += offset[2] * basis[2][0] * subvolume_voxel_size_volume_voxel_size_ratio[0]
-                    vol_y += offset[2] * basis[2][1] * subvolume_voxel_size_volume_voxel_size_ratio[0]
-                    vol_z += offset[2] * basis[2][2] * subvolume_voxel_size_volume_voxel_size_ratio[0]
+                    vol_x += (
+                        offset[2]
+                        * basis[2][0]
+                        * subvolume_voxel_size_volume_voxel_size_ratio[0]
+                    )
+                    vol_y += (
+                        offset[2]
+                        * basis[2][1]
+                        * subvolume_voxel_size_volume_voxel_size_ratio[0]
+                    )
+                    vol_z += (
+                        offset[2]
+                        * basis[2][2]
+                        * subvolume_voxel_size_volume_voxel_size_ratio[0]
+                    )
 
                     vol_x += 0.5
                     vol_y += 0.5
@@ -193,9 +234,13 @@ class Volume:
 
 
 def main():
-    vol = Volume.from_path(
-        "/home/stephen/data/dri-datasets-drive/PHercParis3/volumes/20211026092241.zarr"
-    )
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--vol-path", required=True)
+    args = parser.parse_args()
+
+    vol = Volume.from_path(args.vol_path)
     print(vol[0, 0, 0])
 
 
