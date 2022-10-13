@@ -228,7 +228,7 @@ class Volume:
                     vol_y += 0.5
                     vol_z += 0.5
 
-                    array[z, y, x] = self[int(z), int(y), int(x)]
+                    array[z, y, x] = self[int(vol_z), int(vol_y), int(vol_x)]
 
         return array
 
