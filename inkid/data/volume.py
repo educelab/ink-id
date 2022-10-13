@@ -11,14 +11,14 @@ from inkid.data.mathutils import I3, Fl3, Fl3x3, normalize, get_component_vector
 from inkid.util import uint16_to_float32_normalized_0_1
 
 
-class NewVolume:
-    initialized_volumes: dict[str, NewVolume] = dict()
+class Volume:
+    initialized_volumes: dict[str, Volume] = dict()
 
     @classmethod
-    def from_path(cls, path: str) -> NewVolume:
+    def from_path(cls, path: str) -> Volume:
         if path in cls.initialized_volumes:
             return cls.initialized_volumes[path]
-        cls.initialized_volumes[path] = NewVolume(path)
+        cls.initialized_volumes[path] = Volume(path)
         return cls.initialized_volumes[path]
 
     def __init__(self, zarr_path: str):
@@ -159,7 +159,7 @@ class NewVolume:
 
 
 def main():
-    vol = NewVolume.from_path(
+    vol = Volume.from_path(
         "/home/stephen/data/dri-datasets-drive/PHercParis3/volumes/20211026092241.zarr"
     )
     print(vol[0, 0, 0])
