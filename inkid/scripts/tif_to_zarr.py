@@ -55,7 +55,7 @@ def tif_to_zarr(slices_path: str, zarr_path: str):
     # Write slice images into volume
     txn = ts.Transaction()
     for slice_i, slice_file in tqdm(list(enumerate(slice_files))):
-        img = imageio.v2.imread(slice_file)
+        img = imageio.v3.imread(slice_file)
         # Stage this slice in memory. For larger-than-memory volumes it may be
         # necessary to use the slower synchronous writes since it would not be
         # possible to stage all writes together in memory. Will cross that

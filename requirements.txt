@@ -23,9 +23,10 @@ google-auth-oauthlib==0.4.6
 grpcio==1.49.1
 humanize==4.4.0
 idna==3.4
+imagecodecs==2022.9.26
 imageio==2.22.1
 imagesize==1.4.1
--e git+ssh://git@gitlab.com/educelab/ink-id.git@70c19fa7774e3661d3261fc0840568de1afa5c6a#egg=inkid
+-e git+ssh://git@gitlab.com/educelab/ink-id.git@0155fa63f303719b044fcee24c1fef0f20c674ad#egg=inkid
 isort==5.10.1
 Jinja2==3.1.2
 joblib==1.2.0
@@ -85,6 +86,7 @@ tensorboard-data-server==0.6.1
 tensorboard-plugin-wit==1.8.1
 tensorstore==0.1.27
 threadpoolctl==3.1.0
+tifffile==2022.10.10
 toml==0.10.2
 tomli==2.0.1
 tomlkit==0.11.5
