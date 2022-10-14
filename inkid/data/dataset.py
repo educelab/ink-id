@@ -32,7 +32,6 @@ class RegionPointSampler:
 # How subvolumes are retrieved
 @dataclass
 class SubvolumeGeneratorInfo:
-    method: str = "nearest_neighbor"
     shape_microns: Optional[tuple[float, float, float]] = None
     shape_voxels: Optional[tuple[int, int, int]] = (48, 48, 48)
     move_along_normal: float = 0
@@ -40,18 +39,10 @@ class SubvolumeGeneratorInfo:
     jitter_max: int = 4
     augment_subvolume: bool = True
 
-    method_choices = ["nearest_neighbor", "interpolated"]
-
 
 # How subvolumes are retrieved
 def add_subvolume_arguments(parser):
     default = SubvolumeGeneratorInfo()
-    parser.add_argument(
-        "--subvolume-method",
-        default=default.method,
-        choices=default.method_choices,
-        help="method for sampling subvolumes",
-    )
     parser.add_argument(
         "--subvolume-shape-microns",
         metavar="um",

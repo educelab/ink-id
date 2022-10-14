@@ -310,7 +310,6 @@ def main(argv=None):
 
     # Define the feature inputs to the network
     subvolume_args = dict(
-        method=args.subvolume_method,
         shape_microns=args.subvolume_shape_microns,
         shape_voxels=args.subvolume_shape_voxels,
         move_along_normal=args.move_along_normal,

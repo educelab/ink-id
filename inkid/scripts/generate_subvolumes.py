@@ -226,7 +226,6 @@ def main(argv=None):
         shape_voxels=args.subvolume_shape_voxels,
         shape_microns=args.subvolume_shape_microns,
         move_along_normal=args.move_along_normal,
-        method=args.subvolume_method,
         normalize=args.normalize_subvolumes,
         augment_subvolume=args.augmentation,
         jitter_max=args.jitter_max,
