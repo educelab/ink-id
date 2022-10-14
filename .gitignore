@@ -19,9 +19,4 @@ tmp/
 
 Pipfile*
 
-# Cython
-inkid/data/*.html
-*.c
-*.so
-
 .idea/

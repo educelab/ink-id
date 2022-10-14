@@ -5,8 +5,8 @@ import logging
 from pathlib import Path
 from typing import Optional
 
-import imageio
 import numpy as np
+from PIL import Image
 import tensorstore as ts
 from tqdm import tqdm
 
@@ -80,7 +80,7 @@ class Volume:
             logging.info("Loading volume slices from {}...".format(vol_path))
             vol = np.empty((self.shape_z, self.shape_y, self.shape_x), dtype=np.uint16)
             for slice_i, slice_file in tqdm(list(enumerate(slice_files))):
-                img = imageio.v3.imread(slice_file)
+                img = np.array(Image.open(slice_file), dtype=np.uint16).copy()
                 vol[slice_i, :, :] = img
             print()
 
