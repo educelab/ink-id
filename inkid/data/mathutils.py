@@ -1,3 +1,10 @@
+"""
+Some math utils for vector rotation using quaternions.
+
+These are used for orienting the basis vectors before sampling subvolumes, among other things. Ported from
+https://gitlab.com/ideasman42/blender-mathutils (from C to Python) under GPLv2.
+
+"""
 import math
 import sys
 
@@ -23,9 +30,14 @@ def norm(a: Fl3) -> float:
 
 
 def normalize(a: Fl3) -> Fl3:
-    n = norm(a)
-    a = np.array(a)
-    return tuple(a / n)
+    d: float = dot_fl3(a, a)
+
+    # a larger value causes normalize errors in a scaled down models with camera extreme close
+    if d > 1.0e-35:
+        d = math.sqrt(d)
+        return mul_fl3(a, 1.0 / d)
+    else:
+        return 0.0, 0.0, 0.0
 
 
 def cross(a: Fl3, b: Fl3) -> Fl3:
@@ -119,6 +131,7 @@ def rotation_between_vecs_to_quat(a: Fl3, b: Fl3) -> Quat:
 
     axis: Fl3 = cross(a, b)
 
+    axis = normalize(axis)
     if norm(axis) > sys.float_info.epsilon:
         angle: float = angle_normalized(a, b)
         return axis_angle_normalized_to_quat(axis, angle)
