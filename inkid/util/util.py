@@ -361,13 +361,14 @@ def subvolume_to_sample_img(
         # Get intersection slices of volume for each axis
         for axis in (0, 1, 2):  # x, y, z
             # Get slice image from volume
-            vol_slice_idx = vol_coord[axis]
+            vol_slice_idx = int(vol_coord[axis])
             if axis == 0:
-                vol_slice = volume.x_slice(vol_slice_idx)
+                vol_slice = volume[:, :, vol_slice_idx]
             elif axis == 1:
-                vol_slice = volume.y_slice(vol_slice_idx)
+                vol_slice = volume[:, vol_slice_idx, :]
             else:
-                vol_slice = volume.z_slice(vol_slice_idx)
+                vol_slice = volume[vol_slice_idx, :, :]
+            vol_slice = uint16_to_float32_normalized_0_1(vol_slice)
             # Color map
             vol_sub_img = float_0_1_to_cmap_rgb_uint8(vol_slice)
             # Draw crosshairs around subvolume

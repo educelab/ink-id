@@ -35,7 +35,7 @@ class SubvolumeGeneratorInfo:
     shape_microns: Optional[tuple[float, float, float]] = None
     shape_voxels: Optional[tuple[int, int, int]] = (48, 48, 48)
     move_along_normal: float = 0
-    normalize: bool = False
+    normalize_subvolume: bool = False
     jitter_max: int = 4
     augment_subvolume: bool = True
 
@@ -75,13 +75,6 @@ def add_subvolume_arguments(parser):
         "--jitter-max", metavar="n", type=int, default=default.jitter_max
     )
     parser.add_argument("--no-augmentation", action="store_false", dest="augmentation")
-    parser.add_argument(
-        "--subvolume-window-min-max",
-        nargs=2,
-        type=float,
-        default=None,
-        help="window each subvolume to this defined window in [0, 1]",
-    )
 
 
 # Tuple (not dataclass) I believe because needs to be passed through PyTorch and needs to be basic structure

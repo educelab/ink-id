@@ -105,8 +105,12 @@ class Volume:
         shape_microns: Optional[Fl3] = None,
         normal: Fl3 = (0.0, 0.0, 1.0),
         square_corners=None,
+        augment_subvolume: bool = False,
+        jitter_max: float = 4,
+        move_along_normal: float = 0,
+        normalize_subvolume: bool = False,
     ):
-        # TODO removed: augment, jitter, move_along_normal, window_min_max, normalize, method
+        # TODO removed: augment, jitter, move_along_normal, normalize_subvol
         assert len(center) == 3
         assert len(shape_voxels) == 3
 
