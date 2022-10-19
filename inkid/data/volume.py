@@ -155,92 +155,37 @@ class Volume:
         shape_microns: Fl3,
         basis: Fl3x3,
     ) -> np.array:
-        array = np.zeros(shape_voxels, dtype=np.uint16)
+        basis = np.array(basis)
 
-        subvolume_voxel_size_microns: Fl3 = (
+        subvolume_voxel_shape_microns: Fl3 = (
             shape_microns[0] / shape_voxels[0],
             shape_microns[1] / shape_voxels[1],
             shape_microns[2] / shape_voxels[2],
         )
 
         subvolume_voxel_size_volume_voxel_size_ratio: Fl3 = tuple(
-            np.array(subvolume_voxel_size_microns) / self._voxelsize_um
+            np.array(subvolume_voxel_shape_microns) / self._voxelsize_um
         )
 
-        for z in range(shape_voxels[0]):
-            for y in range(shape_voxels[1]):
-                for x in range(shape_voxels[2]):
-                    # Convert from an index relative to an origin in
-                    # the corner to a position relative to the
-                    # subvolume center (which may not correspond
-                    # exactly to one of the subvolume voxel positions
-                    # if any of the side lengths are even).
-                    offset: I3 = (
-                        int((-1 * (shape_voxels[2] - 1) / 2.0 + x) + 0.5),
-                        int((-1 * (shape_voxels[1] - 1) / 2.0 + y) + 0.5),
-                        int((-1 * (shape_voxels[0] - 1) / 2.0 + z) + 0.5),
-                    )
+        # Shape is [z, y, x] but I want points to be in [x, y, z] hence the reversing with [::-1]
+        points = np.array(list(np.ndindex(*shape_voxels[::-1])), dtype=float)
+        # Convert from index relative to origin in the corner to a position relative to the subvolume center
+        points -= np.array(
+            [
+                (shape_voxels[2] - 1) / 2.0 - 0.5,
+                (shape_voxels[1] - 1) / 2.0 - 0.5,
+                (shape_voxels[0] - 1) / 2.0 - 0.5,
+            ]
+        )
+        xs = np.sum(basis[:, 0] * points, axis=1) * subvolume_voxel_size_volume_voxel_size_ratio[2] + center[0] + 0.5
+        ys = np.sum(basis[:, 1] * points, axis=1) * subvolume_voxel_size_volume_voxel_size_ratio[1] + center[1] + 0.5
+        zs = np.sum(basis[:, 2] * points, axis=1) * subvolume_voxel_size_volume_voxel_size_ratio[0] + center[2] + 0.5
+        xs = np.array(xs, dtype=int)
+        ys = np.array(ys, dtype=int)
+        zs = np.array(zs, dtype=int)
 
-                    # Calculate the corresponding position in the volume.
-                    vol_x: float = center[0]
-                    vol_y: float = center[1]
-                    vol_z: float = center[2]
-
-                    vol_x += (
-                        offset[0]
-                        * basis[0][0]
-                        * subvolume_voxel_size_volume_voxel_size_ratio[2]
-                    )
-                    vol_y += (
-                        offset[0]
-                        * basis[0][1]
-                        * subvolume_voxel_size_volume_voxel_size_ratio[2]
-                    )
-                    vol_z += (
-                        offset[0]
-                        * basis[0][2]
-                        * subvolume_voxel_size_volume_voxel_size_ratio[2]
-                    )
-
-                    vol_x += (
-                        offset[1]
-                        * basis[1][0]
-                        * subvolume_voxel_size_volume_voxel_size_ratio[1]
-                    )
-                    vol_y += (
-                        offset[1]
-                        * basis[1][1]
-                        * subvolume_voxel_size_volume_voxel_size_ratio[1]
-                    )
-                    vol_z += (
-                        offset[1]
-                        * basis[1][2]
-                        * subvolume_voxel_size_volume_voxel_size_ratio[1]
-                    )
-
-                    vol_x += (
-                        offset[2]
-                        * basis[2][0]
-                        * subvolume_voxel_size_volume_voxel_size_ratio[0]
-                    )
-                    vol_y += (
-                        offset[2]
-                        * basis[2][1]
-                        * subvolume_voxel_size_volume_voxel_size_ratio[0]
-                    )
-                    vol_z += (
-                        offset[2]
-                        * basis[2][2]
-                        * subvolume_voxel_size_volume_voxel_size_ratio[0]
-                    )
-
-                    vol_x += 0.5
-                    vol_y += 0.5
-                    vol_z += 0.5
-
-                    array[z, y, x] = self[int(vol_z), int(vol_y), int(vol_x)]
-
-        return array
+        subvol = self[zs, ys, xs].reshape(shape_voxels)
+        return subvol
 
 
 def main():
@@ -257,22 +202,13 @@ def main():
 
     subvol_center = vol.shape[2] // 2, vol.shape[1] // 2, vol.shape[0] // 2
     subvol_shape_voxels = 24, 80, 80
-    subvol_origin = (
-        subvol_center[0] - subvol_shape_voxels[2] // 2,
-        subvol_center[1] - subvol_shape_voxels[1] // 2,
-        subvol_center[2] - subvol_shape_voxels[0] // 2,
-    )
 
+    subvol = vol.get_subvolume(subvol_center, subvol_shape_voxels)
     start = time.time()
-    # subvol = vol.get_subvolume(subvol_center, subvol_shape_voxels)
-    subvol = vol[
-        subvol_origin[2]:subvol_origin[2] + subvol_shape_voxels[0],
-        subvol_origin[1]:subvol_origin[1] + subvol_shape_voxels[1],
-        subvol_origin[0]:subvol_origin[0] + subvol_shape_voxels[2],
-    ]
+    subvol = vol.get_subvolume(subvol_center, subvol_shape_voxels)
     end = time.time()
-    assert subvol.shape == subvol_shape_voxels
-    print(f"{end - start} seconds to fetch {subvol_shape_voxels} subvolume")
+    print(f"{end - start} seconds to fetch {subvol.shape} subvolume")
+    # print(subvol)
 
 
 if __name__ == "__main__":
