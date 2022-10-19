@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import time
 from pathlib import Path
 from typing import Optional
 
@@ -61,6 +62,11 @@ class Volume:
                         "chunks": [chunk_size, chunk_size, chunk_size],
                         "dtype": "<u2",
                     },
+                    "context": {
+                        "cache_pool": {
+                            "total_bytes_limit": 100000000,
+                        }
+                    }
                 }
             ).result()
         else:
@@ -244,8 +250,29 @@ def main():
     parser.add_argument("--vol-path", required=True)
     args = parser.parse_args()
 
+    start = time.time()
     vol = Volume.from_path(args.vol_path)
-    print(vol[0, 0, 0])
+    end = time.time()
+    print(f"{end - start} seconds to initialize {vol.shape} volume")
+
+    subvol_center = vol.shape[2] // 2, vol.shape[1] // 2, vol.shape[0] // 2
+    subvol_shape_voxels = 24, 80, 80
+    subvol_origin = (
+        subvol_center[0] - subvol_shape_voxels[2] // 2,
+        subvol_center[1] - subvol_shape_voxels[1] // 2,
+        subvol_center[2] - subvol_shape_voxels[0] // 2,
+    )
+
+    start = time.time()
+    # subvol = vol.get_subvolume(subvol_center, subvol_shape_voxels)
+    subvol = vol[
+        subvol_origin[2]:subvol_origin[2] + subvol_shape_voxels[0],
+        subvol_origin[1]:subvol_origin[1] + subvol_shape_voxels[1],
+        subvol_origin[0]:subvol_origin[0] + subvol_shape_voxels[2],
+    ]
+    end = time.time()
+    assert subvol.shape == subvol_shape_voxels
+    print(f"{end - start} seconds to fetch {subvol_shape_voxels} subvolume")
 
 
 if __name__ == "__main__":
