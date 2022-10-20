@@ -49,7 +49,7 @@ class Volume:
         self.shape_x = self._metadata["width"]
 
         if vol_path.suffix == ".zarr":
-            chunk_size = 64
+            chunk_size = 256
             self._data = ts.open(
                 {
                     "driver": "zarr",
