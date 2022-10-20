@@ -14,10 +14,6 @@ singularity:
   script:
     - cp -r . /tmp/ink-id
     - singularity build inkid.sif singularity/inkid.def
-  artifacts:
-    paths:
-      - inkid.sif
-    expire_in: 1 day
   rules:
     # prevent builds just because branch is tagged
     - if: $CI_COMMIT_TAG

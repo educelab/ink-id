@@ -244,6 +244,32 @@ class LinearInkDecoder(torch.nn.Module):
         return y  # (N, C, H, W)
 
 
+class DeeperLinearInkDecoder(torch.nn.Module):
+    def __init__(
+        self, _, input_shape, output_neurons
+    ):  # Unnamed parameter is previously dropout
+        super().__init__()
+
+        hidden_layer_size = 128
+        self.fc1 = torch.nn.Linear(int(np.prod(input_shape)), hidden_layer_size)
+        self.fc2 = torch.nn.Linear(hidden_layer_size, hidden_layer_size)
+        self.fc3 = torch.nn.Linear(hidden_layer_size, hidden_layer_size)
+        self.fc4 = torch.nn.Linear(hidden_layer_size, output_neurons)
+
+        self.flatten = torch.nn.Flatten()
+
+    def forward(self, x):
+        y = self.flatten(x)
+        y = self.fc1(y)
+        y = self.fc2(y)
+        y = self.fc3(y)
+        y = self.fc4(y)
+        # Add some dimensions to match the dimensionality of label which is always 2D even if shape is (1, 1)
+        y = torch.unsqueeze(y, 2)
+        y = torch.unsqueeze(y, 3)
+        return y  # (N, C, H, W)
+
+
 class ConvolutionalInkDecoder(torch.nn.Module):
     def __init__(self, filters, output_channels):
         super().__init__()
@@ -516,6 +542,25 @@ class InkClassifier3DCNN(torch.nn.Module):
             subvolume_shape, batch_norm_momentum, no_batch_norm, filters, in_channels=1
         )
         self.decoder = LinearInkDecoder(
+            drop_rate, self.encoder.output_shape, output_neurons=2
+        )
+        self.labels = ["ink_classes"]
+
+    def forward(self, x):
+        return {
+            "ink_classes": self.decoder(self.encoder(x)),
+        }
+
+
+class DeeperInkClassifier3DCNN(torch.nn.Module):
+    def __init__(
+        self, subvolume_shape, batch_norm_momentum, no_batch_norm, filters, drop_rate
+    ):
+        super().__init__()
+        self.encoder = Subvolume3DcnnEncoder(
+            subvolume_shape, batch_norm_momentum, no_batch_norm, filters, in_channels=1
+        )
+        self.decoder = DeeperLinearInkDecoder(
             drop_rate, self.encoder.output_shape, output_neurons=2
         )
         self.labels = ["ink_classes"]

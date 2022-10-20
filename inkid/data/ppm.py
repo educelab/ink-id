@@ -44,10 +44,10 @@ class PPM:
             self.load_ppm_data()
 
     @classmethod
-    def from_path(cls, path: str) -> PPM:
+    def from_path(cls, path: str, lazy_load: bool = False) -> PPM:
         if path in cls.initialized_ppms:
             return cls.initialized_ppms[path]
-        cls.initialized_ppms[path] = PPM(path)
+        cls.initialized_ppms[path] = PPM(path, lazy_load=lazy_load)
         return cls.initialized_ppms[path]
 
     @staticmethod
@@ -98,7 +98,7 @@ class PPM:
         }
 
     def load_ppm_data(self):
-        """Read the PPM file data and store the it in the PPM object.
+        """Read the PPM file data and store it in the PPM object.
 
         The data is stored in an internal array indexed by [y, x, idx]
         where idx is an index into an array of size dim.
