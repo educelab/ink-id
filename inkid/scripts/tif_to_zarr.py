@@ -9,7 +9,7 @@ import tensorstore as ts
 from tqdm import tqdm
 
 
-def tif_to_zarr(slices_path: str, zarr_path: str):
+def tif_to_zarr(slices_path: str, zarr_path: str, chunk_size: int, stage_writes: bool):
     slices_path = Path(slices_path)
     zarr_path = Path(zarr_path)
 
@@ -35,7 +35,6 @@ def tif_to_zarr(slices_path: str, zarr_path: str):
     slice_files.sort()
     assert len(slice_files) == shape_z
 
-    chunk_size = 64
     dataset = ts.open(
         {
             "driver": "zarr",
@@ -53,19 +52,20 @@ def tif_to_zarr(slices_path: str, zarr_path: str):
         }
     ).result()
 
+    txn = ts.Transaction() if stage_writes else None
+
     # Write slice images into volume
-    txn = ts.Transaction()
     for slice_i, slice_file in tqdm(list(enumerate(slice_files))):
         img = np.array(Image.open(slice_file), dtype=np.uint16).copy()
-        # Stage this slice in memory. For larger-than-memory volumes it may be
-        # necessary to use the slower synchronous writes since it would not be
-        # possible to stage all writes together in memory. Will cross that
-        # bridge when we get there.
-        # For now, with a 600MB volume, async: 24s, sync: 19m. ~40x speedup.
-        dataset.with_transaction(txn)[slice_i, :, :] = img
-        # dataset[slice_i, :, :] = img
+        # With a 600MB volume, async (staged): 24s, sync: 19m. ~40x speedup.
+        if stage_writes:
+            dataset.with_transaction(txn)[slice_i, :, :] = img
+        else:
+            dataset[slice_i, :, :] = img
+
     # Commit (write to disk) the staged slice writes
-    txn.commit_async().result()
+    if stage_writes:
+        txn.commit_async().result()
 
     # Copy metadata file
     shutil.copy(metadata_filename, zarr_path / "meta.json")
@@ -75,9 +75,13 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--input-slices-dir", required=True)
     parser.add_argument("--output-zarr-dir", required=True)
+    parser.add_argument("--chunk-size", type=int, default=256)
+    parser.add_argument("--stage-writes", action="store_true")
     args = parser.parse_args()
 
-    tif_to_zarr(args.input_slices_dir, args.output_zarr_dir)
+    tif_to_zarr(
+        args.input_slices_dir, args.output_zarr_dir, args.chunk_size, args.stage_writes
+    )
 
 
 if __name__ == "__main__":
