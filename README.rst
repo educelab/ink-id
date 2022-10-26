@@ -30,6 +30,13 @@ To install the source for development:
     (.venv) $ pip install -e .[dev]  # Install ink-id and dependencies, including those specific to development
     (.venv) $ deactivate  # When finished, deactivate the environment
 
+Cython modules are automatically built during the installation.
+After changes to Cython files (``.pyx`` and ``.pxd``), those modules must be rebuilt:
+
+.. code-block:: bash
+
+    $ python setup.py build_ext --inplace
+
 Usage
 =====
 

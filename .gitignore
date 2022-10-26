@@ -20,3 +20,8 @@ tmp/
 Pipfile*
 
 .idea/
+
+# Cython
+inkid/data/*.html
+*.c
+*.so

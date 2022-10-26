@@ -11,6 +11,7 @@ from PIL import Image
 import tensorstore as ts
 from tqdm import tqdm
 
+import inkid.data.cythonutils
 from inkid.data.mathutils import (
     I3,
     Fl3,
@@ -48,7 +49,7 @@ class Volume:
         self.shape_y = self._metadata["height"]
         self.shape_x = self._metadata["width"]
 
-        if vol_path.suffix == ".zarr":
+        if ".zarr" in vol_path.suffix:
             chunk_size = 256
             self._data = ts.open(
                 {
@@ -155,6 +156,15 @@ class Volume:
         shape_microns: Fl3,
         basis: Fl3x3,
     ) -> np.array:
+        # TODO LEFT OFF
+        #  Function to map from subvol index and parameters to vol point
+        #  Reintroduce Cython dependency and boilerplate
+        #  Compute axis oriented bounding box around subvolume
+        #  Initialize this to zeros
+        #  Compute the overlap with the actual volume bounds and fill that portion (in most cases the entire thing)
+        #  Pass this to the subroutine which samples it using C loops
+        #  Return that
+
         array = np.zeros(shape_voxels, dtype=np.uint16)
 
         subvolume_voxel_size_microns: Fl3 = (
@@ -170,75 +180,18 @@ class Volume:
         for z in range(shape_voxels[0]):
             for y in range(shape_voxels[1]):
                 for x in range(shape_voxels[2]):
-                    # Convert from an index relative to an origin in
-                    # the corner to a position relative to the
-                    # subvolume center (which may not correspond
-                    # exactly to one of the subvolume voxel positions
-                    # if any of the side lengths are even).
-                    offset: I3 = (
-                        int((-1 * (shape_voxels[2] - 1) / 2.0 + x) + 0.5),
-                        int((-1 * (shape_voxels[1] - 1) / 2.0 + y) + 0.5),
-                        int((-1 * (shape_voxels[0] - 1) / 2.0 + z) + 0.5),
+                    subvol_idx: I3 = x, y, z
+
+                    # TODO LEFT OFF have this accept Python types and convert them internally
+                    vol_pos: Fl3 = inkid.data.cythonutils.subvol_idx_to_vol_pos(
+                        subvol_idx,
+                        shape_voxels,
+                        center,
+                        subvolume_voxel_size_volume_voxel_size_ratio,
+                        basis,
                     )
 
-                    # Calculate the corresponding position in the volume.
-                    vol_x: float = center[0]
-                    vol_y: float = center[1]
-                    vol_z: float = center[2]
-
-                    vol_x += (
-                        offset[0]
-                        * basis[0][0]
-                        * subvolume_voxel_size_volume_voxel_size_ratio[2]
-                    )
-                    vol_y += (
-                        offset[0]
-                        * basis[0][1]
-                        * subvolume_voxel_size_volume_voxel_size_ratio[2]
-                    )
-                    vol_z += (
-                        offset[0]
-                        * basis[0][2]
-                        * subvolume_voxel_size_volume_voxel_size_ratio[2]
-                    )
-
-                    vol_x += (
-                        offset[1]
-                        * basis[1][0]
-                        * subvolume_voxel_size_volume_voxel_size_ratio[1]
-                    )
-                    vol_y += (
-                        offset[1]
-                        * basis[1][1]
-                        * subvolume_voxel_size_volume_voxel_size_ratio[1]
-                    )
-                    vol_z += (
-                        offset[1]
-                        * basis[1][2]
-                        * subvolume_voxel_size_volume_voxel_size_ratio[1]
-                    )
-
-                    vol_x += (
-                        offset[2]
-                        * basis[2][0]
-                        * subvolume_voxel_size_volume_voxel_size_ratio[0]
-                    )
-                    vol_y += (
-                        offset[2]
-                        * basis[2][1]
-                        * subvolume_voxel_size_volume_voxel_size_ratio[0]
-                    )
-                    vol_z += (
-                        offset[2]
-                        * basis[2][2]
-                        * subvolume_voxel_size_volume_voxel_size_ratio[0]
-                    )
-
-                    vol_x += 0.5
-                    vol_y += 0.5
-                    vol_z += 0.5
-
-                    array[z, y, x] = self[int(vol_z), int(vol_y), int(vol_x)]
+                    array[z, y, x] = self[int(vol_pos[2]), int(vol_pos[1]), int(vol_pos[0])]
 
         return array
 
@@ -262,9 +215,14 @@ def main():
         subvol_center[1] - subvol_shape_voxels[1] // 2,
         subvol_center[2] - subvol_shape_voxels[0] // 2,
     )
+    subvol = vol[
+        subvol_origin[2]:subvol_origin[2] + subvol_shape_voxels[0],
+        subvol_origin[1]:subvol_origin[1] + subvol_shape_voxels[1],
+        subvol_origin[0]:subvol_origin[0] + subvol_shape_voxels[2],
+    ]
 
     start = time.time()
-    # subvol = vol.get_subvolume(subvol_center, subvol_shape_voxels)
+    subvol = vol.get_subvolume(subvol_center, subvol_shape_voxels)
     subvol = vol[
         subvol_origin[2]:subvol_origin[2] + subvol_shape_voxels[0],
         subvol_origin[1]:subvol_origin[1] + subvol_shape_voxels[1],
