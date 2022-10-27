@@ -114,7 +114,7 @@ class Volume:
         move_along_normal: float = 0,
         normalize_subvolume: bool = False,
     ):
-        # TODO removed: augment, jitter, move_along_normal, normalize_subvol
+        # TODO removed: augment, jitter, move_along_normal, normalize_subvolume
         assert len(center) == 3
         assert len(shape_voxels) == 3
 

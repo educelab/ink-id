@@ -1,29 +1,30 @@
 from libc.stdint cimport uint16_t
 
 cpdef subvol_idx_to_vol_pos(
-    Py_ssize_t subvol_idx_x,
-    Py_ssize_t subvol_idx_y,
-    Py_ssize_t subvol_idx_z,
-    Py_ssize_t subvol_shape_voxels_x,
-    Py_ssize_t subvol_shape_voxels_y,
-    Py_ssize_t subvol_shape_voxels_z,
-    double center_x,
-    double center_y,
-    double center_z,
-    double subvolume_voxel_size_volume_voxel_size_ratio_x,
-    double subvolume_voxel_size_volume_voxel_size_ratio_y,
-    double subvolume_voxel_size_volume_voxel_size_ratio_z,
-    double basis_x_x,
-    double basis_x_y,
-    double basis_x_z,
-    double basis_y_x,
-    double basis_y_y,
-    double basis_y_z,
-    double basis_z_x,
-    double basis_z_y,
-    double basis_z_z,
-):
-    cdef Py_ssize_t offset_x, offset_y, offset_z
+        Py_ssize_t subvol_idx_x,
+        Py_ssize_t subvol_idx_y,
+        Py_ssize_t subvol_idx_z,
+        Py_ssize_t subvol_shape_voxels_x,
+        Py_ssize_t subvol_shape_voxels_y,
+        Py_ssize_t subvol_shape_voxels_z,
+        double center_x,
+        double center_y,
+        double center_z,
+        double subvolume_voxel_size_volume_voxel_size_ratio_x,
+        double subvolume_voxel_size_volume_voxel_size_ratio_y,
+        double subvolume_voxel_size_volume_voxel_size_ratio_z,
+        double basis_x_x,
+        double basis_x_y,
+        double basis_x_z,
+        double basis_y_x,
+        double basis_y_y,
+        double basis_y_z,
+        double basis_z_x,
+        double basis_z_y,
+        double basis_z_z,
+    ):
+    """Convert a subvolume index to a position in the volume space."""
+    cdef double offset_x, offset_y, offset_z
     cdef double vol_pos_x, vol_pos_y, vol_pos_z
     # Convert from an index relative to an origin in the corner to a position relative to the
     # subvolume center (which may not correspond exactly to one of the subvolume voxel positions
@@ -88,27 +89,28 @@ cpdef subvol_idx_to_vol_pos(
     return vol_pos_x, vol_pos_y, vol_pos_z
 
 def nearest_neighbor_with_basis_vectors(
-    subvol,
-    subvol_neighborhood,
-    double center_x,
-    double center_y,
-    double center_z,
-    double subvolume_voxel_size_volume_voxel_size_ratio_x,
-    double subvolume_voxel_size_volume_voxel_size_ratio_y,
-    double subvolume_voxel_size_volume_voxel_size_ratio_z,
-    double basis_x_x,
-    double basis_x_y,
-    double basis_x_z,
-    double basis_y_x,
-    double basis_y_y,
-    double basis_y_z,
-    double basis_z_x,
-    double basis_z_y,
-    double basis_z_z,
-    Py_ssize_t min_x,
-    Py_ssize_t min_y,
-    Py_ssize_t min_z,
-):
+        subvol,
+        subvol_neighborhood,
+        double center_x,
+        double center_y,
+        double center_z,
+        double subvolume_voxel_size_volume_voxel_size_ratio_x,
+        double subvolume_voxel_size_volume_voxel_size_ratio_y,
+        double subvolume_voxel_size_volume_voxel_size_ratio_z,
+        double basis_x_x,
+        double basis_x_y,
+        double basis_x_z,
+        double basis_y_x,
+        double basis_y_y,
+        double basis_y_z,
+        double basis_z_x,
+        double basis_z_y,
+        double basis_z_z,
+        Py_ssize_t min_x,
+        Py_ssize_t min_y,
+        Py_ssize_t min_z,
+    ):
+    """Sample a subvolume from its axis-oriented bounding box neighborhood."""
     cdef uint16_t[:, :, :] subvol_view = subvol
     cdef const uint16_t[:, :, :] subvol_neighborhood_view = subvol_neighborhood
     cdef Py_ssize_t x, y, z
@@ -120,9 +122,11 @@ def nearest_neighbor_with_basis_vectors(
     subvol_shape_y = subvol.shape[1]
     subvol_shape_z = subvol.shape[0]
 
+    # Iterate through subvolume indices
     for z in range(subvol_shape_z):
         for y in range(subvol_shape_y):
             for x in range(subvol_shape_x):
+                # Compute the corresponding position in the volume space
                 (
                     vol_pos_x,
                     vol_pos_y,
@@ -151,14 +155,17 @@ def nearest_neighbor_with_basis_vectors(
                     basis_z_z,
                 )
 
+                # Convert that to a position in the neighborhood space
                 vol_pos_x -= min_x
                 vol_pos_y -= min_y
                 vol_pos_z -= min_z
 
+                # Convert to int
                 subvol_neighborhood_x = <Py_ssize_t> (vol_pos_x + 0.5)
                 subvol_neighborhood_y = <Py_ssize_t> (vol_pos_y + 0.5)
                 subvol_neighborhood_z = <Py_ssize_t> (vol_pos_z + 0.5)
 
+                # Sample that voxel of the subvolume from its neighborhood
                 subvol_view[z, y, x] = subvol_neighborhood_view[
                     subvol_neighborhood_z,
                     subvol_neighborhood_y,
