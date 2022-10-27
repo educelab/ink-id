@@ -126,8 +126,9 @@ class Volume:
 
         normal = normalize(normal)
 
-        center = np.array(center)
-        center += (move_along_normal + random.uniform(-jitter_max, jitter_max)) * np.array(normal)
+        move_along_normal += random.uniform(-jitter_max, jitter_max)
+        center = np.array(center, dtype=float)
+        center += move_along_normal * np.array(normal, dtype=float)
         center = tuple(center)
 
         if square_corners is None:
