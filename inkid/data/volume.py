@@ -134,37 +134,6 @@ class Volume:
         else:
             basis = get_basis_from_square(square_corners)
 
-        subvolume = self.nearest_neighbor_with_basis_vectors(
-            center, shape_voxels, shape_microns, basis
-        )
-        assert subvolume.shape == shape_voxels
-
-        # TODO move this elsewhere
-        # Convert to float normalized to [0, 1]
-        subvolume = uint16_to_float32_normalized_0_1(subvolume)
-
-        # TODO move this elsewhere?
-        # Add singleton dimension for number of channels
-        subvolume = np.expand_dims(subvolume, 0)
-
-        return subvolume
-
-    def nearest_neighbor_with_basis_vectors(
-        self,
-        center: Fl3,
-        shape_voxels: I3,
-        shape_microns: Fl3,
-        basis: Fl3x3,
-    ) -> np.array:
-        # TODO LEFT OFF
-        #  Compute axis oriented bounding box around subvolume
-        #  Initialize this to zeros
-        #  Compute the overlap with the actual volume bounds and fill that portion (in most cases the entire thing)
-        #  Pass this to the subroutine which samples it using C loops
-        #  Return that
-
-        array = np.zeros(shape_voxels, dtype=np.uint16)
-
         subvolume_voxel_size_microns: Fl3 = (
             shape_microns[0] / shape_voxels[0],
             shape_microns[1] / shape_voxels[1],
@@ -175,38 +144,114 @@ class Volume:
             np.array(subvolume_voxel_size_microns) / self._voxelsize_um
         )
 
-        for z in range(shape_voxels[0]):
-            for y in range(shape_voxels[1]):
-                for x in range(shape_voxels[2]):
-                    vol_pos = inkid.data.cythonutils.subvol_idx_to_vol_pos(
-                        x,
-                        y,
-                        z,
-                        shape_voxels[2],
-                        shape_voxels[1],
-                        shape_voxels[0],
-                        center[0],
-                        center[1],
-                        center[2],
-                        subvolume_voxel_size_volume_voxel_size_ratio[2],
-                        subvolume_voxel_size_volume_voxel_size_ratio[1],
-                        subvolume_voxel_size_volume_voxel_size_ratio[0],
-                        basis[0][0],
-                        basis[0][1],
-                        basis[0][2],
-                        basis[1][0],
-                        basis[1][1],
-                        basis[1][2],
-                        basis[2][0],
-                        basis[2][1],
-                        basis[2][2],
-                    )
+        # Compute axis oriented bounding box around subvolume
+        d, h, w = shape_voxels
+        subvol_corners: list[I3] = [
+            (0, 0, 0),
+            (0, h - 1, 0),
+            (w - 1, 0, 0),
+            (w - 1, h - 1, 0),
+            (0, 0, d - 1),
+            (0, h - 1, d - 1),
+            (w - 1, 0, d - 1),
+            (w - 1, h - 1, d - 1),
+        ]
+        vol_positions_of_subvol_corners = []
+        for subvol_pos in subvol_corners:
+            x, y, z = subvol_pos
+            vol_pos: Fl3 = inkid.data.cythonutils.subvol_idx_to_vol_pos(
+                x,
+                y,
+                z,
+                shape_voxels[2],
+                shape_voxels[1],
+                shape_voxels[0],
+                center[0],
+                center[1],
+                center[2],
+                subvolume_voxel_size_volume_voxel_size_ratio[2],
+                subvolume_voxel_size_volume_voxel_size_ratio[1],
+                subvolume_voxel_size_volume_voxel_size_ratio[0],
+                basis[0][0],
+                basis[0][1],
+                basis[0][2],
+                basis[1][0],
+                basis[1][1],
+                basis[1][2],
+                basis[2][0],
+                basis[2][1],
+                basis[2][2],
+            )
+            vol_positions_of_subvol_corners.append(vol_pos)
+        vol_positions_of_subvol_corners = np.rint(vol_positions_of_subvol_corners).astype(int)
+        min_x, min_y, min_z = np.amin(vol_positions_of_subvol_corners, axis=0)
+        max_x, max_y, max_z = np.amax(vol_positions_of_subvol_corners, axis=0)
+        bbox_shape: I3 = max_z - min_z + 1, max_y - min_y + 1, max_x - min_x + 1
 
-                    array[z, y, x] = self[
-                        int(vol_pos[2]), int(vol_pos[1]), int(vol_pos[0])
-                    ]
+        # Compute the subvolume overlap with the actual volume bounds (in most cases complete overlap)
+        # Compute overlap in volume
+        overlap_min_x = min(max(min_x, 0), self.shape[2] - 1)
+        overlap_max_x = min(max(max_x, 0), self.shape[2] - 1)
+        overlap_min_y = min(max(min_y, 0), self.shape[1] - 1)
+        overlap_max_y = min(max(max_y, 0), self.shape[1] - 1)
+        overlap_min_z = min(max(min_z, 0), self.shape[0] - 1)
+        overlap_max_z = min(max(max_z, 0), self.shape[0] - 1)
+        # Compute overlap in subvol bbox
+        subvol_overlap_min_x = min(max(overlap_min_x - min_x, 0), bbox_shape[2] - 1)
+        subvol_overlap_max_x = min(max(overlap_max_x - min_x, 0), bbox_shape[2] - 1)
+        subvol_overlap_min_y = min(max(overlap_min_y - min_y, 0), bbox_shape[1] - 1)
+        subvol_overlap_max_y = min(max(overlap_max_y - min_y, 0), bbox_shape[1] - 1)
+        subvol_overlap_min_z = min(max(overlap_min_z - min_z, 0), bbox_shape[0] - 1)
+        subvol_overlap_max_z = min(max(overlap_max_z - min_z, 0), bbox_shape[0] - 1)
 
-        return array
+        # Initialize the neighborhood/bounding box to zeros
+        subvol_neighborhood = np.zeros(bbox_shape, dtype=np.uint16)
+
+        # Fill neighborhood with data from volume, where it overlaps (isn't out of bounds)
+        subvol_neighborhood[
+            subvol_overlap_min_z : subvol_overlap_max_z + 1,
+            subvol_overlap_min_y : subvol_overlap_max_y + 1,
+            subvol_overlap_min_x : subvol_overlap_max_x + 1,
+        ] = self[
+            overlap_min_z : overlap_max_z + 1,
+            overlap_min_y : overlap_max_y + 1,
+            overlap_min_x : overlap_max_x + 1,
+        ]
+
+        # Pass this filled neighborhood to the subroutine which samples it using C loops
+        subvol = np.zeros(shape_voxels, dtype=np.uint16)
+        inkid.data.cythonutils.nearest_neighbor_with_basis_vectors(
+            subvol,
+            subvol_neighborhood,
+            center[0],
+            center[1],
+            center[2],
+            subvolume_voxel_size_volume_voxel_size_ratio[2],
+            subvolume_voxel_size_volume_voxel_size_ratio[1],
+            subvolume_voxel_size_volume_voxel_size_ratio[0],
+            basis[0][0],
+            basis[0][1],
+            basis[0][2],
+            basis[1][0],
+            basis[1][1],
+            basis[1][2],
+            basis[2][0],
+            basis[2][1],
+            basis[2][2],
+            min_x,
+            min_y,
+            min_z
+        )
+
+        # TODO move this elsewhere
+        # Convert to float normalized to [0, 1]
+        subvol = uint16_to_float32_normalized_0_1(subvol)
+
+        # TODO move this elsewhere?
+        # Add singleton dimension for number of channels
+        subvol = np.expand_dims(subvol, 0)
+
+        return subvol
 
 
 def main():
@@ -223,26 +268,11 @@ def main():
 
     subvol_center = vol.shape[2] // 2, vol.shape[1] // 2, vol.shape[0] // 2
     subvol_shape_voxels = 24, 80, 80
-    subvol_origin = (
-        subvol_center[0] - subvol_shape_voxels[2] // 2,
-        subvol_center[1] - subvol_shape_voxels[1] // 2,
-        subvol_center[2] - subvol_shape_voxels[0] // 2,
-    )
-    subvol = vol[
-        subvol_origin[2] : subvol_origin[2] + subvol_shape_voxels[0],
-        subvol_origin[1] : subvol_origin[1] + subvol_shape_voxels[1],
-        subvol_origin[0] : subvol_origin[0] + subvol_shape_voxels[2],
-    ]
 
+    vol.get_subvolume(subvol_center, subvol_shape_voxels)
     start = time.time()
-    subvol = vol.get_subvolume(subvol_center, subvol_shape_voxels)
-    subvol = vol[
-        subvol_origin[2] : subvol_origin[2] + subvol_shape_voxels[0],
-        subvol_origin[1] : subvol_origin[1] + subvol_shape_voxels[1],
-        subvol_origin[0] : subvol_origin[0] + subvol_shape_voxels[2],
-    ]
+    vol.get_subvolume(subvol_center, subvol_shape_voxels)
     end = time.time()
-    assert subvol.shape == subvol_shape_voxels
     print(f"{end - start} seconds to fetch {subvol_shape_voxels} subvolume")
 
 
