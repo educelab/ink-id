@@ -96,9 +96,6 @@ class Volume:
             ).result()
 
     def __getitem__(self, key):
-        # TODO consider adding bounds checking and return 0 if not in bounds (to match previous implementation)
-        #   It would be nice to avoid that if possible (doesn't affect ML performance), though, because
-        #   it breaks the intuition around the array access.
         return self._data[key].read().result()
 
     @property
