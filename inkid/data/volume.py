@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import random
 import time
 from pathlib import Path
 from typing import Optional
@@ -114,7 +115,6 @@ class Volume:
         move_along_normal: float = 0,
         normalize_subvolume: bool = False,
     ):
-        # TODO removed: augment, jitter, move_along_normal, normalize_subvolume
         assert len(center) == 3
         assert len(shape_voxels) == 3
 
@@ -126,10 +126,14 @@ class Volume:
 
         normal = normalize(normal)
 
+        center = np.array(center)
+        center += (move_along_normal + random.uniform(-jitter_max, jitter_max)) * np.array(normal)
+        center = tuple(center)
+
         if square_corners is None:
-            basis = get_component_vectors_from_normal(normal)
+            basis: Fl3x3 = get_component_vectors_from_normal(normal)
         else:
-            basis = get_basis_from_square(square_corners)
+            basis: Fl3x3 = get_basis_from_square(square_corners)
 
         subvolume_voxel_size_microns: Fl3 = (
             shape_microns[0] / shape_voxels[0],
@@ -239,6 +243,26 @@ class Volume:
             min_y,
             min_z
         )
+
+        # TODO move this elsewhere
+        if augment_subvolume:
+            flip_direction = np.random.randint(4)
+            if flip_direction == 0:
+                subvol = np.flip(subvol, axis=1)  # Flip y
+            elif flip_direction == 1:
+                subvol = np.flip(subvol, axis=2)  # Flip x
+            elif flip_direction == 2:
+                subvol = np.flip(subvol, axis=1)  # Flip x and y
+                subvol = np.flip(subvol, axis=2)
+
+            rotate_direction = np.random.randint(4)
+            subvol = np.rot90(subvol, k=rotate_direction, axes=(1, 2))
+
+        # TODO move this elsewhere
+        if normalize_subvolume:
+            subvol = np.asarray(subvol, dtype=np.float32)
+            subvol = subvol - subvol.mean()
+            subvol = subvol / subvol.std()
 
         # TODO move this elsewhere
         # Convert to float normalized to [0, 1]
