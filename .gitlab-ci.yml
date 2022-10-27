@@ -41,13 +41,9 @@ singularity:
   tags:
     - docker
 
-test:3.8:
+test:3.10:
   extends: .test
-  image: python:3.8
-
-test:3.9:
-  extends: .test
-  image: python:3.9
+  image: python:3.10
 
 pypi:
   stage: deploy
@@ -55,7 +51,7 @@ pypi:
     - if: '$CI_COMMIT_TAG =~ /^v.*$/'  # only run for tagged releases
   tags:
     - docker
-  image: python:3.9
+  image: python:3.10
   before_script:
     - python -m pip install --upgrade pip build setuptools wheel twine
   script:
@@ -66,7 +62,7 @@ test:pages:
   stage: test
   tags:
     - docker
-  image: python:3.9
+  image: python:3.10
   before_script:
     - python -m venv .venv
     - source .venv/bin/activate
@@ -84,7 +80,7 @@ pages:
   stage: deploy
   tags:
     - docker
-  image: python:3.9
+  image: python:3.10
   before_script:
     - python -m venv .venv
     - source .venv/bin/activate

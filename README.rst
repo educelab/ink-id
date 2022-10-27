@@ -8,7 +8,7 @@ In addition to the below README, a `documentation site <https://educelab.gitlab.
 Requirements
 ============
 
-Python >=3.8 is required.
+Python >=3.10 is required.
 
 Installation
 ============
@@ -24,7 +24,7 @@ To install the source for development:
 .. code-block:: bash
 
     $ git clone https://gitlab.com/educelab/ink-id.git && cd ink-id  # Clone the repository
-    $ python -m venv .venv  # Create a virtual environment
+    $ python3.10 -m venv .venv  # Create a virtual environment
     $ . .venv/bin/activate  # Activate the environment
     (.venv) $ pip install -U pip  # Upgrade pip
     (.venv) $ pip install -e .[dev]  # Install ink-id and dependencies, including those specific to development
