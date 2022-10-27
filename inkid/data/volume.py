@@ -67,7 +67,7 @@ class Volume:
                         "cache_pool": {
                             "total_bytes_limit": 100000000,
                         }
-                    }
+                    },
                 }
             ).result()
         else:
@@ -157,8 +157,6 @@ class Volume:
         basis: Fl3x3,
     ) -> np.array:
         # TODO LEFT OFF
-        #  Function to map from subvol index and parameters to vol point
-        #  Reintroduce Cython dependency and boilerplate
         #  Compute axis oriented bounding box around subvolume
         #  Initialize this to zeros
         #  Compute the overlap with the actual volume bounds and fill that portion (in most cases the entire thing)
@@ -180,18 +178,33 @@ class Volume:
         for z in range(shape_voxels[0]):
             for y in range(shape_voxels[1]):
                 for x in range(shape_voxels[2]):
-                    subvol_idx: I3 = x, y, z
-
-                    # TODO LEFT OFF have this accept Python types and convert them internally
-                    vol_pos: Fl3 = inkid.data.cythonutils.subvol_idx_to_vol_pos(
-                        subvol_idx,
-                        shape_voxels,
-                        center,
-                        subvolume_voxel_size_volume_voxel_size_ratio,
-                        basis,
+                    vol_pos = inkid.data.cythonutils.subvol_idx_to_vol_pos(
+                        x,
+                        y,
+                        z,
+                        shape_voxels[2],
+                        shape_voxels[1],
+                        shape_voxels[0],
+                        center[0],
+                        center[1],
+                        center[2],
+                        subvolume_voxel_size_volume_voxel_size_ratio[2],
+                        subvolume_voxel_size_volume_voxel_size_ratio[1],
+                        subvolume_voxel_size_volume_voxel_size_ratio[0],
+                        basis[0][0],
+                        basis[0][1],
+                        basis[0][2],
+                        basis[1][0],
+                        basis[1][1],
+                        basis[1][2],
+                        basis[2][0],
+                        basis[2][1],
+                        basis[2][2],
                     )
 
-                    array[z, y, x] = self[int(vol_pos[2]), int(vol_pos[1]), int(vol_pos[0])]
+                    array[z, y, x] = self[
+                        int(vol_pos[2]), int(vol_pos[1]), int(vol_pos[0])
+                    ]
 
         return array
 
@@ -216,17 +229,17 @@ def main():
         subvol_center[2] - subvol_shape_voxels[0] // 2,
     )
     subvol = vol[
-        subvol_origin[2]:subvol_origin[2] + subvol_shape_voxels[0],
-        subvol_origin[1]:subvol_origin[1] + subvol_shape_voxels[1],
-        subvol_origin[0]:subvol_origin[0] + subvol_shape_voxels[2],
+        subvol_origin[2] : subvol_origin[2] + subvol_shape_voxels[0],
+        subvol_origin[1] : subvol_origin[1] + subvol_shape_voxels[1],
+        subvol_origin[0] : subvol_origin[0] + subvol_shape_voxels[2],
     ]
 
     start = time.time()
     subvol = vol.get_subvolume(subvol_center, subvol_shape_voxels)
     subvol = vol[
-        subvol_origin[2]:subvol_origin[2] + subvol_shape_voxels[0],
-        subvol_origin[1]:subvol_origin[1] + subvol_shape_voxels[1],
-        subvol_origin[0]:subvol_origin[0] + subvol_shape_voxels[2],
+        subvol_origin[2] : subvol_origin[2] + subvol_shape_voxels[0],
+        subvol_origin[1] : subvol_origin[1] + subvol_shape_voxels[1],
+        subvol_origin[0] : subvol_origin[0] + subvol_shape_voxels[2],
     ]
     end = time.time()
     assert subvol.shape == subvol_shape_voxels
