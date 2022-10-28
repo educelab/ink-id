@@ -2,14 +2,9 @@ import argparse
 import json
 from pathlib import Path
 
-import matplotlib
-from matplotlib import pyplot as plt
 import numpy as np
 from PIL import Image
 from tqdm import tqdm
-
-
-matplotlib.use("TkAgg")
 
 
 def get_slices(dirname):
