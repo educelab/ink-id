@@ -67,13 +67,17 @@ def main():
         # green than others. So we first convert the image to a difference of green - (red + blue) and then find the
         # highest one of these (the greenest pixel in the column).
         projection_img = np.array(projection_img).astype(int)
-        projection_img = projection_img[:, :, 1] - projection_img[:, :, 0] - projection_img[:, :, 2]
+        projection_img = (
+            projection_img[:, :, 1] - projection_img[:, :, 0] - projection_img[:, :, 2]
+        )
         projection_img = np.clip(projection_img, 0, None)
         greenest = np.argmax(projection_img, axis=0)
 
         slice_img = Image.open(slice_file)
         slice_img = np.array(slice_img, dtype=np.uint16)
-        slimmed_slice_img = np.zeros((args.voxels_below + args.voxels_above, shape[2]), dtype=np.uint16)
+        slimmed_slice_img = np.zeros(
+            (args.voxels_below + args.voxels_above, shape[2]), dtype=np.uint16
+        )
 
         # Fetch around that
         for x in range(shape[2]):
