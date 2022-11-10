@@ -1,7 +1,7 @@
 {
   "schema_version": "0.1",
   "type": "region",
-  "volume": "../volumes/20200526145449.zarr256",
+  "volume": "../volumes/zarr256_20200526145449",
   "ppm": "../paths/20200526152035/textSurface.ppm",
   "mask": "../paths/20200526152035/textSurface_mask.png",
   "invert_normals": false,

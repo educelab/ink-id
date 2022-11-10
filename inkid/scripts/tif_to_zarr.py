@@ -5,11 +5,12 @@ import shutil
 
 import numpy as np
 from PIL import Image
+import psutil
 import tensorstore as ts
 from tqdm import tqdm
 
 
-def tif_to_zarr(slices_path: str, zarr_path: str, chunk_size: int, stage_writes: bool):
+def tif_to_zarr(slices_path: str, zarr_path: str, chunk_size: int):
     slices_path = Path(slices_path)
     zarr_path = Path(zarr_path)
 
@@ -52,19 +53,21 @@ def tif_to_zarr(slices_path: str, zarr_path: str, chunk_size: int, stage_writes:
         }
     ).result()
 
-    txn = ts.Transaction() if stage_writes else None
+    total_system_memory_bytes: int = psutil.virtual_memory().total
+    sample_slice: np.ndarray = np.zeros((shape_y, shape_x), dtype=np.uint16)
+    sample_slice_size_bytes: int = sample_slice.size * sample_slice.itemsize
+    slices_to_write_at_once: int = int(total_system_memory_bytes / 2 / sample_slice_size_bytes)
 
-    # Write slice images into volume
-    for slice_i, slice_file in tqdm(list(enumerate(slice_files))):
-        img = np.array(Image.open(slice_file), dtype=np.uint16).copy()
-        # With a 600MB volume, async (staged): 24s, sync: 19m. ~40x speedup.
-        if stage_writes:
+    def chunk(seq, size):
+        return [seq[pos:pos + size] for pos in range(0, len(seq), size)]
+
+    for slices_chunk in tqdm(chunk(list(enumerate(slice_files)), slices_to_write_at_once)):
+        txn = ts.Transaction()
+        # Write slice images into volume
+        for slice_i, slice_file in slices_chunk:
+            img = np.array(Image.open(slice_file), dtype=np.uint16)
             dataset.with_transaction(txn)[slice_i, :, :] = img
-        else:
-            dataset[slice_i, :, :] = img
-
-    # Commit (write to disk) the staged slice writes
-    if stage_writes:
+        # Commit (write to disk) the staged slice writes
         txn.commit_async().result()
 
     # Copy metadata file
@@ -76,11 +79,10 @@ def main():
     parser.add_argument("--input-slices-dir", required=True)
     parser.add_argument("--output-zarr-dir", required=True)
     parser.add_argument("--chunk-size", type=int, default=256)
-    parser.add_argument("--stage-writes", action="store_true")
     args = parser.parse_args()
 
     tif_to_zarr(
-        args.input_slices_dir, args.output_zarr_dir, args.chunk_size, args.stage_writes
+        args.input_slices_dir, args.output_zarr_dir, args.chunk_size
     )
 
 

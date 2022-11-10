@@ -50,7 +50,7 @@ class Volume:
         self.shape_y = self._metadata["height"]
         self.shape_x = self._metadata["width"]
 
-        if ".zarr" in vol_path.suffix:
+        if "zarr" in vol_path:
             chunk_size = 256
             self._data = ts.open(
                 {
