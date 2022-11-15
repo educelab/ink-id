@@ -138,67 +138,87 @@ def normalize_to_float_0_1(a: np.array):
 class StackDataset(Dataset):
     def __init__(
         self,
-        feature_img_path: Path,
-        label_img_path: Optional[Path] = None,
+        feature_imgs: list[np.array],
+        label_imgs: Optional[list[np.array]] = None,
         patch_size: int = 64,
         stride: int = 1,
     ):
-        # Load the input image stack
-        assert ".tif" in str(feature_img_path).lower()
-        self.feature_img: np.array = iio.imread(feature_img_path)
-        # .tif stack loaded as (C, H, W)
-        assert len(self.feature_img.shape) == 3
+        self.feature_imgs = feature_imgs
+        for feature_img in self.feature_imgs:
+            # .tif stack loaded as (C, H, W)
+            assert len(feature_img.shape) == 3
+
+        # Make sure feature images all the same depth
+        assert len(np.unique([img.shape[0] for img in self.feature_imgs]))
 
         # Load the label image
-        self.label_img: Optional[np.array] = (
-            iio.imread(label_img_path) if label_img_path else None
-        )
-        if self.label_img is not None:
-            self.label_img = self.label_img.astype(np.int64)
-            # Greyscale or indexed loaded (H, W)
-            if len(self.label_img.shape) == 2:
-                self.label_img = np.expand_dims(self.label_img, axis=0)
-            # RGB loaded (H, W, C)
-            elif len(self.label_img.shape) == 3:
-                self.label_img = np.moveaxis(self.label_img, [0, 1, 2], [1, 2, 0])
-            # Now should be (C, H, W)
-            assert len(self.label_img.shape) == 3
-            # Should be greyscale or RGB (not e.g. RGBA)
-            assert self.label_img.shape[0] in [1, 3]
-            # And should match feature image in HxW
-            assert self.label_img.shape[-2:] == self.feature_img.shape[-2:]
+        self.label_imgs = None
+        if label_imgs is not None:
+            self.label_imgs = []
+            for label_img in label_imgs:
+                # Greyscale or indexed loaded (H, W)
+                if len(label_img.shape) == 2:
+                    label_img = np.expand_dims(label_img, axis=0)
+                # RGB loaded (H, W, C)
+                elif len(label_img.shape) == 3:
+                    label_img = np.moveaxis(label_img, [0, 1, 2], [1, 2, 0])
+
+                # Now should be (C, H, W)
+                assert len(label_img.shape) == 3
+                # Should be greyscale or RGB (not e.g. RGBA)
+                assert label_img.shape[0] in [1, 3]
+
+                self.label_imgs.append(label_img)
+
+            # Label images should match feature images in HxW
+            for feature_img, label_img in zip(self.feature_imgs, self.label_imgs):
+                assert label_img.shape[-2:] == feature_img.shape[-2:]
+
+            # Label images should all be the same depth
+            assert len(np.unique([img.shape[0] for img in self.label_imgs]))
 
         self.patch_size: int = patch_size
         self.stride: int = stride
 
         # Generate possible points
-        ys = range(0, self.feature_img.shape[1], stride)
-        xs = range(0, self.feature_img.shape[2], stride)
-        self.points_list = list(itertools.product(ys, xs))
+        self.points_lists = []
+        for feature_img in self.feature_imgs:
+            ys = range(0, feature_img.shape[1], stride)
+            xs = range(0, feature_img.shape[2], stride)
+            self.points_lists.append(list(itertools.product(ys, xs)))
 
         # TODO mask these
 
     def __len__(self) -> int:
-        return len(self.points_list)
+        return sum([len(points_list) for points_list in self.points_lists])
 
     def __getitem__(self, idx):
-        y, x = self.points_list[idx]
+        i = x = y = None
+        for i, points_list in enumerate(self.points_lists):
+            points_list_len = len(points_list)
+            if idx < points_list_len:
+                y, x = points_list[idx]
+                break
+            idx -= points_list_len
+
+        if y is None:
+            raise IndexError
 
         feature = np.zeros(
-            (self.feature_img.shape[0], self.patch_size, self.patch_size),
-            dtype=self.feature_img.dtype,
+            (self.feature_imgs[0].shape[0], self.patch_size, self.patch_size),
+            dtype=self.feature_imgs[0].dtype,
         )
-        a = self.feature_img[:, y : y + self.patch_size, x : x + self.patch_size]
+        a = self.feature_imgs[i][:, y : y + self.patch_size, x : x + self.patch_size]
         feature[: a.shape[0], : a.shape[1], : a.shape[2]] = a
         feature = normalize_to_float_0_1(feature)
 
         label = None
-        if self.label_img is not None:
+        if self.label_imgs is not None:
             label = np.zeros(
-                (self.label_img.shape[0], self.patch_size, self.patch_size),
-                dtype=self.label_img.dtype,
+                (self.label_imgs[i].shape[0], self.patch_size, self.patch_size),
+                dtype=self.label_imgs[i].dtype,
             )
-            b = self.label_img[:, y : y + self.patch_size, x : x + self.patch_size]
+            b = self.label_imgs[i][:, y : y + self.patch_size, x : x + self.patch_size]
             label[: b.shape[0], : b.shape[1], : b.shape[2]] = b
 
         return {
@@ -263,15 +283,22 @@ def main():
     train_input_stack_path: Path = Path(args.train_input_stack)
     train_label_image_path: Path = Path(args.train_label_image)
 
+    # Load the input image stack
+    assert ".tif" in str(train_input_stack_path).lower()
+    train_feature_img = iio.imread(train_input_stack_path)
+
+    # Load the label image
+    train_label_img = iio.imread(train_label_image_path).astype(np.int64)
+
     train_ds: StackDataset = StackDataset(
-        train_input_stack_path,
-        train_label_image_path,
+        [train_feature_img],
+        [train_label_img],
         stride=16,
     )
 
     train_dl = DataLoader(train_ds, batch_size=32, shuffle=True)
 
-    # TODO do classification images need to be indexed instead of 0-255? check for that in code?
+    # TODO check that indexed colors are loaded as the values I expect
     model = UNet(n_channels=65, n_classes=2)
     model.to(device)
 
