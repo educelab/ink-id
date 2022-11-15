@@ -71,10 +71,12 @@ class Up(nn.Module):
     def forward(self, x1, x2):
         x1 = self.up(x1)
         # input is CHW
-        diffY = x2.size()[2] - x1.size()[2]
-        diffX = x2.size()[3] - x1.size()[3]
+        diff_y = x2.size()[2] - x1.size()[2]
+        diff_x = x2.size()[3] - x1.size()[3]
 
-        x1 = F.pad(x1, [diffX // 2, diffX - diffX // 2, diffY // 2, diffY - diffY // 2])
+        x1 = F.pad(
+            x1, [diff_x // 2, diff_x - diff_x // 2, diff_y // 2, diff_y - diff_y // 2]
+        )
         # if you have padding issues, see
         # https://github.com/HaiyongJiang/U-Net-Pytorch-Unstructured-Buggy/commit/0e854509c2cea854e247a9c615f175f76fbb2e3a
         # https://github.com/xiaopeng-liao/Pytorch-UNet/commit/8ebac70e633bac59fc22bb5195e513d5832fb3bd
@@ -138,7 +140,6 @@ class StackDataset(Dataset):
         self,
         feature_img_path: Path,
         label_img_path: Optional[Path] = None,
-        mask_img_path: Optional[Path] = None,
         patch_size: int = 64,
         stride: int = 1,
     ):
@@ -154,7 +155,7 @@ class StackDataset(Dataset):
         )
         if self.label_img is not None:
             self.label_img = self.label_img.astype(np.int64)
-            # Greyscale loaded (H, W)
+            # Greyscale or indexed loaded (H, W)
             if len(self.label_img.shape) == 2:
                 self.label_img = np.expand_dims(self.label_img, axis=0)
             # RGB loaded (H, W, C)
@@ -219,7 +220,7 @@ def main():
     parser.add_argument("--random-seed", type=int, default=42)
     parser.add_argument(
         "--learning-rate", metavar="n", type=float, default=0.001
-    )  # TODO try torch defaults
+    )  # TODO use this?
     parser.add_argument("--summary-every-n-batches", metavar="n", type=int, default=10)
     args = parser.parse_args()
 
@@ -274,7 +275,7 @@ def main():
     model = UNet(n_channels=65, n_classes=2)
     model.to(device)
 
-    opt = torch.optim.Adam(model.parameters(), lr=args.learning_rate)
+    opt = torch.optim.Adam(model.parameters())
 
     criterion = nn.CrossEntropyLoss()
 
@@ -299,6 +300,7 @@ def main():
             metric_results[metric_name].append(metric_result)
 
         loss = criterion(pred_b, y_b)
+        print(loss)
 
         opt.zero_grad()
         loss.backward()
