@@ -1,6 +1,11 @@
 import argparse
+import datetime
 import itertools
+import logging
+import multiprocessing
 from pathlib import Path
+import random
+import time
 from typing import Optional
 
 import imageio.v3 as iio
@@ -9,6 +14,9 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import Dataset, DataLoader
+
+import inkid
+
 
 # https://github.com/milesial/Pytorch-UNet
 class DoubleConv(nn.Module):
@@ -24,7 +32,7 @@ class DoubleConv(nn.Module):
             nn.ReLU(inplace=True),
             nn.Conv2d(mid_channels, out_channels, kernel_size=3, padding=1, bias=False),
             nn.BatchNorm2d(out_channels),
-            nn.ReLU(inplace=True)
+            nn.ReLU(inplace=True),
         )
 
     def forward(self, x):
@@ -37,8 +45,7 @@ class Down(nn.Module):
     def __init__(self, in_channels, out_channels):
         super().__init__()
         self.maxpool_conv = nn.Sequential(
-            nn.MaxPool2d(2),
-            DoubleConv(in_channels, out_channels)
+            nn.MaxPool2d(2), DoubleConv(in_channels, out_channels)
         )
 
     def forward(self, x):
@@ -53,10 +60,12 @@ class Up(nn.Module):
 
         # if bilinear, use the normal convolutions to reduce the number of channels
         if bilinear:
-            self.up = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=True)
+            self.up = nn.Upsample(scale_factor=2, mode="bilinear", align_corners=True)
             self.conv = DoubleConv(in_channels, out_channels, in_channels // 2)
         else:
-            self.up = nn.ConvTranspose2d(in_channels, in_channels // 2, kernel_size=2, stride=2)
+            self.up = nn.ConvTranspose2d(
+                in_channels, in_channels // 2, kernel_size=2, stride=2
+            )
             self.conv = DoubleConv(in_channels, out_channels)
 
     def forward(self, x1, x2):
@@ -65,8 +74,7 @@ class Up(nn.Module):
         diffY = x2.size()[2] - x1.size()[2]
         diffX = x2.size()[3] - x1.size()[3]
 
-        x1 = F.pad(x1, [diffX // 2, diffX - diffX // 2,
-                        diffY // 2, diffY - diffY // 2])
+        x1 = F.pad(x1, [diffX // 2, diffX - diffX // 2, diffY // 2, diffY - diffY // 2])
         # if you have padding issues, see
         # https://github.com/HaiyongJiang/U-Net-Pytorch-Unstructured-Buggy/commit/0e854509c2cea854e247a9c615f175f76fbb2e3a
         # https://github.com/xiaopeng-liao/Pytorch-UNet/commit/8ebac70e633bac59fc22bb5195e513d5832fb3bd
@@ -141,8 +149,11 @@ class StackDataset(Dataset):
         assert len(self.feature_img.shape) == 3
 
         # Load the label image
-        self.label_img: Optional[np.array] = iio.imread(label_img_path) if label_img_path else None
+        self.label_img: Optional[np.array] = (
+            iio.imread(label_img_path) if label_img_path else None
+        )
         if self.label_img is not None:
+            self.label_img = self.label_img.astype(np.int64)
             # Greyscale loaded (H, W)
             if len(self.label_img.shape) == 2:
                 self.label_img = np.expand_dims(self.label_img, axis=0)
@@ -172,12 +183,22 @@ class StackDataset(Dataset):
     def __getitem__(self, idx):
         y, x = self.points_list[idx]
 
-        feature = self.feature_img[:, y:y+self.patch_size, x:x+self.patch_size].copy()
+        feature = np.zeros(
+            (self.feature_img.shape[0], self.patch_size, self.patch_size),
+            dtype=self.feature_img.dtype,
+        )
+        a = self.feature_img[:, y : y + self.patch_size, x : x + self.patch_size]
+        feature[: a.shape[0], : a.shape[1], : a.shape[2]] = a
         feature = normalize_to_float_0_1(feature)
 
         label = None
         if self.label_img is not None:
-            label = self.label_img[:, y:y+self.patch_size, x:x+self.patch_size].copy()
+            label = np.zeros(
+                (self.label_img.shape[0], self.patch_size, self.patch_size),
+                dtype=self.label_img.dtype,
+            )
+            b = self.label_img[:, y : y + self.patch_size, x : x + self.patch_size]
+            label[: b.shape[0], : b.shape[1], : b.shape[2]] = b
 
         return {
             "feature": feature,
@@ -189,29 +210,108 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--train-input-stack", required=True)
     parser.add_argument("--train-label-image", required=True)
+    parser.add_argument(
+        "--output", metavar="output", help="output directory", required=True
+    )
+    parser.add_argument(
+        "--dataloaders-num-workers", metavar="n", type=int, default=None
+    )
+    parser.add_argument("--random-seed", type=int, default=42)
+    parser.add_argument(
+        "--learning-rate", metavar="n", type=float, default=0.001
+    )  # TODO try torch defaults
+    parser.add_argument("--summary-every-n-batches", metavar="n", type=int, default=10)
     args = parser.parse_args()
+
+    dir_name = datetime.datetime.today().strftime("%Y-%m-%d_%H.%M.%S")
+    output_path = Path(args.output) / dir_name
+    output_path.mkdir(parents=True)
+
+    # Define directories for prediction images and checkpoints
+    predictions_dir = Path(output_path) / "predictions"
+    predictions_dir.mkdir()
+    checkpoints_dir = Path(output_path) / "checkpoints"
+    checkpoints_dir.mkdir()
+    diagnostic_images_dir = Path(output_path) / "diagnostic_images"
+    diagnostic_images_dir.mkdir()
+
+    if args.dataloaders_num_workers is None:
+        args.dataloaders_num_workers = max(1, multiprocessing.cpu_count() - 1)
+
+    # Fix random seeds
+    def fix_random_seed(seed):
+        np.random.seed(seed)
+        random.seed(seed)
+        torch.manual_seed(seed)
+
+    fix_random_seed(args.random_seed)
+
+    # Configure logging
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(message)s",
+        handlers=[
+            logging.FileHandler(output_path / f"{dir_name}.log"),
+            logging.StreamHandler(),
+        ],
+    )
+
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    logging.info(f"PyTorch device: {device}")
 
     train_input_stack_path: Path = Path(args.train_input_stack)
     train_label_image_path: Path = Path(args.train_label_image)
 
-    train_dataset: StackDataset = StackDataset(
+    train_ds: StackDataset = StackDataset(
         train_input_stack_path,
         train_label_image_path,
         stride=16,
     )
 
-    # import matplotlib.pyplot as plt
-    # train_dataloader = DataLoader(train_dataset, shuffle=True, batch_size=None)
-    # for sample in train_dataloader:
-    #     label = np.array(sample["label"])
-    #     label = np.moveaxis(label, [1, 2, 0], [0, 1, 2])
-    #     plt.imshow(label)
-    #     plt.show()
-    #     input()
+    train_dl = DataLoader(train_ds, batch_size=32, shuffle=True)
 
-    train_dataloader = DataLoader(train_dataset, batch_size=32, shuffle=True)
+    # TODO do classification images need to be indexed instead of 0-255? check for that in code?
+    model = UNet(n_channels=65, n_classes=2)
+    model.to(device)
 
+    opt = torch.optim.Adam(model.parameters(), lr=args.learning_rate)
 
+    criterion = nn.CrossEntropyLoss()
+
+    metrics = {
+        "accuracy": inkid.metrics.accuracy,
+        "precision": inkid.metrics.precision,
+        "recall": inkid.metrics.recall,
+        "fbeta": inkid.metrics.fbeta,
+        "auc": inkid.metrics.auc,
+    }
+    metric_results = {metric: [] for metric in metrics}
+
+    model.train()
+    end = time.time()
+    for batch_num, batch in enumerate(train_dl):
+        x_b = batch["feature"].to(device)
+        y_b = torch.squeeze(batch["label"]).to(device)
+        pred_b = model(x_b)
+
+        for metric_name, metric_fn in metrics.items():
+            metric_result = metric_fn(pred_b, y_b)
+            metric_results[metric_name].append(metric_result)
+
+        loss = criterion(pred_b, y_b)
+
+        opt.zero_grad()
+        loss.backward()
+        opt.step()
+
+        if batch_num % args.summary_every_n_batches == 0:
+            logging.info(
+                # f"Epoch: {epoch:>5d}/{args.training_epochs:<5d}"
+                f"Batch: {batch_num:>5d}/{len(train_dl):<5d} "
+                # f"{inkid.metrics.metrics_str(metric_results)} "
+                f"Seconds: {time.time() - end:5.3g}"
+            )
+            end = time.time()
 
 
 if __name__ == "__main__":
