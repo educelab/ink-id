@@ -14,6 +14,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import Dataset, DataLoader
+from tqdm import tqdm
 
 import inkid
 
@@ -224,6 +225,9 @@ class StackDataset(Dataset):
         return {
             "feature": feature,
             "label": label,
+            "img_idx": i,
+            "patch_top_y": y,
+            "patch_left_x": x,
         }
 
 
@@ -242,6 +246,7 @@ def main():
         "--learning-rate", metavar="n", type=float, default=0.001
     )  # TODO use this?
     parser.add_argument("--summary-every-n-batches", metavar="n", type=int, default=10)
+    parser.add_argument("--training-epochs", metavar="n", type=int, default=1)
     args = parser.parse_args()
 
     dir_name = datetime.datetime.today().strftime("%Y-%m-%d_%H.%M.%S")
@@ -285,18 +290,29 @@ def main():
 
     # Load the input image stack
     assert ".tif" in str(train_input_stack_path).lower()
-    train_feature_img = iio.imread(train_input_stack_path)
+    feature_img = iio.imread(train_input_stack_path)
 
     # Load the label image
-    train_label_img = iio.imread(train_label_image_path).astype(np.int64)
+    label_img = iio.imread(train_label_image_path).astype(np.int64)
 
-    train_ds: StackDataset = StackDataset(
+    train_feature_img = feature_img[:, :feature_img.shape[1] // 2, :]
+    train_label_img = label_img[:label_img.shape[0] // 2, :]
+    val_feature_img = feature_img[:, feature_img.shape[1] // 2:, :]
+    val_label_img = label_img[label_img.shape[0] // 2:, :]
+
+    train_ds = StackDataset(
         [train_feature_img],
         [train_label_img],
         stride=16,
     )
+    val_ds = StackDataset(
+        [val_feature_img],
+        [val_label_img],
+        stride=16,
+    )
 
     train_dl = DataLoader(train_ds, batch_size=32, shuffle=True)
+    val_dl = DataLoader(val_ds, batch_size=64, shuffle=False)
 
     # TODO check that indexed colors are loaded as the values I expect
     model = UNet(n_channels=65, n_classes=2)
@@ -317,30 +333,62 @@ def main():
 
     model.train()
     end = time.time()
-    for batch_num, batch in enumerate(train_dl):
-        x_b = batch["feature"].to(device)
-        y_b = torch.squeeze(batch["label"]).to(device)
-        pred_b = model(x_b)
+    global_step = 0
+    for epoch in range(args.training_epochs):
+        for batch_num, batch in enumerate(train_dl):
+            x_b = batch["feature"].to(device)
+            y_b = torch.squeeze(batch["label"]).to(device)
+            pred_b = model(x_b)
 
-        for metric_name, metric_fn in metrics.items():
-            metric_result = metric_fn(pred_b, y_b)
-            metric_results[metric_name].append(metric_result)
+            for metric_name, metric_fn in metrics.items():
+                metric_result = metric_fn(pred_b, y_b)
+                metric_results[metric_name].append(metric_result)
 
-        loss = criterion(pred_b, y_b)
-        print(loss)
+            loss = criterion(pred_b, y_b)
 
-        opt.zero_grad()
-        loss.backward()
-        opt.step()
+            opt.zero_grad()
+            loss.backward()
+            opt.step()
 
-        if batch_num % args.summary_every_n_batches == 0:
-            logging.info(
-                # f"Epoch: {epoch:>5d}/{args.training_epochs:<5d}"
-                f"Batch: {batch_num:>5d}/{len(train_dl):<5d} "
-                # f"{inkid.metrics.metrics_str(metric_results)} "
-                f"Seconds: {time.time() - end:5.3g}"
-            )
-            end = time.time()
+            if global_step % args.summary_every_n_batches == 0:
+                logging.info(
+                    f"Epoch: {epoch:>5d}/{args.training_epochs:<5d}"
+                    f"Batch: {batch_num:>5d}/{len(train_dl):<5d} "
+                    # f"{inkid.metrics.metrics_str(metric_results)} "
+                    f"Seconds: {time.time() - end:5.3g}"
+                )
+                end = time.time()
+
+            if global_step % 2000 == 0:
+                model.eval()
+                logging.info("Validating")
+
+                pred_imgs = [np.zeros((img.shape[1], img.shape[2])) for img in val_ds.label_imgs]
+                for val_batch_num, val_batch in tqdm(enumerate(val_dl), total=len(val_dl)):
+                    x_b = val_batch["feature"].to(device)
+                    img_idx_b = val_batch["img_idx"].cpu().numpy()
+                    pos_x_b = val_batch["patch_left_x"].cpu().numpy()
+                    pos_y_b = val_batch["patch_top_y"].cpu().numpy()
+                    pred_b = model(x_b)
+                    pred_b = F.softmax(pred_b, dim=1).detach().cpu().numpy()
+
+                    for img_idx, x, y, pred in zip(img_idx_b, pos_x_b, pos_y_b, pred_b):
+                        try:
+                            pred_imgs[img_idx][y:y+64, x:x+64] = pred[1]
+                        except ValueError:
+                            pass  # TODO clean this up
+
+                for i, pred_img in enumerate(pred_imgs):
+                    pred_img_path = predictions_dir / f"pred_{i}_{global_step}.png"
+                    pred_img += np.amin(pred_img)
+                    pred_img /= np.amax(pred_img)
+                    pred_img *= 255
+                    pred_img = pred_img.astype(np.uint8)
+                    iio.imwrite(pred_img_path, pred_img)
+
+                model.train()
+
+            global_step += 1
 
 
 if __name__ == "__main__":
