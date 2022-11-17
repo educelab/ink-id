@@ -13,7 +13,7 @@ public/
 env/
 venv/
 env-*/
-.venv/
+.venv*/
 tmp/
 *.overlay
 
