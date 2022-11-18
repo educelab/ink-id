@@ -1,7 +1,7 @@
 import argparse
 from pathlib import Path
 
-import imageio
+import imageio.v3 as iio
 import matplotlib.pyplot as plt
 import numpy as np
 from tqdm import tqdm
@@ -30,7 +30,7 @@ def main():
     means = []
 
     for slice_path in tqdm(slice_paths):
-        img = imageio.imread(slice_path)
+        img = iio.imread(slice_path)
         slice_indices.append(int(slice_path.stem))
         mins.append(np.amin(img))
         maxs.append(np.amax(img))

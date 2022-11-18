@@ -1,21 +1,21 @@
 import argparse
 from pathlib import Path
 
-import imageio
+import imageio.v3 as iio
 import numpy as np
 from scipy.ndimage import gaussian_filter
 from tqdm import tqdm
 
 
 def determine_image_min_max(im_path):
-    im = imageio.imread(im_path)
+    im = iio.imread(im_path)
     filtered_im = gaussian_filter(im, 3)
 
     return np.amin(filtered_im), np.amax(filtered_im)
 
 
 def rescale_and_write_to_file(input_img_path, minimum, window_width, output_dir):
-    img = imageio.imread(input_img_path)
+    img = iio.imread(input_img_path)
 
     rescaled_img = ((img - minimum) / window_width) * np.iinfo(np.uint16).max
     clipped_img = np.clip(
@@ -26,7 +26,7 @@ def rescale_and_write_to_file(input_img_path, minimum, window_width, output_dir)
     img = clipped_img.astype(np.uint16)
 
     output_path = output_dir / input_img_path.name
-    imageio.imwrite(output_path, img)
+    iio.imwrite(output_path, img)
 
 
 def main():
@@ -50,7 +50,7 @@ def main():
     slices_for_finding_min_max = input_slices[:: args.slice_skip]
 
     output_slices_dir = Path(args.output_slices_dir)
-    output_slices_dir.mkdir(exist_ok=True)
+    output_slices_dir.mkdir(exist_ok=True, parents=True)
 
     slice_mins = []
     slice_maxs = []
