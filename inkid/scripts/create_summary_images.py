@@ -165,27 +165,27 @@ class JobSummarizer:
         self.name = Path(directory).name
         self.job_metadatas = dict()
         self.regions_df = pd.DataFrame(
-            columns=[
-                "region_name",
-                "ppm_path",
-                "ppm_width",
-                "ppm_height",
-                "invert_normals",
-                "bounding_box",
-            ]
+            {
+                "region_name": pd.Series(dtype="str"),
+                "ppm_path": pd.Series(dtype="str"),
+                "ppm_width": pd.Series(dtype="int"),
+                "ppm_height": pd.Series(dtype="int"),
+                "invert_normals": pd.Series(dtype="bool"),
+                "bounding_box": pd.Series(dtype="int"),
+            }
         )
         self.prediction_images_df = pd.DataFrame(
-            columns=[
-                "path",
-                "region_name",
-                "iteration_str",
-                "prediction_type",
-                "job_dir",
-                "n_from_k_fold",
-                "training",
-                "prediction",
-                "validation",
-            ]
+            {
+                "path": pd.Series(dtype="str"),
+                "region_name": pd.Series(dtype="str"),
+                "iteration_str": pd.Series(dtype="str"),
+                "prediction_type": pd.Series(dtype="str"),
+                "job_dir": pd.Series(dtype="str"),
+                "n_from_k_fold": pd.Series(dtype="int"),
+                "training": pd.Series(dtype="bool"),
+                "prediction": pd.Series(dtype="bool"),
+                "validation": pd.Series(dtype="bool"),
+            }
         )
 
         # Iterate through job dirs
@@ -524,6 +524,8 @@ class JobSummarizer:
                         )
                     )
             for (img, offset) in zip(imgs, offsets):
+                if img is None:
+                    continue
                 # Only paste the parts of the image that actually contain something
                 mask_img = img.convert("L")
                 mask_img = mask_img.point(lambda x: x > 0, mode="1")
@@ -820,7 +822,7 @@ def merge_imgs(
             merged_img.paste(img, (bounding_box[0], bounding_box[1]))
 
     # Apply color map
-    if cmap_name is not None:
+    if cmap_name is not None and merged_img is not None:
         color_map = colormaps[cmap_name]
         merged_img = merged_img.convert("L")
         merged_img_data = np.array(merged_img)
@@ -1079,14 +1081,15 @@ def try_get_img_from_data_files(img_path):
     if os.path.isfile(img_path):
         img = Image.open(img_path)
     # If not there, maybe it is on the local machine under ~/data.
-    elif "/pscratch/seales_uksr/" in img_path:
-        img_path = img_path.replace("/pscratch/seales_uksr/", "")
-        data_img_path = os.path.join(Path.home(), "data", img_path)
-        bigdata_img_path = os.path.join(Path.home(), "bigdata", img_path)
-        if os.path.isfile(data_img_path):
-            img = Image.open(data_img_path)
-        elif os.path.isfile(bigdata_img_path):
-            img = Image.open(bigdata_img_path)
+    else:
+        for possible_source_prefix in ["/pscratch/seales_uksr/", "/scratch/srpa226/"]:
+            if possible_source_prefix in img_path:
+                simplified_img_path = img_path.replace(possible_source_prefix, "")
+                for possible_target_prefix in ["data", "bigdata", "temp"]:
+                    possible_target_path = os.path.join(Path.home(), possible_target_prefix, simplified_img_path)
+                    if os.path.isfile(possible_target_path):
+                        img = Image.open(possible_target_path)
+                        break
     return img
 
 
