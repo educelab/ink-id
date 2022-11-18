@@ -87,18 +87,22 @@ if __name__ == "__main__":
 
     if not isinstance(args.indices, list):
         args.indices = [args.indices] * (len(slab_folders) - 1)
-    # The number of indices provided should be number of slabs minus one - all slices are taken from the last slab.
+    # The number of indices provided should be number of slabs minus one - all slices are taken from the first/last slab
     assert len(args.indices) == len(slab_folders) - 1
+
+    # We want all the slices from the first slab
+    args.indices.insert(0, len(list(slab_folders[0].glob("*.tif"))))
+
+    # Reverse slice indices if needed
+    if args.reverse_slab_order:
+        args.indices = args.indices[::-1]
 
     all_source_slices_in_merged_volume = []
 
     # Iterate over the slab folders and get the filenames of the slices we are getting from each slab
     for i, slab_folder in enumerate(slab_folders):
         slab_slices = sorted(slab_folder.glob("*.tif"))
-        if i == len(slab_folders) - 1:
-            cutoff_slice_from_this_slab = len(slab_slices)
-        else:
-            cutoff_slice_from_this_slab = args.indices[i]
+        cutoff_slice_from_this_slab = args.indices[i]
         with open(slab_folder / "meta.json", "r") as f:
             slab_volume_name = json.load(f)["name"]
         print(
