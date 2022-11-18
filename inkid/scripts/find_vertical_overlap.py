@@ -4,7 +4,7 @@ from multiprocessing import Pool
 import os
 from pathlib import Path
 
-import imageio
+import imageio.v3 as iio
 from scipy.stats import pearsonr
 from scipy.ndimage import median_filter
 import numpy as np
@@ -37,7 +37,7 @@ def pearson_correlation(x, y, filter_sigma=3):
 
 
 def image_comparison_worker(moving_paths, fixed_array, comp_function):
-    x_im = np.hstack([imageio.imread(moving_path) for moving_path in moving_paths])
+    x_im = np.hstack([iio.imread(moving_path) for moving_path in moving_paths])
     if comp_function == "pearson":
         return pearson_correlation(x_im, fixed_array), moving_paths
     else:
@@ -88,7 +88,7 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
-        "--comparison_function",
+        "--comparison-function",
         "-c",
         default="mutual_information",
         choices=["mutual_information", "pearson"],
@@ -119,7 +119,7 @@ if __name__ == "__main__":
     moving_slab_slices = moving_slab_slices[args.min_index : args.max_index]
 
     reference_image = np.hstack(
-        [imageio.imread(fixed_slab_slice) for fixed_slab_slice in fixed_slab_slices]
+        [iio.imread(fixed_slab_slice) for fixed_slab_slice in fixed_slab_slices]
     )
 
     moving_slab_pairs = [
@@ -135,7 +135,7 @@ if __name__ == "__main__":
         correlations = worker_pool.starmap(image_comparison_worker, process_parameters)
 
     correlations = sorted(correlations)
-    reference_stack = np.vstack([imageio.imread(path) for path in fixed_slab_slices])
+    reference_stack = np.vstack([iio.imread(path) for path in fixed_slab_slices])
     reference_min_slice_name = os.path.basename(fixed_slab_slices[-1]).split(".")[0]
 
     for i, (cor, paths) in enumerate(correlations):

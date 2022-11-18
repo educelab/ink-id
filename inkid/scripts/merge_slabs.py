@@ -73,7 +73,17 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    slab_folders = sorted(Path(args.in_dir).iterdir(), reverse=args.reverse_slab_order)
+    def vol_name_from_dir(dirname):
+        with open(dirname / "meta.json", "r") as meta_f:
+            return json.load(meta_f)["name"]
+
+    # Sort the folders by the actual volume/slab name, not the folder name, since they could have been
+    # processed out of order.
+    slab_folders = sorted(
+        Path(args.in_dir).iterdir(),
+        reverse=args.reverse_slab_order,
+        key=vol_name_from_dir,
+    )
 
     if not isinstance(args.indices, list):
         args.indices = [args.indices] * (len(slab_folders) - 1)
