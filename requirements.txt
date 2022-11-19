@@ -25,7 +25,7 @@ humanize==4.4.0
 idna==3.4
 imageio==2.22.4
 imagesize==1.4.1
--e git+ssh://git@gitlab.com/educelab/ink-id.git@816d8d9e27199f5907c67d6e756a3f505001d236#egg=inkid
+-e git+ssh://git@gitlab.com/educelab/ink-id.git@1751e4e6dc226d2aa96dbc4f20b09c7536b8dcc9#egg=inkid
 isort==5.10.1
 Jinja2==3.1.2
 joblib==1.2.0
@@ -47,11 +47,12 @@ nvidia-cudnn-cu11==8.5.0.96
 oauthlib==3.2.2
 packaging==21.3
 pandas==1.5.1
-pathspec==0.10.2
+pathspec==0.10.1
 Pillow==9.3.0
-platformdirs==2.5.4
+platformdirs==2.5.3
 plotly==5.11.0
 protobuf==3.20.3
+psutil==5.9.4
 pyasn1==0.4.8
 pyasn1-modules==0.2.8
 pycodestyle==2.9.1
@@ -87,6 +88,7 @@ tenacity==8.1.0
 tensorboard==2.11.0
 tensorboard-data-server==0.6.1
 tensorboard-plugin-wit==1.8.1
+tensorstore==0.1.28
 threadpoolctl==3.1.0
 tomli==2.0.1
 tomlkit==0.11.6

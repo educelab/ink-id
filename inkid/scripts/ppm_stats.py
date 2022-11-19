@@ -19,9 +19,9 @@ def main():
     mask_arr = np.array(mask).flatten()
     ppm = inkid.data.PPM(args.ppm)
 
-    vol_xs = ppm._data[:, :, 0].flatten()[mask_arr]
-    vol_ys = ppm._data[:, :, 1].flatten()[mask_arr]
-    vol_zs = ppm._data[:, :, 2].flatten()[mask_arr]
+    vol_xs = ppm.data[:, :, 0].flatten()[mask_arr]
+    vol_ys = ppm.data[:, :, 1].flatten()[mask_arr]
+    vol_zs = ppm.data[:, :, 2].flatten()[mask_arr]
 
     b = args.buffer
     xmin, xmax = int(np.amin(vol_xs)) - b, int(np.amax(vol_xs)) + b

@@ -21,23 +21,23 @@ class PPM:
         header = PPM.parse_ppm_header(path)
         self.width: int = header["width"]
         self.height: int = header["height"]
-        self._dim: int = header["dim"]
-        self._ordered: bool = header["ordered"]
-        self._type: str = header["type"]
-        self._version: str = header["version"]
+        self.dim: int = header["dim"]
+        self.ordered: bool = header["ordered"]
+        self.type: str = header["type"]
+        self.version: str = header["version"]
 
-        self._data: Optional[np.typing.ArrayLike] = None
+        self.data: Optional[np.typing.ArrayLike] = None
 
         logging.info(
             f"Initialized PPM for {self._path} with width {self.width}, "
-            f"height {self.height}, dim {self._dim}"
+            f"height {self.height}, dim {self.dim}"
         )
 
         if not lazy_load:
             self.ensure_loaded()
 
     def is_loaded(self):
-        return self._data is not None
+        return self.data is not None
 
     def ensure_loaded(self):
         if not self.is_loaded():
@@ -110,10 +110,10 @@ class PPM:
         """
         logging.info(
             f"Loading PPM data for {self._path} with width {self.width}, "
-            f"height {self.height}, dim {self._dim}..."
+            f"height {self.height}, dim {self.dim}..."
         )
 
-        self._data = np.empty((self.height, self.width, self._dim))
+        self.data = np.empty((self.height, self.width, self.dim))
 
         data = inkid.util.get_raw_data_from_file_or_url(self._path)
         header_terminator_re = re.compile("^<>$")
@@ -124,15 +124,15 @@ class PPM:
 
         for y in tqdm(range(self.height)):
             for x in range(self.width):
-                for idx in range(self._dim):
+                for idx in range(self.dim):
                     # Only works if dim == 6: (x, y, z, n_x, n_y, n_z)
-                    if self._dim == 6:
-                        self._data[y, x, idx] = struct.unpack("d", data.read(8))[0]
+                    if self.dim == 6:
+                        self.data[y, x, idx] = struct.unpack("d", data.read(8))[0]
         print()
 
     def get_point_with_normal(self, ppm_x, ppm_y):
         self.ensure_loaded()
-        return self._data[ppm_y][ppm_x]
+        return self.data[ppm_y][ppm_x]
 
     def scale_down_by(self, scale_factor):
         self.ensure_loaded()
@@ -140,28 +140,28 @@ class PPM:
         self.width //= scale_factor
         self.height //= scale_factor
 
-        new_data = np.empty((self.height, self.width, self._dim))
+        new_data = np.empty((self.height, self.width, self.dim))
 
         logging.info(
             "Downscaling PPM by factor of {} on all axes...".format(scale_factor)
         )
         for y in tqdm(range(self.height)):
             for x in range(self.width):
-                for idx in range(self._dim):
-                    new_data[y, x, idx] = self._data[
+                for idx in range(self.dim):
+                    new_data[y, x, idx] = self.data[
                         y * scale_factor, x * scale_factor, idx
                     ]
 
-        self._data = new_data
+        self.data = new_data
 
     def translate(self, dx: int, dy: int, dz: int) -> None:
         for ppm_y in tqdm(range(self.height)):
             for ppm_x in range(self.width):
-                if np.any(self._data[ppm_y, ppm_x]):  # Leave empty pixels unchanged
-                    vol_x, vol_y, vol_z = self._data[ppm_y, ppm_x, 0:3]
-                    self._data[ppm_y, ppm_x, 0] = vol_x + dx
-                    self._data[ppm_y, ppm_x, 1] = vol_y + dy
-                    self._data[ppm_y, ppm_x, 2] = vol_z + dz
+                if np.any(self.data[ppm_y, ppm_x]):  # Leave empty pixels unchanged
+                    vol_x, vol_y, vol_z = self.data[ppm_y, ppm_x, 0:3]
+                    self.data[ppm_y, ppm_x, 0] = vol_x + dx
+                    self.data[ppm_y, ppm_x, 1] = vol_y + dy
+                    self.data[ppm_y, ppm_x, 2] = vol_z + dz
 
     def write(self, filename):
         self.ensure_loaded()
@@ -170,16 +170,16 @@ class PPM:
             logging.info("Writing PPM to file {}...".format(filename))
             f.write("width: {}\n".format(self.width).encode("utf-8"))
             f.write("height: {}\n".format(self.height).encode("utf-8"))
-            f.write("dim: {}\n".format(self._dim).encode("utf-8"))
+            f.write("dim: {}\n".format(self.dim).encode("utf-8"))
             f.write(
-                "ordered: {}\n".format("true" if self._ordered else "false").encode(
+                "ordered: {}\n".format("true" if self.ordered else "false").encode(
                     "utf-8"
                 )
             )
             f.write("type: double\n".encode("utf-8"))
-            f.write("version: {}\n".format(self._version).encode("utf-8"))
+            f.write("version: {}\n".format(self.version).encode("utf-8"))
             f.write("<>\n".encode("utf-8"))
             for y in tqdm(range(self.height)):
                 for x in range(self.width):
-                    for idx in range(self._dim):
-                        f.write(struct.pack("d", self._data[y, x, idx]))
+                    for idx in range(self.dim):
+                        f.write(struct.pack("d", self.data[y, x, idx]))
