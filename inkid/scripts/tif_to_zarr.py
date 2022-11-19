@@ -56,7 +56,7 @@ def tif_to_zarr(slices_path: str, zarr_path: str, chunk_size: int):
     total_system_memory_bytes: int = psutil.virtual_memory().total
     sample_slice: np.ndarray = np.zeros((shape_y, shape_x), dtype=np.uint16)
     sample_slice_size_bytes: int = sample_slice.size * sample_slice.itemsize
-    slices_to_write_at_once: int = int(total_system_memory_bytes / 2 / sample_slice_size_bytes)
+    slices_to_write_at_once: int = int(total_system_memory_bytes / 5 / sample_slice_size_bytes)
 
     def chunk(seq, size):
         return [seq[pos:pos + size] for pos in range(0, len(seq), size)]
