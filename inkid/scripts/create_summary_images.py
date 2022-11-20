@@ -548,9 +548,9 @@ class JobSummarizer:
                     # Try getting label image file from recorded location (may not exist on this machine)
                     label_img = try_get_img_from_data_files(label_img_path)
                     if label_img is not None:
+                        label_img = label_img.convert("L")
                         if cmap_name is not None:
                             color_map = colormaps[cmap_name]
-                            label_img = label_img.convert("L")
                             img_data = np.array(label_img)
                             label_img = Image.fromarray(
                                 np.uint8(color_map(img_data) * 255)
@@ -766,6 +766,7 @@ class JobSummarizer:
                 )
                 assert label_img_path is not None
                 label_img = try_get_img_from_data_files(label_img_path)
+                label_img = label_img.convert("L")
                 assert label_img is not None
                 ppm_mask_img_path = self.get_mask_image_path(ppm_path, invert_normals)
                 ppm_mask_img = try_get_img_from_data_files(ppm_mask_img_path)
