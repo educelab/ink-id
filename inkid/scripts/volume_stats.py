@@ -21,7 +21,7 @@ def main():
     args = parser.parse_args()
 
     input_slices_dir = Path(args.input_slices_dir)
-    slice_paths = sorted(input_slices_dir.glob("????.tif"))
+    slice_paths = sorted(input_slices_dir.glob("*.tif"))
     slice_paths = slice_paths[:: args.slice_skip]
 
     slice_indices = []
