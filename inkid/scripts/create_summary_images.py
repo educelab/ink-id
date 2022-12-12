@@ -22,6 +22,8 @@ from tqdm import tqdm
 import inkid
 
 
+Image.MAX_IMAGE_PIXELS = 10000000000
+
 WHITE = (255, 255, 255)
 LIGHT_GRAY = (104, 104, 104)
 DARK_GRAY = (64, 64, 64)
@@ -359,6 +361,14 @@ class JobSummarizer:
         ]
         if job_dir is not None:
             df = df.loc[df["job_dir"] == job_dir]
+        # Filter out those which aren't from the requested region types (training, prediction, validation)
+        if region_sets_to_include is not None:
+            filtered_dfs = []
+            for region_set_type in region_sets_to_include:
+                filtered_dfs.append(df[df[region_set_type]])
+            df = pd.concat(filtered_dfs, ignore_index=True).drop_duplicates(
+                ignore_index=True
+            )
         if return_latest_if_not_found:
             # Sort by iteration
             df = df.sort_values("iteration_str", key=iteration_series_sort_key)
@@ -373,14 +383,6 @@ class JobSummarizer:
             df = df.groupby(["region_name"], as_index=False).last()
         else:
             df = df.loc[(df["iteration_str"] == iteration)]
-        # Filter out those which aren't from the requested region types (training, prediction, validation)
-        if region_sets_to_include is not None:
-            filtered_dfs = []
-            for region_set_type in region_sets_to_include:
-                filtered_dfs.append(df[df[region_set_type]])
-            df = pd.concat(filtered_dfs, ignore_index=True).drop_duplicates(
-                ignore_index=True
-            )
         image_paths = list(df.path)
         image_bounding_boxes = list(df.bounding_box)
         image_label_as = zip(
