@@ -16,10 +16,15 @@ from tqdm import tqdm
 
 
 def scoop(input_tuple: tuple) -> None:
-    filename, input_volume_dir, output_volume_dir, fill, jitter = input_tuple
+    filename, input_volume_dir, output_volume_dir, fill, jitter, flip_vertical = input_tuple
     projection_img = Image.open(filename).convert("RGB")
     output_img = Image.open(input_volume_dir / f"{filename.stem}.tif").copy()
     assert output_img.mode == "I;16"
+
+    if flip_vertical:
+        projection_img = projection_img.transpose(Image.Transpose.FLIP_TOP_BOTTOM)
+        output_img = output_img.transpose(Image.Transpose.FLIP_TOP_BOTTOM)
+
     # Column by column
     for x in range(projection_img.width):
         # Within a column look for where the line intersects. Assume line has original width 1 but anti aliasing
@@ -71,6 +76,9 @@ def main():
         default=0,
         help="Randomly vary intensity of scooped pixels from -j to +j",
     )
+    parser.add_argument(
+        "--flip-vertical", action="store_true", help="Flip the loaded images vertically before scooping"
+    )
     args = parser.parse_args()
 
     input_volume_dir = Path(args.input_volume_dir)
@@ -81,7 +89,7 @@ def main():
     projection_filenames = sorted(list(projections_dir.glob("*.png")))
     with Pool(processes=multiprocessing.cpu_count() * 3 // 4) as p:
         pool_args = [
-            (f, input_volume_dir, output_volume_dir, args.fill, args.jitter)
+            (f, input_volume_dir, output_volume_dir, args.fill, args.jitter, args.flip_vertical)
             for f in projection_filenames
         ]
         for _ in tqdm(p.imap(scoop, pool_args), total=len(projection_filenames)):
