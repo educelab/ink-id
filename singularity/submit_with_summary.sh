@@ -25,8 +25,3 @@ OUTPUT2=$(sbatch --dependency afterany:"$JOB_ID" summary.sh "$2")
 echo $OUTPUT2
 # Get the job ID from that string
 JOB_ID2=$(echo $OUTPUT2 | sed 's/[^0-9]*//g')
-
-# Make an rclone upload job dependent on the summary job
-OUTPUT3=$(sbatch --dependency afterany:"$JOB_ID2" rclone_upload.sh "$2")
-# Should print "Submitted batch job <ID>"
-echo $OUTPUT3
