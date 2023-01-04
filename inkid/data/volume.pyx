@@ -532,15 +532,14 @@ cdef class Volume:
             rotate_direction = np.random.randint(4)
             subvolume = np.rot90(subvolume, k=rotate_direction, axes=(1, 2))
 
-        if normalize:
-            subvolume = np.asarray(subvolume, dtype=np.float32)
-            subvolume = subvolume - subvolume.mean()
-            subvolume = subvolume / subvolume.std()
-
         assert subvolume.shape == tuple(shape_voxels)
 
         # Convert to float normalized to [0, 1]
         subvolume = inkid.util.uint16_to_float32_normalized_0_1(subvolume)
+
+        if normalize:
+            subvolume = subvolume - subvolume.mean()
+            subvolume = subvolume / subvolume.std()
 
         # Window (contrast stretch) if requested
         if window_min_max is not None:
