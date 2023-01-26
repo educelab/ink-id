@@ -54,12 +54,12 @@ def main():
     print(f"Global blurred mean: {np.mean(blurred_means)}")
 
     fig, ax = plt.subplots()
-    ax.plot(slice_indices, mins, label="min", color="blue")
     ax.plot(slice_indices, maxs, label="max", color="red")
-    ax.plot(slice_indices, means, label="mean", color="green")
-    ax.plot(slice_indices, blurred_mins, label="blurred min", color="lightskyblue")
     ax.plot(slice_indices, blurred_maxs, label="blurred max", color="lightcoral")
+    ax.plot(slice_indices, means, label="mean", color="green")
     ax.plot(slice_indices, blurred_means, label="blurred mean", color="darkseagreen")
+    ax.plot(slice_indices, blurred_mins, label="blurred min", color="lightskyblue")
+    ax.plot(slice_indices, mins, label="min", color="blue")
 
     ax.legend()
     ax.set_title(f"Stats for volume: {input_slices_dir.stem}")
