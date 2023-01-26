@@ -15,7 +15,7 @@ def determine_image_min_max(im_path):
 
 
 def rescale_and_write_to_file(input_img_path, minimum, window_width, output_dir):
-    img = iio.imread(input_img_path)
+    img = iio.imread(input_img_path).astype(float)
 
     rescaled_img = ((img - minimum) / window_width) * np.iinfo(np.uint16).max
     clipped_img = np.clip(
@@ -55,6 +55,7 @@ def main():
     slice_mins = []
     slice_maxs = []
 
+    print("Determining global min/max (after Gaussian blur)...")
     for test_slice_path in tqdm(slices_for_finding_min_max):
         slice_min, slice_max = determine_image_min_max(test_slice_path)
         slice_mins.append(slice_min)
@@ -67,6 +68,7 @@ def main():
     print(f"Global minimum: {global_min}")
     print(f"Global maximum: {global_max}")
 
+    print("Windowing and writing slices...")
     for input_slice_path in tqdm(input_slices):
         rescale_and_write_to_file(
             input_slice_path, global_min, window_width, output_slices_dir
