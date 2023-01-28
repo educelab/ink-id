@@ -58,8 +58,9 @@ if __name__ == "__main__":
 
         input_file = h5py.File(file, "r")
         print("Datasets in input file:", input_file.keys())
-        
+
         in_data = input_file[args.dataset]
+        print("Retrieved:", in_data)
         assert isinstance(
             in_data, h5py.Dataset
         ), "Error, data at this path is not of type Dataset"
