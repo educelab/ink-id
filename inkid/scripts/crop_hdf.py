@@ -3,6 +3,7 @@ import os
 import timeit
 
 import h5py
+import numpy as np
 from PIL import Image
 from tqdm import tqdm
 
@@ -68,6 +69,13 @@ if __name__ == "__main__":
         if args.output_type == "tiff":
             for i in tqdm(range(depth), desc="Extract TIFFs"):
                 mat1 = in_data[i, args.min_y : args.max_y, args.min_x : args.max_x]
+                print(mat1.dtype)
+                # convert float to uint16
+                print(np.amin(mat1), np.amax(mat1))
+                mat1 = mat1.astype("uint16")
+                print(np.amin(mat1), np.amax(mat1))
+                print()
+
                 im = Image.fromarray(mat1)
                 output_path = os.path.join(
                     args.output_dir, os.path.basename(file).rstrip(".hdf")
