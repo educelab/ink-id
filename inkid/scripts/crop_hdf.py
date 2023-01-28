@@ -57,10 +57,9 @@ if __name__ == "__main__":
             raise ValueError(f"Error, file {file} is not of valid extension .hdf")
 
         input_file = h5py.File(file, "r")
-        print("Datasets in input file:", input_file.keys())
+        input_file.visit(lambda x: print(x))
 
         in_data = input_file[args.dataset]
-        print("Retrieved:", in_data)
         assert isinstance(
             in_data, h5py.Dataset
         ), "Error, data at this path is not of type Dataset"
