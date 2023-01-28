@@ -67,7 +67,8 @@ if __name__ == "__main__":
         (depth, height, width) = in_data.shape
 
         if args.output_type == "tiff":
-            for i in tqdm(range(depth), desc="Extract TIFFs"):
+            # for i in tqdm(range(depth), desc="Extract TIFFs"):
+            for i in range(depth):
                 mat1 = in_data[i, args.min_y : args.max_y, args.min_x : args.max_x]
                 print(mat1.dtype)
                 # convert float to uint16
@@ -77,14 +78,10 @@ if __name__ == "__main__":
                 print()
 
                 im = Image.fromarray(mat1)
-                output_path = os.path.join(
-                    args.output_dir, os.path.basename(file).rstrip(".hdf")
-                )
-                os.makedirs(output_path, exist_ok=True)
+                os.makedirs(args.output_dir, exist_ok=True)
                 filename = os.path.join(
                     args.output_dir,
-                    output_path,
-                    "slice_" + str(i).zfill(len(str(depth))) + ".tiff",
+                    str(i).zfill(len(str(depth))) + ".tif",
                 )
                 im.save(filename)
 
