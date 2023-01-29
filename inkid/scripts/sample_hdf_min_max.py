@@ -48,11 +48,11 @@ def main():
                 update = True
 
             if update:
-                print(f"Slices processed: {i}")
-                print(f"Raw min: {global_raw_min}")
-                print(f"Raw max: {global_raw_max}")
-                print(f"Blurred min: {global_blurred_min}")
-                print(f"Blurred max: {global_blurred_max}")
+                print(f"Slices processed: {i}", flush=True)
+                print(f"Raw min: {global_raw_min}", flush=True)
+                print(f"Raw max: {global_raw_max}", flush=True)
+                print(f"Blurred min: {global_blurred_min}", flush=True)
+                print(f"Blurred max: {global_blurred_max}", flush=True)
 
         print(f"Raw min: {global_raw_min}")
         print(f"Raw max: {global_raw_max}")
