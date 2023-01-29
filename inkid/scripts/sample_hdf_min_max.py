@@ -1,6 +1,5 @@
 import argparse
 import h5py
-import numpy as np
 
 def main():
 
@@ -11,8 +10,8 @@ def main():
 
     with h5py.File(args.hdf_file, "r") as f:
         dset = f[args.dataset]
-        print(f"min: {np.amin(dset)}")
-        print(f"max: {np.amax(dset)}")
+        print(f"min: {dset[:].min()}")
+        print(f"max: {dset[:].max()}")
 
 if __name__ == "__main__":
     main()
