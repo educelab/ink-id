@@ -21,11 +21,12 @@ GitPython==3.1.30
 google-auth==2.16.0
 google-auth-oauthlib==0.4.6
 grpcio==1.51.1
+h5py==3.8.0
 humanize==4.4.0
 idna==3.4
 imageio==2.24.0
 imagesize==1.4.1
--e git+ssh://git@gitlab.com/educelab/ink-id.git@0e784435bf3bc73f0004bc0bb7404d6af986c1db#egg=inkid
+-e git+ssh://git@gitlab.com/educelab/ink-id.git@fa9f7d9a6f37fb05441d9faf57bf2ff1add71b23#egg=inkid
 isort==5.11.4
 Jinja2==3.1.2
 joblib==1.2.0
