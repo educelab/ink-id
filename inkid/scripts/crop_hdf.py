@@ -14,14 +14,17 @@ This script internally crops hdf files or converts them to tiff format
 def rescale_img(img, input_min, input_max, output_min, output_max):
     input_window_width = input_max - input_min
     output_window_width = output_max - output_min
-    rescaled_img = ((img - input_min) / input_window_width) * output_window_width
-    rescaled_img += output_min
-    clipped_img = np.clip(
-        rescaled_img,
+    img = img.astype(float)
+    img -= input_min  # Shift to 0
+    img /= input_window_width  # Scale to 0-1
+    img *= output_window_width  # Scale to output window
+    img += output_min  # Shift to output window
+    img = np.clip(
+        img,
         output_min,
         output_max,
     )
-    return clipped_img
+    return img
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Extract HDF to HDF or TIFF")
