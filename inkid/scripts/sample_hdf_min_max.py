@@ -4,7 +4,6 @@ import numpy as np
 import random
 
 from scipy.ndimage import gaussian_filter
-from tqdm import tqdm
 
 
 def main():
@@ -24,7 +23,7 @@ def main():
         global_blurred_min = np.inf
         global_blurred_max = -np.inf
 
-        for _ in tqdm(range(slices), desc="Randomly sampling slices from HDF"):
+        for i in range(slices):
             z = random.randint(0, slices - 1)
             img = dset[z]
             blurred_img = gaussian_filter(img, 3)
@@ -49,6 +48,7 @@ def main():
                 update = True
 
             if update:
+                print(f"Slices processed: {i}")
                 print(f"Raw min: {global_raw_min}")
                 print(f"Raw max: {global_raw_max}")
                 print(f"Blurred min: {global_blurred_min}")
