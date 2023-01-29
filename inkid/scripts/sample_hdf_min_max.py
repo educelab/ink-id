@@ -13,7 +13,8 @@ def main():
 
     with h5py.File(args.hdf_file, "r") as f:
         dset = f[args.dataset]
-        chunk_size = 100
+        print(f"Dataset shape: {dset.shape}")
+        chunk_size = 10
         min_value = np.inf
         max_value = -np.inf
 
