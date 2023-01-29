@@ -11,6 +11,18 @@ from tqdm import tqdm
 This script internally crops hdf files or converts them to tiff format
 """
 
+def rescale_img(img, input_min, input_max, output_min, output_max):
+    input_window_width = input_max - input_min
+    output_window_width = output_max - output_min
+    rescaled_img = ((img - input_min) / input_window_width) * output_window_width
+    rescaled_img += output_min
+    clipped_img = np.clip(
+        rescaled_img,
+        output_min,
+        output_max,
+    )
+    return clipped_img
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Extract HDF to HDF or TIFF")
     parser.add_argument(
@@ -49,6 +61,11 @@ if __name__ == "__main__":
         default="tiff",
         help="output file type, default to tiff",
     )
+    parser.add_argument("--window", action="store_true", help="Apply windowing")
+    parser.add_argument("--input-window-min", type=float, default=0.0, help="Input window min")
+    parser.add_argument("--input-window-max", type=float, default=1.0, help="Input window max")
+    parser.add_argument("--output-window-min", type=float, default=0.0, help="Output window min")
+    parser.add_argument("--output-window-max", type=float, default=np.iinfo(np.uint16).max, help="Output window max")
     args = parser.parse_args()
 
     time_start = timeit.default_timer()
@@ -67,15 +84,19 @@ if __name__ == "__main__":
         (depth, height, width) = in_data.shape
 
         if args.output_type == "tiff":
-            # for i in tqdm(range(depth), desc="Extract TIFFs"):
-            for i in range(depth):
+            for i in tqdm(range(depth), desc="Extract TIFFs"):
                 mat1 = in_data[i, args.min_y : args.max_y, args.min_x : args.max_x]
-                print(mat1.dtype)
-                # convert float to uint16
-                print(np.amin(mat1), np.amax(mat1))
+
+                if args.window:
+                    mat1 = rescale_img(
+                        mat1,
+                        args.input_window_min,
+                        args.input_window_max,
+                        args.output_window_min,
+                        args.output_window_max,
+                    )
+
                 mat1 = mat1.astype("uint16")
-                print(np.amin(mat1), np.amax(mat1))
-                print()
 
                 im = Image.fromarray(mat1)
                 os.makedirs(args.output_dir, exist_ok=True)
