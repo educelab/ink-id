@@ -78,7 +78,7 @@ if __name__ == "__main__":
             raise ValueError(f"Error, file {file} is not of valid extension .hdf")
 
         input_file = h5py.File(file, "r")
-        input_file.visit(lambda x: print(x))
+        input_file.visit(lambda x: print(x))  # Print all datasets in file
 
         in_data = input_file[args.dataset]
         assert isinstance(

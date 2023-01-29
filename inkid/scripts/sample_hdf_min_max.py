@@ -1,8 +1,11 @@
 import argparse
 import h5py
 import numpy as np
+import random
 
+from scipy.ndimage import gaussian_filter
 from tqdm import tqdm
+
 
 def main():
 
@@ -14,16 +17,48 @@ def main():
     with h5py.File(args.hdf_file, "r") as f:
         dset = f[args.dataset]
         print(f"Dataset shape: {dset.shape}")
-        chunk_size = 10
-        min_value = np.inf
-        max_value = -np.inf
+        slices, height, width = dset.shape
 
-        for i in tqdm(range(0, dset.shape[0], chunk_size), desc="Processing HDF"):
-            chunk = dset[i:i + chunk_size]
-            min_value = min(min_value, chunk.min())
-            max_value = max(max_value, chunk.max())
+        global_raw_min = np.inf
+        global_raw_max = -np.inf
+        global_blurred_min = np.inf
+        global_blurred_max = -np.inf
 
-        print(f"min: {min_value}, max: {max_value}")
+        for _ in tqdm(range(slices), desc="Randomly sampling slices from HDF"):
+            z = random.randint(0, slices - 1)
+            img = dset[z]
+            blurred_img = gaussian_filter(img, 3)
+
+            raw_min = np.amin(img)
+            raw_max = np.amax(img)
+            blurred_min = np.amin(blurred_img)
+            blurred_max = np.amax(blurred_img)
+
+            update = False
+            if raw_min < global_raw_min:
+                global_raw_min = raw_min
+                update = True
+            if raw_max > global_raw_max:
+                global_raw_max = raw_max
+                update = True
+            if blurred_min < global_blurred_min:
+                global_blurred_min = blurred_min
+                update = True
+            if blurred_max > global_blurred_max:
+                global_blurred_max = blurred_max
+                update = True
+
+            if update:
+                print(f"Raw min: {global_raw_min}")
+                print(f"Raw max: {global_raw_max}")
+                print(f"Blurred min: {global_blurred_min}")
+                print(f"Blurred max: {global_blurred_max}")
+
+        print(f"Raw min: {global_raw_min}")
+        print(f"Raw max: {global_raw_max}")
+        print(f"Blurred min: {global_blurred_min}")
+        print(f"Blurred max: {global_blurred_max}")
+
 
 if __name__ == "__main__":
     main()
