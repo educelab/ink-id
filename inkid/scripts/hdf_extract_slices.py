@@ -130,7 +130,7 @@ def main():
         for _ in tqdm(range(args.percentile_slice_samples)):
             file = np.random.choice(args.input_files)
             input_file = h5py.File(file, "r")
-            in_data = input_file[args.dataset]
+            in_data = input_file[args.dataset_name]
 
             assert isinstance(
                 in_data, h5py.Dataset
