@@ -138,7 +138,7 @@ def main():
             (depth, height, width) = in_data.shape
             z = np.random.randint(depth)
 
-            img = in_data[z, args.min_y : args.max_y, args.min_x : args.max_x]
+            img = in_data[z]
             input_window_min_samples.append(np.percentile(img, args.percentile_min))
             input_window_max_samples.append(np.percentile(img, args.percentile_max))
 
