@@ -33,7 +33,7 @@ def main():
         description="Extract .tif slices from .hdf input files"
     )
     parser.add_argument(
-        "--input_files",
+        "--input-files",
         "-i",
         required=True,
         help="Input HDF file(s). Can be specified multiple times",
