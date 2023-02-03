@@ -164,14 +164,13 @@ def main():
             for z in tqdm(range(depth), desc="Extract .tifs"):
                 img = dataset[z, args.min_y : args.max_y, args.min_x : args.max_x]
 
-                if args.window:
-                    img = window_img(
-                        img,
-                        input_window_min,
-                        input_window_max,
-                        output_window_min,
-                        output_window_max,
-                    )
+                img = window_img(
+                    img,
+                    input_window_min,
+                    input_window_max,
+                    output_window_min,
+                    output_window_max,
+                )
 
                 img = img.astype("uint16")
 
