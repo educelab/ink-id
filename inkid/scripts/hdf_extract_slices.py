@@ -123,22 +123,29 @@ def main():
 
     if args.auto_percentile_windowing:
         print("Calculating input window based on percentiles...")
+
         input_window_min_samples = []
         input_window_max_samples = []
-        for _ in range(args.percentile_slice_samples):
+
+        for _ in tqdm(range(args.percentile_slice_samples)):
             file = np.random.choice(args.input_files)
             input_file = h5py.File(file, "r")
             in_data = input_file[args.dataset]
+
             assert isinstance(
                 in_data, h5py.Dataset
             ), "Error, data at this path is not of type Dataset"
             (depth, height, width) = in_data.shape
             z = np.random.randint(depth)
+
             img = in_data[z, args.min_y : args.max_y, args.min_x : args.max_x]
             input_window_min_samples.append(np.percentile(img, args.percentile_min))
             input_window_max_samples.append(np.percentile(img, args.percentile_max))
+
         input_window_min = np.mean(input_window_min_samples)
         input_window_max = np.mean(input_window_max_samples)
+
+        print(f"Input window min: {input_window_min}, input window max: {input_window_max}")
 
     for file_name in args.input_files:
         print(f"Processing {file_name}...")
@@ -154,7 +161,7 @@ def main():
             this_output_dir = Path(args.output_dir) / Path(file_name).stem
             this_output_dir.mkdir(parents=True, exist_ok=True)
 
-            for z in tqdm(range(depth), desc="Extract TIFFs"):
+            for z in tqdm(range(depth), desc="Extract .tifs"):
                 img = dataset[z, args.min_y : args.max_y, args.min_x : args.max_x]
 
                 if args.window:
