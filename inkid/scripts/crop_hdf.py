@@ -1,5 +1,6 @@
 import argparse
 import os
+from pathlib import Path
 import timeit
 
 import h5py
@@ -86,6 +87,9 @@ if __name__ == "__main__":
         ), "Error, data at this path is not of type Dataset"
         (depth, height, width) = in_data.shape
 
+        output_dir = os.path.join(args.output_dir, Path(file).stem)
+        os.makedirs(args.output_dir, exist_ok=True)
+
         if args.output_type == "tiff":
             for i in tqdm(range(depth), desc="Extract TIFFs"):
                 mat1 = in_data[i, args.min_y : args.max_y, args.min_x : args.max_x]
@@ -102,7 +106,6 @@ if __name__ == "__main__":
                 mat1 = mat1.astype("uint16")
 
                 im = Image.fromarray(mat1)
-                os.makedirs(args.output_dir, exist_ok=True)
                 filename = os.path.join(
                     args.output_dir,
                     str(i).zfill(len(str(depth))) + ".tif",
