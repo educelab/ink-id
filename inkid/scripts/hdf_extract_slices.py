@@ -102,10 +102,10 @@ def main():
         help="Apply automatic percentile windowing",
     )
     parser.add_argument(
-        "--percentile-min", type=float, default=1.0, help="Percentile min"
+        "--percentile-min", type=float, default=0.1, help="Percentile min"
     )
     parser.add_argument(
-        "--percentile-max", type=float, default=99.0, help="Percentile max"
+        "--percentile-max", type=float, default=99.9, help="Percentile max"
     )
     parser.add_argument(
         "--percentile-slice-samples",
