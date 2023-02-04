@@ -165,7 +165,7 @@ def main():
             f"Input window min: {input_window_min}, input window max: {input_window_max}"
         )
 
-    slice_counter = 0
+    slice_counter = -1
 
     for file_name in args.input_files:
         print(f"Processing {file_name}...")
@@ -185,6 +185,8 @@ def main():
             this_output_dir.mkdir(parents=True, exist_ok=True)
 
             for z in tqdm(range(depth), desc="Extract .tifs"):
+                slice_counter += 1
+
                 if z % args.slice_skip != 0:
                     continue
 
@@ -209,8 +211,6 @@ def main():
 
                 slice_path = this_output_dir / slice_name
                 iio.imwrite(slice_path, img)
-
-                slice_counter += 1
 
     print(f"Total time: {timeit.default_timer() - start}")
 
