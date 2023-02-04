@@ -41,6 +41,15 @@ def main():
     )
     parser.add_argument("--output-dir", "-o", required=True, help="Output directory")
     parser.add_argument(
+        "--combine-output-in-single-dir",
+        action="store_true",
+        help="Combine all slices into a single output directory "
+        "(default is to create a separate subdirectory for each input .hdf file)",
+    )
+    parser.add_argument(
+        "--slice-skip", type=int, default=1, help="Only sample every Nth slice"
+    )
+    parser.add_argument(
         "--dataset-name",
         default="entry/data/data",
         help="Dataset to fetch within the HDF file(s)",
@@ -145,7 +154,11 @@ def main():
         input_window_min = np.mean(input_window_min_samples)
         input_window_max = np.mean(input_window_max_samples)
 
-        print(f"Input window min: {input_window_min}, input window max: {input_window_max}")
+        print(
+            f"Input window min: {input_window_min}, input window max: {input_window_max}"
+        )
+
+    slice_counter = 0
 
     for file_name in args.input_files:
         print(f"Processing {file_name}...")
@@ -158,10 +171,16 @@ def main():
             ), "Error, data at this path is not of type Dataset"
             (depth, height, width) = dataset.shape
 
-            this_output_dir = Path(args.output_dir) / Path(file_name).stem
+            if args.combine_output_in_single_dir:
+                this_output_dir = Path(args.output_dir)
+            else:
+                this_output_dir = Path(args.output_dir) / Path(file_name).stem
             this_output_dir.mkdir(parents=True, exist_ok=True)
 
             for z in tqdm(range(depth), desc="Extract .tifs"):
+                if z % args.slice_skip != 0:
+                    continue
+
                 img = dataset[z, args.min_y : args.max_y, args.min_x : args.max_x]
 
                 img = window_img(
@@ -177,6 +196,8 @@ def main():
                 slice_name = str(z).zfill(len(str(depth))) + ".tif"
                 slice_path = this_output_dir / slice_name
                 iio.imwrite(slice_path, img)
+
+                slice_counter += 1
 
     print(f"Total time: {timeit.default_timer() - start}")
 
