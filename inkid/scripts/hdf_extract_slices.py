@@ -56,28 +56,28 @@ def main():
     )
     # Cropping
     parser.add_argument(
-        "--min-x",
+        "--crop-min-x",
         type=int,
         default=0,
-        help="Crop the resulting slice images to have a minimum x value.",
+        help="Crop the resulting slice images to start at a minimum x value.",
     )
     parser.add_argument(
-        "--max-x",
+        "--crop-width",
         type=int,
         default=None,
-        help="Crop the resulting slice images to have a maximum x value.",
+        help="Crop the resulting slice images to have a specified width.",
     )
     parser.add_argument(
-        "--min-y",
+        "--crop-min-y",
         type=int,
         default=0,
-        help="Crop the resulting slice images to have a minimum y value.",
+        help="Crop the resulting slice images to start at a minimum y value.",
     )
     parser.add_argument(
-        "--max-y",
+        "--crop-height",
         type=int,
         default=None,
-        help="Crop the resulting slice images to have a maximum y value.",
+        help="Crop the resulting slice images to have a specified height.",
     )
     # Windowing
     parser.add_argument(
@@ -137,6 +137,13 @@ def main():
     output_window_min = args.output_window_min
     output_window_max = args.output_window_max
 
+    crop_max_x = None
+    if args.crop_width is not None:
+        crop_max_x = args.crop_min_x + args.crop_width
+    crop_max_y = None
+    if args.crop_height is not None:
+        crop_max_y = args.crop_min_y + args.crop_height
+
     if args.auto_percentile_windowing:
         print("Calculating input window based on percentiles...")
 
@@ -154,7 +161,7 @@ def main():
             (depth, height, width) = in_data.shape
             z = np.random.randint(depth)
 
-            img = in_data[z, args.min_y : args.max_y, args.min_x : args.max_x]
+            img = in_data[z, args.crop_min_y : crop_max_y, args.crop_min_x : crop_max_x]
             input_window_min_samples.append(np.percentile(img, args.percentile_min))
             input_window_max_samples.append(np.percentile(img, args.percentile_max))
 
@@ -190,7 +197,9 @@ def main():
                 if z % args.slice_skip != 0:
                     continue
 
-                img = dataset[z, args.min_y : args.max_y, args.min_x : args.max_x]
+                img = dataset[
+                    z, args.crop_min_y : crop_max_y, args.crop_min_x : crop_max_x
+                ]
 
                 img = window_img(
                     img,
