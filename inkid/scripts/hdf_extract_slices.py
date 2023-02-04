@@ -118,12 +118,19 @@ def main():
     start = timeit.default_timer()
 
     # Print files and their datasets
+    total_depth = 0
     for file in args.input_files:
         if not file.endswith(".hdf"):
             raise ValueError(f"Error, file {file} is not of valid extension .hdf")
         input_file = h5py.File(file, "r")
         print(f"File: {file} contains datasets:")
         input_file.visit(lambda x: print(f"\t{x}"))  # Print all datasets in file
+        in_data = input_file[args.dataset_name]
+        assert isinstance(
+            in_data, h5py.Dataset
+        ), "Error, data at this path is not of type Dataset"
+        (depth, height, width) = in_data.shape
+        total_depth += depth
 
     input_window_min = args.input_window_min
     input_window_max = args.input_window_max
@@ -193,7 +200,13 @@ def main():
 
                 img = img.astype("uint16")
 
-                slice_name = str(z).zfill(len(str(depth))) + ".tif"
+                if args.combine_output_in_single_dir:
+                    slice_name = (
+                        str(slice_counter).zfill(len(str(total_depth))) + ".tif"
+                    )
+                else:
+                    slice_name = str(z).zfill(len(str(depth))) + ".tif"
+
                 slice_path = this_output_dir / slice_name
                 iio.imwrite(slice_path, img)
 
