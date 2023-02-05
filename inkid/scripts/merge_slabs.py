@@ -1,5 +1,4 @@
 import argparse
-import json
 from pathlib import Path
 import shutil
 
@@ -73,16 +72,11 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    def vol_name_from_dir(dirname):
-        with open(dirname / "meta.json", "r") as meta_f:
-            return json.load(meta_f)["name"]
-
     # Sort the folders by the actual volume/slab name, not the folder name, since they could have been
     # processed out of order.
     slab_folders = sorted(
         Path(args.in_dir).iterdir(),
         reverse=args.reverse_slab_order,
-        key=vol_name_from_dir,
     )
 
     if not isinstance(args.indices, list):
@@ -103,10 +97,8 @@ if __name__ == "__main__":
     for i, slab_folder in enumerate(slab_folders):
         slab_slices = sorted(slab_folder.glob("*.tif"))
         cutoff_slice_from_this_slab = args.indices[i]
-        with open(slab_folder / "meta.json", "r") as f:
-            slab_volume_name = json.load(f)["name"]
         print(
-            f"Taking slices 0 to {cutoff_slice_from_this_slab - 1} from slab {slab_folder.stem}: {slab_volume_name}"
+            f"Taking slices 0 to {cutoff_slice_from_this_slab - 1} from slab {slab_folder.stem}"
         )
         all_source_slices_in_merged_volume += slab_slices[:cutoff_slice_from_this_slab]
 
