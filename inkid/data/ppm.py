@@ -97,6 +97,32 @@ class PPM:
             "version": version,
         }
 
+    @staticmethod
+    def write_ppm_from_data(
+        path: str,
+        data: np.typing.ArrayLike,
+        width: int,
+        height: int,
+        dim: int,
+        ordered: bool = True,
+        version: str = "1.0",
+    ):
+        with open(path, "wb") as f:
+            logging.info("Writing PPM to file {}...".format(path))
+            f.write("width: {}\n".format(width).encode("utf-8"))
+            f.write("height: {}\n".format(height).encode("utf-8"))
+            f.write("dim: {}\n".format(dim).encode("utf-8"))
+            f.write(
+                "ordered: {}\n".format("true" if ordered else "false").encode("utf-8")
+            )
+            f.write("type: double\n".encode("utf-8"))
+            f.write("version: {}\n".format(version).encode("utf-8"))
+            f.write("<>\n".encode("utf-8"))
+            for y in tqdm(range(height)):
+                for x in range(width):
+                    for idx in range(dim):
+                        f.write(struct.pack("d", data[y, x, idx]))
+
     def load_ppm_data(self):
         """Read the PPM file data and store it in the PPM object.
 
