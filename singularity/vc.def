@@ -1,0 +1,61 @@
+Bootstrap: docker
+From: volcart/vcbuilder-debian:latest.dynamic
+
+%labels
+  MAINTAINER Stephen Parsons <stephen.parsons@uky.edu>
+  OS Debian
+
+%files
+  /tmp/volume-cartographer /usr/local/educelab/volume-cartographer
+
+%post
+  # Give read/write access in volume-cartographer (so it can later be edited using a persistent overlay)
+  chmod --recursive a+rw /usr/local/educelab/volume-cartographer
+
+  # Basic installs (noninteractive so tzdata dependency install doesn't halt build with prompt)
+  apt update
+  DEBIAN_FRONTEND=noninteractive apt install -y nano vim ffmpeg imagemagick
+
+  # Store git credentials for up to an hour (in overlay, not container) for convenience
+  git config --global credential.helper cache
+  git config --global credential.helper 'cache --timeout=3600'
+  git config --global --add safe.directory /usr/local/educelab/volume-cartographer
+
+  cd /usr/local/educelab/volume-cartographer
+  mkdir build && cd build
+  export CMAKE_PREFIX_PATH="/usr/local/Qt-6.2.3/"
+  cmake -GNinja -DVC_BUILD_ACVD=ON -DCMAKE_BUILD_TYPE=Release ..
+  ninja
+  ninja install
+
+
+%runscript
+  if [ $# -lt 1 ]; then
+      echo "Usage: ./container <command>"
+      exit 1
+  fi
+
+  exec "$@"
+
+%help
+  This container provides an environment for running volume-cartographer.
+
+  Building the container:
+    - The volume-cartographer git repository must exist at /tmp/volume-cartographer on the host machine before building the container. Cloning using https is recommended so that the repository can be manipulated after container creation using your username and password instead of needing ssh keys on the container. After this clone, you can check out a different branch or make changes if desired, but this can also be done after the container is built.
+    - Example command sequence to build fresh container:
+      `rm -rf /tmp/volume-cartographer`
+      `git clone --branch develop https://gitlab.com/educelab/volume-cartographer.git /tmp/volume-cartographer`
+      `sudo singularity build vc.sif vc.def`
+
+  Preparing for use:
+    - Then get the container ready for use, for example:
+      `scp vc.sif *.sh lcc:~/volume-cartographer`
+      `ssh lcc`
+      `cd volume-cartographer`
+      `module load ccs/singularity`
+      `mkdir -p out`
+      `rm -f vc.overlay && dd if=/dev/zero of=vc.overlay bs=1M count=500 && mkfs.ext3 -F vc.overlay  # Create a new overlay for the new container`
+      `singularity shell --overlay vc.overlay vc.sif  # If you want to get into the container and make any changes to the code, or checkout another branch`
+      `cp vc.sif /project/seales_uksr/containers`
+      `chmod g+w /project/seales_uksr/containers/vc.sif`
+      `chgrp seales_uksr /project/seales_uksr/containers/vc.sif`
