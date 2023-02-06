@@ -9,7 +9,7 @@ singularity:
   tags:
     - docker
   image:
-    name: quay.io/singularity/singularity:v3.2.1
+    name: quay.io/singularity/singularity:v3.8.4
     entrypoint: [""]
   script:
     - cp -r . /tmp/ink-id
