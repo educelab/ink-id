@@ -180,14 +180,14 @@ def main(argv=None):
     )
     parser.add_argument("--validation-max-samples", metavar="n", type=int, default=5000)
     parser.add_argument("--summary-every-n-batches", metavar="n", type=int, default=10)
-    parser.add_argument(
-        "--checkpoint-every-n-batches", metavar="n", type=int, default=0
-    )
+    parser.add_argument("--checkpoint-every-n-batches", metavar="n", type=int, default=20000)
     parser.add_argument("--final-prediction-on-all", action="store_true")
     parser.add_argument("--skip-training", action="store_true")
     parser.add_argument("--multi-gpu", action="store_true")
-    parser.add_argument("--wandb-silent", action="store_true", help="Disable wandb logging")
     parser.add_argument("--wandb", action="store_true", help="Sync to wandb")
+    parser.add_argument("--wandb-silent", action="store_true", help="Disable wandb logging")
+    parser.add_argument("--wandb-project", metavar="project", default="ink-id", help="WandB project name")
+    parser.add_argument("--wandb-entity", metavar="entity", default="educelab", help="WandB entity name")
     parser.add_argument(
         "--dataloaders-num-workers", metavar="n", type=int, default=None
     )
@@ -241,7 +241,7 @@ def main(argv=None):
     if not args.wandb:
         os.environ["WANDB_MODE"] = "offline"
         os.environ["WANDB_SILENT"] = "true"
-    wandb.init(config=vars(args), project="ink-id", entity="scroll-prize", name=output_path)
+    wandb.init(config=vars(args), project=args.wandb_project, entity=args.wandb_entity, name=output_path)
 
     # Configure logging
     # noinspection PyArgumentList
