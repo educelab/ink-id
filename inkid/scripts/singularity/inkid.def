@@ -6,18 +6,18 @@ From: ubuntu:22.04
   OS Ubuntu 22.04
 
 %files
-  /tmp/ink-id /usr/local/dri/ink-id
+  /tmp/ink-id /usr/local/educelab/ink-id
 
 %post
   # Give read/write access in ink-id (so it can later be edited using a persistent overlay)
-  chmod --recursive a+rw /usr/local/dri/ink-id
+  chmod --recursive a+rw /usr/local/educelab/ink-id
   # Basic installs (noninteractive so tzdata dependency install doesn't halt build with prompt)
   apt update
   DEBIAN_FRONTEND=noninteractive apt install -y git nano vim build-essential
   # Store git credentials for up to an hour (in overlay, not container) for convenience
   git config --global credential.helper cache
   git config --global credential.helper 'cache --timeout=3600'
-  git config --global --add safe.directory /usr/local/dri/ink-id
+  git config --global --add safe.directory /usr/local/educelab/ink-id
   # To make add-apt-repository available
   apt install -y software-properties-common
   # Temporary fix for https://github.com/pytorch/pytorch/issues/53452
@@ -27,20 +27,20 @@ From: ubuntu:22.04
   # Needed for pygifsicle
   apt install -y gifsicle
   # Create a virtualenv for this project
-  python3.10 -m venv /usr/local/dri/ink-id/.venv
+  python3.10 -m venv /usr/local/educelab/ink-id/.venv
   # Activate virtualenv
-  . /usr/local/dri/ink-id/.venv/bin/activate
+  . /usr/local/educelab/ink-id/.venv/bin/activate
   # Update pip
   pip install --upgrade pip
   # Remove locally installed inkid from requirements file, we want to install that separately
-  sed -i '/ink-id.git/d' /usr/local/dri/ink-id/requirements.txt
+  sed -i '/ink-id.git/d' /usr/local/educelab/ink-id/requirements.txt
   # Install the exact versions of all of the dependencies
   # Specifies CUDA version because for some reason it was installing ROCm version of Torch
   # Similar but not identical issue: https://github.com/pytorch/pytorch/issues/52571
-  pip install --requirement /usr/local/dri/ink-id/requirements.txt --find-links https://download.pytorch.org/whl/cu102/torch_stable.html
+  pip install --requirement /usr/local/educelab/ink-id/requirements.txt --find-links https://download.pytorch.org/whl/cu102/torch_stable.html
   # Now install inkid
-  pip install --editable /usr/local/dri/ink-id
-  chmod --recursive a+rw /usr/local/dri/ink-id/.venv
+  pip install --editable /usr/local/educelab/ink-id
+  chmod --recursive a+rw /usr/local/educelab/ink-id/.venv
 
 %runscript
   if [ $# -lt 1 ]; then
@@ -48,7 +48,7 @@ From: ubuntu:22.04
       exit 1
   fi
 
-  . /usr/local/dri/ink-id/.venv/bin/activate
+  . /usr/local/educelab/ink-id/.venv/bin/activate
   exec "$@"
 
 %help
@@ -57,7 +57,7 @@ From: ubuntu:22.04
   Building the container:
     - The ink-id git repository must exist at /tmp/ink-id on the host machine before building the container. Cloning using https is recommended so that the repository can be manipulated after container creation using your username and password instead of needing ssh keys on the container. After this clone, you can check out a different branch or make changes if desired, but this can also be done after the container is built.
     - Example command sequence to build fresh container:
-      `cd <path_to_ink-id>/singularity`
+      `cd <path_to_ink-id>/inkid/scripts/singularity`
       `rm -rf /tmp/ink-id`
       `git clone --branch develop https://github.com/educelab/ink-id.git /tmp/ink-id`
       `sudo singularity build inkid.sif inkid.def`
@@ -71,20 +71,14 @@ From: ubuntu:22.04
       `mkdir -p out`
       `rm -f inkid.overlay && dd if=/dev/zero of=inkid.overlay bs=1M count=500 && mkfs.ext3 -F inkid.overlay  # Create a new overlay for the new container`
       `singularity shell --overlay inkid.overlay inkid.sif  # If you want to get into the container and make any changes to the code, or checkout another branch`
-      `rclone copy -uv inkid.sif dri-experiments-drive:singularity-containers`  # If you want to update the shared .sif file
       `cp inkid.sif /project/seales_uksr/containers`
       `chmod g+w /project/seales_uksr/containers/inkid.sif`
       `chgrp seales_uksr /project/seales_uksr/containers/inkid.sif`
 
   Usage:
-    - Any script or shell usage should first source the virtualenv: `. /usr/local/dri/ink-id/.venv/bin/activate`
-    - It is possible to use an overlay to allow one to check out another branch, pull recent changes, or make local edits to ink-id code. To create and use an overlay: `dd if=/dev/zero of=inkid.overlay bs=1M count=500 && mkfs.ext3 inkid.overlay; singularity shell --overlay inkid.overlay inkid.sif` (see Singularity documentation on persistent overlays). If the overlay directory is deleted or not specified when using the container, the changes will be gone and the checkout of ink-id built into the container will be present.
-    - You can use `git config` to set your name and email after creating an overlay so you get accurate commit authorship.
-    - It is recommended to use the included `ink-id/singularity/submit.sh` to run a job, which already activate the virtual environment.
     - Example usage with sbatch:
       `sbatch -p <partition> --time=<timelimit> submit.sh ...  # Submit jobs using the container`
 
   Selected example jobs:
     - MS910 fragments: `./submit_with_summary.sh sbatch -p <PARTITION> --time=<TIMELIMIT> --mem=150G submit.sh $PSCRATCH/seales_uksr/dri-datasets-drive/MorganM910/MS910.volpkg/working/segmentation/all-fragments.json $PSCRATCH/seales_uksr/dri-experiments-drive/inkid/results/MS910/fragments/all/test/<OUTPUT> --subvolume-shape 48 48 48 --final-prediction-on-all --prediction-grid-spacing 8 --label-type rgb_values`
 
-  This container is intended to be built once and used with multiple checkouts of inkid code, using an overlay to store the changes or checkouts. Only when the dependencies change does the container need rebuilding.
