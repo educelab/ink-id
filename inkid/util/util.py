@@ -93,7 +93,7 @@ def perform_validation(model, dataloader, metrics, device):
             xb = batch["feature"].to(device)
             preds = model(xb)
             total_loss = None
-            for label_type in model.labels:
+            for label_type in getattr(model, "module", model).labels:
                 yb = (
                     xb.clone()
                     if label_type == "autoencoded"
@@ -117,7 +117,7 @@ def perform_validation(model, dataloader, metrics, device):
 
 
 def generate_prediction_images(
-    dataloader, model, device, predictions_dir, suffix, prediction_averaging
+    dataloader, model, device, predictions_dir, suffix, prediction_averaging, global_step
 ):
     """Helper function to generate a prediction image given a model and dataloader, and save it to a file."""
     model.eval()  # Turn off training mode for batch norm and dropout purposes
@@ -133,7 +133,7 @@ def generate_prediction_images(
                 "ink_classes",
                 "rgb_values",
                 "volcart_texture",
-            }.intersection(model.labels):
+            }.intersection(getattr(model, "module", model).labels):
                 output_size = {
                     "volcart_texture": 1,
                     "ink_classes": 2,
@@ -190,7 +190,7 @@ def generate_prediction_images(
                         int(x), int(y), prediction, label_type
                     )
     for region in dataloader.dataset.regions():
-        region.write_predictions(predictions_dir, suffix)
+        region.write_predictions(predictions_dir, suffix, step=global_step)
         region.reset_predictions()
     model.train()
 

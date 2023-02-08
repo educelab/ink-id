@@ -60,7 +60,7 @@ def display_volume(vol, initial_slice=0):
 
 
 def select_seed_points():
-    return [(256, 145, 428)]
+    return [(100, 100, 100)]
 
 
 def get_slice(

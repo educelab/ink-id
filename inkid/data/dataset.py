@@ -14,6 +14,7 @@ import jsonschema
 import numpy as np
 from PIL import Image, ImageFilter
 import torch
+import wandb
 
 import inkid
 
@@ -531,7 +532,7 @@ class RegionSource(DataSource):
                         f"Unknown label_type: {label_type} used for prediction"
                     )
 
-    def write_predictions(self, directory, suffix):
+    def write_predictions(self, directory, suffix, step=-1):
         """Write the buffered prediction images to disk."""
         if not os.path.exists(directory):
             os.makedirs(directory)
@@ -539,15 +540,21 @@ class RegionSource(DataSource):
         filename_base = os.path.join(
             directory, "{}_prediction_{}_".format(self.name, suffix)
         )
+        wandb_images = {}
         if self._ink_classes_prediction_image_written_to:
             im = Image.fromarray(self._ink_classes_prediction_image)
             im.save(filename_base + "ink_classes.png")
+            wandb_images[f"prediction/{self.name}/ink_classes"] = wandb.Image(im)
         if self._rgb_values_prediction_image_written_to:
             im = Image.fromarray(self._rgb_values_prediction_image)
             im.save(filename_base + "rgb_values.png")
+            wandb_images[f"prediction/{self.name}/rgb_values"] = wandb.Image(im)
         if self._volcart_texture_prediction_image_written_to:
             im = Image.fromarray(self._volcart_texture_prediction_image)
             im.save(filename_base + "volcart_texture.png")
+            wandb_images[f"prediction/{self.name}/volcart_texture"] = wandb.Image(im)
+        if step != -1 and hasattr(wandb, "run") and wandb.run is not None:
+            wandb.log(wandb_images, step=step, commit=False)
 
     def reset_predictions(self):
         """Reset the prediction image buffers."""
