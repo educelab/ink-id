@@ -411,21 +411,4 @@ def save_subvolume_batch_to_img(
         outfile += f"_{iteration}"
     outfile += ".png"
     composite_img.save(outfile)
-
-
-# https://discuss.pytorch.org/t/a-tensorboard-problem-about-use-add-graph-method-for-deeplab-v3-in-torchvision/95808/2
-class ImmutableOutputModelWrapper(torch.nn.Module):
-    def __init__(self, model: torch.nn.Module) -> None:
-        super().__init__()
-        self.model = model
-
-    def forward(self, x: torch.Tensor) -> Any:
-        x = self.model(x)
-
-        if isinstance(x, dict):
-            x_named_tuple = namedtuple("ModelEndpoints", sorted(x.keys()))
-            x = x_named_tuple(**x)
-        elif isinstance(x, list):
-            x = tuple(x)
-
-        return x
+p
