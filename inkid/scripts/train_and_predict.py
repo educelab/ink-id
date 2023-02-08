@@ -190,16 +190,6 @@ def main(argv=None):
     )
     parser.add_argument("--random-seed", type=int, default=42)
 
-    # Rclone
-    parser.add_argument(
-        "--rclone-transfer-remote",
-        metavar="remote",
-        default=None,
-        help="if specified, and if matches the name of one of the directories in "
-        "the output path, transfer the results to that rclone remote into the "
-        "subpath following the remote name",
-    )
-
     args = parser.parse_args(argv)
 
     # Make sure some sort of input is provided, else there is nothing to do
@@ -796,10 +786,6 @@ def main(argv=None):
     # Update metadata file on disk with results after run
     with open(os.path.join(output_path, "metadata.json"), "w") as f:
         f.write(json.dumps(metadata, indent=4, sort_keys=False))
-
-    # Transfer results via rclone if requested
-    if args.rclone_transfer_remote is not None:
-        inkid.util.rclone_transfer_to_remote(args.rclone_transfer_remote, output_path)
 
     writer.close()
 

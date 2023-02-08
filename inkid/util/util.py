@@ -74,64 +74,6 @@ def get_descriptive_statistics(tensor):
     return np.array([t_min, t_max, t_mean, t_std, t_median, t_var])
 
 
-def rclone_transfer_to_remote(rclone_remote, output_path, move=False):
-    folders = []
-    path = os.path.abspath(output_path)
-    while True:
-        path, folder = os.path.split(path)
-        if folder != "":
-            folders.append(folder)
-        else:
-            if path != "":
-                folders.append(path)
-            break
-    folders.reverse()
-
-    if rclone_remote is None:
-        for folder in folders:
-            if "-drive" in folder:
-                rclone_remote = folder
-                break
-
-    if rclone_remote not in folders:
-        print(
-            "Provided rclone transfer remote was not a directory "
-            "name in the output path, so it is not clear where in the "
-            "remote to put the files. Transfer canceled."
-        )
-    else:
-        while folders.pop(0) != rclone_remote:
-            continue
-
-        if move:
-            command = [
-                "rclone",
-                "--transfers=32",
-                "--checkers=16",
-                "--drive-chunk-size=16384k",
-                "--drive-upload-cutoff=16384k",
-                "move",
-                "-v",
-                "--delete-empty-src-dirs",
-                output_path,
-                rclone_remote + ":" + os.path.join(*folders),
-            ]
-        else:
-            command = [
-                "rclone",
-                "--transfers=32",
-                "--checkers=16",
-                "--drive-chunk-size=16384k",
-                "--drive-upload-cutoff=16384k",
-                "copy",
-                "-v",
-                output_path,
-                rclone_remote + ":" + os.path.join(*folders),
-            ]
-        logging.info(" ".join(command))
-        subprocess.call(command)
-
-
 # https://www.geeksforgeeks.org/serialize-python-dictionary-to-xml/
 def dict_to_xml(data):
     xml = dicttoxml(data)
