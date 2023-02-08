@@ -37,6 +37,16 @@ After changes to Cython files (``.pyx`` and ``.pxd``), those modules must be reb
 
     $ python setup.py build_ext --inplace
 
+Set up W&B
+
+Go to [https://wandb.ai/settings](https://wandb.ai/settings) to copy your API key, and then run:
+
+.. code-block:: bash
+
+    $ wandb login
+
+And then use `inkid-train-and-predict` with `--wandb`
+
 Usage
 =====
 

@@ -54,16 +54,16 @@ def auc(pred, yb):
         return float("nan")
 
 
-def metrics_dict(metric_results):
+def metrics_dict(metric_results, prefix=""):
     with warnings.catch_warnings():  # Sometimes we will take the mean of all NaNs. This is fine, just return NaN.
         warnings.simplefilter("ignore")
         result_dict = {}
         for label_type in metric_results:
             for k, v in metric_results[label_type].items():
                 if "sum" in k:
-                    result_dict[f"{label_type}_{k}"] = np.nansum([float(i) for i in v])
+                    result_dict[f"{prefix}{label_type}_{k}"] = np.nansum([float(i) for i in v])
                 else:
-                    result_dict[f"{label_type}_{k}"] = np.nanmean([float(i) for i in v])
+                    result_dict[f"{prefix}{label_type}_{k}"] = np.nanmean([float(i) for i in v])
         return result_dict
 
 

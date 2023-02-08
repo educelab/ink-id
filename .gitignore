@@ -24,4 +24,8 @@ inkid/data/*.html
 *.c
 *.so
 
+.vim/
 .idea/
+data/
+wandb/
+

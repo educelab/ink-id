@@ -25,8 +25,8 @@ import git
 import numpy as np
 import torch
 import torch.nn as nn
+import wandb
 from torch.utils.data import DataLoader
-from torch.utils.tensorboard import SummaryWriter
 import torchsummary
 
 import inkid
@@ -181,10 +181,13 @@ def main(argv=None):
     parser.add_argument("--validation-max-samples", metavar="n", type=int, default=5000)
     parser.add_argument("--summary-every-n-batches", metavar="n", type=int, default=10)
     parser.add_argument(
-        "--checkpoint-every-n-batches", metavar="n", type=int, default=5000
+        "--checkpoint-every-n-batches", metavar="n", type=int, default=0
     )
     parser.add_argument("--final-prediction-on-all", action="store_true")
     parser.add_argument("--skip-training", action="store_true")
+    parser.add_argument("--multi-gpu", action="store_true")
+    parser.add_argument("--wandb-silent", action="store_true", help="Disable wandb logging")
+    parser.add_argument("--wandb", action="store_true", help="Sync to wandb")
     parser.add_argument(
         "--dataloaders-num-workers", metavar="n", type=int, default=None
     )
@@ -232,9 +235,13 @@ def main(argv=None):
 
     os.makedirs(output_path)
 
-    # Create TensorBoard writer
-    tensorboard_path = os.path.join(output_path, "tensorboard")
-    writer = SummaryWriter(tensorboard_path)
+    # Initialize W&B
+    # TODO (dh): parametrize this before the release
+    os.environ["WANDB_SILENT"] = "true" if args.wandb_silent else "false"
+    if not args.wandb:
+        os.environ["WANDB_MODE"] = "offline"
+        os.environ["WANDB_SILENT"] = "true"
+    wandb.init(config=vars(args), project="ink-id", entity="scroll-prize", name=output_path)
 
     # Configure logging
     # noinspection PyArgumentList
@@ -567,14 +574,15 @@ def main(argv=None):
     sample_dl = train_dl or val_dl or pred_dl
     if sample_dl is not None:
         features = next(iter(sample_dl))["feature"]
-        writer.add_graph(inkid.util.ImmutableOutputModelWrapper(model), features)
-        writer.flush()
         inkid.util.save_subvolume_batch_to_img(
             model, device, sample_dl, diagnostic_images_dir
         )
 
     # Move model to device (possibly GPU)
     model = model.to(device)
+
+    if args.multi_gpu:
+        model = nn.DataParallel(model)
 
     # Print summary of model
     shape = (in_channels,) + tuple(args.subvolume_shape_voxels)
@@ -598,11 +606,13 @@ def main(argv=None):
             active=10,  # Profile ten batches, and record those
             repeat=1,  # Only do this process once
         ),
-        on_trace_ready=torch.profiler.tensorboard_trace_handler(tensorboard_path),
     )
 
+    global_step = -1
     # Run training loop
     if train_dl is not None and not args.skip_training:
+        wandb_commit = False
+
         with profiling_context_manager:
             for epoch in range(args.training_epochs):
                 fix_random_seed(epoch + args.random_seed)
@@ -614,7 +624,7 @@ def main(argv=None):
                         xb = xb.to(device)
                         preds = model(xb)
                         total_loss = None
-                        for label_type in model.labels:
+                        for label_type in getattr(model, "module", model).labels:
                             yb = (
                                 xb.clone()
                                 if label_type == "autoencoded"
@@ -639,6 +649,10 @@ def main(argv=None):
                         opt.step()
                         opt.zero_grad()
 
+                        if torch.cuda.is_available():
+                            torch.cuda.synchronize()
+
+                        global_step = epoch * len(train_dl) + batch_num
                         if batch_num % args.summary_every_n_batches == 0:
                             logging.info(
                                 f"Epoch: {epoch:>5d}/{args.training_epochs:<5d}"
@@ -646,27 +660,24 @@ def main(argv=None):
                                 f"{inkid.metrics.metrics_str(metric_results)} "
                                 f"Seconds: {time.time() - last_summary:5.3g}"
                             )
-                            for metric, result in inkid.metrics.metrics_dict(
-                                metric_results
-                            ).items():
-                                writer.add_scalar(
-                                    "train_" + metric,
-                                    result,
-                                    epoch * len(train_dl) + batch_num,
-                                )
-                                writer.flush()
+                            wandb.log(
+                                data=inkid.metrics.metrics_dict(metric_results, prefix="train/"),
+                                step=global_step,
+                                commit=False
+                            )
+                            wandb_commit = True
                             for metrics_for_label in metric_results.values():
                                 for single_metric_results in metrics_for_label.values():
                                     single_metric_results.clear()
                             last_summary = time.time()
 
-                        if batch_num % args.checkpoint_every_n_batches == 0:
+                        if args.checkpoint_every_n_batches > 0 and batch_num % args.checkpoint_every_n_batches == 0:
                             # Save model checkpoint
                             torch.save(
                                 {
                                     "epoch": epoch,
                                     "batch": batch_num,
-                                    "model_state_dict": model.state_dict(),
+                                    "model_state_dict": getattr(model, "module", model).state_dict(),
                                     "optimizer_state_dict": opt.state_dict(),
                                 },
                                 os.path.join(
@@ -681,15 +692,12 @@ def main(argv=None):
                                 val_results = inkid.util.perform_validation(
                                     model, val_dl, metrics, device
                                 )
-                                for metric, result in inkid.metrics.metrics_dict(
-                                    val_results
-                                ).items():
-                                    writer.add_scalar(
-                                        "val_" + metric,
-                                        result,
-                                        epoch * len(train_dl) + batch_num,
-                                    )
-                                    writer.flush()
+                                wandb.log(
+                                    data=inkid.metrics.metrics_dict(val_results, prefix="val/"),
+                                    step=global_step,
+                                    commit=False
+                                )
+                                wandb_commit = True
                                 logging.info(
                                     f"done ({inkid.metrics.metrics_str(val_results)})"
                                 )
@@ -708,6 +716,7 @@ def main(argv=None):
                                     predictions_dir,
                                     f"{epoch}_{batch_num}",
                                     args.prediction_averaging,
+                                    global_step
                                 )
                                 logging.info("done")
                             else:
@@ -721,6 +730,7 @@ def main(argv=None):
                                 "AutoencoderAndInkClassifier",
                             ]:
                                 logging.info("Visualizing autoencoder outputs...")
+                                # TODO (dh): log images to W&B
                                 inkid.util.save_subvolume_batch_to_img(
                                     model,
                                     device,
@@ -731,6 +741,11 @@ def main(argv=None):
                                     include_vol_slices=False,
                                 )
                                 logging.info("done")
+
+                        if wandb_commit:
+                            # This is the equivalent of flush
+                            wandb.log({}, step=global_step, commit=True)
+                            wandb_commit = False
                         profiling_context_manager.step()
 
     # Run a final prediction on all regions
@@ -758,6 +773,7 @@ def main(argv=None):
                     predictions_dir,
                     "final",
                     args.prediction_averaging,
+                    global_step
                 )
             logging.info("done")
         # Perform finishing touches even if cut short
@@ -786,8 +802,6 @@ def main(argv=None):
     # Update metadata file on disk with results after run
     with open(os.path.join(output_path, "metadata.json"), "w") as f:
         f.write(json.dumps(metadata, indent=4, sort_keys=False))
-
-    writer.close()
 
 
 if __name__ == "__main__":
