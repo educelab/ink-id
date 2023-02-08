@@ -3,7 +3,6 @@
 ========
 
 ``inkid`` is a Python package and collection of scripts for identifying ink in volumetric CT data using machine learning.
-In addition to the below README, a `documentation site <https://educelab.gitlab.io/ink-id/>`_ is available.
 
 Requirements
 ============
@@ -23,7 +22,7 @@ To install the source for development:
 
 .. code-block:: bash
 
-    $ git clone https://gitlab.com/educelab/ink-id.git && cd ink-id  # Clone the repository
+    $ git clone https://github.com/educelab/ink-id.git && cd ink-id  # Clone the repository
     $ python -m venv .venv  # Create a virtual environment
     $ . .venv/bin/activate  # Activate the environment
     (.venv) $ pip install -U pip  # Upgrade pip

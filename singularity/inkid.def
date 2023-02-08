@@ -59,7 +59,7 @@ From: ubuntu:22.04
     - Example command sequence to build fresh container:
       `cd <path_to_ink-id>/singularity`
       `rm -rf /tmp/ink-id`
-      `git clone --branch develop https://gitlab.com/educelab/ink-id.git /tmp/ink-id`
+      `git clone --branch develop https://github.com/educelab/ink-id.git /tmp/ink-id`
       `sudo singularity build inkid.sif inkid.def`
 
   Preparing for use:

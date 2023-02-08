@@ -44,7 +44,7 @@ From: volcart/vcbuilder-debian:latest.dynamic
     - The volume-cartographer git repository must exist at /tmp/volume-cartographer on the host machine before building the container. Cloning using https is recommended so that the repository can be manipulated after container creation using your username and password instead of needing ssh keys on the container. After this clone, you can check out a different branch or make changes if desired, but this can also be done after the container is built.
     - Example command sequence to build fresh container:
       `rm -rf /tmp/volume-cartographer`
-      `git clone --branch develop https://gitlab.com/educelab/volume-cartographer.git /tmp/volume-cartographer`
+      `git clone --branch develop https://github.com/educelab/volume-cartographer.git /tmp/volume-cartographer`
       `sudo singularity build vc.sif vc.def`
 
   Preparing for use:
