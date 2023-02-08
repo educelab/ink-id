@@ -18,6 +18,10 @@ import torch
 import inkid
 
 
+# Ignore PIL warnings about large images
+Image.MAX_IMAGE_PIXELS = 10000000000
+
+
 # Which subvolumes are retrieved
 @dataclass
 class RegionPointSampler:

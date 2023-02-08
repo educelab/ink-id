@@ -22,6 +22,7 @@ from tqdm import tqdm
 import inkid
 
 
+# Ignore PIL warnings about large images
 Image.MAX_IMAGE_PIXELS = 10000000000
 
 WHITE = (255, 255, 255)
