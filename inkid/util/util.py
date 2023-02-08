@@ -411,4 +411,3 @@ def save_subvolume_batch_to_img(
         outfile += f"_{iteration}"
     outfile += ".png"
     composite_img.save(outfile)
-p
