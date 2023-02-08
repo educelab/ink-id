@@ -667,7 +667,7 @@ def flatten_data_sources_list(source_paths: List[str]) -> List[str]:
             with open(source_path, "r") as f:
                 sources_in_file = f.read().splitlines()
             sources_in_file = [
-                os.path.join(os.path.dirname(source_path), s) for s in sources_in_file
+                os.path.join(os.path.dirname(source_path), s) for s in sources_in_file if s
             ]
             expanded_paths += flatten_data_sources_list(sources_in_file)
         else:
