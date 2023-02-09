@@ -571,11 +571,15 @@ def main(argv=None):
                 logging.info(f"{name} Trainable: {param.requires_grad}")
 
     # Save sample subvolumes
-    sample_dl = train_dl or val_dl or pred_dl
-    if sample_dl is not None:
-        features = next(iter(sample_dl))["feature"]
+    if train_dl is not None:
+        _ = next(iter(train_dl))["feature"]
         inkid.util.save_subvolume_batch_to_img(
-            model, device, sample_dl, diagnostic_images_dir
+            model, device, train_dl, diagnostic_images_dir, "sample_subvolume_batch_training.png"
+        )
+    if pred_dl is not None:
+        _ = next(iter(pred_dl))["feature"]
+        inkid.util.save_subvolume_batch_to_img(
+            model, device, pred_dl, diagnostic_images_dir, "sample_subvolume_batch_prediction.png"
         )
 
     # Move model to device (possibly GPU)
@@ -722,8 +726,8 @@ def main(argv=None):
                         device,
                         train_dl,
                         diagnostic_images_dir,
+                        f"autoencoder_samples_{epoch}_{batch_num}.png",
                         include_autoencoded=True,
-                        iteration=batch_num,
                         include_vol_slices=False,
                     )
                     logging.info("done")

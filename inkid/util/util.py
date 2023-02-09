@@ -1,18 +1,15 @@
 """Miscellaneous operations used in ink-id."""
 
-from collections import namedtuple
 from copy import deepcopy
 import itertools
 from io import BytesIO
 import json
-import logging
 import requests
-from typing import Any
 from urllib.parse import urlsplit, urlunsplit
 
 import math
 import os
-import subprocess
+from pathlib import Path
 from xml.dom.minidom import parseString
 
 from dicttoxml import dicttoxml
@@ -46,13 +43,13 @@ def save_volume_to_image_stack(volume, dirname):
     that directory, with filenames starting at 0 and going up to the z height of the volume.
 
     """
-    os.makedirs(dirname, exist_ok=True)
+    Path(dirname).mkdir(parents=True, exist_ok=True)
     for z in range(volume.shape[0]):
         image = volume[z, :, :]
         image *= np.iinfo(np.uint16).max  # Assume incoming [0, 1] floats
         image = image.astype(np.uint16)
         image = Image.fromarray(image)
-        image.save(os.path.join(dirname, str(z) + ".tif"))
+        image.save(Path(dirname) / f"{z}.tif")
 
 
 def remap(x, in_min, in_max, out_min, out_max):
@@ -197,15 +194,13 @@ def generate_prediction_images(
 
 def json_schema(schema_name):
     """Return the JSON schema of the specified name from the inkid/schemas directory."""
-    file_path = os.path.join(
-        os.path.dirname(inkid.__file__), "schemas", schema_name + ".schema.json"
-    )
+    file_path = Path(inkid.__file__).parent / "schemas" / f"{schema_name}.schema.json"
     with open(file_path, "r") as f:
         return json.load(f)
 
 
 def dummy_volpkg_path():
-    return os.path.join(os.path.dirname(inkid.__file__), "examples", "DummyTest.volpkg")
+    return Path(inkid.__file__).parent / "examples" / "DummyTest.volpkg"
 
 
 def get_raw_data_from_file_or_url(filename, return_relative_url=False):
@@ -358,13 +353,13 @@ def save_subvolume_batch_to_img(
     device,
     dataloader,
     outdir,
+    filename,
     padding=10,
     background_color=(128, 128, 128),
     include_autoencoded=False,
-    iteration=None,
     include_vol_slices=True,
 ):
-    os.makedirs(outdir, exist_ok=True)
+    Path(outdir).mkdir(parents=True, exist_ok=True)
 
     batch = next(iter(dataloader))
     if include_autoencoded:
@@ -406,8 +401,5 @@ def save_subvolume_batch_to_img(
     for i, img in enumerate(imgs):
         composite_img.paste(img, (padding, img.size[1] * i + padding * (i + 1)))
 
-    outfile = os.path.join(outdir, f"sample_subvolume_batch")
-    if iteration is not None:
-        outfile += f"_{iteration}"
-    outfile += ".png"
+    outfile = Path(outdir) / filename
     composite_img.save(outfile)
