@@ -6,6 +6,7 @@
 #SBATCH --output=out/inkid_summary_%A.out
 #SBATCH --partition=SKY32M192_L
 #SBATCH --time=1-00:00:00
+#SBATCH --mem=0
 
 # Make rclone available on the container and tell system where to look
 #SBATCH --export=SINGULARITY_BIND='/share/singularity/bin',SINGULARITYENV_PREPEND_PATH='/share/singularity/bin'
