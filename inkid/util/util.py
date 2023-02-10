@@ -14,6 +14,7 @@ from xml.dom.minidom import parseString
 
 from dicttoxml import dicttoxml
 from matplotlib import colormaps
+from matplotlib import pyplot as plt
 import numpy as np
 from PIL import Image, ImageDraw
 import torch
@@ -258,17 +259,27 @@ def uint16_to_float32_normalized_0_1(img):
     return img
 
 
-def float_0_1_to_cmap_rgb_uint8(img, cmap="turbo"):
-    color_map = colormaps[cmap]
-    return Image.fromarray(np.uint8(color_map(img) * 255))
-
-
 def window_0_1_array(arr, window_min, window_max):
     """Assumes input array is in [0, 1] range and contrast stretches to new min/max"""
     clipped = np.clip(arr, window_min, window_max)
     shifted = clipped - window_min
     windowed = shifted / (window_max - window_min)
     return windowed
+
+
+def plot_with_colorbar(img, cmap="turbo", vmin=None, vmax=None):
+    # plot
+    fig, ax = plt.subplots()
+    im = ax.imshow(img, cmap=cmap, vmin=vmin, vmax=vmax)
+    fig.colorbar(im, ax=ax)
+    fig.tight_layout()
+    # convert to PIL Image
+    buf = BytesIO()
+    fig.savefig(buf, format="png")
+    buf.seek(0)
+    pil_img = Image.open(buf)
+    plt.close(fig)
+    return pil_img
 
 
 def subvolume_to_sample_img(
@@ -281,21 +292,31 @@ def subvolume_to_sample_img(
     include_vol_slices=True,
 ):
     max_size = (300, 300)
-    red = (255, 0, 0)
     z_shape, y_shape, x_shape = subvolume.shape
 
     sub_images = []
 
     # Get central slices of subvolume
+    subvolume_slices = []
     z_idx: int = z_shape // 2
-    sub_images.append(float_0_1_to_cmap_rgb_uint8(subvolume[z_idx, :, :]))
     y_idx: int = y_shape // 2
-    sub_images.append(float_0_1_to_cmap_rgb_uint8(subvolume[:, y_idx, :]))
     x_idx: int = x_shape // 2
-    sub_images.append(float_0_1_to_cmap_rgb_uint8(subvolume[:, :, x_idx]))
+    subvolume_slices.append(subvolume[z_idx, :, :])
+    subvolume_slices.append(subvolume[:, y_idx, :])
+    subvolume_slices.append(subvolume[:, :, x_idx])
+
+    # Get min/max across all three slices
+    min_val = min([s.min() for s in subvolume_slices])
+    max_val = max([s.max() for s in subvolume_slices])
+
+    # Plot with color bar
+    for subvolume_slice in subvolume_slices:
+        subvolume_img = plot_with_colorbar(subvolume_slice, vmin=min_val, vmax=max_val)
+        sub_images.append(subvolume_img)
 
     if include_vol_slices:
         # Get intersection slices of volume for each axis
+        vol_slices = []
         for axis in (0, 1, 2):  # x, y, z
             # Get slice image from volume
             vol_slice_idx = vol_coord[axis]
@@ -305,36 +326,51 @@ def subvolume_to_sample_img(
                 vol_slice = volume.y_slice(vol_slice_idx)
             else:
                 vol_slice = volume.z_slice(vol_slice_idx)
-            # Color map
-            vol_sub_img = float_0_1_to_cmap_rgb_uint8(vol_slice)
+            # Convert to PIL Image
+            vol_slice_img = Image.fromarray(vol_slice, mode="F")
             # Draw crosshairs around subvolume
-            draw = ImageDraw.Draw(vol_sub_img)
+            draw = ImageDraw.Draw(vol_slice_img)
             # Find (x, y) coordinates in this slice image space
             subvolume_img_x_y = list(vol_coord).copy()
             subvolume_img_x_y.pop(axis)
             x, y = subvolume_img_x_y
-            w, h = vol_sub_img.size
+            w, h = vol_slice_img.size
             # Draw lines through that (x, y) but don't draw them at the center, so the actual spot is not obscured
-            r = max(vol_sub_img.size) // 50
-            width = max(vol_sub_img.size) // 100
-            draw.line([(0, y), (x - r, y)], fill=red, width=width)  # Left of (x, y)
-            draw.line([(x + r, y), (w, y)], fill=red, width=width)  # Right of (x, y)
-            draw.line([(x, 0), (x, y - r)], fill=red, width=width)  # Above (x, y)
-            draw.line([(x, y + r), (x, h)], fill=red, width=width)  # Below (x, y)
+            c = np.amax(vol_slice)
+            r = max(vol_slice_img.size) // 50
+            width = max(vol_slice_img.size) // 100
+            draw.line([(0, y), (x - r, y)], fill=c, width=width)  # Left of (x, y)
+            draw.line([(x + r, y), (w, y)], fill=c, width=width)  # Right of (x, y)
+            draw.line([(x, 0), (x, y - r)], fill=c, width=width)  # Above (x, y)
+            draw.line([(x, y + r), (x, h)], fill=c, width=width)  # Below (x, y)
             # Reduce size and add to list of images for this subvolume
-            vol_sub_img.thumbnail(max_size)
-            sub_images.append(vol_sub_img)
+            vol_slice_img.thumbnail(max_size)
+            vol_slices.append(np.array(vol_slice_img))
+
+        # Get min/max across all three slices
+        min_val = min([s.min() for s in vol_slices])
+        max_val = max([s.max() for s in vol_slices])
+
+        # Plot with color bar
+        for vol_slice in vol_slices:
+            vol_slice_img = plot_with_colorbar(vol_slice, vmin=min_val, vmax=max_val)
+            sub_images.append(vol_slice_img)
 
     if autoencoded_subvolume is not None:
-        sub_images.append(
-            float_0_1_to_cmap_rgb_uint8(autoencoded_subvolume[z_idx, :, :])
-        )
-        sub_images.append(
-            float_0_1_to_cmap_rgb_uint8(autoencoded_subvolume[:, y_idx, :])
-        )
-        sub_images.append(
-            float_0_1_to_cmap_rgb_uint8(autoencoded_subvolume[:, :, x_idx])
-        )
+        # Get central slices of autoencoded subvolume
+        autoencoded_subvolume_slices = []
+        autoencoded_subvolume_slices.append(autoencoded_subvolume[z_idx, :, :])
+        autoencoded_subvolume_slices.append(autoencoded_subvolume[:, y_idx, :])
+        autoencoded_subvolume_slices.append(autoencoded_subvolume[:, :, x_idx])
+
+        # Get min/max across all three slices
+        min_val = min([s.min() for s in autoencoded_subvolume_slices])
+        max_val = max([s.max() for s in autoencoded_subvolume_slices])
+
+        # Plot with color bar
+        for autoencoded_subvolume_slice in autoencoded_subvolume_slices:
+            autoencoded_subvolume_img = plot_with_colorbar(autoencoded_subvolume_slice, vmin=min_val, vmax=max_val)
+            sub_images.append(autoencoded_subvolume_img)
 
     width = sum([s.size[0] for s in sub_images]) + padding * (len(sub_images) - 1)
     height = max([s.size[1] for s in sub_images])
@@ -346,6 +382,21 @@ def subvolume_to_sample_img(
         x_ctr += s.size[0] + padding
 
     return img
+
+
+def create_colormap_swatch(cmap, w, h):
+    swatch = Image.new("RGB", (w, h))
+    for x in range(w):
+        intensity = int((x / w) * 255)
+        swatch.paste(
+            (intensity, intensity, intensity), (x, 0, x + 1, h)
+        )
+    if cmap is not None:
+        color_map = colormaps[cmap]
+        swatch = swatch.convert("L")
+        img_data = np.array(swatch)
+        swatch = Image.fromarray(np.uint8(color_map(img_data) * 255))
+    return swatch
 
 
 def save_subvolume_batch_to_img(

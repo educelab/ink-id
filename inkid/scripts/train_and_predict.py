@@ -571,6 +571,7 @@ def main(argv=None):
                 logging.info(f"{name} Trainable: {param.requires_grad}")
 
     # Save sample subvolumes
+    logging.info("Saving sample subvolumes...")
     if train_dl is not None:
         _ = next(iter(train_dl))["feature"]
         inkid.util.save_subvolume_batch_to_img(
@@ -581,6 +582,7 @@ def main(argv=None):
         inkid.util.save_subvolume_batch_to_img(
             model, device, pred_dl, diagnostic_images_dir, "sample_subvolume_batch_prediction.png"
         )
+    logging.info("done")
 
     # Move model to device (possibly GPU)
     model = model.to(device)

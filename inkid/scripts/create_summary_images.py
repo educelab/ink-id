@@ -992,17 +992,7 @@ def build_footer_img(
         swatch_title = "no ink            ink"
         swatch_title_w = int(font_regular.getlength(swatch_title))
         swatch_title_h = int(font_regular.getbbox(swatch_title)[3])
-        swatch = Image.new("RGB", (swatch_title_w, swatch_title_h))
-        for x in range(swatch.width):
-            intensity = int((x / swatch.width) * 255)
-            swatch.paste(
-                (intensity, intensity, intensity), (x, 0, x + 1, swatch.height)
-            )
-        if cmap_name is not None:
-            color_map = colormaps[cmap_name]
-            swatch = swatch.convert("L")
-            img_data = np.array(swatch)
-            swatch = Image.fromarray(np.uint8(color_map(img_data) * 255))
+        swatch = inkid.util.create_colormap_swatch(cmap_name, swatch_title_w, swatch_title_h)
         draw.text(
             (horizontal_offset + buffer_size, buffer_size),
             swatch_title,
