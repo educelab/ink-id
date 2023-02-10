@@ -533,7 +533,7 @@ def main(argv=None):
         pred_dl = DataLoader(
             pred_ds,
             batch_size=args.batch_size * 2,
-            shuffle=False,
+            shuffle=True,  # Not really necessary for actual prediction but helps sample visualization
             num_workers=args.dataloaders_num_workers,
         )
     logging.info("done")
