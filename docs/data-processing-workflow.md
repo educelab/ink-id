@@ -81,9 +81,43 @@ sbatch -p CAL48M192_L --time=14-00:00:00 inkid_general_cpu.sh python /usr/local/
 
 If the slices come from individual slabs, they must be merged together into a single volume.
 
-First, the offsets must be determined. (TODO)
+First, the offsets must be determined.
+Starting with the overlap between slab 000 and slab 001, load both as virtual image stacks in ImageJ.
+Set slab 000 to slice 0, and then scrub through the slices of slab 001 until finding the one that most resembles slab 000, slice 0.
+The offsets are typically quite uniform, so you can likely expect it to be around slice 1548.
+Record the individual slice number that best appears to be the overlap slice based on visual judgement.
+This is primarily a visual sanity check; the actual best slice will be computed.
+Take a note like this:
 
-Then, the merge itself can be performed using `merge_slabs.py`:
+```
+PHercParis2Fr47_54keV_slab_000 slice 0000 matches PHercParis2Fr47_54keV_slab_001 slice 1547
+```
+
+Then, confirm those results using `inkid/scripts/find_vertical_overlap.py`. For example:
+
+```
+python inkid/scripts/find_vertical_overlap.py --fixed-slab ~/data/dri-datasets-drive/PHerc2Fr47/slab_000 --moving-slab ~/data/dri-datasets-drive/PHerc2Fr47/slab_001 --min-index 1540 --max-index 1560 --num-candidates 50 --comparison-function pearson
+```
+
+This will compare at most 50 slices (which is more than the suggested range, so this argument is effectively ignored) between slices 1540 and 1560 of slab 001, using the Pearson correlation coefficient to compare each against slice 0 of slab 000.
+A sorted list of slice numbers is printed with their associated correlation.
+The most highly correlated slice should be at the bottom.
+Verify it is at least close (typically within 2-3, ideally within 0-1 slices) to the manual guess.
+
+Repeat this for each pair of adjacent slabs, resulting in a set of notes like this:
+
+```
+PHercParis2Fr47_54keV_slab_000 slice 0000 matches PHercParis2Fr47_54keV_slab_001 slice 1547 | script agrees
+PHercParis2Fr47_54keV_slab_001 slice 0000 matches PHercParis2Fr47_54keV_slab_002 slice 1550 | script says 1549
+PHercParis2Fr47_54keV_slab_002 slice 0000 matches PHercParis2Fr47_54keV_slab_003 slice 1547 | script says 1548
+PHercParis2Fr47_54keV_slab_003 slice 0000 matches PHercParis2Fr47_54keV_slab_004 slice 1549 | script agrees
+PHercParis2Fr47_54keV_slab_004 slice 0000 matches PHercParis2Fr47_54keV_slab_005 slice 1548 | script says 1549
+```
+
+Then, the merge itself can be performed using `merge_slabs.py`.
+For arbitrary sets being merged, care should be taken regarding the ordering of the slabs and the ordering of the slices within the slabs.
+Check the documentation inside `merge_slabs.py` for more information if this is necessary.
+Specifically for 2019 fragment scans from Diamond Light Source, the slice indices can be passed in the order they are listed above, and `--reverse-slab-order` should be supplied.
 
 ```
 sbatch -p CAL48M192_L --time=14-00:00:00 inkid_general_cpu.sh python /usr/local/dri/ink-id/inkid/scripts/merge_slabs.py --in-dir /pscratch/seales_uksr/nxstorage_partial_copy_in_case_gemini_down/data/Herculaneum_Scrolls/PHercParis2/Frag47/CT/54keV/2023-02-04_slices/ --out-dir /pscratch/seales_uksr/nxstorage_partial_copy_in_case_gemini_down/data/Herculaneum_Scrolls/PHercParis2/Frag47/CT/54keV/2023-02-05_merged_slices --indices 1547 1549 1548 1549 1549 --reverse-slab-order
@@ -96,33 +130,54 @@ Taking slices 0 to 1546 from slab full_recon_row_001_scan_91867_91868
 Taking slices 0 to 2149 from slab full_recon_row_000_scan_91865_91866
 ```
 
-If you crop a dataset, please save the crop information into a text file and store it alongside the volume in the Volume Package. The following example matches the above crop command:
+Following this process, there will be a merged volume in the output directory of the above script.
+Load it as a virtual image stack in ImageJ and confirm the merged volume appears coherent and does not have jumps between slabs.
+Also note the approximate beginning slice and ending slice of the fragment itself, if it is smaller than the entire slice range.
+The slices before and after the fragment can then be "cropped" (deleted) like this, further reducing the data size:
 
 ```
-CROP
-Original: original_from_hdf5/
-Output: cropped/
-Crop: 9060x1794+670+830
+rm {0000..1330}.tif  # Remove slices before fragment
+rm {8550..9891}.tif  # Remove slices after fragment
 ```
 
-# Create .volpkg
+# Import slices into .volpkg
 
-If your object does not yet have a Volume Package, use `vc_packager` to create one. New packages require the following flags:
+Use `vc_packager` to import the slices into a volume package.
+The following flags will be required:
 
-* `--volpkg (-v)`: The name of the Volume Package
-* `--material-thickness (-m)`: The estimated thickness of a layer (i.e. page) in microns
+* `--volpkg (-v)`: The path and name of the volume package
 * `--slices (-s)`: Path to an importable volume.
 
-If you are adding a volume to an existing Volume Package, only the path to the Volume Package and the path to the importable volume are required.
+If the object does not already have a volume package, the following will also be required:
 
-Example:
+* `--material-thickness (-m)`: The estimated thickness of a layer (i.e. page) in microns
+
+For Herculaneum scans, use 150 as the estimated material thickness.
+
+You will be prompted for a descriptive name for the volume.
+Base the name on this example: `PHercParis2Fr47 88keV merged, cropped 7332x1608x7229+552+4596+1331`, where the numbers following `cropped` are `crop-width`, `crop-height`, `crop-slices`, `x-min`, `y-min`, `z-min`.
+You will also input the voxel size of the volume in microns, which for 2019 Diamond Light Source fragment scans is 3.24.
+Finally you will choose whether to flip the images (for 2019 Diamond fragment scans, type `all`), and whether to compress the resulting slice images (keep the default, which is not to compress).
+This entire process should look something like this:
+
+```
+~/src/volume-cartographer/build/bin/vc_packager -v . -s ~/temp/PHercParis2Fr47_88keV_merged_slices/
+Getting info for Volume: "~/temp/PHercParis2Fr47_88keV_merged_slices/"
+Enter a descriptive name for the volume: PHercParis2Fr47 88keV merged, cropped 7332x1608x7229+552+4596+1331  
+Enter the voxel size of the volume in microns (e.g. 13.546): 3.24
+Flip options: Vertical flip (vf), horizontal flip (hf), both, z-flip (zf), all, [none] : all
+Compress slice images? [yN]:
+Adding Volume: "~/temp/PHercParis2Fr47_88keV_merged_slices/"
+```
+
+Other `vc_packager` examples:
 
 ```shell
 # Create a new Volume Package
-vc_packager -v PHerc2Fr143.volpkg -m 200 -s PHerc2Fr143/volumes/54kV_cropped/
+vc_packager -v PHerc2Fr47.volpkg -m 150 -s PHerc2Fr47/volumes/54kV_cropped/
 
 # Add to an existing Volume Package
-vc_packager -v PHerc2Fr143.volpkg -s PHerc2Fr143/volumes/88kV_cropped/
+vc_packager -v PHerc2Fr47.volpkg -s PHerc2Fr47/volumes/88kV_cropped/
 ```
 
 `vc_packager` supports importing Grayscale or RGB images in the TIFF, JPG, PNG, or BMP formats with 8 or 16 bits-per-channel. The `--slices` option accepts a number of different importable volume types:
