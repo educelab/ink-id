@@ -64,9 +64,9 @@ From: ubuntu:22.04
 
   Preparing for use:
     - Then get the container ready for use, for example:
-      `scp inkid.sif *.sh lcc:~/develop`
+      `scp inkid.sif *.sh lcc:~/ink-id`
       `ssh lcc`
-      `cd develop`
+      `cd ink-id`
       `module load ccs/singularity`
       `mkdir -p out`
       `rm -f inkid.overlay && dd if=/dev/zero of=inkid.overlay bs=1M count=500 && mkfs.ext3 -F inkid.overlay  # Create a new overlay for the new container`
