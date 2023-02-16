@@ -24,7 +24,7 @@ From: volcart/vcbuilder-debian:latest.dynamic
   cd /usr/local/educelab/volume-cartographer
   mkdir build && cd build
   export CMAKE_PREFIX_PATH="/usr/local/Qt-6.2.3/"
-  cmake -GNinja -DVC_BUILD_ACVD=ON -DCMAKE_BUILD_TYPE=Release ..
+  cmake -GNinja -DVC_BUILD_ACVD=ON -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_RPATH=/usr/local/Qt-6.2.3/lib ..
   ninja
   ninja install
 
