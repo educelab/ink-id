@@ -24,6 +24,8 @@ From: volcart/vcbuilder-debian:latest.dynamic
   cd /usr/local/educelab/volume-cartographer
   mkdir build && cd build
   export CMAKE_PREFIX_PATH="/usr/local/Qt-6.2.3/"
+  # Hahaha https://forum.qt.io/topic/136058/libqt6core-so-6-cannot-open-shared-object-file-even-though-it-exists-seems-to-depend-on-docker-host-os
+  strip --remove-section=.note.ABI-tag /usr/local/Qt-6.2.3/lib/libQt6Core.so.6.2.3
   cmake -GNinja -DVC_BUILD_ACVD=ON -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_RPATH=/usr/local/Qt-6.2.3/lib ..
   ninja
   ninja install
