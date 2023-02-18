@@ -18,5 +18,3 @@ cdef struct BasisVectors:
     Float3 z
 
 cpdef BasisVectors get_component_vectors_from_normal(Float3 n)
-
-cpdef BasisVectors get_basis_from_square(square_corners)

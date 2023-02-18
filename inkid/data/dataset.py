@@ -14,6 +14,7 @@ import jsonschema
 import numpy as np
 from PIL import Image, ImageFilter
 import torch
+import torchvision.transforms as transforms
 import wandb
 
 import inkid
@@ -277,6 +278,18 @@ class RegionSource(DataSource):
         feature = self.volume.get_subvolume(
             center=(x, y, z), normal=(n_x, n_y, n_z), **self.feature_args
         )
+
+        transform = transforms.Compose(
+            [
+                inkid.util.uint16_to_float32_normalized_0_1,
+                torch.from_numpy,
+                transforms.RandomHorizontalFlip(),
+                transforms.RandomVerticalFlip(),
+                transforms.Normalize((0.5,), (0.5,)),
+            ]
+        )
+        feature = transform(feature)
+
         item = {
             "feature_metadata": feature_metadata,
             "feature": feature,

@@ -4,18 +4,6 @@ import inkid
 
 
 class VectorMathTestCase(unittest.TestCase):
-    def test_get_basis_from_square(self):
-        square_corners = [[-5, 5, 0], [5, 5, 0], [-5, -5, 0], [5, -5, 0]]
-        basis_vectors = inkid.data.get_basis_from_square(square_corners)
-        self.assertEqual(
-            basis_vectors,
-            {
-                "x": {"x": 1.0, "y": 0.0, "z": 0.0},
-                "y": {"x": 0.0, "y": -1.0, "z": 0.0},
-                "z": {"x": 0.0, "y": 0.0, "z": -1.0},
-            },
-        )
-
     def test_get_component_vectors_from_normal_trivial(self):
         normal = {"x": 0, "y": 0, "z": 1}
         component_vectors = inkid.data.get_component_vectors_from_normal(normal)

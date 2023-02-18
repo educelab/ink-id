@@ -312,7 +312,6 @@ def main(argv=None):
         shape_voxels=args.subvolume_shape_voxels,
         move_along_normal=args.move_along_normal,
         normalize=args.normalize_subvolumes,
-        window_min_max=args.subvolume_window_min_max,
     )
     train_feature_args = subvolume_args.copy()
     train_feature_args.update(

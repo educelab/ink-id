@@ -326,6 +326,7 @@ def subvolume_to_sample_img(
                 vol_slice = volume.y_slice(vol_slice_idx)
             else:
                 vol_slice = volume.z_slice(vol_slice_idx)
+            vol_slice = uint16_to_float32_normalized_0_1(vol_slice)
             # Convert to PIL Image
             vol_slice_img = Image.fromarray(vol_slice, mode="F")
             # Draw crosshairs around subvolume

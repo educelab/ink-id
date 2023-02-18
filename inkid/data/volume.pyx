@@ -16,56 +16,16 @@ from tqdm import tqdm
 
 cimport inkid.data.mathutils as mathutils
 
-import inkid.util
 
 cpdef norm(vec):
     vec = np.array(vec)
     return (vec[0]**2 + vec[1]**2 + vec[2]**2)**(1./2)
 
+
 cpdef normalize_fl3(vec):
     vec = np.array(vec)
     n = norm(vec)
     return vec / n
-
-cpdef BasisVectors get_basis_from_square(square_corners):
-    cdef BasisVectors basis
-    cdef float x_vec[3]
-    cdef float y_vec[3]
-    cdef float z_vec[3]
-    mathutils.zero_v3(z_vec)
-
-    top_left, top_right, bottom_left, bottom_right = np.array(square_corners)
-
-    x_vec_np = ((top_right - top_left) + (bottom_right - bottom_left)) / 2.0
-    y_vec_np = ((bottom_left - top_left) + (bottom_right - top_right)) / 2.0
-
-    x_vec[0] = x_vec_np[0]
-    x_vec[1] = x_vec_np[1]
-    x_vec[2] = x_vec_np[2]
-
-    y_vec[0] = y_vec_np[0]
-    y_vec[1] = y_vec_np[1]
-    y_vec[2] = y_vec_np[2]
-
-    mathutils.cross_v3_v3v3(z_vec, x_vec, y_vec)
-
-    mathutils.normalize_v3(x_vec)
-    mathutils.normalize_v3(y_vec)
-    mathutils.normalize_v3(z_vec)
-
-    basis.x.x = x_vec[0]
-    basis.x.y = x_vec[1]
-    basis.x.z = x_vec[2]
-
-    basis.y.x = y_vec[0]
-    basis.y.y = y_vec[1]
-    basis.y.z = y_vec[2]
-
-    basis.z.x = z_vec[0]
-    basis.z.y = z_vec[1]
-    basis.z.z = z_vec[2]
-
-    return basis
 
 
 cpdef BasisVectors get_component_vectors_from_normal(const Float3 n):
@@ -118,6 +78,7 @@ cpdef BasisVectors get_component_vectors_from_normal(const Float3 n):
     basis.z.z = z_vec[2]
 
     return basis
+
 
 cdef class Volume:
     """Represent a volume and support accesses of the volume data.
@@ -207,21 +168,21 @@ cdef class Volume:
 
     def z_slice(self, int idx):
         if 0 <= idx < self.shape_z:
-            return inkid.util.uint16_to_float32_normalized_0_1(self._data_view[idx, :, :])
+            return np.array(self._data_view[idx, :, :], dtype=np.uint16)
         else:
-            return np.zeros((self.shape_y, self.shape_x), dtype=np.float32)
+            return np.zeros((self.shape_y, self.shape_x), dtype=np.uint16)
 
     def y_slice(self, int idx):
         if 0 <= idx < self.shape_y:
-            return inkid.util.uint16_to_float32_normalized_0_1(self._data_view[:, idx, :])
+            return np.array(self._data_view[:, idx, :], dtype=np.uint16)
         else:
-            return np.zeros((self.shape_z, self.shape_x), dtype=np.float32)
+            return np.zeros((self.shape_z, self.shape_x), dtype=np.uint16)
 
     def x_slice(self, int idx):
         if 0 <= idx < self.shape_x:
-            return inkid.util.uint16_to_float32_normalized_0_1(self._data_view[:, :, idx])
+            return np.array(self._data_view[:, :, idx], dtype=np.uint16)
         else:
-            return np.zeros((self.shape_z, self.shape_y), dtype=np.float32)
+            return np.zeros((self.shape_z, self.shape_y), dtype=np.uint16)
 
     def shape(self):
         return self.shape_z, self.shape_y, self.shape_x
@@ -421,7 +382,6 @@ cdef class Volume:
                         <int>(volume_point.z + 0.5)
                     )
 
-
     def get_subvolume(self, center, shape_voxels, shape_microns, normal,
                       move_along_normal, jitter_max,
                       augment_subvolume, method, normalize=False, square_corners=None, window_min_max=None):
@@ -447,11 +407,10 @@ cdef class Volume:
                 the center point along the center vector.
             jitter_max: Jitter the center point a random amount up to
                 this value in either direction along the normal vector.
-            augment_subvolume: Whether to perform augmentation.
             method: String to indicate how to get the volume data.
 
         Returns:
-            A np.float32 array of the requested shape.
+            A np.uint16 array of the requested shape.
 
         """
         assert len(center) == 3
@@ -464,9 +423,6 @@ cdef class Volume:
 
         assert len(shape_microns) == 3
 
-        # TODO if square_corners is not None and not empty, modify basis vectors before calling (and center and normal?)
-        # TODO if empty return zeros?
-
         if normal is None or not np.any(normal):
             normal = np.array([0, 0, 1])
         else:
@@ -477,9 +433,6 @@ cdef class Volume:
 
         if jitter_max is None:
             jitter_max = 0
-
-        if augment_subvolume is None:
-            augment_subvolume = False
 
         center = np.array(center)
         center += (move_along_normal + random.randint(-jitter_max, jitter_max)) * normal
@@ -506,47 +459,18 @@ cdef class Volume:
 
         subvolume = np.zeros(shape_voxels, dtype=np.uint16)
 
-        if square_corners is None or len(square_corners) > 0:
-            if square_corners is None:
-                basis = get_component_vectors_from_normal(n)
-            else:
-                basis = get_basis_from_square(square_corners)
-            if method is None:
-                method = 'nearest_neighbor'
-            assert method in ['interpolated', 'nearest_neighbor']
-            if method == 'interpolated':
-                self.interpolated_with_basis_vectors(c, s_v, s_m, basis, subvolume)
-            elif method == 'nearest_neighbor':
-                self.nearest_neighbor_with_basis_vectors(c, s_v, s_m, basis, subvolume)
-
-        if augment_subvolume:
-            flip_direction = np.random.randint(4)
-            if flip_direction == 0:
-                subvolume = np.flip(subvolume, axis=1)  # Flip y
-            elif flip_direction == 1:
-                subvolume = np.flip(subvolume, axis=2)  # Flip x
-            elif flip_direction == 2:
-                subvolume = np.flip(subvolume, axis=1)  # Flip x and y
-                subvolume = np.flip(subvolume, axis=2)
-
-            rotate_direction = np.random.randint(4)
-            subvolume = np.rot90(subvolume, k=rotate_direction, axes=(1, 2))
+        basis = get_component_vectors_from_normal(n)
+        if method is None:
+            method = 'nearest_neighbor'
+        assert method in ['interpolated', 'nearest_neighbor']
+        if method == 'interpolated':
+            self.interpolated_with_basis_vectors(c, s_v, s_m, basis, subvolume)
+        elif method == 'nearest_neighbor':
+            self.nearest_neighbor_with_basis_vectors(c, s_v, s_m, basis, subvolume)
 
         assert subvolume.shape == tuple(shape_voxels)
 
-        # Convert to float normalized to [0, 1]
-        subvolume = inkid.util.uint16_to_float32_normalized_0_1(subvolume)
-
-        if normalize:
-            subvolume = subvolume - subvolume.mean()
-            subvolume = subvolume / subvolume.std()
-
-        # Window (contrast stretch) if requested
-        if window_min_max is not None:
-            window_min, window_max = window_min_max
-            subvolume = inkid.util.window_0_1_array(subvolume, window_min, window_max)
-
-        # Add singleton dimension for number of channels
+        # Add singleton dimension for number of channels: [C(1), D, H, W]
         subvolume = np.expand_dims(subvolume, 0)
 
         return subvolume
