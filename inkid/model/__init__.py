@@ -1,3 +1,5 @@
+from .cyclegan_networks import define_G
+
 from .model import model_choices
 
 from .model import Autoencoder

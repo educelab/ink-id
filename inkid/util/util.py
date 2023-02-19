@@ -79,7 +79,7 @@ def dict_to_xml(data):
     return dom.toprettyxml()
 
 
-def perform_validation(model, dataloader, metrics, device):
+def perform_validation(model, dataloader, metrics, device, domain_transfer_model=None):
     """Run the validation process using a model and dataloader, and return the results of all metrics."""
     model.eval()  # Turn off training mode for batch norm and dropout purposes
     with torch.no_grad():
@@ -89,6 +89,10 @@ def perform_validation(model, dataloader, metrics, device):
         }
         for batch in tqdm(dataloader):
             xb = batch["feature"].to(device)
+            if domain_transfer_model is not None:
+                xb = torch.squeeze(xb, 1)
+                xb = domain_transfer_model(xb)
+                xb = torch.unsqueeze(xb, 1)
             preds = model(xb)
             total_loss = None
             for label_type in getattr(model, "module", model).labels:
@@ -115,7 +119,7 @@ def perform_validation(model, dataloader, metrics, device):
 
 
 def generate_prediction_images(
-    dataloader, model, device, predictions_dir, suffix, prediction_averaging, global_step
+    dataloader, model, device, predictions_dir, suffix, prediction_averaging, global_step, domain_transfer_model=None
 ):
     """Helper function to generate a prediction image given a model and dataloader, and save it to a file."""
     model.eval()  # Turn off training mode for batch norm and dropout purposes
@@ -151,7 +155,12 @@ def generate_prediction_images(
                     aug_pxb = batch_features.rot90(rotation, [3, 4])
                     if flip:
                         aug_pxb = aug_pxb.flip(4)
-                    preds = model(aug_pxb.to(device))
+                    aug_pxb = aug_pxb.to(device)
+                    if domain_transfer_model is not None:
+                        aug_pxb = torch.squeeze(aug_pxb, 1)
+                        aug_pxb = domain_transfer_model(aug_pxb)
+                        aug_pxb = torch.unsqueeze(aug_pxb, 1)
+                    preds = model(aug_pxb)
                     pred = preds[label_type]
                     if label_type == "ink_classes":
                         pred = F.softmax(pred, dim=1)

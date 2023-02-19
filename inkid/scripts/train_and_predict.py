@@ -10,6 +10,7 @@ added to those for validation and prediction.
 """
 
 import argparse
+from collections import OrderedDict
 import copy
 import datetime
 import json
@@ -167,6 +168,18 @@ def main(argv=None):
         action="store_true",
         help="allow loaded weights to continue training, typically for fine-tuning "
              "(it is recommended to use a lower learning rate)"
+    )
+    parser.add_argument(
+        "--training-domain-transfer-weights",
+        metavar="path",
+        default=None,
+        help="pretrained model checkpoint to use to transfer subvolume domain before training"
+    )
+    parser.add_argument(
+        "--prediction-validation-domain-transfer-weights",
+        metavar="path",
+        default=None,
+        help="pretrained model checkpoint to use to transfer subvolume domain before prediction and validation"
     )
 
     # Run configuration
@@ -569,6 +582,47 @@ def main(argv=None):
             for name, param in model.named_parameters():
                 logging.info(f"{name} Trainable: {param.requires_grad}")
 
+    # Load domain transfer weights if specified
+    training_domain_transfer_model = None
+    if args.training_domain_transfer_weights is not None:
+        logging.info("Loading training domain transfer model weights...")
+        training_domain_transfer_model_dict = torch.load(args.training_domain_transfer_weights)
+        # training_domain_transfer_new_dict = OrderedDict()
+        # for k, v in training_domain_transfer_model_dict.items():
+        #     # load_state_dict expects keys with prefix 'module.'
+        #     training_domain_transfer_new_dict["module." + k] = v
+
+        training_domain_transfer_model = inkid.model.define_G(
+            input_nc=args.subvolume_shape_voxels[0],
+            output_nc=args.subvolume_shape_voxels[0],
+            ngf=64,
+            netG="resnet_9blocks",
+            gpu_ids=list(range(torch.cuda.device_count())),
+            up_method="upsample",
+            norm="instance",
+        )
+        training_domain_transfer_model.load_state_dict(training_domain_transfer_model_dict)
+        logging.info("done")
+    prediction_validation_domain_transfer_model = None
+    if args.prediction_validation_domain_transfer_weights is not None:
+        logging.info("Loading prediction and validation domain transfer model weights...")
+        prediction_validation_domain_transfer_model_dict = torch.load(args.prediction_validation_domain_transfer_weights)
+        # prediction_validation_domain_transfer_new_dict = OrderedDict()
+        # for k, v in prediction_validation_domain_transfer_model_dict.items():
+        #     # load_state_dict expects keys with prefix 'module.'
+        #     prediction_validation_domain_transfer_new_dict["module." + k] = v
+        prediction_validation_domain_transfer_model = inkid.model.define_G(
+            input_nc=args.subvolume_shape_voxels[0],
+            output_nc=args.subvolume_shape_voxels[0],
+            ngf=64,
+            netG="resnet_9blocks",
+            gpu_ids=list(range(torch.cuda.device_count())),
+            up_method="upsample",
+            norm="instance",
+        )
+        prediction_validation_domain_transfer_model.load_state_dict(prediction_validation_domain_transfer_model_dict)
+        logging.info("done")
+
     # Save sample subvolumes
     logging.info("Saving sample subvolumes...")
     if train_dl is not None:
@@ -613,6 +667,10 @@ def main(argv=None):
         for batch_num, batch in enumerate(train_dl):
             xb = batch["feature"]
             xb = xb.to(device)
+            if args.training_domain_transfer_weights is not None:
+                xb = torch.squeeze(xb, 1)
+                xb = training_domain_transfer_model(xb)
+                xb = torch.unsqueeze(xb, 1)
             preds = model(xb)
             total_loss = None
             for label_type in getattr(model, "module", model).labels:
@@ -681,7 +739,7 @@ def main(argv=None):
                 if val_dl is not None:
                     logging.info("Evaluating on validation set... ")
                     val_results = inkid.util.perform_validation(
-                        model, val_dl, metrics, device
+                        model, val_dl, metrics, device, prediction_validation_domain_transfer_model
                     )
                     wandb.log(
                         data=inkid.metrics.metrics_dict(val_results, prefix="val/"),
@@ -707,7 +765,8 @@ def main(argv=None):
                         predictions_dir,
                         f"{epoch}_{batch_num}",
                         args.prediction_averaging,
-                        global_step
+                        global_step,
+                        prediction_validation_domain_transfer_model,
                     )
                     logging.info("done")
                 else:
@@ -763,7 +822,8 @@ def main(argv=None):
                     predictions_dir,
                     "final",
                     args.prediction_averaging,
-                    global_step
+                    global_step,
+                    prediction_validation_domain_transfer_model,
                 )
             logging.info("done")
         # Perform finishing touches even if cut short
@@ -774,7 +834,7 @@ def main(argv=None):
     try:
         if val_dl is not None:
             logging.info("Performing final evaluation on validation set... ")
-            val_results = inkid.util.perform_validation(model, val_dl, metrics, device)
+            val_results = inkid.util.perform_validation(model, val_dl, metrics, device, prediction_validation_domain_transfer_model)
             metadata["Final validation metrics"] = inkid.metrics.metrics_dict(
                 val_results
             )
