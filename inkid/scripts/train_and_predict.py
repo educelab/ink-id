@@ -587,10 +587,10 @@ def main(argv=None):
     if args.training_domain_transfer_weights is not None:
         logging.info("Loading training domain transfer model weights...")
         training_domain_transfer_model_dict = torch.load(args.training_domain_transfer_weights)
-        # training_domain_transfer_new_dict = OrderedDict()
-        # for k, v in training_domain_transfer_model_dict.items():
-        #     # load_state_dict expects keys with prefix 'module.'
-        #     training_domain_transfer_new_dict["module." + k] = v
+        training_domain_transfer_new_dict = OrderedDict()
+        for k, v in training_domain_transfer_model_dict.items():
+            # load_state_dict expects keys with prefix 'module.'
+            training_domain_transfer_new_dict["module." + k] = v
 
         training_domain_transfer_model = inkid.model.define_G(
             input_nc=args.subvolume_shape_voxels[0],
@@ -601,16 +601,16 @@ def main(argv=None):
             up_method="upsample",
             norm="instance",
         )
-        training_domain_transfer_model.load_state_dict(training_domain_transfer_model_dict)
+        training_domain_transfer_model.load_state_dict(training_domain_transfer_new_dict)
         logging.info("done")
     prediction_validation_domain_transfer_model = None
     if args.prediction_validation_domain_transfer_weights is not None:
         logging.info("Loading prediction and validation domain transfer model weights...")
         prediction_validation_domain_transfer_model_dict = torch.load(args.prediction_validation_domain_transfer_weights)
-        # prediction_validation_domain_transfer_new_dict = OrderedDict()
-        # for k, v in prediction_validation_domain_transfer_model_dict.items():
-        #     # load_state_dict expects keys with prefix 'module.'
-        #     prediction_validation_domain_transfer_new_dict["module." + k] = v
+        prediction_validation_domain_transfer_new_dict = OrderedDict()
+        for k, v in prediction_validation_domain_transfer_model_dict.items():
+            # load_state_dict expects keys with prefix 'module.'
+            prediction_validation_domain_transfer_new_dict["module." + k] = v
         prediction_validation_domain_transfer_model = inkid.model.define_G(
             input_nc=args.subvolume_shape_voxels[0],
             output_nc=args.subvolume_shape_voxels[0],
@@ -620,7 +620,7 @@ def main(argv=None):
             up_method="upsample",
             norm="instance",
         )
-        prediction_validation_domain_transfer_model.load_state_dict(prediction_validation_domain_transfer_model_dict)
+        prediction_validation_domain_transfer_model.load_state_dict(prediction_validation_domain_transfer_new_dict)
         logging.info("done")
 
     # Save sample subvolumes
