@@ -660,142 +660,143 @@ def main(argv=None):
     if train_dl is not None and not args.skip_training:
         wandb_commit = False
 
-    for epoch in range(args.training_epochs):
-        fix_random_seed(epoch + args.random_seed)
-        model.train()  # Turn on training mode
-        total_batches = len(train_dl)
-        for batch_num, batch in enumerate(train_dl):
-            xb = batch["feature"]
-            xb = xb.to(device)
-            if args.training_domain_transfer_weights is not None:
-                xb = torch.squeeze(xb, 1)
-                xb = training_domain_transfer_model(xb)
-                xb = torch.unsqueeze(xb, 1)
-            preds = model(xb)
-            total_loss = None
-            for label_type in getattr(model, "module", model).labels:
-                yb = (
-                    xb.clone()
-                    if label_type == "autoencoded"
-                    else batch[label_type].to(device)
-                )
-                pred = preds[label_type]
-                for metric, fn in metrics[label_type].items():
-                    metric_result = fn(pred, yb)
-                    metric_results[label_type][metric].append(metric_result)
-                    if metric == "loss":
-                        if total_loss is None:
-                            total_loss = metric_result
-                        else:
-                            total_loss = total_loss + metric_result
-            if total_loss is not None:
-                total_loss.backward()
-                if "total" not in metric_results:
-                    metric_results["total"] = {"loss": []}
-                metric_results["total"]["loss"].append(total_loss)
-            else:
-                raise TypeError("Training is running, but loss is None")
-            opt.step()
-            opt.zero_grad()
+    if not args.skip_training:
+        for epoch in range(args.training_epochs):
+            fix_random_seed(epoch + args.random_seed)
+            model.train()  # Turn on training mode
+            total_batches = len(train_dl)
+            for batch_num, batch in enumerate(train_dl):
+                xb = batch["feature"]
+                xb = xb.to(device)
+                if args.training_domain_transfer_weights is not None:
+                    xb = torch.squeeze(xb, 1)
+                    xb = training_domain_transfer_model(xb)
+                    xb = torch.unsqueeze(xb, 1)
+                preds = model(xb)
+                total_loss = None
+                for label_type in getattr(model, "module", model).labels:
+                    yb = (
+                        xb.clone()
+                        if label_type == "autoencoded"
+                        else batch[label_type].to(device)
+                    )
+                    pred = preds[label_type]
+                    for metric, fn in metrics[label_type].items():
+                        metric_result = fn(pred, yb)
+                        metric_results[label_type][metric].append(metric_result)
+                        if metric == "loss":
+                            if total_loss is None:
+                                total_loss = metric_result
+                            else:
+                                total_loss = total_loss + metric_result
+                if total_loss is not None:
+                    total_loss.backward()
+                    if "total" not in metric_results:
+                        metric_results["total"] = {"loss": []}
+                    metric_results["total"]["loss"].append(total_loss)
+                else:
+                    raise TypeError("Training is running, but loss is None")
+                opt.step()
+                opt.zero_grad()
 
-            if torch.cuda.is_available():
-                torch.cuda.synchronize()
+                if torch.cuda.is_available():
+                    torch.cuda.synchronize()
 
-            global_step = epoch * len(train_dl) + batch_num
-            if batch_num % args.summary_every_n_batches == 0:
-                logging.info(
-                    f"Epoch: {epoch:>5d}/{args.training_epochs:<5d}"
-                    f"Batch: {batch_num:>5d}/{total_batches:<5d} "
-                    f"{inkid.metrics.metrics_str(metric_results)} "
-                    f"Seconds: {time.time() - last_summary:5.3g}"
-                )
-                wandb.log(
-                    data=inkid.metrics.metrics_dict(metric_results, prefix="train/"),
-                    step=global_step,
-                    commit=False
-                )
-                wandb_commit = True
-                for metrics_for_label in metric_results.values():
-                    for single_metric_results in metrics_for_label.values():
-                        single_metric_results.clear()
-                last_summary = time.time()
-
-            if args.checkpoint_every_n_batches > 0 and batch_num % args.checkpoint_every_n_batches == 0:
-                # Save model checkpoint
-                torch.save(
-                    {
-                        "epoch": epoch,
-                        "batch": batch_num,
-                        "model_state_dict": getattr(model, "module", model).state_dict(),
-                        "optimizer_state_dict": opt.state_dict(),
-                    },
-                    os.path.join(
-                        checkpoints_dir,
-                        f"checkpoint_{epoch}_{batch_num}.pt",
-                    ),
-                )
-
-                # Periodic evaluation and prediction
-                if val_dl is not None:
-                    logging.info("Evaluating on validation set... ")
-                    val_results = inkid.util.perform_validation(
-                        model, val_dl, metrics, device, prediction_validation_domain_transfer_model
+                global_step = epoch * len(train_dl) + batch_num
+                if batch_num % args.summary_every_n_batches == 0:
+                    logging.info(
+                        f"Epoch: {epoch:>5d}/{args.training_epochs:<5d}"
+                        f"Batch: {batch_num:>5d}/{total_batches:<5d} "
+                        f"{inkid.metrics.metrics_str(metric_results)} "
+                        f"Seconds: {time.time() - last_summary:5.3g}"
                     )
                     wandb.log(
-                        data=inkid.metrics.metrics_dict(val_results, prefix="val/"),
+                        data=inkid.metrics.metrics_dict(metric_results, prefix="train/"),
                         step=global_step,
                         commit=False
                     )
                     wandb_commit = True
-                    logging.info(
-                        f"done ({inkid.metrics.metrics_str(val_results)})"
-                    )
-                else:
-                    logging.info(
-                        "Empty validation set, skipping validation."
+                    for metrics_for_label in metric_results.values():
+                        for single_metric_results in metrics_for_label.values():
+                            single_metric_results.clear()
+                    last_summary = time.time()
+
+                if args.checkpoint_every_n_batches > 0 and batch_num % args.checkpoint_every_n_batches == 0:
+                    # Save model checkpoint
+                    torch.save(
+                        {
+                            "epoch": epoch,
+                            "batch": batch_num,
+                            "model_state_dict": getattr(model, "module", model).state_dict(),
+                            "optimizer_state_dict": opt.state_dict(),
+                        },
+                        os.path.join(
+                            checkpoints_dir,
+                            f"checkpoint_{epoch}_{batch_num}.pt",
+                        ),
                     )
 
-                # Prediction image
-                if pred_dl is not None:
-                    logging.info("Generating prediction image... ")
-                    inkid.util.generate_prediction_images(
-                        pred_dl,
-                        model,
-                        device,
-                        predictions_dir,
-                        f"{epoch}_{batch_num}",
-                        args.prediction_averaging,
-                        global_step,
-                        prediction_validation_domain_transfer_model,
-                    )
-                    logging.info("done")
-                else:
-                    logging.info(
-                        "Empty prediction set, skipping prediction image generation."
-                    )
+                    # Periodic evaluation and prediction
+                    if val_dl is not None:
+                        logging.info("Evaluating on validation set... ")
+                        val_results = inkid.util.perform_validation(
+                            model, val_dl, metrics, device, prediction_validation_domain_transfer_model
+                        )
+                        wandb.log(
+                            data=inkid.metrics.metrics_dict(val_results, prefix="val/"),
+                            step=global_step,
+                            commit=False
+                        )
+                        wandb_commit = True
+                        logging.info(
+                            f"done ({inkid.metrics.metrics_str(val_results)})"
+                        )
+                    else:
+                        logging.info(
+                            "Empty validation set, skipping validation."
+                        )
 
-                # Visualize autoencoder outputs
-                if args.model in [
-                    "Autoencoder",
-                    "AutoencoderAndInkClassifier",
-                ]:
-                    logging.info("Visualizing autoencoder outputs...")
-                    # TODO (dh): log images to W&B
-                    inkid.util.save_subvolume_batch_to_img(
-                        model,
-                        device,
-                        train_dl,
-                        diagnostic_images_dir,
-                        f"autoencoder_samples_{epoch}_{batch_num}.png",
-                        include_autoencoded=True,
-                        include_vol_slices=False,
-                    )
-                    logging.info("done")
+                    # Prediction image
+                    if pred_dl is not None:
+                        logging.info("Generating prediction image... ")
+                        inkid.util.generate_prediction_images(
+                            pred_dl,
+                            model,
+                            device,
+                            predictions_dir,
+                            f"{epoch}_{batch_num}",
+                            args.prediction_averaging,
+                            global_step,
+                            prediction_validation_domain_transfer_model,
+                        )
+                        logging.info("done")
+                    else:
+                        logging.info(
+                            "Empty prediction set, skipping prediction image generation."
+                        )
 
-            if wandb_commit:
-                # This is the equivalent of flush
-                wandb.log({}, step=global_step, commit=True)
-                wandb_commit = False
+                    # Visualize autoencoder outputs
+                    if args.model in [
+                        "Autoencoder",
+                        "AutoencoderAndInkClassifier",
+                    ]:
+                        logging.info("Visualizing autoencoder outputs...")
+                        # TODO (dh): log images to W&B
+                        inkid.util.save_subvolume_batch_to_img(
+                            model,
+                            device,
+                            train_dl,
+                            diagnostic_images_dir,
+                            f"autoencoder_samples_{epoch}_{batch_num}.png",
+                            include_autoencoded=True,
+                            include_vol_slices=False,
+                        )
+                        logging.info("done")
+
+                if wandb_commit:
+                    # This is the equivalent of flush
+                    wandb.log({}, step=global_step, commit=True)
+                    wandb_commit = False
 
     # Run a final prediction on all regions
     if args.final_prediction_on_all:
