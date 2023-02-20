@@ -198,6 +198,24 @@ vc_packager -v ObjectName.volpkg -s MixedData/slices_%04d.tif
 vc_packager -v ObjectName.volpkg -s OnlySlices/
 ```
 
+# Make slice video
+
+Use `ffmpeg` to make a video of the volume slices.
+Note that the input tif files specified using `-i` must match the number of digits in the slice filenames (usually `%04d.tif` or `%05d.tif`).
+
+Example command:
+
+```shell
+ffmpeg -r 30 -f image2 -i /pscratch/seales_uksr/nxstorage_partial_copy_in_case_gemini_down/data/Herculaneum_Scrolls/PHercParis4/PHercParis4.volpkg/volumes/20230210143520/%05d.tif -vf "scale=3840:-1,pad=ceil(iw/2)*2:ceil(ih/2)*2" -vcodec libx264 -crf 32 -pix_fmt yuv420p /pscratch/seales_uksr/nxstorage_partial_copy_in_case_gemini_down/data/Herculaneum_Scrolls/PHercParis4/PHercParis4.volpkg/working/PHercParis4_54keV_stitched_part_1.mp4
+```
+
+The same command can be run on LCC using the VC Singularity container defined by `ink-id/inkid/scripts/singularity/vc.def`.
+As with many of the LCC commands in this process, it is helpful to request all memory on the node using `--mem=0`.
+
+```shell
+sbatch -p SKY32M192_L --mem=0 --time=5-00:00:00 vc_general_cpu.sh ffmpeg -r 30 -f image2 -i /pscratch/seales_uksr/nxstorage_partial_copy_in_case_gemini_down/data/Herculaneum_Scrolls/PHercParis4/PHercParis4.volpkg/volumes/20230210143520/%05d.tif -vf "scale=3840:-1,pad=ceil(iw/2)*2:ceil(ih/2)*2" -vcodec libx264 -crf 32 -pix_fmt yuv420p /pscratch/seales_uksr/nxstorage_partial_copy_in_case_gemini_down/data/Herculaneum_Scrolls/PHercParis4/PHercParis4.volpkg/working/PHercParis4_54keV_stitched_part_1.mp4
+```
+
 # Segmentation
 
 ## Hidden layers
