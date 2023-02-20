@@ -10,9 +10,7 @@ from urllib.parse import urlsplit, urlunsplit
 import math
 import os
 from pathlib import Path
-from xml.dom.minidom import parseString
 
-from dicttoxml import dicttoxml
 from matplotlib import colormaps
 from matplotlib import pyplot as plt
 import numpy as np
@@ -22,19 +20,6 @@ import torch.nn.functional as F
 from tqdm import tqdm
 
 import inkid
-
-
-def are_coordinates_within(p1, p2, distance):
-    """Return if two points would have overlapping boxes.
-
-    Given two (x, y) points and a distance, imagine creating squares
-    with side lengths equal to that distance and centering them on
-    each point. Return if the squares overlap at all.
-
-    """
-    (x1, y1) = p1
-    (x2, y2) = p2
-    return abs(x1 - x2) < distance and abs(y1 - y2) < distance
 
 
 def save_volume_to_image_stack(volume, dirname):
@@ -51,32 +36,6 @@ def save_volume_to_image_stack(volume, dirname):
         image = image.astype(np.uint16)
         image = Image.fromarray(image)
         image.save(Path(dirname) / f"{z}.tif")
-
-
-def remap(x, in_min, in_max, out_min, out_max):
-    val = (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min
-    if math.isnan(val):
-        return 0
-    else:
-        return val
-
-
-def get_descriptive_statistics(tensor):
-    t_min = tensor.min()
-    t_max = tensor.max()
-    t_mean = tensor.mean()
-    t_std = tensor.std()
-    t_median = np.median(tensor)
-    t_var = tensor.var()
-
-    return np.array([t_min, t_max, t_mean, t_std, t_median, t_var])
-
-
-# https://www.geeksforgeeks.org/serialize-python-dictionary-to-xml/
-def dict_to_xml(data):
-    xml = dicttoxml(data)
-    dom = parseString(xml)
-    return dom.toprettyxml()
 
 
 def perform_validation(model, dataloader, metrics, device, domain_transfer_model=None):
@@ -266,14 +225,6 @@ def uint16_to_float32_normalized_0_1(img):
     # Normalize to [0, 1]
     img *= 1.0 / np.iinfo(np.uint16).max
     return img
-
-
-def window_0_1_array(arr, window_min, window_max):
-    """Assumes input array is in [0, 1] range and contrast stretches to new min/max"""
-    clipped = np.clip(arr, window_min, window_max)
-    shifted = clipped - window_min
-    windowed = shifted / (window_max - window_min)
-    return windowed
 
 
 def plot_with_colorbar(img, cmap="turbo", vmin=None, vmax=None):
