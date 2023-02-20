@@ -202,7 +202,7 @@ def main(argv=None):
     parser.add_argument("--wandb-project", metavar="project", default="ink-id", help="WandB project name")
     parser.add_argument("--wandb-entity", metavar="entity", default="educelab", help="WandB entity name")
     parser.add_argument(
-        "--dataloaders-num-workers", metavar="n", type=int, default=None
+        "--dataloaders-num-workers", metavar="n", type=int, default=0
     )
     parser.add_argument("--random-seed", type=int, default=42)
 
@@ -287,9 +287,6 @@ def main(argv=None):
     os.makedirs(checkpoints_dir)
     diagnostic_images_dir = os.path.join(output_path, "diagnostic_images")
     os.makedirs(diagnostic_images_dir)
-
-    if args.dataloaders_num_workers is None:
-        args.dataloaders_num_workers = max(1, multiprocessing.cpu_count() - 1)
 
     # Create metadata dict
     metadata = {
@@ -628,12 +625,12 @@ def main(argv=None):
     if train_dl is not None:
         _ = next(iter(train_dl))["feature"]
         inkid.util.save_subvolume_batch_to_img(
-            model, device, train_dl, diagnostic_images_dir, "sample_subvolume_batch_training.png"
+            model, device, train_dl, diagnostic_images_dir, "sample_subvolume_batch_training.png", domain_transfer_model=training_domain_transfer_model
         )
     if pred_dl is not None:
         _ = next(iter(pred_dl))["feature"]
         inkid.util.save_subvolume_batch_to_img(
-            model, device, pred_dl, diagnostic_images_dir, "sample_subvolume_batch_prediction.png"
+            model, device, pred_dl, diagnostic_images_dir, "sample_subvolume_batch_prediction.png", domain_transfer_model=prediction_validation_domain_transfer_model
         )
     logging.info("done")
 

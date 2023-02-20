@@ -279,7 +279,7 @@ def window_0_1_array(arr, window_min, window_max):
 def plot_with_colorbar(img, cmap="turbo", vmin=None, vmax=None):
     # plot
     fig, ax = plt.subplots()
-    im = ax.imshow(img, cmap=cmap, vmin=vmin, vmax=vmax)
+    im = ax.imshow(img, cmap=cmap, vmin=vmin, vmax=vmax, origin="lower")
     fig.colorbar(im, ax=ax)
     fig.tight_layout()
     # convert to PIL Image
@@ -298,6 +298,7 @@ def subvolume_to_sample_img(
     padding,
     background_color,
     autoencoded_subvolume=None,
+    domain_transfer_subvolume=None,
     include_vol_slices=True,
 ):
     max_size = (300, 300)
@@ -322,6 +323,38 @@ def subvolume_to_sample_img(
     for subvolume_slice in subvolume_slices:
         subvolume_img = plot_with_colorbar(subvolume_slice, vmin=min_val, vmax=max_val)
         sub_images.append(subvolume_img)
+
+    if autoencoded_subvolume is not None:
+        # Get central slices of autoencoded subvolume
+        autoencoded_subvolume_slices = []
+        autoencoded_subvolume_slices.append(autoencoded_subvolume[z_idx, :, :])
+        autoencoded_subvolume_slices.append(autoencoded_subvolume[:, y_idx, :])
+        autoencoded_subvolume_slices.append(autoencoded_subvolume[:, :, x_idx])
+
+        # Get min/max across all three slices
+        min_val = min([s.min() for s in autoencoded_subvolume_slices])
+        max_val = max([s.max() for s in autoencoded_subvolume_slices])
+
+        # Plot with color bar
+        for autoencoded_subvolume_slice in autoencoded_subvolume_slices:
+            autoencoded_subvolume_img = plot_with_colorbar(autoencoded_subvolume_slice, vmin=min_val, vmax=max_val)
+            sub_images.append(autoencoded_subvolume_img)
+
+    if domain_transfer_subvolume is not None:
+        # Get central slices of domain transfer subvolume
+        domain_transfer_subvolume_slices = []
+        domain_transfer_subvolume_slices.append(domain_transfer_subvolume[z_idx, :, :])
+        domain_transfer_subvolume_slices.append(domain_transfer_subvolume[:, y_idx, :])
+        domain_transfer_subvolume_slices.append(domain_transfer_subvolume[:, :, x_idx])
+
+        # Get min/max across all three slices
+        min_val = min([s.min() for s in domain_transfer_subvolume_slices])
+        max_val = max([s.max() for s in domain_transfer_subvolume_slices])
+
+        # Plot with color bar
+        for domain_transfer_subvolume_slice in domain_transfer_subvolume_slices:
+            domain_transfer_subvolume_img = plot_with_colorbar(domain_transfer_subvolume_slice, vmin=min_val, vmax=max_val)
+            sub_images.append(domain_transfer_subvolume_img)
 
     if include_vol_slices:
         # Get intersection slices of volume for each axis
@@ -366,22 +399,6 @@ def subvolume_to_sample_img(
             vol_slice_img = plot_with_colorbar(vol_slice, vmin=min_val, vmax=max_val)
             sub_images.append(vol_slice_img)
 
-    if autoencoded_subvolume is not None:
-        # Get central slices of autoencoded subvolume
-        autoencoded_subvolume_slices = []
-        autoencoded_subvolume_slices.append(autoencoded_subvolume[z_idx, :, :])
-        autoencoded_subvolume_slices.append(autoencoded_subvolume[:, y_idx, :])
-        autoencoded_subvolume_slices.append(autoencoded_subvolume[:, :, x_idx])
-
-        # Get min/max across all three slices
-        min_val = min([s.min() for s in autoencoded_subvolume_slices])
-        max_val = max([s.max() for s in autoencoded_subvolume_slices])
-
-        # Plot with color bar
-        for autoencoded_subvolume_slice in autoencoded_subvolume_slices:
-            autoencoded_subvolume_img = plot_with_colorbar(autoencoded_subvolume_slice, vmin=min_val, vmax=max_val)
-            sub_images.append(autoencoded_subvolume_img)
-
     width = sum([s.size[0] for s in sub_images]) + padding * (len(sub_images) - 1)
     height = max([s.size[1] for s in sub_images])
 
@@ -419,10 +436,13 @@ def save_subvolume_batch_to_img(
     background_color=(128, 128, 128),
     include_autoencoded=False,
     include_vol_slices=True,
+    domain_transfer_model=None,
 ):
     Path(outdir).mkdir(parents=True, exist_ok=True)
 
     batch = next(iter(dataloader))
+    subvolumes = torch.squeeze(batch["feature"], 1)  # Remove channels axis
+
     if include_autoencoded:
         model.eval()  # Turn off training mode for batch norm and dropout purposes
         with torch.no_grad():
@@ -432,10 +452,18 @@ def save_subvolume_batch_to_img(
         model.train()
     else:
         autoencodeds = [None] * len(batch["feature"])
-    subvolumes = np.squeeze(batch["feature"], axis=1)  # Remove channels axis
+
+    if domain_transfer_model is not None:
+        domain_transfer_model.eval()
+        with torch.no_grad():
+            domain_transfer_subvolumes = domain_transfer_model(subvolumes.to(device))
+            domain_transfer_subvolumes = np.asarray(domain_transfer_subvolumes.cpu())
+        domain_transfer_model.train()
+    else:
+        domain_transfer_subvolumes = [None] * len(batch["feature"])
 
     imgs = []
-    for i, (subvolume, autoencoded) in enumerate(zip(subvolumes, autoencodeds)):
+    for i, (subvolume, autoencoded, domain_transfer_subvolume) in enumerate(zip(subvolumes, autoencodeds, domain_transfer_subvolumes)):
         dataloader.dataset.source(batch["feature_metadata"].path[i])
         volume = dataloader.dataset.source(batch["feature_metadata"].path[i]).volume
         imgs.append(
@@ -450,6 +478,7 @@ def save_subvolume_batch_to_img(
                 padding,
                 background_color,
                 autoencoded_subvolume=autoencoded,
+                domain_transfer_subvolume=domain_transfer_subvolume,
                 include_vol_slices=include_vol_slices,
             )
         )
