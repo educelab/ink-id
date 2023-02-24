@@ -216,6 +216,9 @@ As with many of the LCC commands in this process, it is helpful to request all m
 sbatch -p SKY32M192_L --mem=0 --time=5-00:00:00 vc_general_cpu.sh ffmpeg -r 30 -f image2 -i /pscratch/seales_uksr/nxstorage_partial_copy_in_case_gemini_down/data/Herculaneum_Scrolls/PHercParis4/PHercParis4.volpkg/volumes/20230210143520/%05d.tif -vf "scale=3840:-1,pad=ceil(iw/2)*2:ceil(ih/2)*2" -vcodec libx264 -crf 32 -pix_fmt yuv420p /pscratch/seales_uksr/nxstorage_partial_copy_in_case_gemini_down/data/Herculaneum_Scrolls/PHercParis4/PHercParis4.volpkg/working/PHercParis4_54keV_stitched_part_1.mp4
 ```
 
+The slice video should be placed in the `working/` directory of the `.volpkg`.
+Watch the slice video through, checking that the object of interest stays within the crop for all slices, and that there is not any visible data corruption.
+
 # Segmentation
 
 ## Hidden layers
