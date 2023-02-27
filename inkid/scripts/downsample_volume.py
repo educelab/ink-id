@@ -21,7 +21,7 @@ def main():
 
     new_dir_name = str(Path(args.input_volume).name) + f"_downscaled_{args.scale}x"
     out_dir = Path(args.output) / new_dir_name
-    out_dir.mkdir()
+    out_dir.mkdir(parents=True, exist_ok=True)
 
     # Remove slices to downsample on z axis
     image_filenames = sorted(Path(args.input_volume).glob("*.tif"))
