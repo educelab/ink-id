@@ -113,6 +113,9 @@ def main(argv=None):
     # How samples are generated
     inkid.data.add_subvolume_arguments(parser)
 
+    # CycleGAN args
+    inkid.model.cyclegan_networks.add_cyclegan_args(parser)
+
     # Network architecture
     parser.add_argument(
         "--model-3d-to-2d",
@@ -593,9 +596,9 @@ def main(argv=None):
             input_nc=args.subvolume_shape_voxels[0],
             output_nc=args.subvolume_shape_voxels[0],
             ngf=64,
-            netG="resnet_9blocks",
+            netG=args.netG,
             gpu_ids=list(range(torch.cuda.device_count())),
-            up_method="upsample",
+            up_method=args.up_method_G,
             norm="instance",
         )
         training_domain_transfer_model.load_state_dict(training_domain_transfer_new_dict)
@@ -612,9 +615,9 @@ def main(argv=None):
             input_nc=args.subvolume_shape_voxels[0],
             output_nc=args.subvolume_shape_voxels[0],
             ngf=64,
-            netG="resnet_9blocks",
+            netG=args.netG,
             gpu_ids=list(range(torch.cuda.device_count())),
-            up_method="upsample",
+            up_method=args.up_method_G,
             norm="instance",
         )
         prediction_validation_domain_transfer_model.load_state_dict(prediction_validation_domain_transfer_new_dict)

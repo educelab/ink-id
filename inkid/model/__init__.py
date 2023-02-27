@@ -1,3 +1,4 @@
+from .cyclegan_networks import add_cyclegan_args
 from .cyclegan_networks import define_G
 
 from .model import model_choices
