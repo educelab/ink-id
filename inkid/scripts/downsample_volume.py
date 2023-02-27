@@ -20,7 +20,7 @@ def main():
         return
 
     new_dir_name = str(Path(args.input_volume).name) + f"_downscaled_{args.scale}x"
-    out_dir = Path(args.output) / new_dir_name
+    out_dir = Path(args.output_dir) / new_dir_name
     out_dir.mkdir(parents=True, exist_ok=True)
 
     # Remove slices to downsample on z axis
