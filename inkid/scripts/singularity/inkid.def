@@ -13,7 +13,7 @@ From: ubuntu:22.04
   chmod --recursive a+rw /usr/local/educelab/ink-id
   # Basic installs (noninteractive so tzdata dependency install doesn't halt build with prompt)
   apt update
-  DEBIAN_FRONTEND=noninteractive apt install -y git nano vim build-essential
+  DEBIAN_FRONTEND=noninteractive apt install -y git nano vim build-essential imagemagick
   # Store git credentials for up to an hour (in overlay, not container) for convenience
   git config --global credential.helper cache
   git config --global credential.helper 'cache --timeout=3600'

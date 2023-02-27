@@ -10,9 +10,9 @@ from wand.image import Image
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("input-volume")
-    parser.add_argument("scale", type=int)
-    parser.add_argument("output-dir")
+    parser.add_argument("--input-volume", required=True)
+    parser.add_argument("--scale", type=int, required=True)
+    parser.add_argument("--output-dir", required=True)
     args = parser.parse_args()
 
     if not math.log2(args.scale).is_integer():
