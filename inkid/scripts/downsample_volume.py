@@ -10,24 +10,24 @@ from wand.image import Image
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("input")
+    parser.add_argument("input-volume")
     parser.add_argument("scale", type=int)
-    parser.add_argument("output")
+    parser.add_argument("output-dir")
     args = parser.parse_args()
 
     if not math.log2(args.scale).is_integer():
         print(f"error: Scale factor {args.scale} is not a power of 2.")
         return
 
-    new_volume_dirname = datetime.now().strftime("%Y%m%d%H%M%S")
-    out_dir = Path(args.output) / new_volume_dirname
+    new_dir_name = str(Path(args.input_volume).name) + f"_downscaled_{args.scale}x"
+    out_dir = Path(args.output) / new_dir_name
     out_dir.mkdir()
 
     # Remove slices to downsample on z axis
-    image_filenames = sorted(Path(args.input).glob("*.tif"))
+    image_filenames = sorted(Path(args.input_volume).glob("*.tif"))
     image_filenames = image_filenames[:: args.scale]
 
-    # Precalculate some values
+    # Precalculate the new dimensions
     num_digits_in_filenames = math.ceil(math.log10(len(image_filenames)))
     with Image(filename=image_filenames[0]) as img:
         new_width = img.width // args.scale
@@ -42,12 +42,12 @@ def main():
                 img_clone.save(filename=out_dir / f"{i:0{num_digits_in_filenames}}.tif")
 
     # New meta.json file
-    with open(Path(args.input) / "meta.json") as f:
+    with open(Path(args.input_volume) / "meta.json") as f:
         metadata = json.load(f)
         metadata["width"] = new_width
         metadata["height"] = new_height
         metadata["slices"] = new_slices
-        metadata["uuid"] = new_volume_dirname
+        metadata["uuid"] = datetime.now().strftime("%Y%m%d%H%M%S")
         metadata["name"] = f'{metadata["name"]}, downscaled {args.scale}x'
         metadata["voxelsize"] = metadata["voxelsize"] * args.scale
 
