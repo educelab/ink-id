@@ -7,7 +7,7 @@
 Publications
 ============
 
-When using ``inkid``, please cite the following paper:
+When using ``inkid`` in a publication, please cite the following paper:
 
 .. code-block:: bibtex
 
