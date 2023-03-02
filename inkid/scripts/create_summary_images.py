@@ -804,10 +804,12 @@ def merge_imgs(
 ):
     merged_img = None
 
+    new_bounding_boxes = []
     for path, bounding_box in zip(paths, bounding_boxes):
         img = Image.open(path)
         if bounding_box is None:
             bounding_box = (0, 0, img.width, img.height)
+        new_bounding_boxes.append(bounding_box)
         # For some images (grayscale PNGs in my experience so far), Pillow opens them as 32-bit integer images and
         # then clips them to 8-bit in later stages, creating washed out images. If it has opened an image as 32-bit
         # we detect and convert it here, so it is not clipped later.
@@ -833,7 +835,7 @@ def merge_imgs(
 
     # Draw bounding boxes
     for bounding_box, (training, prediction, validation) in zip(
-        bounding_boxes, image_label_as
+        new_bounding_boxes, image_label_as
     ):
         to_draw = {
             "training": training,
