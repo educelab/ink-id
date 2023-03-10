@@ -31,15 +31,13 @@ After changes to Cython files (``.pyx`` and ``.pxd``), those modules must be reb
 
     $ python setup.py build_ext --inplace
 
-Set up W&B
-
-Go to [https://wandb.ai/settings](https://wandb.ai/settings) to copy your API key, and then run:
+To set up Weights & Biases for experiment tracking, go to [https://wandb.ai/settings](https://wandb.ai/settings) to copy your API key, and then run:
 
 .. code-block:: bash
 
     $ wandb login
 
-And then use `inkid-train-and-predict` with `--wandb`
+Use `--wandb` with `inkid-train-and-predict` to log job results to W&B. 
 
 Requirements
 ============
@@ -165,8 +163,7 @@ Contributing
 
 When contributing to this repository, please first discuss the change you wish to make via issue, email, or another method with the owners of this repository.
 
-We follow the git branching model described `here <http://nvie.com/posts/a-successful-git-branching-model/>`_
-and document code based on the `Google Python Style Guide standards <https://google.github.io/styleguide/pyguide.html?showone=Comments#Comments>`_.
+We follow the git branching model described `here <http://nvie.com/posts/a-successful-git-branching-model/>`_.
 
 License
 =======
