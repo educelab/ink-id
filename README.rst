@@ -4,29 +4,6 @@
 
 ``inkid`` is a Python package and collection of scripts for identifying ink in volumetric CT data using machine learning.
 
-Publications
-============
-
-When using ``inkid`` in a publication, please cite the following paper:
-
-.. code-block:: bibtex
-
-    @article{parker2019invisibility,
-       title={From invisibility to readability: recovering the ink of Herculaneum},
-       author={Parker, Clifford Seth and Parsons, Stephen and Bandy, Jack and Chapman, Christy and Coppens, Frederik and Seales, William Brent},
-       journal={PloS one},
-       volume={14},
-       number={5},
-       pages={e0215775},
-       year={2019},
-       publisher={Public Library of Science}
-    }
-
-Requirements
-============
-
-Python >=3.8 is required.
-
 Installation
 ============
 
@@ -63,6 +40,11 @@ Go to [https://wandb.ai/settings](https://wandb.ai/settings) to copy your API ke
     $ wandb login
 
 And then use `inkid-train-and-predict` with `--wandb`
+
+Requirements
+============
+
+Python >=3.8 is required.
 
 Usage
 =====
@@ -190,3 +172,22 @@ License
 =======
 
 This package is licensed under the GNU General Public License (GPLv3) - see ``LICENSE`` for details.
+
+Citation
+============
+
+If you use ``inkid`` in your research, please cite the following publication:
+
+.. code-block:: bibtex
+
+    @article{parker2019invisibility,
+       title={From invisibility to readability: recovering the ink of Herculaneum},
+       author={Parker, Clifford Seth and Parsons, Stephen and Bandy, Jack and Chapman, Christy and Coppens, Frederik and Seales, William Brent},
+       journal={PloS one},
+       volume={14},
+       number={5},
+       pages={e0215775},
+       year={2019},
+       publisher={Public Library of Science}
+    }
+
