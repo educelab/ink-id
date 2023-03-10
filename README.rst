@@ -37,7 +37,7 @@ To set up Weights & Biases for experiment tracking, go to `wandb.ai/settings <ht
 
     $ wandb login
 
-Use `--wandb` with `inkid-train-and-predict` to log job results to W&B. 
+Use ``--wandb`` with ``inkid-train-and-predict`` to log job results to W&B. 
 
 Requirements
 ============
