@@ -31,7 +31,7 @@ After changes to Cython files (``.pyx`` and ``.pxd``), those modules must be reb
 
     $ python setup.py build_ext --inplace
 
-To set up Weights & Biases for experiment tracking, go to [https://wandb.ai/settings](https://wandb.ai/settings) to copy your API key, and then run:
+To set up Weights & Biases for experiment tracking, go to your [settings page](https://wandb.ai/settings) to copy your API key, and then run:
 
 .. code-block:: bash
 
