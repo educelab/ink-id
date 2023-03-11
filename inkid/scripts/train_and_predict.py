@@ -78,6 +78,12 @@ def main(argv=None):
         help="remove the nth source from the flattened set of all training data sources, and "
         "add this set to the validation and prediction sets",
     )
+    parser.add_argument(
+        "--cross-validate-at-top-level",
+        action="store_true",
+        help="remove the nth source from the top-level set of all training data sources, "
+        "before flattening it, and add this set to the validation and prediction sets",
+    )
 
     # Which samples are generated
     parser.add_argument(
@@ -170,19 +176,19 @@ def main(argv=None):
         "--unfreeze-loaded-weights",
         action="store_true",
         help="allow loaded weights to continue training, typically for fine-tuning "
-             "(it is recommended to use a lower learning rate)"
+        "(it is recommended to use a lower learning rate)",
     )
     parser.add_argument(
         "--training-domain-transfer-weights",
         metavar="path",
         default=None,
-        help="pretrained model checkpoint to use to transfer subvolume domain before training"
+        help="pretrained model checkpoint to use to transfer subvolume domain before training",
     )
     parser.add_argument(
         "--prediction-validation-domain-transfer-weights",
         metavar="path",
         default=None,
-        help="pretrained model checkpoint to use to transfer subvolume domain before prediction and validation"
+        help="pretrained model checkpoint to use to transfer subvolume domain before prediction and validation",
     )
 
     # Run configuration
@@ -196,17 +202,26 @@ def main(argv=None):
     )
     parser.add_argument("--validation-max-samples", metavar="n", type=int, default=5000)
     parser.add_argument("--summary-every-n-batches", metavar="n", type=int, default=10)
-    parser.add_argument("--checkpoint-every-n-batches", metavar="n", type=int, default=20000)
+    parser.add_argument(
+        "--checkpoint-every-n-batches", metavar="n", type=int, default=20000
+    )
     parser.add_argument("--final-prediction-on-all", action="store_true")
     parser.add_argument("--skip-training", action="store_true")
     parser.add_argument("--multi-gpu", action="store_true")
     parser.add_argument("--wandb", action="store_true", help="Sync to wandb")
-    parser.add_argument("--wandb-silent", action="store_true", help="Disable wandb logging")
-    parser.add_argument("--wandb-project", metavar="project", default="ink-id", help="WandB project name")
-    parser.add_argument("--wandb-entity", metavar="entity", default="educelab", help="WandB entity name")
     parser.add_argument(
-        "--dataloaders-num-workers", metavar="n", type=int, default=0
+        "--wandb-silent", action="store_true", help="Disable wandb logging"
     )
+    parser.add_argument(
+        "--wandb-project",
+        metavar="project",
+        default="ink-id",
+        help="WandB project name",
+    )
+    parser.add_argument(
+        "--wandb-entity", metavar="entity", default="educelab", help="WandB entity name"
+    )
+    parser.add_argument("--dataloaders-num-workers", metavar="n", type=int, default=0)
     parser.add_argument("--random-seed", type=int, default=42)
 
     args = parser.parse_args(argv)
@@ -257,7 +272,12 @@ def main(argv=None):
     if not args.wandb:
         os.environ["WANDB_MODE"] = "offline"
         os.environ["WANDB_SILENT"] = "true"
-    wandb.init(config=vars(args), project=args.wandb_project, entity=args.wandb_entity, name=output_path)
+    wandb.init(
+        config=vars(args),
+        project=args.wandb_project,
+        entity=args.wandb_entity,
+        name=output_path,
+    )
 
     # Configure logging
     # noinspection PyArgumentList
@@ -451,12 +471,18 @@ def main(argv=None):
         grid_spacing=args.prediction_grid_spacing,
     )
 
+    # Perform cross validation at the top level, i.e. before flattening the sources into their expanded lists
+    if args.cross_validate_on and args.cross_validate_at_top_level:
+        nth_source = args.training_set.pop(args.cross_validate_on)
+        args.validation_set.append(nth_source)
+        args.prediction_set.append(nth_source)
+
     train_ds = inkid.data.Dataset(args.training_set)
     val_ds = inkid.data.Dataset(args.validation_set)
     pred_ds = inkid.data.Dataset(args.prediction_set)
 
-    # If k-fold job, remove nth region from training and put in prediction/validation sets
-    if args.cross_validate_on is not None:
+    # Perform cross validation after flattening the sources into their expanded lists
+    if args.cross_validate_on and not args.cross_validate_at_top_level:
         nth_region_path = train_ds.pop_nth_region(args.cross_validate_on).path
         val_ds.sources.append(inkid.data.DataSource.from_path(nth_region_path))
         pred_ds.sources.append(inkid.data.DataSource.from_path(nth_region_path))
@@ -569,13 +595,17 @@ def main(argv=None):
         checkpoint = torch.load(args.load_weights_from)
         pretrained_dict = checkpoint["model_state_dict"]
         pretrained_dict = {k: v for k, v in pretrained_dict.items() if k in model_dict}
-        logging.info(f"Loading weights for the following layers: {list(pretrained_dict.keys())}")
+        logging.info(
+            f"Loading weights for the following layers: {list(pretrained_dict.keys())}"
+        )
         model_dict.update(pretrained_dict)
         model.load_state_dict(model_dict)
         logging.info("done")
 
         if not args.unfreeze_loaded_weights:
-            logging.info("Freezing pretrained weights. Layer summary appears below showing which are now trainable:")
+            logging.info(
+                "Freezing pretrained weights. Layer summary appears below showing which are now trainable:"
+            )
             for name, param in model.named_parameters():
                 if name in pretrained_dict.keys():
                     param.requires_grad = False
@@ -586,7 +616,9 @@ def main(argv=None):
     training_domain_transfer_model = None
     if args.training_domain_transfer_weights is not None:
         logging.info("Loading training domain transfer model weights...")
-        training_domain_transfer_model_dict = torch.load(args.training_domain_transfer_weights)
+        training_domain_transfer_model_dict = torch.load(
+            args.training_domain_transfer_weights
+        )
         training_domain_transfer_new_dict = OrderedDict()
         for k, v in training_domain_transfer_model_dict.items():
             # load_state_dict expects keys with prefix 'module.'
@@ -601,12 +633,18 @@ def main(argv=None):
             up_method=args.up_method_G,
             norm="instance",
         )
-        training_domain_transfer_model.load_state_dict(training_domain_transfer_new_dict)
+        training_domain_transfer_model.load_state_dict(
+            training_domain_transfer_new_dict
+        )
         logging.info("done")
     prediction_validation_domain_transfer_model = None
     if args.prediction_validation_domain_transfer_weights is not None:
-        logging.info("Loading prediction and validation domain transfer model weights...")
-        prediction_validation_domain_transfer_model_dict = torch.load(args.prediction_validation_domain_transfer_weights)
+        logging.info(
+            "Loading prediction and validation domain transfer model weights..."
+        )
+        prediction_validation_domain_transfer_model_dict = torch.load(
+            args.prediction_validation_domain_transfer_weights
+        )
         prediction_validation_domain_transfer_new_dict = OrderedDict()
         for k, v in prediction_validation_domain_transfer_model_dict.items():
             # load_state_dict expects keys with prefix 'module.'
@@ -620,7 +658,9 @@ def main(argv=None):
             up_method=args.up_method_G,
             norm="instance",
         )
-        prediction_validation_domain_transfer_model.load_state_dict(prediction_validation_domain_transfer_new_dict)
+        prediction_validation_domain_transfer_model.load_state_dict(
+            prediction_validation_domain_transfer_new_dict
+        )
         logging.info("done")
 
     # Save sample subvolumes
@@ -628,12 +668,22 @@ def main(argv=None):
     if train_dl is not None:
         _ = next(iter(train_dl))["feature"]
         inkid.util.save_subvolume_batch_to_img(
-            model, device, train_dl, diagnostic_images_dir, "sample_subvolume_batch_training.png", domain_transfer_model=training_domain_transfer_model
+            model,
+            device,
+            train_dl,
+            diagnostic_images_dir,
+            "sample_subvolume_batch_training.png",
+            domain_transfer_model=training_domain_transfer_model,
         )
     if pred_dl is not None:
         _ = next(iter(pred_dl))["feature"]
         inkid.util.save_subvolume_batch_to_img(
-            model, device, pred_dl, diagnostic_images_dir, "sample_subvolume_batch_prediction.png", domain_transfer_model=prediction_validation_domain_transfer_model
+            model,
+            device,
+            pred_dl,
+            diagnostic_images_dir,
+            "sample_subvolume_batch_prediction.png",
+            domain_transfer_model=prediction_validation_domain_transfer_model,
         )
     logging.info("done")
 
@@ -711,9 +761,11 @@ def main(argv=None):
                         f"Seconds: {time.time() - last_summary:5.3g}"
                     )
                     wandb.log(
-                        data=inkid.metrics.metrics_dict(metric_results, prefix="train/"),
+                        data=inkid.metrics.metrics_dict(
+                            metric_results, prefix="train/"
+                        ),
                         step=global_step,
-                        commit=False
+                        commit=False,
                     )
                     wandb_commit = True
                     for metrics_for_label in metric_results.values():
@@ -721,13 +773,18 @@ def main(argv=None):
                             single_metric_results.clear()
                     last_summary = time.time()
 
-                if args.checkpoint_every_n_batches > 0 and batch_num % args.checkpoint_every_n_batches == 0:
+                if (
+                    args.checkpoint_every_n_batches > 0
+                    and batch_num % args.checkpoint_every_n_batches == 0
+                ):
                     # Save model checkpoint
                     torch.save(
                         {
                             "epoch": epoch,
                             "batch": batch_num,
-                            "model_state_dict": getattr(model, "module", model).state_dict(),
+                            "model_state_dict": getattr(
+                                model, "module", model
+                            ).state_dict(),
                             "optimizer_state_dict": opt.state_dict(),
                         },
                         os.path.join(
@@ -740,21 +797,21 @@ def main(argv=None):
                     if val_dl is not None:
                         logging.info("Evaluating on validation set... ")
                         val_results = inkid.util.perform_validation(
-                            model, val_dl, metrics, device, prediction_validation_domain_transfer_model
+                            model,
+                            val_dl,
+                            metrics,
+                            device,
+                            prediction_validation_domain_transfer_model,
                         )
                         wandb.log(
                             data=inkid.metrics.metrics_dict(val_results, prefix="val/"),
                             step=global_step,
-                            commit=False
+                            commit=False,
                         )
                         wandb_commit = True
-                        logging.info(
-                            f"done ({inkid.metrics.metrics_str(val_results)})"
-                        )
+                        logging.info(f"done ({inkid.metrics.metrics_str(val_results)})")
                     else:
-                        logging.info(
-                            "Empty validation set, skipping validation."
-                        )
+                        logging.info("Empty validation set, skipping validation.")
 
                     # Prediction image
                     if pred_dl is not None:
@@ -835,7 +892,13 @@ def main(argv=None):
     try:
         if val_dl is not None:
             logging.info("Performing final evaluation on validation set... ")
-            val_results = inkid.util.perform_validation(model, val_dl, metrics, device, prediction_validation_domain_transfer_model)
+            val_results = inkid.util.perform_validation(
+                model,
+                val_dl,
+                metrics,
+                device,
+                prediction_validation_domain_transfer_model,
+            )
             metadata["Final validation metrics"] = inkid.metrics.metrics_dict(
                 val_results
             )
