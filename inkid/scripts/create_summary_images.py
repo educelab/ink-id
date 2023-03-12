@@ -98,11 +98,13 @@ def compute_ink_classes_metrics(preds, labels):
     stats_val = stats(preds, labels)
     tp, fp, tn, fn, support = list(stats_val)
     false_positive_rate = float(fp / (fp + tn))
+    recall = float(tp / (tp + fn))
 
     return {
         "crossEntropyLoss": loss_val,
         "dice": dice_val,
         "falsePositiveRate": false_positive_rate,
+        "recall": recall,
     }
 
 
@@ -802,6 +804,7 @@ class JobSummarizer:
             metrics_results["crossEntropyLoss"] = []
             metrics_results["dice"] = []
             metrics_results["falsePositiveRate"] = []
+            metrics_results["recall"] = []
             all_iterations = sorted(iteration_to_preds.keys(), key=iteration_str_sort_key)
             for iteration_str in all_iterations:
                 print(f"Computing metrics for iteration: {iteration_str}")
@@ -812,6 +815,7 @@ class JobSummarizer:
                 metrics_results["crossEntropyLoss"].append(result["crossEntropyLoss"])
                 metrics_results["dice"].append(result["dice"])
                 metrics_results["falsePositiveRate"].append(result["falsePositiveRate"])
+                metrics_results["recall"].append(result["recall"])
 
         return metrics_results
 
@@ -1176,12 +1180,13 @@ def main():
         metrics_dir = Path(out_dir) / "metrics"
         metrics_dir.mkdir()
 
-        csv_rows = [["iterations", "crossEntropyLoss", "dice", "falsePositiveRate"]]
+        csv_rows = [["iterations", "crossEntropyLoss", "dice", "falsePositiveRate", "recall"]]
         for i, iteration in enumerate(metrics_results["iterations"]):
             cross_entropy_loss = metrics_results["crossEntropyLoss"][i]
             dice = metrics_results["dice"][i]
             false_positive_rate = metrics_results["falsePositiveRate"][i]
-            csv_rows.append([iteration, cross_entropy_loss, dice, false_positive_rate])
+            recall = metrics_results["recall"][i]
+            csv_rows.append([iteration, cross_entropy_loss, dice, false_positive_rate, recall])
 
         csv_path = metrics_dir / "metrics.csv"
         with open(csv_path, "w", newline="") as csvfile:
