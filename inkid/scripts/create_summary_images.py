@@ -795,8 +795,6 @@ class JobSummarizer:
                         (iteration_to_labels[iteration_str], labels)
                     )
 
-                break
-
         metrics_results = {}
         # Compute the metric
         if prediction_type == "ink_classes":
