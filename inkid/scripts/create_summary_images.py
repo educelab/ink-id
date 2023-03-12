@@ -17,7 +17,7 @@ from PIL import Image, ImageDraw, ImageFont
 import pygifsicle
 import torch
 import torch.nn as nn
-from torchmetrics import Dice
+from torchmetrics import Dice, StatScores
 from tqdm import tqdm
 
 import inkid
@@ -93,9 +93,16 @@ def compute_ink_classes_metrics(preds, labels):
     dice = Dice()
     dice_val = float(dice(preds, labels))
 
+    # Compute stat scores
+    stats = StatScores(task="binary")
+    stats_val = stats(preds, labels)
+    tp, fp, tn, fn, support = list(stats_val)
+    false_positive_rate = float(fp / (fp + tn))
+
     return {
         "crossEntropyLoss": loss_val,
         "dice": dice_val,
+        "falsePositiveRate": false_positive_rate,
     }
 
 
@@ -775,6 +782,7 @@ class JobSummarizer:
                     f"from iteration: {iteration_str} "
                     f"and labels from image: {Path(label_img_path).name}"
                 )
+                break
 
                 preds, labels = get_preds_and_labels(img, label_img, ppm_mask_img, bounding_box)
                 if iteration_str not in iteration_to_preds:
@@ -794,6 +802,7 @@ class JobSummarizer:
             metrics_results["iterations"] = []
             metrics_results["crossEntropyLoss"] = []
             metrics_results["dice"] = []
+            metrics_results["falsePositiveRate"] = []
             all_iterations = sorted(iteration_to_preds.keys())
             for iteration_str in all_iterations:
                 preds = iteration_to_preds[iteration_str]
@@ -802,6 +811,7 @@ class JobSummarizer:
                 metrics_results["iterations"].append(iteration_str)
                 metrics_results["crossEntropyLoss"].append(result["crossEntropyLoss"])
                 metrics_results["dice"].append(result["dice"])
+                metrics_results["falsePositiveRate"].append(result["falsePositiveRate"])
 
         return metrics_results
 
