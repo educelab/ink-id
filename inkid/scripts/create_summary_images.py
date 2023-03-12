@@ -35,7 +35,7 @@ YELLOW = (255, 255, 0)
 region_set_type_to_color = {"training": RED, "prediction": YELLOW, "validation": BLUE}
 
 
-def compute_ink_classes_metrics(pred_img, label_img, mask_img=None, bounding_box=None):
+def get_preds_and_labels(pred_img, label_img, mask_img=None, bounding_box=None):
     # Convert images to the desired formats
     pred_img = pred_img.convert("L")
     pred_img = np.array(pred_img)
@@ -78,6 +78,10 @@ def compute_ink_classes_metrics(pred_img, label_img, mask_img=None, bounding_box
     # Convert label image pixel values to class indices (0: not ink, 1: ink)
     labels = np.where(labels > 0, 1, 0)
 
+    return preds, labels
+
+
+def compute_ink_classes_metrics(preds, labels):
     # Compute cross entropy loss
     preds = torch.tensor(preds)
     labels = torch.tensor(labels)
@@ -718,9 +722,9 @@ class JobSummarizer:
             return Path(path).name
 
         validation_ds = inkid.data.Dataset([validation_ds_path], lazy_load=True)
-        region_metrics = {}
+        iteration_to_preds = {}
+        iteration_to_labels = {}
         for region in validation_ds.regions():
-            region_metrics[region.name] = {}
             # We know the PPM and invert_normals for this region, so get them
             normalized_ppm_path = get_path_name(region.source_json["ppm"])
             invert_normals = region.source_json["invert_normals"]
@@ -766,38 +770,40 @@ class JobSummarizer:
                 ppm_mask_img = try_get_img_from_data_files(ppm_mask_img_path)
 
                 print(
-                    f"Comparing {prediction_type} for PPM: "
+                    f"Getting {prediction_type} preds for PPM: "
                     f"{Path(ppm_path).name}, "
-                    f"iteration: {iteration_str} "
-                    f"against label image: {Path(label_img_path).name}"
+                    f"from iteration: {iteration_str} "
+                    f"and labels from image: {Path(label_img_path).name}"
                 )
 
-                # Compute the metric
-                if prediction_type == "ink_classes":
-                    result_metrics = compute_ink_classes_metrics(
-                        img,
-                        label_img,
-                        mask_img=ppm_mask_img,
-                        bounding_box=bounding_box,
+                preds, labels = get_preds_and_labels(img, label_img, ppm_mask_img, bounding_box)
+                if iteration_str not in iteration_to_preds:
+                    iteration_to_preds[iteration_str] = np.array(preds)
+                    iteration_to_labels[iteration_str] = np.array(labels)
+                else:
+                    iteration_to_preds[iteration_str] = np.concatenate(
+                        (iteration_to_preds[iteration_str], preds)
                     )
-                    print(result_metrics)
-                    if prediction_type not in region_metrics[region.name]:
-                        region_metrics[region.name][prediction_type] = {
-                            "iterations": [],
-                        }
-                        for metric_name in result_metrics:
-                            region_metrics[region.name][prediction_type][
-                                metric_name
-                            ] = []
-                    region_metrics[region.name][prediction_type]["iterations"].append(
-                        iteration_str
+                    iteration_to_labels[iteration_str] = np.concatenate(
+                        (iteration_to_labels[iteration_str], labels)
                     )
-                    for metric_name, metric_value in result_metrics.items():
-                        region_metrics[region.name][prediction_type][metric_name].append(
-                            metric_value
-                        )
 
-        return region_metrics
+        metrics_results = {}
+        # Compute the metric
+        if prediction_type == "ink_classes":
+            metrics_results["iterations"] = []
+            metrics_results["crossEntropyLoss"] = []
+            metrics_results["dice"] = []
+            all_iterations = sorted(iteration_to_preds.keys())
+            for iteration_str in all_iterations:
+                preds = iteration_to_preds[iteration_str]
+                labels = iteration_to_labels[iteration_str]
+                result = compute_ink_classes_metrics(preds, labels)
+                metrics_results["iterations"].append(iteration_str)
+                metrics_results["crossEntropyLoss"].append(result["crossEntropyLoss"])
+                metrics_results["dice"].append(result["dice"])
+
+        return metrics_results
 
 
 def merge_imgs(
@@ -1156,7 +1162,7 @@ def main():
 
     if args.validation_dataset_for_metrics:
         print("\nComputing metrics over validation dataset...")
-        metrics = job_summarizer.compute_metrics(args.validation_dataset_for_metrics)
+        metrics_results = job_summarizer.compute_metrics(args.validation_dataset_for_metrics)
         metrics_dir = Path(out_dir) / "metrics"
         metrics_dir.mkdir()
 
@@ -1164,27 +1170,12 @@ def main():
         job_date = job_summarizer.date
         job_date = datetime.datetime.strptime(job_date, "%Y-%m-%d-%H:%M:%S").date()
         job_name = job_summarizer.name
-        for region_name, region_results in metrics.items():
-            for metric, metric_results in region_results.items():
-                iterations = metric_results["iterations"]
-                loss_values = metric_results["crossEntropyLoss"]
-                dice_values = metric_results["dice"]
-                combined = sorted(
-                    zip(iterations, loss_values, dice_values),
-                    key=lambda pair: iteration_str_sort_key(pair[0]),
-                )
-                iterations = [i for i, _, _ in combined]
-                loss_values = [l for _, l, _ in combined]
-                dice_values = [d for _, _, d in combined]
-                csv_rows.append(
-                    [job_date, job_name, region_name, metric, "iterations"] + iterations
-                )
-                csv_rows.append(
-                    [job_date, job_name, region_name, metric, "loss"] + loss_values
-                )
-                csv_rows.append(
-                    [job_date, job_name, region_name, metric, "dice"] + dice_values
-                )
+
+        csv_rows.append("iterations", "crossEntropyLoss", "dice")
+        for iteration in metrics_results["iterations"]:
+            cross_entropy_loss = metrics_results["crossEntropyLoss"][iteration]
+            dice = metrics_results["dice"][iteration]
+            csv_rows.append(iteration, cross_entropy_loss, dice)
 
         csv_path = metrics_dir / "metrics.csv"
         with open(csv_path, "w", newline="") as csvfile:
