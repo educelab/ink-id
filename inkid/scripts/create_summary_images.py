@@ -794,7 +794,7 @@ class JobSummarizer:
                     iteration_to_labels[iteration_str] = np.concatenate(
                         (iteration_to_labels[iteration_str], labels)
                     )
-                    
+
                 break
 
         metrics_results = {}
@@ -806,6 +806,7 @@ class JobSummarizer:
             metrics_results["falsePositiveRate"] = []
             all_iterations = sorted(iteration_to_preds.keys())
             for iteration_str in all_iterations:
+                print(f"Computing metrics for iteration: {iteration_str}")
                 preds = iteration_to_preds[iteration_str]
                 labels = iteration_to_labels[iteration_str]
                 result = compute_ink_classes_metrics(preds, labels)
