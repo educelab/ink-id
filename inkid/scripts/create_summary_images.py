@@ -756,6 +756,8 @@ class JobSummarizer:
                 ppm_mask_img_path = self.get_mask_image_path(ppm_path, invert_normals)
                 ppm_mask_img = try_get_img_from_data_files(ppm_mask_img_path)
 
+                print(f"Comparing {prediction_type} for PPM: {ppm_path}, iteration: {iteration_str} against label image: {label_img_path}")
+
                 # Compute the metric
                 if prediction_type == "ink_classes":
                     loss = cross_entropy_loss(
@@ -764,6 +766,7 @@ class JobSummarizer:
                         mask_img=ppm_mask_img,
                         bounding_box=bounding_box,
                     )
+                    print(loss)
                     if prediction_type not in region_metrics[region.name]:
                         region_metrics[region.name][prediction_type] = {
                             "iterations": [],
