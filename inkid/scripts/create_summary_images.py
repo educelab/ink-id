@@ -1178,16 +1178,12 @@ def main():
         metrics_dir = Path(out_dir) / "metrics"
         metrics_dir.mkdir()
 
-        csv_rows = []
-        job_date = job_summarizer.date
-        job_date = datetime.datetime.strptime(job_date, "%Y-%m-%d-%H:%M:%S").date()
-        job_name = job_summarizer.name
-
-        csv_rows.append(["iterations", "crossEntropyLoss", "dice"])
+        csv_rows = [["iterations", "crossEntropyLoss", "dice", "falsePositiveRate"]]
         for i, iteration in enumerate(metrics_results["iterations"]):
             cross_entropy_loss = metrics_results["crossEntropyLoss"][i]
             dice = metrics_results["dice"][i]
-            csv_rows.append([iteration, cross_entropy_loss, dice])
+            false_positive_rate = metrics_results["falsePositiveRate"][i]
+            csv_rows.append([iteration, cross_entropy_loss, dice, false_positive_rate])
 
         csv_path = metrics_dir / "metrics.csv"
         with open(csv_path, "w", newline="") as csvfile:
