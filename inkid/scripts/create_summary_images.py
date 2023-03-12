@@ -17,6 +17,7 @@ from PIL import Image, ImageDraw, ImageFont
 import pygifsicle
 import torch
 import torch.nn as nn
+from torchmetrics import Dice
 from tqdm import tqdm
 
 import inkid
@@ -34,7 +35,7 @@ YELLOW = (255, 255, 0)
 region_set_type_to_color = {"training": RED, "prediction": YELLOW, "validation": BLUE}
 
 
-def cross_entropy_loss(pred_img, label_img, mask_img=None, bounding_box=None):
+def compute_ink_classes_metrics(pred_img, label_img, mask_img=None, bounding_box=None):
     # Convert images to the desired formats
     pred_img = pred_img.convert("L")
     pred_img = np.array(pred_img)
@@ -81,9 +82,17 @@ def cross_entropy_loss(pred_img, label_img, mask_img=None, bounding_box=None):
     preds = torch.tensor(preds)
     labels = torch.tensor(labels)
     loss = nn.CrossEntropyLoss()
-    val = float(loss(preds, labels))
+    loss_val = float(loss(preds, labels))
 
-    return val
+    # Compute dice score
+    preds = torch.argmax(preds, dim=1)
+    dice = Dice()
+    dice_val = float(dice(preds, labels))
+
+    return {
+        "crossEntropyLoss": loss_val,
+        "dice": dice_val,
+    }
 
 
 def is_job_dir(dirname: str) -> bool:
@@ -526,7 +535,7 @@ class JobSummarizer:
                             cmap_name,
                         )
                     )
-            for (img, offset) in zip(imgs, offsets):
+            for img, offset in zip(imgs, offsets):
                 if img is None:
                     continue
                 # Only paste the parts of the image that actually contain something
@@ -756,26 +765,37 @@ class JobSummarizer:
                 ppm_mask_img_path = self.get_mask_image_path(ppm_path, invert_normals)
                 ppm_mask_img = try_get_img_from_data_files(ppm_mask_img_path)
 
-                print(f"Comparing {prediction_type} for PPM: {ppm_path}, iteration: {iteration_str} against label image: {label_img_path}")
+                print(
+                    f"Comparing {prediction_type} for PPM: "
+                    f"{Path(ppm_path).name}, "
+                    f"iteration: {iteration_str} "
+                    f"against label image: {Path(label_img_path).name}"
+                )
 
                 # Compute the metric
                 if prediction_type == "ink_classes":
-                    loss = cross_entropy_loss(
+                    result_metrics = compute_ink_classes_metrics(
                         img,
                         label_img,
                         mask_img=ppm_mask_img,
                         bounding_box=bounding_box,
                     )
-                    print(loss)
+                    print(result_metrics)
                     if prediction_type not in region_metrics[region.name]:
                         region_metrics[region.name][prediction_type] = {
                             "iterations": [],
-                            "values": [],
                         }
+                        for metric_name in result_metrics:
+                            region_metrics[region.name][prediction_type][
+                                metric_name
+                            ] = []
                     region_metrics[region.name][prediction_type]["iterations"].append(
                         iteration_str
                     )
-                    region_metrics[region.name][prediction_type]["values"].append(loss)
+                    for metric_name, metric_value in result_metrics.items():
+                        region_metrics[region.name][prediction_type][metric_name].append(
+                            metric_value
+                        )
 
         return region_metrics
 
@@ -980,7 +1000,9 @@ def build_footer_img(
         swatch_title = "no ink            ink"
         swatch_title_w = int(font_regular.getlength(swatch_title))
         swatch_title_h = int(font_regular.getbbox(swatch_title)[3])
-        swatch = inkid.util.create_colormap_swatch(cmap_name, swatch_title_w, swatch_title_h)
+        swatch = inkid.util.create_colormap_swatch(
+            cmap_name, swatch_title_w, swatch_title_h
+        )
         draw.text(
             (horizontal_offset + buffer_size, buffer_size),
             swatch_title,
@@ -1067,7 +1089,9 @@ def try_get_img_from_data_files(img_path):
             if possible_source_prefix in img_path:
                 simplified_img_path = img_path.replace(possible_source_prefix, "")
                 for possible_target_prefix in ["data", "bigdata", "temp"]:
-                    possible_target_path = os.path.join(Path.home(), possible_target_prefix, simplified_img_path)
+                    possible_target_path = os.path.join(
+                        Path.home(), possible_target_prefix, simplified_img_path
+                    )
                     if os.path.isfile(possible_target_path):
                         img = Image.open(possible_target_path)
                         break
@@ -1143,18 +1167,23 @@ def main():
         for region_name, region_results in metrics.items():
             for metric, metric_results in region_results.items():
                 iterations = metric_results["iterations"]
-                values = metric_results["values"]
+                loss_values = metric_results["crossEntropyLoss"]
+                dice_values = metric_results["dice"]
                 combined = sorted(
-                    zip(iterations, values),
+                    zip(iterations, loss_values, dice_values),
                     key=lambda pair: iteration_str_sort_key(pair[0]),
                 )
-                iterations = [i for i, _ in combined]
-                values = [v for _, v in combined]
+                iterations = [i for i, _, _ in combined]
+                loss_values = [l for _, l, _ in combined]
+                dice_values = [d for _, _, d in combined]
                 csv_rows.append(
                     [job_date, job_name, region_name, metric, "iterations"] + iterations
                 )
                 csv_rows.append(
-                    [job_date, job_name, region_name, metric, "values"] + values
+                    [job_date, job_name, region_name, metric, "loss"] + loss_values
+                )
+                csv_rows.append(
+                    [job_date, job_name, region_name, metric, "dice"] + dice_values
                 )
 
         csv_path = metrics_dir / "metrics.csv"
