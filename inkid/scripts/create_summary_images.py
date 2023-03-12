@@ -1184,9 +1184,9 @@ def main():
         job_name = job_summarizer.name
 
         csv_rows.append(["iterations", "crossEntropyLoss", "dice"])
-        for iteration in metrics_results["iterations"]:
-            cross_entropy_loss = metrics_results["crossEntropyLoss"][iteration]
-            dice = metrics_results["dice"][iteration]
+        for i, iteration in enumerate(metrics_results["iterations"]):
+            cross_entropy_loss = metrics_results["crossEntropyLoss"][i]
+            dice = metrics_results["dice"][i]
             csv_rows.append([iteration, cross_entropy_loss, dice])
 
         csv_path = metrics_dir / "metrics.csv"
