@@ -705,37 +705,20 @@ class JobSummarizer:
             write_img_sequence(animation, filename)
 
     def compute_metrics(self, validation_ds_path):
-        def normalize_path_to_volpkg(path: str) -> str:
-            """Normalize a path to contain only the .volpkg name and parts following.
-
-            Example input:
-
-            /pscratch/seales_uksr/dri-datasets-2-drive/PHercParis1Fr39/PHercParis1Fr39.volpkg/working
-            /54keV_surface_layer/merged/20220318/54KeV_surface_layer.ppm
-
-            Example output:
-
-            PHercParis1Fr39.volpkg/working/54keV_surface_layer/merged/20220318/54KeV_surface_layer.ppm
-            """
-            path = Path(path)
-            delim = ".volpkg"
-            parts_with_delim = list(filter(lambda x: delim in x, path.parts))
-            assert len(parts_with_delim) == 1
-            volpkg_name = parts_with_delim[0]
-            path_after_volpkg = str(path).split(delim)[1][1:]  # Remove leading /
-            return str(Path(volpkg_name) / path_after_volpkg)
+        def get_path_name(path: str) -> str:
+            return Path(path).name
 
         validation_ds = inkid.data.Dataset([validation_ds_path], lazy_load=True)
         region_metrics = {}
         for region in validation_ds.regions():
             region_metrics[region.name] = {}
             # We know the PPM and invert_normals for this region, so get them
-            normalized_ppm_path = normalize_path_to_volpkg(region.source_json["ppm"])
+            normalized_ppm_path = get_path_name(region.source_json["ppm"])
             invert_normals = region.source_json["invert_normals"]
             # Filter to the prediction images matching that (ppm, invert_normal) pair
             pred_imgs_df = self.prediction_images_df.merge(self.regions_df)
             pred_imgs_df["normalized_ppm_path"] = pred_imgs_df["ppm_path"].apply(
-                normalize_path_to_volpkg
+                get_path_name
             )
             pred_imgs_df = pred_imgs_df[
                 (pred_imgs_df["normalized_ppm_path"] == normalized_ppm_path)
