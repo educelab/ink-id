@@ -782,7 +782,6 @@ class JobSummarizer:
                     f"from iteration: {iteration_str} "
                     f"and labels from image: {Path(label_img_path).name}"
                 )
-                break
 
                 preds, labels = get_preds_and_labels(img, label_img, ppm_mask_img, bounding_box)
                 if iteration_str not in iteration_to_preds:
@@ -795,6 +794,8 @@ class JobSummarizer:
                     iteration_to_labels[iteration_str] = np.concatenate(
                         (iteration_to_labels[iteration_str], labels)
                     )
+                    
+                break
 
         metrics_results = {}
         # Compute the metric
