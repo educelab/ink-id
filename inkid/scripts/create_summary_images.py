@@ -802,7 +802,7 @@ class JobSummarizer:
             metrics_results["crossEntropyLoss"] = []
             metrics_results["dice"] = []
             metrics_results["falsePositiveRate"] = []
-            all_iterations = sorted(iteration_to_preds.keys())
+            all_iterations = sorted(iteration_to_preds.keys(), key=iteration_str_sort_key)
             for iteration_str in all_iterations:
                 print(f"Computing metrics for iteration: {iteration_str}")
                 preds = iteration_to_preds[iteration_str]
