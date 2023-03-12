@@ -1181,11 +1181,11 @@ def main():
         job_date = datetime.datetime.strptime(job_date, "%Y-%m-%d-%H:%M:%S").date()
         job_name = job_summarizer.name
 
-        csv_rows.append("iterations", "crossEntropyLoss", "dice")
+        csv_rows.append(["iterations", "crossEntropyLoss", "dice"])
         for iteration in metrics_results["iterations"]:
             cross_entropy_loss = metrics_results["crossEntropyLoss"][iteration]
             dice = metrics_results["dice"][iteration]
-            csv_rows.append(iteration, cross_entropy_loss, dice)
+            csv_rows.append([iteration, cross_entropy_loss, dice])
 
         csv_path = metrics_dir / "metrics.csv"
         with open(csv_path, "w", newline="") as csvfile:
