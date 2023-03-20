@@ -472,7 +472,7 @@ def main(argv=None):
     )
 
     # Perform cross validation at the top level, i.e. before flattening the sources into their expanded lists
-    if args.cross_validate_on and args.cross_validate_at_top_level:
+    if args.cross_validate_on is not None and args.cross_validate_at_top_level:
         nth_source = args.training_set.pop(args.cross_validate_on)
         args.validation_set.append(nth_source)
         args.prediction_set.append(nth_source)
@@ -482,7 +482,7 @@ def main(argv=None):
     pred_ds = inkid.data.Dataset(args.prediction_set)
 
     # Perform cross validation after flattening the sources into their expanded lists
-    if args.cross_validate_on and not args.cross_validate_at_top_level:
+    if args.cross_validate_on is not None and not args.cross_validate_at_top_level:
         nth_region_path = train_ds.pop_nth_region(args.cross_validate_on).path
         val_ds.sources.append(inkid.data.DataSource.from_path(nth_region_path))
         pred_ds.sources.append(inkid.data.DataSource.from_path(nth_region_path))
