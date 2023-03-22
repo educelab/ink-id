@@ -8,6 +8,7 @@ cimport libc.math as math
 import logging
 import os
 import random
+from typing import Optional
 
 import numpy as np
 cimport numpy as cnp
@@ -101,19 +102,20 @@ cdef class Volume:
     """
     cdef const unsigned short [:, :, :] _data_view
     cdef int shape_z, shape_y, shape_x
+    cdef int offset_x, offset_y, offset_z
     cdef dict _metadata
     cdef float _voxelsize_um
 
     initialized_volumes = dict()  # Dict[str, Volume]
 
     @classmethod
-    def from_path(cls, path: str) -> Volume:
+    def from_path(cls, path: str, bounding_box: Optional[tuple] = None) -> Volume:
         if path in cls.initialized_volumes:
             return cls.initialized_volumes[path]
-        cls.initialized_volumes[path] = Volume(path)
+        cls.initialized_volumes[path] = Volume(path, bounding_box=bounding_box)
         return cls.initialized_volumes[path]
     
-    def __init__(self, slices_path):
+    def __init__(self, slices_path, bounding_box=None):
         """Initialize a volume using a path to the slices directory.
 
         Get the absolute path and filename for each slice in the given
@@ -124,6 +126,7 @@ cdef class Volume:
         files, so it must be a directory with only image files.
 
         """
+
         # Load metadata
         self._metadata = dict()
         metadata_filename = os.path.join(slices_path, 'meta.json')
@@ -136,6 +139,19 @@ cdef class Volume:
         self.shape_z = self._metadata['slices']
         self.shape_y = self._metadata['height']
         self.shape_x = self._metadata['width']
+        self.offset_x = 0
+        self.offset_y = 0
+        self.offset_z = 0
+
+        if bounding_box is not None:
+            assert len(bounding_box) == 6
+            min_x, min_y, min_z, max_x, max_y, max_z = bounding_box
+            self.shape_x = max_x - min_x
+            self.shape_y = max_y - min_y
+            self.shape_z = max_z - min_z
+            self.offset_x = min_x
+            self.offset_y = min_y
+            self.offset_z = min_z
 
         # Get list of slice image filenames
         slice_files = []
@@ -146,19 +162,19 @@ cdef class Volume:
                 if filename[0] != '.' and os.path.splitext(filename)[1] == '.tif':
                     slice_files.append(os.path.join(root, filename))
         slice_files.sort()
+        slice_files = slice_files[self.offset_z:self.offset_z + self.shape_z]
         assert len(slice_files) == self.shape_z
 
         # Load slice images into volume
-        data, w, h, d = None, 0, 0, 0
         logging.info('Loading volume slices from {}...'.format(slices_path))
+        data = np.empty((self.shape_z, self.shape_y, self.shape_x), dtype=np.uint16)
         for slice_i, slice_file in tqdm(list(enumerate(slice_files))):
-            if data is None:
-                img = Image.open(slice_file)
-                w, h = img.size
-                img.close()
-                d = len(slice_files)
-                data = np.empty((d, h, w), dtype=np.uint16)
-            data[slice_i, :, :] = np.array(Image.open(slice_file), dtype=np.uint16).copy()
+            slice_img = Image.open(slice_file)
+            slice_np = np.array(slice_img, dtype=np.uint16)[
+                self.offset_y:self.offset_y + self.shape_y,
+                self.offset_x:self.offset_x + self.shape_x
+            ]
+            data[slice_i, :, :] = slice_np.copy()
         print()
         self._data_view = data
         logging.info('Loaded volume {} with shape (z, y, x) = {}'.format(

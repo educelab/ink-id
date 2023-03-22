@@ -38,6 +38,15 @@
         "type": "number"
       }
     },
+    "volume_bounding_box": {
+      "description": "bounding box array [min_x, min_y, min_z, max_x, max_y, max_z], or null (indicating volume occupies entire volume bounds). only applicable for volume data sources.",
+      "type": ["array", "null"],
+      "minItems": 6,
+      "maxItems": 6,
+      "items": {
+          "type": "number"
+      }
+    },
     "ink_label": {
       "description": "Ink label image path relative to this data source file",
       "type": ["string", "null"]

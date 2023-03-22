@@ -615,18 +615,20 @@ class VolumeSource(DataSource):
     def __init__(self, path: str) -> None:
         super().__init__(path)
 
+        self.volume_bounding_box = self.source_json.get("volume_bounding_box")
+        if self.volume_bounding_box is not None:
+            self.volume_bounding_box = tuple(self.volume_bounding_box)
         self.volume: inkid.data.Volume = inkid.data.Volume.from_path(
-            self.source_json["volume"]
+            self.source_json["volume"],
+            bounding_box=self.volume_bounding_box,
         )
 
         # This volume generates points, here we create the empty list
         self._points = list()
 
     def __len__(self):
-        # Could be anything, we can keep sampling all day. PyTorch requires a finite value, so here's one.
-        # This could either be changed or one could combine the settings for multiple epochs and limited
-        # training samples.
-        return 10000000
+        s = self.volume.shape()
+        return s[0] * s[1] * s[2]
 
     def __getitem__(self, _):
         # Random 3d position
@@ -648,6 +650,18 @@ class VolumeSource(DataSource):
         feature = self.volume.get_subvolume(
             center=(x, y, z), normal=(n_x, n_y, n_z), **self.feature_args
         )
+
+        transform = transforms.Compose(
+            [
+                inkid.util.uint16_to_float32_normalized_0_1,
+                torch.from_numpy,
+                transforms.RandomHorizontalFlip(),
+                transforms.RandomVerticalFlip(),
+                transforms.Normalize((0.5,), (0.5,)),
+            ]
+        )
+        feature = transform(feature)
+
         item = {
             "feature_metadata": feature_metadata,
             "feature": feature,

@@ -1,0 +1,6 @@
+{
+  "schema_version": "0.1",
+  "type": "volume",
+  "volume": "../volumes/20200526145449",
+  "volume_bounding_box": [310, 100, 10, 590, 300, 190]
+}
