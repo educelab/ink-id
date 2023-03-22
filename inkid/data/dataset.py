@@ -623,12 +623,12 @@ class VolumeSource(DataSource):
             bounding_box=self.volume_bounding_box,
         )
 
-        # This volume generates points, here we create the empty list
-        self._points = list()
-
     def __len__(self):
-        s = self.volume.shape()
-        return s[0] * s[1] * s[2]
+        # s = self.volume.shape()
+        # return s[0] * s[1] * s[2]
+        # Returning the proper size as above creates memory problems, even just for lists of indices, since
+        # there is one for every voxel. So we just return a large number instead.
+        return 100000
 
     def __getitem__(self, _):
         # Random 3d position
