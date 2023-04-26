@@ -1,5 +1,5 @@
 ========
- ink-id
+ ink-ID
 ========
 
 ``inkid`` is a Python package and collection of scripts for identifying ink in volumetric CT data using machine learning.
