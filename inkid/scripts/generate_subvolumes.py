@@ -268,6 +268,9 @@ def main(argv=None):
         subvolume = batch["feature"]
         subvolume = subvolume.numpy()[0][0]
 
+        # normalize the subvolume to [0, 1]
+        subvolume = (subvolume - subvolume.min()) / (subvolume.max() - subvolume.min())
+
         if args.concat_subvolumes:
             concat_x = (counter // square_side_length) * padded_shape_voxels[2]
             concat_y = (counter % square_side_length) * padded_shape_voxels[1]
