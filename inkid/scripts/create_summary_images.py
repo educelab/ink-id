@@ -81,9 +81,12 @@ def get_preds_and_labels(pred_img, label_img, mask_img=None, bounding_box=None):
     return preds, labels
 
 
-def f_score(precision, recall, beta: float = 1.0):
+def f_score(precision: float, recall: float, beta: float = 1.0) -> float:
     """Compute the F-score for a given precision and recall."""
-    return (1 + beta ** 2) * (precision * recall) / ((beta ** 2) * precision + recall)
+    if ((beta ** 2) * precision + recall) == 0:
+        return 0.0
+    else:
+        return (1 + beta ** 2) * (precision * recall) / ((beta ** 2) * precision + recall)
 
 
 def compute_ink_classes_metrics(preds, labels):
@@ -99,19 +102,45 @@ def compute_ink_classes_metrics(preds, labels):
     stats = StatScores(task="binary")
     stats_val = stats(class_preds, labels)
 
-    tp, fp, tn, fn, support = list(stats_val)
+    tp, fp, tn, fn, support = (float(x) for x in stats_val)
 
-    false_positive_rate = float(fp / (fp + tn))
-    precision = float(tp / (tp + fp))
-    recall = float(tp / (tp + fn))
-    f1_aka_dice_manual = float(2 * tp / (2 * tp + fp + fn))
-    f1_aka_dice_manual_2 = float(2 * (precision * recall) / (precision + recall))
-    f1_aka_dice = float(f_score(precision, recall, 1))
+    # Compute metrics and account for possible division by zero
+    if tp + fp == 0:
+        precision = 0.0
+    else:
+        precision = tp / (tp + fp)
+
+    if tp + fn == 0:
+        recall = 0.0
+    else:
+        recall = tp / (tp + fn)
+
+    if fp + tn == 0:
+        false_positive_rate = 0.0
+    else:
+        false_positive_rate = fp / (fp + tn)
+
+    if (2 * tp + fp + fn) == 0:
+        f1_aka_dice_manual = 0.0
+    else:
+        f1_aka_dice_manual = 2 * tp / (2 * tp + fp + fn)
+
+    if (precision + recall) == 0:
+        f1_aka_dice_manual_2 = 0.0
+    else:
+        f1_aka_dice_manual_2 = 2 * (precision * recall) / (precision + recall)
+
+    f1_aka_dice = f_score(precision, recall, 1)
     print(f1_aka_dice_manual, f1_aka_dice_manual_2, f1_aka_dice)
     assert np.isclose(f1_aka_dice_manual, f1_aka_dice_manual_2)
     assert np.isclose(f1_aka_dice_manual, f1_aka_dice)
-    f05_manual = float((1 + 0.5 ** 2) * (precision * recall) / ((0.5 ** 2) * precision + recall))
-    f05 = float(f_score(precision, recall, 0.5))
+
+    if (0.5 ** 2) * precision + recall == 0:
+        f05_manual = 0.0
+    else:
+        f05_manual = (1 + 0.5 ** 2) * (precision * recall) / ((0.5 ** 2) * precision + recall)
+
+    f05 = f_score(precision, recall, 0.5)
     print(f05_manual, f05)
     assert np.isclose(f05_manual, f05)
 
