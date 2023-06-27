@@ -89,6 +89,7 @@ def compute_ink_classes_metrics(preds, labels):
     loss_val = float(loss(preds, labels))
 
     # Compute stat scores
+    preds = torch.argmax(preds, dim=1)
     stats = StatScores(task="binary")
     stats_val = stats(preds, labels)
     tp, fp, tn, fn, support = list(stats_val)
