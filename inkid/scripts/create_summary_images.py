@@ -131,7 +131,6 @@ def compute_ink_classes_metrics(preds, labels):
         f1_aka_dice_manual_2 = 2 * (precision * recall) / (precision + recall)
 
     f1_aka_dice = f_score(precision, recall, 1)
-    print(f1_aka_dice_manual, f1_aka_dice_manual_2, f1_aka_dice)
     assert np.isclose(f1_aka_dice_manual, f1_aka_dice_manual_2)
     assert np.isclose(f1_aka_dice_manual, f1_aka_dice)
 
@@ -141,7 +140,6 @@ def compute_ink_classes_metrics(preds, labels):
         f05_manual = (1 + 0.5 ** 2) * (precision * recall) / ((0.5 ** 2) * precision + recall)
 
     f05 = f_score(precision, recall, 0.5)
-    print(f05_manual, f05)
     assert np.isclose(f05_manual, f05)
 
     return {
