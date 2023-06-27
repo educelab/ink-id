@@ -81,27 +81,44 @@ def get_preds_and_labels(pred_img, label_img, mask_img=None, bounding_box=None):
     return preds, labels
 
 
+def f_score(precision, recall, beta: float = 1.0):
+    """Compute the F-score for a given precision and recall."""
+    return (1 + beta ** 2) * (precision * recall) / ((beta ** 2) * precision + recall)
+
+
 def compute_ink_classes_metrics(preds, labels):
-    # Compute cross entropy loss
-    preds = torch.tensor(preds)
+    raw_preds = torch.tensor(preds)
     labels = torch.tensor(labels)
+
+    # Compute cross entropy loss
     loss = nn.CrossEntropyLoss()
-    loss_val = float(loss(preds, labels))
+    loss_val = float(loss(raw_preds, labels))
 
     # Compute stat scores
-    preds = torch.argmax(preds, dim=1)
+    class_preds = torch.argmax(raw_preds, dim=1)
     stats = StatScores(task="binary")
-    stats_val = stats(preds, labels)
+    stats_val = stats(class_preds, labels)
+
     tp, fp, tn, fn, support = list(stats_val)
+
     false_positive_rate = float(fp / (fp + tn))
+    precision = float(tp / (tp + fp))
     recall = float(tp / (tp + fn))
-    dice_val = 2 * tp / (2 * tp + fp + fn)
+    f1_aka_dice_manual = float(2 * tp / (2 * tp + fp + fn))
+    f1_aka_dice_manual_2 = float(2 * (precision * recall) / (precision + recall))
+    f1_aka_dice = float(f_score(precision, recall, 1))
+    assert f1_aka_dice_manual == f1_aka_dice_manual_2 == f1_aka_dice
+    f05_manual = float((1 + 0.5 ** 2) * (precision * recall) / ((0.5 ** 2) * precision + recall))
+    f05 = float(f_score(precision, recall, 0.5))
+    assert f05_manual == f05
 
     return {
         "crossEntropyLoss": loss_val,
-        "dice": dice_val,
-        "falsePositiveRate": false_positive_rate,
+        "precision": precision,
         "recall": recall,
+        "falsePositiveRate": false_positive_rate,
+        "f1_aka_dice": f1_aka_dice,
+        "f05": f05,
     }
 
 
@@ -799,9 +816,11 @@ class JobSummarizer:
         if prediction_type == "ink_classes":
             metrics_results["iterations"] = []
             metrics_results["crossEntropyLoss"] = []
-            metrics_results["dice"] = []
-            metrics_results["falsePositiveRate"] = []
+            metrics_results["precision"] = []
             metrics_results["recall"] = []
+            metrics_results["falsePositiveRate"] = []
+            metrics_results["f1_aka_dice"] = []
+            metrics_results["f05"] = []
             all_iterations = sorted(iteration_to_preds.keys(), key=iteration_str_sort_key)
             for iteration_str in all_iterations:
                 print(f"Computing metrics for iteration: {iteration_str}")
@@ -810,9 +829,11 @@ class JobSummarizer:
                 result = compute_ink_classes_metrics(preds, labels)
                 metrics_results["iterations"].append(iteration_str)
                 metrics_results["crossEntropyLoss"].append(result["crossEntropyLoss"])
-                metrics_results["dice"].append(result["dice"])
-                metrics_results["falsePositiveRate"].append(result["falsePositiveRate"])
+                metrics_results["precision"].append(result["precision"])
                 metrics_results["recall"].append(result["recall"])
+                metrics_results["falsePositiveRate"].append(result["falsePositiveRate"])
+                metrics_results["f1_aka_dice"].append(result["f1_aka_dice"])
+                metrics_results["f05"].append(result["f05"])
 
         return metrics_results
 
@@ -1177,13 +1198,17 @@ def main():
         metrics_dir = Path(out_dir) / "metrics"
         metrics_dir.mkdir()
 
-        csv_rows = [["iterations", "crossEntropyLoss", "dice", "falsePositiveRate", "recall"]]
+        csv_rows = [
+            ["iterations", "crossEntropyLoss", "precision", "recall", "falsePositiveRate", "f1_aka_dice", "f05"]
+        ]
         for i, iteration in enumerate(metrics_results["iterations"]):
             cross_entropy_loss = metrics_results["crossEntropyLoss"][i]
-            dice = metrics_results["dice"][i]
-            false_positive_rate = metrics_results["falsePositiveRate"][i]
+            precision = metrics_results["precision"][i]
             recall = metrics_results["recall"][i]
-            csv_rows.append([iteration, cross_entropy_loss, dice, false_positive_rate, recall])
+            false_positive_rate = metrics_results["falsePositiveRate"][i]
+            f1_aka_dice = metrics_results["f1_aka_dice"][i]
+            f05 = metrics_results["f05"][i]
+            csv_rows.append([iteration, cross_entropy_loss, precision, recall, false_positive_rate, f1_aka_dice, f05])
 
         csv_path = metrics_dir / "metrics.csv"
         with open(csv_path, "w", newline="") as csvfile:
