@@ -17,7 +17,7 @@ from PIL import Image, ImageDraw, ImageFont
 import pygifsicle
 import torch
 import torch.nn as nn
-from torchmetrics import Dice, StatScores
+from torchmetrics import StatScores
 from tqdm import tqdm
 
 import inkid
@@ -88,17 +88,13 @@ def compute_ink_classes_metrics(preds, labels):
     loss = nn.CrossEntropyLoss()
     loss_val = float(loss(preds, labels))
 
-    # Compute dice score
-    preds = torch.argmax(preds, dim=1)
-    dice = Dice()
-    dice_val = float(dice(preds, labels))
-
     # Compute stat scores
     stats = StatScores(task="binary")
     stats_val = stats(preds, labels)
     tp, fp, tn, fn, support = list(stats_val)
     false_positive_rate = float(fp / (fp + tn))
     recall = float(tp / (tp + fn))
+    dice_val = 2 * tp / (2 * tp + fp + fn)
 
     return {
         "crossEntropyLoss": loss_val,
