@@ -227,6 +227,16 @@ def uint16_to_float32_normalized_0_1(img):
     return img
 
 
+def standardize_subvolume(tensor):
+    """Standardize subvolume to mean 0 and std 1."""
+    assert isinstance(tensor, torch.Tensor)
+    tensor -= torch.mean(tensor)
+    std = torch.std(tensor)
+    if std != 0:
+        tensor /= std
+    return tensor
+
+
 def plot_with_colorbar(img, cmap="turbo", vmin=None, vmax=None):
     # plot
     fig, ax = plt.subplots()

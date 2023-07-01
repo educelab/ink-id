@@ -42,7 +42,7 @@ class SubvolumeGeneratorInfo:
     shape_microns: Optional[tuple[float, float, float]] = None
     shape_voxels: Optional[tuple[int, int, int]] = (48, 48, 48)
     move_along_normal: float = 0
-    normalize: bool = False
+    standardize: bool = False
     jitter_max: int = 4
     augment_subvolume: bool = True
 
@@ -82,9 +82,9 @@ def add_subvolume_arguments(parser):
         help="number of voxels to move along normal vector before sampling a subvolume",
     )
     parser.add_argument(
-        "--normalize-subvolumes",
+        "--standardize-subvolumes",
         action="store_true",
-        help="normalize each subvolume to zero mean and unit variance",
+        help="standardize each subvolume to zero mean and unit variance",
     )
     parser.add_argument(
         "--jitter-max", metavar="n", type=int, default=default.jitter_max
@@ -279,15 +279,16 @@ class RegionSource(DataSource):
             center=(x, y, z), normal=(n_x, n_y, n_z), **self.feature_args
         )
 
-        transform = transforms.Compose(
-            [
-                inkid.util.uint16_to_float32_normalized_0_1,
-                torch.from_numpy,
-                transforms.RandomHorizontalFlip(),
-                transforms.RandomVerticalFlip(),
-                transforms.Normalize((0.5,), (0.5,)),
-            ]
-        )
+        transforms_list = [
+            inkid.util.uint16_to_float32_normalized_0_1,
+            torch.from_numpy,
+            transforms.RandomHorizontalFlip(),
+            transforms.RandomVerticalFlip(),
+            transforms.Normalize((0.5,), (0.5,)),
+        ]
+        if self.feature_args["standardize"]:
+            transforms_list.append(inkid.util.standardize_subvolume)
+        transform = transforms.Compose(transforms_list)
         feature = transform(feature)
 
         item = {
