@@ -207,6 +207,9 @@ def main(argv=None):
     parser.add_argument(
         "--random-seed", type=int, default=42, help="seed for random number generators"
     )
+    parser.add_argument(
+        "--normalize-subvolumes", action="store_true", help="normalize subvolumes to [0,1] before saving"
+    )
     inkid.data.add_subvolume_arguments(parser)
 
     # Image rendering option
@@ -269,7 +272,8 @@ def main(argv=None):
         subvolume = subvolume.numpy()[0][0]
 
         # normalize the subvolume to [0, 1]
-        subvolume = (subvolume - subvolume.min()) / (subvolume.max() - subvolume.min())
+        if args.normalize_subvolumes:
+            subvolume = (subvolume - subvolume.min()) / (subvolume.max() - subvolume.min())
 
         if args.concat_subvolumes:
             concat_x = (counter // square_side_length) * padded_shape_voxels[2]
@@ -284,6 +288,7 @@ def main(argv=None):
             inkid.util.save_volume_to_image_stack(
                 subvolume, os.path.join(args.output, str(counter))
             )
+            np.save(os.path.join(args.output, f"{str(counter)}.npy"), subvolume)
 
             if args.visualize:
                 rendered_img = visualize(subvolume)
