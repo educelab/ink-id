@@ -31,7 +31,7 @@ def save_volume_to_image_stack(volume, dirname):
     """
     Path(dirname).mkdir(parents=True, exist_ok=True)
     for z in range(volume.shape[0]):
-        image = volume[z, :, :]
+        image = volume[z, :, :].copy()
         image *= np.iinfo(np.uint16).max  # Assume incoming [0, 1] floats
         image = image.astype(np.uint16)
         image = Image.fromarray(image)
