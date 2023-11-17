@@ -14,7 +14,10 @@ From: volcart/vcbuilder-debian:latest.dynamic
 
   # Basic installs (noninteractive so tzdata dependency install doesn't halt build with prompt)
   apt update
-  DEBIAN_FRONTEND=noninteractive apt install -y nano vim ffmpeg imagemagick
+  DEBIAN_FRONTEND=noninteractive apt install -y nano vim ffmpeg imagemagick gdb locales
+  # add en_US.UTF-8 to /etc/locale.gen
+  sed -i 's/# en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen
+  locale-gen
 
   # Store git credentials for up to an hour (in overlay, not container) for convenience
   git config --global credential.helper cache
