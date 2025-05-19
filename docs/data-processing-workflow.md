@@ -330,7 +330,8 @@ vc_render -v ../../ -s 20200125113143 --output-ppm 54kv_internal_layer.ppm --uv-
 
 ## Segmentations from canny segmentation
 
-Provide `vc_render` with the volume package, the final mesh produced by Meshlab, and the ID of the segmented volume:
+Provide `vc_render` with the volume package, the final mesh produced by Meshlab, and the ID of the segmented volume.
+Be sure to select `--uv-algorithm 2` to use an orthographic projection for the flattening, so that the texture image more resembles the geometry of a photograph.
 
 ```shell
 # Run vc_render
